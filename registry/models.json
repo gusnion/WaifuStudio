@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "anima-2.9b-preview",
+      "family": "anima",
+      "display_name": "Anima 2.9B preview v1",
+      "profile": {
+        "unet_name": "Anima-2.9B-preview-v1.safetensors",
+        "clip_name": "qwen_3_06b_base.safetensors",
+        "clip_type": "stable_diffusion",
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "source": "local (E:\\IA\\VIDEO\\ComfyUI\\models)",
+      "license": "ver README del modelo en ComfyUI/models (no inventar)",
+      "preprompt": "glossy",
+      "defaults": {
+        "steps": 20,
+        "cfg": 4.0,
+        "sampler_name": "euler",
+        "scheduler": "sgm_uniform",
+        "width": 320,
+        "height": 576
+      },
+      "notes": "Modelo inicial; Anima [Official] y One obsession se añaden en M8-11 (descarga)"
+    }
+  ]
+}

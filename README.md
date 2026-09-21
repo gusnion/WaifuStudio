@@ -20,12 +20,18 @@ Sin nube obligatoria: el engine corre en loopback y la app consume su API local.
 E:\IA\WAIFU
 ├─ app/
 │  ├─ __init__.py
-│  ├─ config.py    # configuración central congelada
-│  ├─ engine.py    # cliente API del engine ComfyUI (M8-03)
-│  └─ health.py    # smoke CLI (python -m app.health)
-├─ tests/          # tests CPU, sin red ni GPU
+│  ├─ config.py       # configuración central congelada
+│  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
+│  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
+│  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
+│  └─ health.py       # smoke CLI (python -m app.health)
+├─ registry/
+│  └─ models.json     # registro versionado de modelos locales (M8-10)
+├─ tests/             # tests CPU, sin red ni GPU
 │  ├─ __init__.py
-│  └─ test_engine.py
+│  ├─ test_engine.py
+│  ├─ test_preprompts.py
+│  └─ test_registry.py
 ├─ data/           # estado local (ignorado por git, aún no creado)
 ├─ outputs/        # resultados propios (ignorado por git, aún no creado)
 ├─ .gitignore
@@ -64,6 +70,17 @@ paths = engine.outputs(entry, expected_ext=("png",))
 ```
 
 Los tests corren offline con un transporte falso: no envían jobs al engine ni tocan la GPU.
+
+## Modelos y preprompts (F1)
+
+`app/registry.py` (M8-10) carga y guarda el registro versionado `registry/models.json`
+(`{"version": 1, "models": [...]}`). Cada `ModelEntry` declara familia, `profile` (unet/clip/clip_type/vae),
+origen, licencia y preprompt; los ids son slugs `[a-z0-9._-]+` y no pueden repetirse.
+CLI: `python -m app.registry` imprime una línea por modelo: `id | family | unet | preprompt`.
+
+`app/preprompts.py` (M8-12) mantiene `FAMILY_PREPROMPTS` (familia → nombre → `{positive, negative}`) con
+los textos certificados de la familia `anima`; `DEFAULT_FAMILY = "anima"` y `DEFAULT_PREPROMPT = "glossy"`.
+F1 solo registra y cataloga: aplicar el preprompt al prompt es de F2.
 
 ## Smoke
 
