@@ -22,6 +22,7 @@ E:\IA\WAIFU
 │  ├─ __init__.py
 │  ├─ config.py       # configuración central congelada
 │  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
+│  ├─ gate_f1.py      # runner Gate F1: 1 imagen por modelo del registro (M8-11b)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  └─ health.py       # smoke CLI (python -m app.health)
@@ -30,6 +31,7 @@ E:\IA\WAIFU
 ├─ tests/             # tests CPU, sin red ni GPU
 │  ├─ __init__.py
 │  ├─ test_engine.py
+│  ├─ test_gate_f1.py
 │  ├─ test_preprompts.py
 │  └─ test_registry.py
 ├─ data/           # estado local (ignorado por git, aún no creado)
@@ -116,3 +118,19 @@ Perfil congelado del grafo (exportado de la ruta certificada nw03/nw07 con `buil
 `Anima-2.9B-preview-v1.safetensors` + CLIP `qwen_3_06b_base` + VAE `qwen_image_vae`; 320x576, batch 1;
 20 pasos, cfg 4.0, euler/`sgm_uniform`, denoise 1.0, seed 42; 9 nodos: UNETLoader, CLIPLoader, VAELoader,
 CLIPTextEncode x2, EmptyLatentImage, KSampler, VAEDecode, SaveImage.
+
+## Gate F1
+
+```
+& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.gate_f1
+```
+
+**Requisito: GPU libre** (el operador confirma que ComfyUI no tiene trabajo en curso; igual que F0, el
+runner no comprueba `/queue`, no espera ni pide confirmaciones).
+
+Recorre el registro (o solo los `--model-id` indicados) y, por cada modelo, parchea los nodos
+UNETLoader/CLIPLoader/VAELoader del grafo con su `profile` (localizados por `class_type`, no por id
+fijo), fija la `--seed` en todo nodo con widget `seed` y ejecuta `submit` + `wait` + `outputs`.
+Imprime una línea por PNG: `id | prompt_id | ruta | bytes`; exit 0 solo si todos los modelos generaron
+al menos 1 PNG de peso > 0, exit 1 con el detalle de cada fallo. Opciones: `--model-id ID` (repetible;
+default todos), `--seed N` (default 42) y `--graph RUTA` (default `E:\IA\WAIFU\workflows\anima_base.json`).

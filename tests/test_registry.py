@@ -58,11 +58,18 @@ def make_entry(model_id: str = "modelo-test", **overrides) -> ModelEntry:
 
 
 class RealRegistryTests(unittest.TestCase):
-    def test_load_real_tiene_un_modelo(self):
+    def test_load_real_tiene_tres_modelos(self):
         registry = ModelRegistry.load(REGISTRY_PATH)
 
-        self.assertEqual(len(registry), 1)
-        self.assertEqual([entry.id for entry in registry.models], ["anima-2.9b-preview"])
+        self.assertEqual(len(registry), 3)
+        self.assertEqual(
+            [entry.id for entry in registry.models],
+            [
+                "anima-2.9b-preview",
+                "anima-official-aesthetic-v11",
+                "one-obsession-anima-v40",
+            ],
+        )
 
     def test_entrada_real_coincide_con_el_brief(self):
         registry = ModelRegistry.load(REGISTRY_PATH)
@@ -87,7 +94,7 @@ class RealRegistryTests(unittest.TestCase):
     def test_by_family(self):
         registry = ModelRegistry.load(REGISTRY_PATH)
 
-        self.assertEqual(len(registry.by_family("anima")), 1)
+        self.assertEqual(len(registry.by_family("anima")), 3)
         self.assertEqual(registry.by_family("wan"), [])
 
     def test_to_dict_es_versionado(self):
