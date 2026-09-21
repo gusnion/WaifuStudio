@@ -80,3 +80,22 @@ si el engine no responde. `data_dir` puede faltar sin romper el smoke.
 
 Hasta F5 el engine y los assets viven en `E:\IA\VIDEO` (ComfyUI, modelos, workflows, salidas).
 Ese árbol es de solo lectura para este repo y se archiva al cerrar F5.
+
+## Gate F0
+
+```
+& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.gate_f0
+```
+
+**Requisito: GPU libre** (el operador confirma que ComfyUI no tiene trabajo en curso; el runner no
+comprueba `/queue`, no espera ni pide confirmaciones).
+
+Envía `workflows\anima_base.json` con `ComfyEngine.submit`, espera el history (`wait`) y verifica los
+PNG con `outputs`. Imprime el `prompt_id`, la ruta absoluta y el tamaño de cada PNG; exit 0 con al
+menos 1 PNG de peso > 0, exit 1 en cualquier fallo. Opciones: `--seed N` (default 42) y
+`--graph RUTA` (default `E:\IA\WAIFU\workflows\anima_base.json`).
+
+Perfil congelado del grafo (exportado de la ruta certificada nw03/nw07 con `build_master("imagen", seed=42)`):
+`Anima-2.9B-preview-v1.safetensors` + CLIP `qwen_3_06b_base` + VAE `qwen_image_vae`; 320x576, batch 1;
+20 pasos, cfg 4.0, euler/`sgm_uniform`, denoise 1.0, seed 42; 9 nodos: UNETLoader, CLIPLoader, VAELoader,
+CLIPTextEncode x2, EmptyLatentImage, KSampler, VAEDecode, SaveImage.
