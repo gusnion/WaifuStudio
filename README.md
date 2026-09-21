@@ -21,7 +21,11 @@ E:\IA\WAIFU
 ├─ app/
 │  ├─ __init__.py
 │  ├─ config.py    # configuración central congelada
+│  ├─ engine.py    # cliente API del engine ComfyUI (M8-03)
 │  └─ health.py    # smoke CLI (python -m app.health)
+├─ tests/          # tests CPU, sin red ni GPU
+│  ├─ __init__.py
+│  └─ test_engine.py
 ├─ data/           # estado local (ignorado por git, aún no creado)
 ├─ outputs/        # resultados propios (ignorado por git, aún no creado)
 ├─ .gitignore
@@ -43,6 +47,23 @@ Derivadas de `comfy_root`: `comfy_output_dir` (`output/`), `comfy_workflows_dir`
 `comfy_models_dir` (`models/`), `comfy_custom_nodes_dir` (`custom_nodes/`).
 
 Sin secretos ni lectura de `.env`: solo `os.environ`.
+
+## Engine (M8-03)
+
+`app/engine.py` es el cliente HTTP de la API de ComfyUI (solo stdlib, transporte inyectable):
+
+```python
+from app.config import load_config
+from app.engine import ComfyEngine, load_graph
+
+engine = ComfyEngine(load_config())
+graph = load_graph(r"workflows\base.json")
+prompt_id = engine.submit(graph)
+entry = engine.wait(prompt_id)
+paths = engine.outputs(entry, expected_ext=("png",))
+```
+
+Los tests corren offline con un transporte falso: no envían jobs al engine ni tocan la GPU.
 
 ## Smoke
 
