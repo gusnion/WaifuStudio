@@ -24,6 +24,9 @@ E:\IA\WAIFU
 │  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
 │  ├─ enhancer.py     # «Mejorar prompt»: LLM local + RAG + preprompts (M8-20)
 │  ├─ gate_f1.py      # runner Gate F1: 1 imagen por modelo del registro (M8-11b)
+│  ├─ graphs.py       # grafos API-format: perfil/params e img2img (F3a)
+│  ├─ jobs.py         # cola 1-GPU en serie con worker daemon (F3a)
+│  ├─ oc_traits.py    # catálogo de traits OC Maker con tags danbooru (F3a)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  ├─ store.py        # store sqlite3 de generaciones (M8-21)
@@ -37,6 +40,9 @@ E:\IA\WAIFU
 │  ├─ test_engine.py
 │  ├─ test_enhancer.py
 │  ├─ test_gate_f1.py
+│  ├─ test_graphs.py
+│  ├─ test_jobs.py
+│  ├─ test_oc_traits.py
 │  ├─ test_preprompts.py
 │  ├─ test_registry.py
 │  └─ test_store.py
@@ -104,6 +110,27 @@ LLM inyectado como `llm(system, user) -> str`. `load_local_llm()` carga el GGUF 
 
 `app/store.py` (M8-21) persiste generaciones en sqlite3 (`generations`: prompt, negative, params,
 status, outputs y error; `params`/`outputs` como JSON) con `add`, `get`, `list`, `count` y `update`.
+
+## Backend F3
+
+`app/graphs.py` (F3a) manipula grafos API-format sobre copias profundas: `patch_model` aplica el
+`profile` del modelo (UNETLoader/CLIPLoader/VAELoader por `class_type`) y la seed; `patch_params`
+aplica solo los parámetros no-None (seed/steps/cfg/sampler/scheduler al KSampler; width/height al
+EmptyLatentImage); `to_img2img` sustituye el EmptyLatentImage por `img_ref` (LoadImage) + `img_enc`
+(VAEEncode) y rewirea `latent_image`/`denoise` del KSampler. `EngineError` ante grafos o valores
+incompletos. `app/gate_f1.py` reutiliza `patch_model`.
+
+`app/jobs.py` (F3a) ejecuta los jobs de la GPU en serie (un worker daemon, FIFO): `submit` (id
+`uuid4().hex`), `status` (`queued|running|done|error`), `result` (excepción guardada o None),
+`wait` (estado final, o el actual al agotar timeout) y `start`/`stop` idempotentes; la excepción de
+un job pasa a `error` sin matar al worker.
+
+`app/oc_traits.py` (F3a) cataloga 8 grupos de traits OC Maker (hair, eyes, face, body, outfit,
+expression, accessories, setting) con tags danbooru estándar; `build_prompt` valida los ids, deduplica
+tags y compone el prompt en orden de grupo, y `list_traits` devuelve una copia serializable para la API.
+
+Los tests de F3a (`tests\test_graphs.py`, `tests\test_jobs.py`, `tests\test_oc_traits.py`) corren
+offline: `test_graphs.py` usa el grafo real `workflows\anima_base.json`.
 
 ## Smoke
 

@@ -18,35 +18,17 @@ runner NO comprueba ``/queue``, no espera y no pide confirmaciones.
 from __future__ import annotations
 
 import argparse
-import copy
 import sys
 from pathlib import Path
 from typing import Callable
 
 from app.config import load_config
 from app.engine import ComfyEngine, EngineError, load_graph
+from app.graphs import patch_model
 from app.registry import DEFAULT_PATH, ModelEntry, ModelRegistry
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_GRAPH = APP_ROOT / "workflows" / "anima_base.json"
-
-
-def _loader_nodes(graph: dict, class_type: str) -> list[dict]:
-    return [node for node in graph.values() if node.get("class_type") == class_type]
-
-
-def _patch_loader(graph: dict, class_type: str, **values: str) -> None:
-    """Fija ``values`` en los inputs de todo nodo ``class_type``; EngineError si no hay."""
-    nodes = _loader_nodes(graph, class_type)
-    if not nodes:
-        raise EngineError(
-            f"grafo sin nodo {class_type}: no se puede aplicar el perfil del modelo"
-        )
-    for node in nodes:
-        inputs = node.get("inputs")
-        if not isinstance(inputs, dict):
-            raise EngineError(f"nodo {class_type} sin inputs dict: {node!r}")
-        inputs.update(values)
 
 
 def build_graph_for(graph: dict, entry: ModelEntry, seed: int) -> dict:
@@ -55,24 +37,7 @@ def build_graph_for(graph: dict, entry: ModelEntry, seed: int) -> dict:
     No muta ``graph``. EngineError si falta UNETLoader, CLIPLoader, VAELoader o
     algun nodo con widget ``seed``.
     """
-    patched = copy.deepcopy(graph)
-    _patch_loader(patched, "UNETLoader", unet_name=entry.profile.unet_name)
-    _patch_loader(
-        patched,
-        "CLIPLoader",
-        clip_name=entry.profile.clip_name,
-        type=entry.profile.clip_type,
-    )
-    _patch_loader(patched, "VAELoader", vae_name=entry.profile.vae_name)
-    applied = 0
-    for node in patched.values():
-        inputs = node.get("inputs")
-        if isinstance(inputs, dict) and "seed" in inputs:
-            inputs["seed"] = int(seed)
-            applied += 1
-    if not applied:
-        raise EngineError("grafo sin nodo con widget 'seed': no se puede fijar la seed")
-    return patched
+    return patch_model(graph, entry, seed)
 
 
 def run(
