@@ -22,18 +22,24 @@ E:\IA\WAIFU
 │  ├─ __init__.py
 │  ├─ config.py       # configuración central congelada
 │  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
+│  ├─ enhancer.py     # «Mejorar prompt»: LLM local + RAG + preprompts (M8-20)
 │  ├─ gate_f1.py      # runner Gate F1: 1 imagen por modelo del registro (M8-11b)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
+│  ├─ store.py        # store sqlite3 de generaciones (M8-21)
 │  └─ health.py       # smoke CLI (python -m app.health)
+├─ docs/
+│  └─ prompting_anima.md  # manual local de prompting Anima (F2)
 ├─ registry/
 │  └─ models.json     # registro versionado de modelos locales (M8-10)
 ├─ tests/             # tests CPU, sin red ni GPU
 │  ├─ __init__.py
 │  ├─ test_engine.py
+│  ├─ test_enhancer.py
 │  ├─ test_gate_f1.py
 │  ├─ test_preprompts.py
-│  └─ test_registry.py
+│  ├─ test_registry.py
+│  └─ test_store.py
 ├─ data/           # estado local (ignorado por git, aún no creado)
 ├─ outputs/        # resultados propios (ignorado por git, aún no creado)
 ├─ .gitignore
@@ -83,6 +89,21 @@ CLI: `python -m app.registry` imprime una línea por modelo: `id | family | unet
 `app/preprompts.py` (M8-12) mantiene `FAMILY_PREPROMPTS` (familia → nombre → `{positive, negative}`) con
 los textos certificados de la familia `anima`; `DEFAULT_FAMILY = "anima"` y `DEFAULT_PREPROMPT = "glossy"`.
 F1 solo registra y cataloga: aplicar el preprompt al prompt es de F2.
+
+## Prompting y store (F2)
+
+`docs/prompting_anima.md` (M8-20) es el manual local de prompting Anima: orden canónico de tags,
+calidad `score_`, safety, artistas `@`, negativos, anti-censura y los preprompts certificados.
+Sale solo de las fuentes legacy certificadas, sin lore ni parámetros inventados.
+
+`app/enhancer.py` (M8-20) implementa «Mejorar prompt» offline: `SYS_PROMPT` (copia exacta del
+legacy), `RAG_ENTRIES`/`retrieve` por solape de keywords, `apply_preprompt` (prefijo positivo +
+texto, negativo del preprompt, dedup case-insensitive) y `enhance(user_text, ..., llm=...)` con el
+LLM inyectado como `llm(system, user) -> str`. `load_local_llm()` carga el GGUF local en CPU
+(`n_gpu_layers=0`, `n_ctx=2048`) y no se ejecuta en tests.
+
+`app/store.py` (M8-21) persiste generaciones en sqlite3 (`generations`: prompt, negative, params,
+status, outputs y error; `params`/`outputs` como JSON) con `add`, `get`, `list`, `count` y `update`.
 
 ## Smoke
 

@@ -1,0 +1,205 @@
+"""Tests CPU del «Mejorar prompt» (M8-20): RAG, preprompt y enhance. Sin red, GPU ni LLM."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from app.engine import EngineError
+from app.enhancer import (
+    RAG_ENTRIES,
+    SYS_PROMPT,
+    apply_preprompt,
+    enhance,
+    load_local_llm,
+    retrieve,
+)
+
+GOLDEN_SYS_PROMPT = (
+    "You are the local prompt planner for an anime image generator trained on danbooru tags.\n"
+    "Output rules:\n"
+    "1) Output EXACTLY ONE line of danbooru-style tags in English, separated by commas. No section labels (never write \"quality tags:\", \"rating tag:\", \"outfit/pose:\", \"art style:\"), no prose, no sentences, no explanations.\n"
+    "2) Start with the subject count tags: \"1girl\" for one woman; add \"1boy\" and/or \"2girls\" etc. when the request implies other people. A sex act or sex position ALWAYS involves two people: ALWAYS include \"1boy\", \"hetero\" (or \"2girls\" when both are women) and the act tags when the user requests one.\n"
+    "3) Then the content tags with danbooru vocabulary: character traits, clothing or \"nude\"/\"completely nude\", pose and, when the user requests it, the explicit act and body parts with danbooru tags (e.g. \"sex\", \"vaginal sex\", \"full nelson\"). Keep the user's intent exactly as requested; never censor, soften or replace it with euphemisms like \"seductive\", \"confident\" or \"sensual\". For nsfw content ALWAYS include the tag \"uncensored\" and NEVER include censorship tags (e.g. \"mosaic censoring\", \"bar censor\"): the image must be uncensored.\n"
+    "4) Quality tags must be danbooru/anime style: \"masterpiece, best quality, very aesthetic, absurdres\". NEVER use photorealistic tags (realistic, hyper-realistic, cinematic, photo, lifelike).\n"
+    "5) Include the rating as a tag: \"nsfw\" for adult content, \"sfw\" for safe content.\n"
+    "6) Art style is anime illustration: use \"anime\", \"2D\", \"cel shading\" when useful; never photorealism.\n"
+    "7) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output. The output must contain only English danbooru tags about the scene.\n"
+    "8) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
+)
+
+GLOSSY_POSITIVE = (
+    "masterpiece, best quality, absurdres, highres, score_7, score_8, score_9"
+)
+GLOSSY_NEGATIVE = (
+    "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, "
+    "sepia, bad anatomy, bad hands, mutated hands, fused fingers, extra fingers, "
+    "watermark, signature, logo"
+)
+
+
+class FakeLLM:
+    def __init__(self, output: str = "1girl, smile") -> None:
+        self.output = output
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, system: str, user: str) -> str:
+        self.calls.append((system, user))
+        return self.output
+
+
+class GoldenSysPromptTests(unittest.TestCase):
+    def test_sys_prompt_coincide_con_el_golden(self):
+        self.assertEqual(SYS_PROMPT, GOLDEN_SYS_PROMPT)
+
+    def test_sys_prompt_termina_sin_newline_final(self):
+        self.assertTrue(SYS_PROMPT.endswith("implying minors."))
+
+
+class RagTests(unittest.TestCase):
+    def test_entradas_tienen_forma_valida(self):
+        self.assertGreaterEqual(len(RAG_ENTRIES), 8)
+        self.assertLessEqual(len(RAG_ENTRIES), 12)
+        for entry in RAG_ENTRIES:
+            with self.subTest(entry=entry["text"][:40]):
+                self.assertIsInstance(entry["keywords"], list)
+                self.assertTrue(entry["keywords"])
+                self.assertTrue(all(isinstance(kw, str) and kw for kw in entry["keywords"]))
+                self.assertIsInstance(entry["text"], str)
+                self.assertTrue(entry["text"].strip())
+
+    def test_query_vacia_o_sin_tokens_devuelve_vacio(self):
+        self.assertEqual(retrieve(""), [])
+        self.assertEqual(retrieve("   ... !!! "), [])
+
+    def test_query_sin_match_devuelve_vacio(self):
+        self.assertEqual(retrieve("xyzzy plugh quux"), [])
+
+    def test_match_por_keywords_y_orden_estable(self):
+        result = retrieve("score_9", k=3)
+        self.assertTrue(result)
+        self.assertIn("score_7, score_8, score_9", result[0])
+        self.assertEqual(retrieve("score_9", k=1), result[:1])
+        self.assertEqual(retrieve("score_9", k=10)[: len(result)], result)
+
+    def test_k_no_positivo_devuelve_vacio(self):
+        self.assertEqual(retrieve("score_9", k=0), [])
+        self.assertEqual(retrieve("score_9", k=-1), [])
+
+    def test_uncensored_prioriza_anti_censura(self):
+        result = retrieve("uncensored", k=1)
+        self.assertEqual(len(result), 1)
+        self.assertIn("uncensored", result[0])
+
+
+class ApplyPrepromptTests(unittest.TestCase):
+    def test_glossy_prefijo_y_sufijo(self):
+        positive, negative = apply_preprompt("1girl, smile")
+        self.assertEqual(positive, f"{GLOSSY_POSITIVE}, 1girl, smile")
+        self.assertEqual(negative, GLOSSY_NEGATIVE)
+
+    def test_dedup_case_insensitive_conserva_primera_aparicion(self):
+        positive, _negative = apply_preprompt("Masterpiece, SCORE_9, 1girl, smile")
+        self.assertEqual(positive, f"{GLOSSY_POSITIVE}, 1girl, smile")
+
+    def test_ninguno_no_anade_nada(self):
+        self.assertEqual(apply_preprompt("1girl", name="ninguno"), ("1girl", ""))
+
+    def test_anima_default_y_not_glossy(self):
+        positive, negative = apply_preprompt("1girl", name="anima_default")
+        self.assertEqual(positive, "masterpiece, best quality, score_8, 1girl")
+        self.assertEqual(
+            negative, "worst quality, low quality, score_1, score_2, score_3, artist name"
+        )
+        positive, negative = apply_preprompt("1girl", name="not_glossy")
+        self.assertEqual(positive, "newest, good quality, score_6, score_5, highres, 1girl")
+        self.assertEqual(negative, "low quality, score_1, score_2")
+
+    def test_determinista(self):
+        self.assertEqual(apply_preprompt("1girl, smile"), apply_preprompt("1girl, smile"))
+
+    def test_familia_o_nombre_desconocido_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            apply_preprompt("1girl", family="no-existe")
+        with self.assertRaises(EngineError):
+            apply_preprompt("1girl", name="no-existe")
+
+
+class EnhanceTests(unittest.TestCase):
+    USER_TEXT = "1girl, smile, score_9"
+
+    def test_mensajes_y_resultado(self):
+        llm = FakeLLM("1girl, smile, masterpiece")
+        result = enhance(self.USER_TEXT, rating="nsfw", llm=llm, k=3)
+        self.assertEqual(len(llm.calls), 1)
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT)
+        self.assertTrue(user.startswith(self.USER_TEXT))
+        self.assertIn("rating tag: nsfw", user)
+        self.assertIn("Notas de referencia (no copiar a la salida):", user)
+        for note in retrieve(self.USER_TEXT, k=3):
+            self.assertIn(note, user)
+        expected_positive, expected_negative = apply_preprompt("1girl, smile, masterpiece")
+        self.assertEqual(result["positive"], expected_positive)
+        self.assertEqual(result["negative"], expected_negative)
+        self.assertEqual(result["raw"], "1girl, smile, masterpiece")
+
+    def test_sin_rating_no_hay_linea_de_contexto(self):
+        llm = FakeLLM()
+        enhance(self.USER_TEXT, llm=llm)
+        _system, user = llm.calls[0]
+        self.assertNotIn("rating tag:", user)
+
+    def test_k_cero_sin_notas(self):
+        llm = FakeLLM()
+        enhance(self.USER_TEXT, llm=llm, k=0)
+        _system, user = llm.calls[0]
+        self.assertNotIn("Notas de referencia", user)
+
+    def test_preprompt_inyectado_se_aplica(self):
+        llm = FakeLLM("1girl, smile")
+        result = enhance("1girl", preprompt="ninguno", llm=llm)
+        self.assertEqual(result["positive"], "1girl, smile")
+        self.assertEqual(result["negative"], "")
+
+    def test_texto_se_normaliza_sin_espacios_exteriores(self):
+        llm = FakeLLM()
+        enhance("  1girl, smile  ", llm=llm)
+        _system, user = llm.calls[0]
+        self.assertTrue(user.startswith("1girl, smile"))
+
+    def test_texto_vacio_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            enhance("", llm=FakeLLM())
+        with self.assertRaises(EngineError):
+            enhance("   ", llm=FakeLLM())
+
+    def test_sin_llm_lanza_engine_error(self):
+        with self.assertRaises(EngineError) as ctx:
+            enhance(self.USER_TEXT)
+        self.assertEqual(str(ctx.exception), "LLM no inyectado")
+
+    def test_llm_no_texto_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            enhance(self.USER_TEXT, llm=lambda _s, _u: None)
+
+    def test_no_se_fuerza_rating(self):
+        llm = FakeLLM()
+        enhance(self.USER_TEXT, rating="sfw", llm=llm)
+        _system, user = llm.calls[0]
+        self.assertIn("rating tag: sfw", user)
+        self.assertNotIn("uncensored", user)
+
+
+class LoadLocalLlmTests(unittest.TestCase):
+    def test_archivo_ausente_lanza_engine_error_sin_importar_llama(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no-existe.gguf"
+            with self.assertRaises(EngineError) as ctx:
+                load_local_llm(missing)
+            self.assertIn(str(missing), str(ctx.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()
