@@ -19,6 +19,9 @@ fuentes: sin lore, sin parámetros de sampler y sin modelos inventados.
 - Familia `score_`: usar `score_7`, `score_8`, `score_9` para calidad alta.
 - Espacios: los tags se separan con `, `; la excepción es `score_X`, que lleva guion bajo
   (`score_8`, nunca `score 8`).
+- Normalización de la salida del LLM: en cada tag de «Mejorar prompt» el guion bajo se convierte
+  en espacio (`coastal_city` → `coastal city`, `completely_nude` → `completely nude`), salvo
+  `score_<N>` (`score_9`, `score_12`), que se conserva intacto.
 - Calidad danbooru/anime recomendada por el planner: `masterpiece, best quality, very aesthetic,
   absurdres`.
 - PROHIBIDO fotorrealismo: nada de `realistic`, `hyper-realistic`, `cinematic`, `photo`, `lifelike`.
@@ -31,6 +34,9 @@ fuentes: sin lore, sin parámetros de sampler y sin modelos inventados.
   viajar como línea de contexto y el LLM no debe copiarla a la salida.
 - Anti-censura: en `nsfw` el positivo SIEMPRE incluye `uncensored` y NUNCA tags de censura
   (`mosaic censoring`, `bar censor`); la imagen debe salir sin censura.
+- Determinismo de rating en «Mejorar prompt» (antes del preprompt, case-insensitive, por tags
+  separados por comas y sin duplicar): `nsfw` garantiza `nsfw` y `uncensored` y elimina `sfw`;
+  `sfw` garantiza `sfw` y elimina `nsfw` y `uncensored`; sin rating (`None`) no se toca el rating.
 - No censurar ni suavizar la petición: nada de eufemismos tipo `seductive`, `confident` o `sensual`
   en lugar del acto o las partes del cuerpo realmente pedidos.
 - Regla dura del planner: todos los personajes son adultos (21+); nunca menores, términos
@@ -85,5 +91,7 @@ El LLM NO decide el preprompt: se aplica de forma determinista al positivo (pref
 ## Flujo «Mejorar prompt» (F2)
 
 `app/enhancer.py` construye el mensaje (system = `SYS_PROMPT`; user = texto + notas RAG + `rating
-tag` si viene), llama al LLM local inyectado y aplica el preprompt elegido con `apply_preprompt`;
-el store `app/store.py` guarda prompt, negativo, params y salidas.
+tag` si viene), llama al LLM local inyectado y aplica el preprompt elegido con `apply_preprompt`.
+Antes del preprompt normaliza la salida del LLM (`_` → espacio salvo `score_<N>`) y fuerza el
+rating pedido según el determinismo de `nsfw`/`sfw`; el resultado (`raw` ya normalizado) y el
+prompt final se guardan con el store `app/store.py` (prompt, negativo, params y salidas).

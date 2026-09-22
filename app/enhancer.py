@@ -129,6 +129,12 @@ DEFAULT_LLM_RELATIVE = Path(
 
 LlmFn = Callable[[str, str], str]
 
+SCORE_TAG_RE = re.compile(r"^score_\d+$", re.IGNORECASE)
+RATING_RULES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
+    "nsfw": (("nsfw", "uncensored"), frozenset({"sfw"})),
+    "sfw": (("sfw",), frozenset({"nsfw", "uncensored"})),
+}
+
 
 def _tokens(text: Any) -> set[str]:
     """Tokens alfanumericos en minusculas (score_9 -> {score, 9})."""
@@ -173,6 +179,47 @@ def _dedup_tags(parts: list[str]) -> str:
     return ", ".join(merged)
 
 
+def _normalize_tag(tag: str) -> str:
+    """`_` -> espacio salvo en `score_<N>`, que conserva el guion bajo."""
+    if SCORE_TAG_RE.match(tag):
+        return tag
+    return tag.replace("_", " ")
+
+
+def _normalize_tags(text: str) -> str:
+    """Normaliza la lista de tags del LLM: `coastal_city` -> `coastal city`, `score_9` intacto."""
+    return ", ".join(
+        _normalize_tag(tag.strip()) for tag in str(text).split(",") if tag.strip()
+    )
+
+
+def _enforce_rating(text: str, rating: str | None) -> str:
+    """Fuerza el rating pedido sobre los tags, case-insensitive y sin duplicar.
+
+    `nsfw` garantiza `nsfw` y `uncensored` y elimina `sfw`; `sfw` garantiza `sfw`
+    y elimina `nsfw`/`uncensored`; cualquier otro valor (p. ej. `None`) no toca el
+    rating. Los tags repetidos del LLM se deduplican conservando la 1a aparicion y
+    los que faltan se anaden al final, en el orden de la regla.
+    """
+    rule = RATING_RULES.get(rating) if isinstance(rating, str) else None
+    if rule is None:
+        return text
+    required, removed = rule
+    kept: list[str] = []
+    seen: set[str] = set()
+    for raw_tag in str(text).split(","):
+        tag = raw_tag.strip()
+        if not tag or tag.lower() in removed or tag.lower() in seen:
+            continue
+        seen.add(tag.lower())
+        kept.append(tag)
+    for tag in required:
+        if tag not in seen:
+            kept.append(tag)
+            seen.add(tag)
+    return ", ".join(kept)
+
+
 def apply_preprompt(
     text: str, family: str = "anima", name: str = "glossy"
 ) -> tuple[str, str]:
@@ -197,8 +244,12 @@ def enhance(
 ) -> dict[str, str]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
 
-    Sin censurar ni forzar el rating: si viene, se anade como linea de contexto.
-    Sin `llm` inyectado lanza EngineError.
+    Antes del preprompt, el texto del LLM se normaliza (en cada tag `_` -> espacio,
+    salvo `score_<N>`, que queda intacto) y se fuerza el rating pedido: `nsfw`
+    garantiza `nsfw` y `uncensored` y elimina `sfw`; `sfw` garantiza `sfw` y
+    elimina `nsfw`/`uncensored`; `rating=None` no toca el rating. El forzado es
+    case-insensitive, deduplica tags repetidos y no anade duplicados. Sin `llm`
+    inyectado lanza EngineError.
     """
     text = user_text.strip() if isinstance(user_text, str) else ""
     if not text:
@@ -216,14 +267,25 @@ def enhance(
     raw = llm(SYS_PROMPT, user)
     if not isinstance(raw, str):
         raise EngineError("enhance: el LLM no devolvio texto")
-    positive, negative = apply_preprompt(raw, family=family, name=preprompt)
-    return {"positive": positive, "negative": negative, "raw": raw}
+    prepared = _enforce_rating(_normalize_tags(raw), rating)
+    positive, negative = apply_preprompt(prepared, family=family, name=preprompt)
+    return {"positive": positive, "negative": negative, "raw": prepared}
 
 
-def load_local_llm(model_path: str | Path | None = None):
-    """Carga el GGUF local en CPU (n_gpu_layers=0, n_ctx=2048, verbose=False).
+def load_local_llm(
+    model_path: str | Path | None = None,
+    *,
+    max_tokens: int = 192,
+    temperature: float = 0.7,
+) -> LlmFn:
+    """Carga el GGUF local en CPU y devuelve `llm(system, user) -> str`.
 
-    Import perezoso de llama_cpp; EngineError si falta el archivo. No usar en tests.
+    `n_gpu_layers=0`, `n_ctx=2048`, `verbose=False`; el callable usa
+    `Llama.create_chat_completion(messages=[system, user], max_tokens=...,
+    temperature=...)` y exige contenido de texto no vacio en
+    `choices[0]["message"]["content"]` (si no, `EngineError("LLM sin contenido")`).
+    Import perezoso de llama_cpp; EngineError si falta el archivo (antes de
+    importar). No usar en tests.
     """
     path = (
         Path(model_path)
@@ -234,7 +296,26 @@ def load_local_llm(model_path: str | Path | None = None):
         raise EngineError(f"modelo LLM local no encontrado: {path}")
     from llama_cpp import Llama
 
-    return Llama(model_path=str(path), n_ctx=2048, n_gpu_layers=0, verbose=False)
+    llama = Llama(model_path=str(path), n_ctx=2048, n_gpu_layers=0, verbose=False)
+
+    def llm(system: str, user: str) -> str:
+        response = llama.create_chat_completion(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        try:
+            content = response["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            content = None
+        if not isinstance(content, str) or not content.strip():
+            raise EngineError("LLM sin contenido")
+        return content
+
+    return llm
 
 
 __all__ = [

@@ -128,8 +128,12 @@ Sale solo de las fuentes legacy certificadas, sin lore ni parámetros inventados
 `app/enhancer.py` (M8-20) implementa «Mejorar prompt» offline: `SYS_PROMPT` (copia exacta del
 legacy), `RAG_ENTRIES`/`retrieve` por solape de keywords, `apply_preprompt` (prefijo positivo +
 texto, negativo del preprompt, dedup case-insensitive) y `enhance(user_text, ..., llm=...)` con el
-LLM inyectado como `llm(system, user) -> str`. `load_local_llm()` carga el GGUF local en CPU
-(`n_gpu_layers=0`, `n_ctx=2048`) y no se ejecuta en tests.
+LLM inyectado como `llm(system, user) -> str`. `enhance` normaliza la salida del LLM (`_` → espacio
+salvo `score_<N>`) y fuerza el rating pedido antes del preprompt: `nsfw` garantiza `nsfw` y
+`uncensored` y elimina `sfw`; `sfw` garantiza `sfw` y elimina `nsfw`/`uncensored`; sin rating no se
+toca. `load_local_llm()` carga el GGUF local en CPU (`n_gpu_layers=0`, `n_ctx=2048`) y devuelve un
+callable de chat (`create_chat_completion`, `max_tokens=192`, `temperature=0.7`) que exige
+contenido de texto no vacío; no se ejecuta en tests.
 
 `app/store.py` (M8-21) persiste generaciones en sqlite3 (`generations`: prompt, negative, params,
 status, outputs y error; `params`/`outputs` como JSON) con `add`, `get`, `list`, `count` y `update`.

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from app.engine import EngineError
 from app.enhancer import (
@@ -47,6 +50,26 @@ class FakeLLM:
     def __call__(self, system: str, user: str) -> str:
         self.calls.append((system, user))
         return self.output
+
+
+def _fake_llama_module(response):
+    """Modulo `llama_cpp` falso: `Llama` registra init y devuelve `response`."""
+    module = types.ModuleType("llama_cpp")
+
+    class FakeLlama:
+        instances: list[FakeLlama] = []
+
+        def __init__(self, **kwargs) -> None:
+            self.init_kwargs = kwargs
+            self.chat_calls: list[dict] = []
+            FakeLlama.instances.append(self)
+
+        def create_chat_completion(self, **kwargs):
+            self.chat_calls.append(kwargs)
+            return response
+
+    module.Llama = FakeLlama
+    return module, FakeLlama
 
 
 class GoldenSysPromptTests(unittest.TestCase):
@@ -140,10 +163,11 @@ class EnhanceTests(unittest.TestCase):
         self.assertIn("Notas de referencia (no copiar a la salida):", user)
         for note in retrieve(self.USER_TEXT, k=3):
             self.assertIn(note, user)
-        expected_positive, expected_negative = apply_preprompt("1girl, smile, masterpiece")
+        expected_raw = "1girl, smile, masterpiece, nsfw, uncensored"
+        expected_positive, expected_negative = apply_preprompt(expected_raw)
         self.assertEqual(result["positive"], expected_positive)
         self.assertEqual(result["negative"], expected_negative)
-        self.assertEqual(result["raw"], "1girl, smile, masterpiece")
+        self.assertEqual(result["raw"], expected_raw)
 
     def test_sin_rating_no_hay_linea_de_contexto(self):
         llm = FakeLLM()
@@ -184,12 +208,67 @@ class EnhanceTests(unittest.TestCase):
         with self.assertRaises(EngineError):
             enhance(self.USER_TEXT, llm=lambda _s, _u: None)
 
-    def test_no_se_fuerza_rating(self):
+    def test_linea_de_contexto_rating_sfw(self):
         llm = FakeLLM()
         enhance(self.USER_TEXT, rating="sfw", llm=llm)
         _system, user = llm.calls[0]
         self.assertIn("rating tag: sfw", user)
         self.assertNotIn("uncensored", user)
+
+
+class RatingEnforcementTests(unittest.TestCase):
+    def test_nsfw_garantiza_nsfw_y_uncensored_y_elimina_sfw(self):
+        llm = FakeLLM("1girl, sfw, smile, uncensored")
+        result = enhance("1girl", rating="nsfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "1girl, smile, uncensored, nsfw")
+        raw_tags = [tag.strip().lower() for tag in result["raw"].split(",")]
+        self.assertNotIn("sfw", raw_tags)
+
+    def test_nsfw_no_duplica_ni_pisa_la_capitalizacion(self):
+        llm = FakeLLM("1girl, NSFW, Uncensored, smile")
+        result = enhance("1girl", rating="nsfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "1girl, NSFW, Uncensored, smile")
+
+    def test_nsfw_deduplica_tags_repetidos_del_llm(self):
+        llm = FakeLLM("1girl, smile, smile, uncensored, uncensored")
+        result = enhance("1girl", rating="nsfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "1girl, smile, uncensored, nsfw")
+
+    def test_sfw_garantiza_sfw_y_elimina_nsfw_y_uncensored(self):
+        llm = FakeLLM("1girl, nsfw, uncensored, smile")
+        result = enhance("1girl", rating="sfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "1girl, smile, sfw")
+
+    def test_rating_none_no_toca_el_rating(self):
+        llm = FakeLLM("1girl, nsfw, uncensored, smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "1girl, nsfw, uncensored, smile")
+
+
+class TagNormalizationTests(unittest.TestCase):
+    def test_underscore_a_espacio_salvo_score(self):
+        llm = FakeLLM("coastal_city, completely_nude, score_9, score_7, smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(
+            result["raw"],
+            "coastal city, completely nude, score_9, score_7, smile",
+        )
+
+    def test_normalizacion_antes_del_preprompt(self):
+        llm = FakeLLM("coastal_city, score_9")
+        result = enhance("1girl", preprompt="ninguno", llm=llm, k=0)
+        self.assertEqual(result["positive"], "coastal city, score_9")
+
+    def test_score_en_mayusculas_queda_intacto(self):
+        llm = FakeLLM("SCORE_9, score_12")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "SCORE_9, score_12")
+
+    def test_sin_cambios_no_muta_el_texto(self):
+        raw = "1girl, smile, masterpiece"
+        result = enhance("1girl", llm=FakeLLM(raw), k=0)
+        self.assertEqual(result["raw"], raw)
+        self.assertEqual(result["positive"], apply_preprompt(raw)[0])
 
 
 class LoadLocalLlmTests(unittest.TestCase):
@@ -199,6 +278,56 @@ class LoadLocalLlmTests(unittest.TestCase):
             with self.assertRaises(EngineError) as ctx:
                 load_local_llm(missing)
             self.assertIn(str(missing), str(ctx.exception))
+
+
+class LlmWrapperTests(unittest.TestCase):
+    def _llm(self, response):
+        module, fake = _fake_llama_module(response)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        model = Path(tmp.name) / "fake.gguf"
+        model.write_bytes(b"")
+        patcher = mock.patch.dict(sys.modules, {"llama_cpp": module})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        llm = load_local_llm(model, max_tokens=64, temperature=0.2)
+        return llm, fake.instances[0]
+
+    def test_chat_completion_valido_devuelve_el_contenido(self):
+        llm, _llama = self._llm({"choices": [{"message": {"content": "1girl, smile"}}]})
+        self.assertEqual(llm("SYS", "USER"), "1girl, smile")
+
+    def test_mensajes_y_parametros_del_chat(self):
+        llm, llama = self._llm({"choices": [{"message": {"content": "ok"}}]})
+        llm("SYS", "USER")
+        call = llama.chat_calls[0]
+        self.assertEqual(
+            call["messages"],
+            [
+                {"role": "system", "content": "SYS"},
+                {"role": "user", "content": "USER"},
+            ],
+        )
+        self.assertEqual(call["max_tokens"], 64)
+        self.assertEqual(call["temperature"], 0.2)
+        self.assertEqual(llama.init_kwargs["n_gpu_layers"], 0)
+        self.assertEqual(llama.init_kwargs["n_ctx"], 2048)
+
+    def test_respuesta_no_dict_o_sin_choices_lanza_engine_error(self):
+        for response in ("texto", {"choices": []}, {}):
+            with self.subTest(response=response):
+                llm, _llama = self._llm(response)
+                with self.assertRaises(EngineError) as ctx:
+                    llm("SYS", "USER")
+                self.assertEqual(str(ctx.exception), "LLM sin contenido")
+
+    def test_contenido_no_texto_o_vacio_lanza_engine_error(self):
+        for content in (None, {"x": 1}, "", "   "):
+            with self.subTest(content=content):
+                llm, _llama = self._llm({"choices": [{"message": {"content": content}}]})
+                with self.assertRaises(EngineError) as ctx:
+                    llm("SYS", "USER")
+                self.assertEqual(str(ctx.exception), "LLM sin contenido")
 
 
 if __name__ == "__main__":
