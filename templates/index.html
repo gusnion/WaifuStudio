@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WAIFU</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>WAIFU</h1>
+    <nav class="tabs">
+      <button id="tab-image" class="tab active" type="button">Imagen</button>
+      <button id="tab-video" class="tab" type="button">Video</button>
+    </nav>
+    <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
+  </header>
+
+  <main>
+    <section id="panel-image" class="panel active">
+      <aside class="controls">
+        <label class="field">
+          <span>Prompt</span>
+          <textarea id="prompt" rows="5" placeholder="1girl, smile, ..."></textarea>
+        </label>
+        <button id="btn-enhance" type="button">Mejorar prompt</button>
+
+        <label class="field">
+          <span>Preprompt</span>
+          <select id="preprompt"></select>
+        </label>
+        <label class="field">
+          <span>Modelo</span>
+          <select id="model"></select>
+        </label>
+
+        <div class="grid-2">
+          <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
+          <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
+          <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
+          <label class="field"><span>Sampler</span><input id="sampler" type="text" value="euler"></label>
+          <label class="field"><span>Scheduler</span><input id="scheduler" type="text" value="sgm_uniform"></label>
+          <label class="field"><span>Ancho</span><input id="width" type="number" value="320" step="8"></label>
+          <label class="field"><span>Alto</span><input id="height" type="number" value="576" step="8"></label>
+        </div>
+
+        <label class="field">
+          <span>Imagen de referencia (PNG)</span>
+          <input id="ref-image" type="file" accept="image/png">
+        </label>
+        <label class="field">
+          <span>Fuerza <output id="strength-value">0.60</output></span>
+          <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
+        </label>
+
+        <button id="btn-generate" class="primary" type="button">Generar</button>
+        <p id="job-status" class="status">Listo</p>
+      </aside>
+
+      <section class="gallery-panel">
+        <div class="gallery-header">
+          <h2>Galería</h2>
+          <button id="btn-reload" type="button">Recargar</button>
+        </div>
+        <div id="gallery" class="gallery"></div>
+      </section>
+    </section>
+
+    <section id="panel-video" class="panel">
+      <div class="placeholder">
+        <h2>Video</h2>
+        <p>Pestaña de video — F4 (pendiente).</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="oc-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>OC Maker</h2>
+        <button id="btn-oc-close" type="button">Cerrar</button>
+      </div>
+      <div id="oc-groups" class="oc-groups"></div>
+      <div class="modal-footer">
+        <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

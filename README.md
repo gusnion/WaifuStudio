@@ -29,12 +29,16 @@ E:\IA\WAIFU
 │  ├─ oc_traits.py    # catálogo de traits OC Maker con tags danbooru (F3a)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
+│  ├─ server.py       # webapp FastAPI: API JSON, runner de generación y UI (F3b)
 │  ├─ store.py        # store sqlite3 de generaciones (M8-21)
 │  └─ health.py       # smoke CLI (python -m app.health)
 ├─ docs/
 │  └─ prompting_anima.md  # manual local de prompting Anima (F2)
 ├─ registry/
 │  └─ models.json     # registro versionado de modelos locales (M8-10)
+├─ static/            # app.css y app.js de la UI (F3b)
+├─ templates/
+│  └─ index.html      # UI de una página: pestañas Imagen/Video + OC Maker (F3b)
 ├─ tests/             # tests CPU, sin red ni GPU
 │  ├─ __init__.py
 │  ├─ test_engine.py
@@ -45,10 +49,12 @@ E:\IA\WAIFU
 │  ├─ test_oc_traits.py
 │  ├─ test_preprompts.py
 │  ├─ test_registry.py
+│  ├─ test_server.py
 │  └─ test_store.py
-├─ data/           # estado local (ignorado por git, aún no creado)
+├─ data/           # estado local (ignorado por git)
 ├─ outputs/        # resultados propios (ignorado por git, aún no creado)
 ├─ .gitignore
+├─ requirements.txt  # fastapi/uvicorn/jinja2 fijados (F3b)
 └─ README.md
 ```
 
@@ -131,6 +137,39 @@ tags y compone el prompt en orden de grupo, y `list_traits` devuelve una copia s
 
 Los tests de F3a (`tests\test_graphs.py`, `tests\test_jobs.py`, `tests\test_oc_traits.py`) corren
 offline: `test_graphs.py` usa el grafo real `workflows\anima_base.json`.
+
+## Webapp (F3)
+
+`app/server.py` (F3b) es la webapp local FastAPI. `create_app(config, store, registry,
+engine_factory, llm, *, queue, start_worker)` inyecta todas las dependencias para los tests.
+Rutas JSON: `GET /api/models`, `GET /api/preprompts?family=`, `GET /api/traits`,
+`POST /api/prompt/build`, `POST /api/enhance` (503 `{"error":"LLM no disponible"}` sin LLM),
+`POST /api/generate` (valida modelo/prompt/base64/strength y escribe la referencia en
+`comfy_root/input/`), `GET /api/jobs/{id}`, `GET /api/gallery?limit&offset` y
+`GET /media/{gen_id}/{name}` (PNG confinado a `data_dir/gallery/<gen_id>/`, 404/403).
+
+El runner `run_generation(job, config, store, registry, engine_factory)` carga
+`workflows\anima_base.json`, aplica `patch_model`/`patch_params` (e `to_img2img` con
+`ref_image`+`strength`), encola en la `JobQueue` (`submit`→`wait`→`outputs`) y copia los PNG a
+`data_dir/gallery/<gen_id>/` actualizando el store; un fallo queda en store y job sin matar al
+worker. La UI (`templates/index.html` + `static/app.css` + `static/app.js`, sin CDN) trae la
+pestaña **Imagen** (prompt + «Mejorar prompt», preprompt/modelo, seed/steps/cfg/sampler/scheduler/
+ancho/alto, imagen de referencia + fuerza, Generar con polling y galería) y la pestaña **Video**
+como placeholder de F4, más el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
+
+### Requisitos y arranque
+
+Las 3 dependencias están instaladas en el venv legacy y fijadas en `requirements.txt`
+(fastapi 0.141.1, uvicorn 0.53.0, jinja2 3.1.6):
+
+```powershell
+& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m pip install -r requirements.txt
+& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.server
+```
+
+Por defecto escucha en `127.0.0.1:8765`; el puerto se cambia con `WAIFU_APP_PORT`.
+La generación real requiere ComfyUI arriba (`WAIFU_COMFY_URL`) y GPU libre; los tests corren
+offline con un transporte falso y `start_worker=False` (sin GPU ni LLM reales).
 
 ## Smoke
 

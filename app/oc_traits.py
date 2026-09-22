@@ -54,7 +54,7 @@ TRAIT_GROUPS: dict[str, list[dict]] = {
         {"id": "muscular", "label": "Musculosa", "tags": ["muscular"]},
         {"id": "chubby", "label": "Rellenita", "tags": ["chubby"]},
         {"id": "abs", "label": "Abdominales", "tags": ["abs"]},
-        {"id": "petite", "label": "Petite", "tags": ["petite"]},
+        {"id": "flat_chest", "label": "Pecho plano", "tags": ["flat chest"]},
     ],
     "outfit": [
         {"id": "school_uniform", "label": "Uniforme escolar", "tags": ["school uniform"]},
