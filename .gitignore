@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 .venv/
+ComfyUI/
+python/
+cache/
 data/
 outputs/
 tmp/

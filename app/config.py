@@ -1,4 +1,4 @@
-"""Configuración central del engine (contrato congelado M8-01)."""
+"""Configuración central del engine (contrato congelado M8-01; default ajustado en F5: engine en el propio repo)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 
-DEFAULT_COMFY_ROOT = Path(r"E:\IA\VIDEO\ComfyUI")
+DEFAULT_COMFY_ROOT = APP_ROOT / "ComfyUI"
 DEFAULT_COMFY_URL = "http://127.0.0.1:8288"
 
 

@@ -60,6 +60,14 @@ E:\IA\WAIFU
 │  ├─ anima_base.json
 │  ├─ wan22_i2v_432x768.api.json    # Wan 2.2 I2V exportado del legacy (F4)
 │  └─ h3_fl2va_vertical.api.json    # MiniMax H3 FL2VA verbatim del certificado (F4)
+├─ scripts/           # launchers del stack (F5)
+│  ├─ environment.ps1               # envs y dirs de cache/tmp del repo
+│  ├─ start_engine.ps1              # arranca el engine ComfyUI en 8288 (idempotente)
+│  └─ stop_engine.ps1               # para el engine (exige /queue vacía)
+├─ ComfyUI/           # engine movido en F5 (ignorado por git)
+├─ python/            # CPython base del venv (ignorado por git)
+├─ .venv/             # venv del repo (ignorado por git)
+├─ cache/             # caches uv/huggingface/torch/pip (ignorado por git)
 ├─ data/           # estado local (ignorado por git)
 ├─ outputs/        # resultados propios (ignorado por git, aún no creado)
 ├─ .gitignore
@@ -74,7 +82,7 @@ Los valores vacíos se ignoran y se usa el default.
 
 | Clave | Variable de entorno | Default |
 |-------|---------------------|---------|
-| `comfy_root` | `WAIFU_COMFY_ROOT` | `E:\IA\VIDEO\ComfyUI` |
+| `comfy_root` | `WAIFU_COMFY_ROOT` | `E:\IA\WAIFU\ComfyUI` |
 | `comfy_url` | `WAIFU_COMFY_URL` | `http://127.0.0.1:8288` |
 | `data_dir` | `WAIFU_DATA_DIR` | `E:\IA\WAIFU\data` |
 
@@ -168,12 +176,17 @@ ancho/alto, imagen de referencia + fuerza, Generar con polling y galería) y la 
 
 ### Requisitos y arranque
 
-Las 3 dependencias están instaladas en el venv legacy y fijadas en `requirements.txt`
+Las 3 dependencias están instaladas en el venv del propio repo y fijadas en `requirements.txt`
 (fastapi 0.141.1, uvicorn 0.53.0, jinja2 3.1.6):
 
 ```powershell
-& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m pip install -r requirements.txt
-& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.server
+# launchers en la raíz del repo
+.\VERIFICAR_WAIFU.bat      # python -m app.health
+.\INICIAR_WAIFU.bat        # python -m app.server
+
+# o directo con el venv del repo
+& 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m pip install -r requirements.txt
+& 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m app.server
 ```
 
 Por defecto escucha en `127.0.0.1:8765`; el puerto se cambia con `WAIFU_APP_PORT`.
@@ -221,15 +234,15 @@ textarea de movimiento + rating + «Generar motion», motion positivo (Wan) / pr
 (solo Wan), seed, estado del job con polling y galería de video con `<video controls>`.
 
 **Requisito GPU/ComfyUI**: la generación real necesita el engine arriba (`WAIFU_COMFY_URL`), GPU
-libre y los modelos/custom nodes de cada motor instalados en `E:\IA\VIDEO\ComfyUI` (UnetLoaderGGUF
+libre y los modelos/custom nodes de cada motor instalados en `E:\IA\WAIFU\ComfyUI` (UnetLoaderGGUF
 para Wan, nodos MiniMax H3 + turbo LoRA para H3). Los tests corren offline con transporte y LLM
 falsos: no tocan GPU ni red.
 
 ## Smoke
 
 ```
-& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.health
-& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.health --require-engine
+& 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m app.health
+& 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m app.health --require-engine
 ```
 
 Comprueba rutas críticas y hace `GET {comfy_url}/system_stats` (timeout 2s, nunca lanza jobs).
@@ -238,13 +251,14 @@ si el engine no responde. `data_dir` puede faltar sin romper el smoke.
 
 ## Nota legacy
 
-Hasta F5 el engine y los assets viven en `E:\IA\VIDEO` (ComfyUI, modelos, workflows, salidas).
-Ese árbol es de solo lectura para este repo y se archiva al cerrar F5.
+Desde F5 el engine y los assets viven en `E:\IA\WAIFU` (ComfyUI, modelos, workflows, salidas,
+`python\` y `.venv\`). `E:\IA\VIDEO` queda como repo legacy de solo lectura (herramientas y
+fuentes) y ya no contiene `ComfyUI\`, `python\` ni `.venv\`.
 
 ## Gate F0
 
 ```
-& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.gate_f0
+& 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m app.gate_f0
 ```
 
 **Requisito: GPU libre** (el operador confirma que ComfyUI no tiene trabajo en curso; el runner no
@@ -263,7 +277,7 @@ CLIPTextEncode x2, EmptyLatentImage, KSampler, VAEDecode, SaveImage.
 ## Gate F1
 
 ```
-& 'E:\IA\VIDEO\.venv\Scripts\python.exe' -m app.gate_f1
+& 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m app.gate_f1
 ```
 
 **Requisito: GPU libre** (el operador confirma que ComfyUI no tiene trabajo en curso; igual que F0, el
