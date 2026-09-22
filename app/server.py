@@ -24,8 +24,10 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import APP_ROOT, EngineConfig, load_config
 from app.engine import ComfyEngine, EngineError, load_graph
+from app.enhancer import DEFAULT_LLM_RELATIVE
 from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
+from app.enhancer import load_local_llm
 from app.graphs import DEFAULT_STRENGTH, patch_model, patch_params, to_img2img
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, write_motion
@@ -280,13 +282,20 @@ def create_app(
 
     @app.post("/api/enhance")
     async def api_enhance(payload: dict = Body(...)) -> Any:
+        rating = payload.get("rating")
+        if rating is None:
+            rating = "sfw"
+        if rating not in ("sfw", "nsfw"):
+            return JSONResponse(
+                status_code=400, content={"error": "rating invalido; usar sfw|nsfw"}
+            )
         if llm is None:
             return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
         result = enhance_prompt(
             str(payload.get("text") or ""),
             family=str(payload.get("family") or DEFAULT_FAMILY),
             preprompt=str(payload.get("preprompt") or DEFAULT_PREPROMPT),
-            rating=payload.get("rating"),
+            rating=rating,
             llm=llm,
         )
         return {"positive": result["positive"], "negative": result["negative"]}
@@ -315,6 +324,13 @@ def create_app(
             return JSONResponse(status_code=400, content={"error": "negative invalido"})
         preprompt = payload.get("preprompt") or entry.preprompt or DEFAULT_PREPROMPT
         get_preprompt(entry.family, preprompt)
+        rating = payload.get("rating")
+        if rating is None:
+            rating = "sfw"
+        if rating not in ("sfw", "nsfw"):
+            return JSONResponse(
+                status_code=400, content={"error": "rating invalido; usar sfw|nsfw"}
+            )
         params = payload.get("params") or {}
         if not isinstance(params, dict):
             return JSONResponse(status_code=400, content={"error": "params invalido"})
@@ -356,6 +372,7 @@ def create_app(
             strength = DEFAULT_STRENGTH
         stored_params = dict(params)
         stored_params["preprompt"] = preprompt
+        stored_params["rating"] = rating
         if ref_image is not None:
             stored_params["strength"] = strength
             stored_params["ref_image"] = ref_image
@@ -500,13 +517,47 @@ def create_app(
     return app
 
 
+LIVE_LLM_ENV = "WAIFU_LLM_MODEL"
+
+
+def _live_llm_path() -> str | None:
+    """GGUF de la app en vivo: `WAIFU_LLM_MODEL`, si no el Q4_K_M hermano.
+
+    El Q3_K_M por defecto del enhancer degenera con el prompt de motion (spam
+    CJK tras la primera frase); el Q4_K_M del mismo directorio escribe ingles
+    limpio. `None` deja el default de `load_local_llm` (Q3_K_M).
+    """
+    override = os.environ.get(LIVE_LLM_ENV, "").strip()
+    if override:
+        return override
+    q3 = load_config().comfy_root / DEFAULT_LLM_RELATIVE
+    q4 = q3.with_name(q3.name.replace(".Q3_K_M.gguf", ".Q4_K_M.gguf"))
+    return str(q4) if q4 != q3 and q4.is_file() else None
+
+
+def _lazy_llm() -> Callable[[str, str], str]:
+    """LLM local perezoso: carga el GGUF en la primera llamada (CPU, sin GPU).
+
+    El servidor arranca al instante y el coste de carga lo paga la primera
+    peticion a `/api/enhance` o `/api/motion`.
+    """
+    loaded: list[Callable[[str, str], str]] = []
+
+    def llm(system: str, user: str) -> str:
+        if not loaded:
+            loaded.append(load_local_llm(_live_llm_path()))
+        return loaded[0](system, user)
+
+    return llm
+
+
 def main() -> int:
     """`python -m app.server`: uvicorn en 127.0.0.1 y puerto de WAIFU_APP_PORT."""
     import uvicorn
 
     port_text = os.environ.get("WAIFU_APP_PORT", "").strip()
     port = int(port_text) if port_text else APP_PORT
-    uvicorn.run(create_app(), host=APP_HOST, port=port, log_level="info")
+    uvicorn.run(create_app(llm=_lazy_llm()), host=APP_HOST, port=port, log_level="info")
     return 0
 
 

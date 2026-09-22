@@ -146,6 +146,7 @@ async function enhancePrompt() {
     const data = await postJson("/api/enhance", {
       text,
       preprompt: $("preprompt").value,
+      rating: $("rating").value,
     });
     $("prompt").value = data.positive;
     state.negative = data.negative || "";
@@ -169,6 +170,7 @@ async function generate() {
     prompt,
     negative: state.negative,
     preprompt: $("preprompt").value,
+    rating: $("rating").value,
     params: readParams(),
   };
   const file = $("ref-image").files[0];

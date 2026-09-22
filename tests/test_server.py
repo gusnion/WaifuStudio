@@ -181,6 +181,10 @@ class EnhanceRouteTests(ServerTestCase):
     def fake_llm(system, user):
         return "1girl, smile"
 
+    @staticmethod
+    def nsfw_llm(system, user):
+        return "1girl, nsfw, uncensored, smile"
+
     def test_con_llm(self):
         client = self.make_client(llm=self.fake_llm)
         response = client.post(
@@ -188,7 +192,8 @@ class EnhanceRouteTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertTrue(data["positive"].endswith("1girl, smile"))
+        self.assertIn("1girl, smile", data["positive"])
+        self.assertTrue(data["positive"].endswith("sfw"))
         self.assertIn("masterpiece", data["positive"])
         self.assertIn("worst quality", data["negative"])
 
@@ -202,6 +207,24 @@ class EnhanceRouteTests(ServerTestCase):
         response = client.post("/api/enhance", json={"text": "  "})
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
+
+    def test_rating_por_defecto_sfw_elimina_nsfw(self):
+        client = self.make_client(llm=self.nsfw_llm)
+        response = client.post("/api/enhance", json={"text": "1girl", "preprompt": "ninguno"})
+        self.assertEqual(response.status_code, 200)
+        tags = [tag.strip().lower() for tag in response.json()["positive"].split(",")]
+        self.assertIn("sfw", tags)
+        self.assertNotIn("nsfw", tags)
+        self.assertNotIn("uncensored", tags)
+
+    def test_rating_invalido_400(self):
+        for rating in ("explicit", "", 5):
+            with self.subTest(rating=rating):
+                response = self.make_client(llm=self.fake_llm).post(
+                    "/api/enhance", json={"text": "1girl", "rating": rating}
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
 
 
 class GenerateValidationTests(ServerTestCase):
@@ -230,6 +253,13 @@ class GenerateValidationTests(ServerTestCase):
                 )
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
+
+    def test_rating_invalido_400(self):
+        response = self.make_client().post(
+            "/api/generate", json=self.payload(rating="explicit")
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
 
     def test_strength_invalido_400(self):
         for strength in (0, 1.5, "abc"):
@@ -263,6 +293,7 @@ class GenerateValidationTests(ServerTestCase):
         row = self.store.list()[0]
         self.assertEqual(row["params"]["strength"], 0.5)
         self.assertEqual(row["params"]["ref_image"], inputs[0].name)
+        self.assertEqual(row["params"]["rating"], "sfw")
         status = client.get(f"/api/jobs/{job_id}").json()
         self.assertEqual(status["status"], "queued")
         self.assertEqual(status["outputs"], [])
