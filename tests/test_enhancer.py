@@ -11,6 +11,7 @@ from unittest import mock
 
 from app.engine import EngineError
 from app.enhancer import (
+    BASE_NEGATIVE,
     RAG_ENTRIES,
     SYS_PROMPT,
     apply_preprompt,
@@ -35,11 +36,19 @@ GOLDEN_SYS_PROMPT = (
 GLOSSY_POSITIVE = (
     "masterpiece, best quality, absurdres, highres, score_7, score_8, score_9"
 )
-GLOSSY_NEGATIVE = (
-    "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, "
-    "sepia, bad anatomy, bad hands, mutated hands, fused fingers, extra fingers, "
-    "watermark, signature, logo"
+GOLDEN_BASE_NEGATIVE = (
+    "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, "
+    "blurry, mosaic censoring, bar censor"
 )
+PREPROMPT_NEGATIVE_EXTRAS = {
+    "glossy": (
+        "score_1, score_2, score_3, sepia, bad anatomy, bad hands, mutated hands, "
+        "fused fingers, extra fingers, watermark, signature, logo"
+    ),
+    "anima_default": "score_1, score_2, score_3, artist name",
+    "not_glossy": "score_1, score_2",
+    "ninguno": "",
+}
 
 
 class FakeLLM:
@@ -116,28 +125,80 @@ class RagTests(unittest.TestCase):
         self.assertIn("uncensored", result[0])
 
 
+class BaseNegativeTests(unittest.TestCase):
+    def test_golden_base_negative_texto_exacto(self):
+        self.assertEqual(BASE_NEGATIVE, GOLDEN_BASE_NEGATIVE)
+
+    def test_base_sin_duplicados_ci(self):
+        tags = [tag.strip().lower() for tag in BASE_NEGATIVE.split(",")]
+        self.assertEqual(len(tags), len(set(tags)))
+
+    def test_base_incluye_anti_menores_y_anti_censura(self):
+        for term in (
+            "child",
+            "teen",
+            "loli",
+            "young-looking",
+            "mosaic censoring",
+            "bar censor",
+        ):
+            with self.subTest(term=term):
+                self.assertIn(term, BASE_NEGATIVE)
+
+
+class NegativeCompositionTests(unittest.TestCase):
+    def expected(self, name: str) -> str:
+        extra = PREPROMPT_NEGATIVE_EXTRAS[name]
+        return f"{GOLDEN_BASE_NEGATIVE}, {extra}" if extra else GOLDEN_BASE_NEGATIVE
+
+    def test_los_4_preprompts_componen_base_mas_extra(self):
+        for name in PREPROMPT_NEGATIVE_EXTRAS:
+            with self.subTest(preprompt=name):
+                _positive, negative = apply_preprompt("1girl", name=name)
+                self.assertEqual(negative, self.expected(name))
+
+    def test_composicion_sin_duplicados_ci_y_orden_estable(self):
+        for name in PREPROMPT_NEGATIVE_EXTRAS:
+            with self.subTest(preprompt=name):
+                _positive, negative = apply_preprompt("1girl", name=name)
+                tags = [tag.strip().lower() for tag in negative.split(",")]
+                self.assertEqual(len(tags), len(set(tags)))
+                self.assertTrue(
+                    negative == GOLDEN_BASE_NEGATIVE
+                    or negative.startswith(GOLDEN_BASE_NEGATIVE + ", ")
+                )
+                self.assertEqual(
+                    negative, apply_preprompt("1girl", name=name)[1]
+                )
+
+
 class ApplyPrepromptTests(unittest.TestCase):
     def test_glossy_prefijo_y_sufijo(self):
         positive, negative = apply_preprompt("1girl, smile")
         self.assertEqual(positive, f"{GLOSSY_POSITIVE}, 1girl, smile")
-        self.assertEqual(negative, GLOSSY_NEGATIVE)
+        self.assertEqual(
+            negative, f"{GOLDEN_BASE_NEGATIVE}, {PREPROMPT_NEGATIVE_EXTRAS['glossy']}"
+        )
 
     def test_dedup_case_insensitive_conserva_primera_aparicion(self):
         positive, _negative = apply_preprompt("Masterpiece, SCORE_9, 1girl, smile")
         self.assertEqual(positive, f"{GLOSSY_POSITIVE}, 1girl, smile")
 
-    def test_ninguno_no_anade_nada(self):
-        self.assertEqual(apply_preprompt("1girl", name="ninguno"), ("1girl", ""))
+    def test_ninguno_no_anade_prefijo_ni_sufijo(self):
+        self.assertEqual(
+            apply_preprompt("1girl", name="ninguno"), ("1girl", GOLDEN_BASE_NEGATIVE)
+        )
 
     def test_anima_default_y_not_glossy(self):
         positive, negative = apply_preprompt("1girl", name="anima_default")
         self.assertEqual(positive, "masterpiece, best quality, score_8, 1girl")
         self.assertEqual(
-            negative, "worst quality, low quality, score_1, score_2, score_3, artist name"
+            negative,
+            f"{GOLDEN_BASE_NEGATIVE}, score_1, score_2, score_3, artist name",
         )
         positive, negative = apply_preprompt("1girl", name="not_glossy")
         self.assertEqual(positive, "newest, good quality, score_6, score_5, highres, 1girl")
-        self.assertEqual(negative, "low quality, score_1, score_2")
+        self.assertEqual(negative, f"{GOLDEN_BASE_NEGATIVE}, score_1, score_2")
 
     def test_determinista(self):
         self.assertEqual(apply_preprompt("1girl, smile"), apply_preprompt("1girl, smile"))
@@ -185,7 +246,18 @@ class EnhanceTests(unittest.TestCase):
         llm = FakeLLM("1girl, smile")
         result = enhance("1girl", preprompt="ninguno", llm=llm)
         self.assertEqual(result["positive"], "1girl, smile")
-        self.assertEqual(result["negative"], "")
+        self.assertEqual(result["negative"], GOLDEN_BASE_NEGATIVE)
+
+    def test_negative_de_enhance_es_el_compuesto(self):
+        llm = FakeLLM("1girl, smile")
+        result = enhance("1girl", preprompt="glossy", llm=llm, k=0)
+        self.assertEqual(
+            result["negative"],
+            f"{GOLDEN_BASE_NEGATIVE}, {PREPROMPT_NEGATIVE_EXTRAS['glossy']}",
+        )
+        tags = [tag.strip().lower() for tag in result["negative"].split(",")]
+        self.assertEqual(len(tags), len(set(tags)))
+        self.assertIn("mosaic censoring", tags)
 
     def test_texto_se_normaliza_sin_espacios_exteriores(self):
         llm = FakeLLM()

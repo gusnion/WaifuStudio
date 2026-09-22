@@ -148,11 +148,11 @@ def run_generation(
         applied = {key: params[key] for key in PARAM_KEYS if params.get(key) is not None}
         graph = patch_params(graph, **applied)
         preprompt = job.get("preprompt") or entry.preprompt or DEFAULT_PREPROMPT
-        positive, preprompt_negative = apply_preprompt(
+        positive, negative = apply_preprompt(
             job["prompt"], family=entry.family, name=preprompt
         )
         graph = _set_text_nodes(
-            graph, positive, _merge_tags([preprompt_negative, job.get("negative") or ""])
+            graph, positive, _merge_tags([job.get("negative") or "", negative])
         )
         if job.get("ref_image"):
             graph = to_img2img(

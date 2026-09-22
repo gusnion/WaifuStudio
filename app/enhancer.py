@@ -2,9 +2,11 @@
 
 Offline y sin GPU: el LLM se INYECTA (`llm(system, user) -> str`) para tests;
 `load_local_llm` es el unico camino que toca `llama_cpp` y jamas se ejecuta en
-tests. El SYS_PROMPT es copia EXACTA del planner legacy certificado
+tests. El SYS_PROMPT y `BASE_NEGATIVE` (negativo base: calidad + anti-menores +
+anti-censura) son copias EXACTAS del planner legacy certificado
 (``E:\\IA\\VIDEO\\local_prompt_planner\\local_planner.py``); el RAG y el manual
-salen de las mismas fuentes (``docs/prompting_anima.md``).
+salen de las mismas fuentes (``docs/prompting_anima.md``). El negativo final es
+SIEMPRE `BASE_NEGATIVE` + negativo del preprompt, con dedup case-insensitive.
 """
 
 from __future__ import annotations
@@ -29,6 +31,13 @@ SYS_PROMPT = (
     "6) Art style is anime illustration: use \"anime\", \"2D\", \"cel shading\" when useful; never photorealism.\n"
     "7) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output. The output must contain only English danbooru tags about the scene.\n"
     "8) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
+)
+
+# Copia EXACTA (texto, sin reformatear) de NEGATIVE del planner legacy (:41-44):
+# negativo base de calidad + anti-menores + anti-censura, sin bloqueos SFW.
+BASE_NEGATIVE = (
+    "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, "
+    "blurry, mosaic censoring, bar censor"
 )
 
 # Notas de recuperacion (RAG) por keywords. Todo el contenido sale del manual
@@ -223,13 +232,16 @@ def _enforce_rating(text: str, rating: str | None) -> str:
 def apply_preprompt(
     text: str, family: str = "anima", name: str = "glossy"
 ) -> tuple[str, str]:
-    """Aplica el preprompt: positivo = prefijo + texto; negativo = sufijo; dedup CI.
+    """Aplica el preprompt: positivo = prefijo + texto; negativo = base + sufijo.
 
+    El negativo devuelto es SIEMPRE `BASE_NEGATIVE` (calidad + anti-menores +
+    anti-censura) seguido del negativo del preprompt, unidos con dedup
+    case-insensitive que conserva la primera aparicion (sin duplicar terminos).
     Determinista; usa `app.preprompts.get_preprompt` (EngineError si no existe).
     """
     preprompt = get_preprompt(family, name)
     positive = _dedup_tags([preprompt["positive"], text])
-    negative = _dedup_tags([preprompt["negative"]])
+    negative = _dedup_tags([BASE_NEGATIVE, preprompt["negative"]])
     return positive, negative
 
 
@@ -248,8 +260,9 @@ def enhance(
     salvo `score_<N>`, que queda intacto) y se fuerza el rating pedido: `nsfw`
     garantiza `nsfw` y `uncensored` y elimina `sfw`; `sfw` garantiza `sfw` y
     elimina `nsfw`/`uncensored`; `rating=None` no toca el rating. El forzado es
-    case-insensitive, deduplica tags repetidos y no anade duplicados. Sin `llm`
-    inyectado lanza EngineError.
+    case-insensitive, deduplica tags repetidos y no anade duplicados. El negativo
+    devuelto es el compuesto de `apply_preprompt` (`BASE_NEGATIVE` + preprompt,
+    dedup case-insensitive). Sin `llm` inyectado lanza EngineError.
     """
     text = user_text.strip() if isinstance(user_text, str) else ""
     if not text:
@@ -319,6 +332,7 @@ def load_local_llm(
 
 
 __all__ = [
+    "BASE_NEGATIVE",
     "DEFAULT_LLM_RELATIVE",
     "RAG_ENTRIES",
     "SYS_PROMPT",

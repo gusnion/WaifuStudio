@@ -72,6 +72,9 @@ fuentes: sin lore, sin parámetros de sampler y sin modelos inventados.
 - Negativo base del planner (calidad + anti-menores + anti-censura indirecta):
   `worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, blurry, mosaic
   censoring, bar censor`.
+- Este negativo base se aplica SIEMPRE en imagen y vídeo: en imagen se compone con el negativo del
+  preprompt elegido y, si viene, el del usuario (dedup case-insensitive que conserva el orden); en
+  vídeo el negativo por defecto `MOTION_NEGATIVE` ya incluye la protección anti-menores y anti-censura.
 - Negativo de anatomía del preprompt `glossy`: `worst quality, low quality, score_1, score_2,
   score_3, blurry, jpeg artifacts, sepia, bad anatomy, bad hands, mutated hands, fused fingers,
   extra fingers, watermark, signature, logo`.

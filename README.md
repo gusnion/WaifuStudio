@@ -125,9 +125,10 @@ F1 solo registra y cataloga: aplicar el preprompt al prompt es de F2.
 calidad `score_`, safety, artistas `@`, negativos, anti-censura y los preprompts certificados.
 Sale solo de las fuentes legacy certificadas, sin lore ni parámetros inventados.
 
-`app/enhancer.py` (M8-20) implementa «Mejorar prompt» offline: `SYS_PROMPT` (copia exacta del
-legacy), `RAG_ENTRIES`/`retrieve` por solape de keywords, `apply_preprompt` (prefijo positivo +
-texto, negativo del preprompt, dedup case-insensitive) y `enhance(user_text, ..., llm=...)` con el
+`app/enhancer.py` (M8-20) implementa «Mejorar prompt» offline: `SYS_PROMPT` y `BASE_NEGATIVE`
+(copias exactas del legacy), `RAG_ENTRIES`/`retrieve` por solape de keywords, `apply_preprompt`
+(prefijo positivo + texto; negativo = `BASE_NEGATIVE` + negativo del preprompt, dedup
+case-insensitive) y `enhance(user_text, ..., llm=...)` con el
 LLM inyectado como `llm(system, user) -> str`. `enhance` normaliza la salida del LLM (`_` → espacio
 salvo `score_<N>`) y fuerza el rating pedido antes del preprompt: `nsfw` garantiza `nsfw` y
 `uncensored` y elimina `sfw`; `sfw` garantiza `sfw` y elimina `nsfw`/`uncensored`; sin rating no se

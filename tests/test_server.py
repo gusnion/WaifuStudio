@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.config import EngineConfig
 from app.engine import ComfyEngine
+from app.enhancer import BASE_NEGATIVE
 from app.jobs import JobQueue
 from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app, run_generation
@@ -344,7 +345,7 @@ class RunGenerationTests(ServerTestCase):
         self.assertEqual(graph["7"]["inputs"]["seed"], 7)
         self.assertEqual(graph["7"]["inputs"]["steps"], 5)
         self.assertEqual(graph["4"]["inputs"]["text"], "1girl, smile")
-        self.assertEqual(graph["5"]["inputs"]["text"], "")
+        self.assertEqual(graph["5"]["inputs"]["text"], BASE_NEGATIVE)
 
     def test_img2img_usa_referencia_y_fuerza(self):
         transport = FakeTransport(self.config)
@@ -375,6 +376,44 @@ class RunGenerationTests(ServerTestCase):
         graph = transport.submits[0]["prompt"]
         self.assertTrue(graph["4"]["inputs"]["text"].startswith("masterpiece, best quality"))
         self.assertIn("worst quality", graph["5"]["inputs"]["text"])
+
+    def test_negativo_compuesto_base_mas_preprompt_en_el_grafo(self):
+        transport = FakeTransport(self.config)
+        job = self.make_job(preprompt="glossy")
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+        )
+        negative = transport.submits[0]["prompt"]["5"]["inputs"]["text"]
+        self.assertIn("child", negative)
+        self.assertIn("mosaic censoring", negative)
+        self.assertIn("bar censor", negative)
+        self.assertIn("bad anatomy", negative)
+        tags = [tag.strip().lower() for tag in negative.split(",")]
+        self.assertEqual(len(tags), len(set(tags)))
+
+    def test_negativo_de_usuario_se_suma_al_compuesto_sin_duplicar(self):
+        transport = FakeTransport(self.config)
+        job = self.make_job(
+            preprompt="glossy", negative="Child, user tag, LOW QUALITY"
+        )
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+        )
+        negative = transport.submits[0]["prompt"]["5"]["inputs"]["text"]
+        tags = [tag.strip().lower() for tag in negative.split(",")]
+        self.assertEqual(tags.count("child"), 1)
+        self.assertEqual(tags.count("low quality"), 1)
+        self.assertIn("user tag", tags)
+        self.assertIn("mosaic censoring", tags)
+        self.assertEqual(negative.split(",")[1].strip(), "user tag")
 
     def test_error_no_propaga_y_marca_store(self):
         transport = FakeTransport(self.config, write_output=False)
