@@ -42,6 +42,7 @@ class InitTests(StoreTestCase):
                 "status",
                 "outputs",
                 "error",
+                "kind",
             ],
         )
 
@@ -75,6 +76,17 @@ class AddGetTests(StoreTestCase):
         self.assertEqual(row["params"], {"steps": 20, "cfg": 4.0})
         self.assertEqual(row["status"], "running")
         self.assertEqual(row["outputs"], [{"path": "a.png", "bytes": 10}])
+
+    def test_kind_default_image_y_roundtrip(self):
+        image_id = self.store.add("m", "p")
+        video_id = self.store.add("m", "p", kind="video")
+        self.assertEqual(self.store.get(image_id)["kind"], "image")
+        self.assertEqual(self.store.get(video_id)["kind"], "video")
+        self.assertEqual(
+            [row["kind"] for row in self.store.list()], ["image", "video"]
+        )
+        self.assertTrue(self.store.update(video_id, kind="image"))
+        self.assertEqual(self.store.get(video_id)["kind"], "image")
 
     def test_get_inexistente_devuelve_none(self):
         self.assertIsNone(self.store.get(999))

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import functools
 import os
 import shutil
 import uuid
@@ -29,11 +28,19 @@ from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
 from app.graphs import DEFAULT_STRENGTH, patch_model, patch_params, to_img2img
 from app.jobs import JobQueue
+from app.motion import MOTION_NEGATIVE, write_motion
 from app.oc_traits import build_prompt, list_traits
 from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, get_preprompt, list_preprompts
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
 from app.store import Store
+from app.video import (
+    ASPECTS,
+    H3_TEMPLATE_PATH,
+    VIDEO_HISTORY_TIMEOUT_S,
+    WAN_TEMPLATE_PATH,
+    run_video_generation,
+)
 
 APP_HOST = "127.0.0.1"
 APP_PORT = 8765
@@ -42,6 +49,11 @@ TEMPLATES_DIR = APP_ROOT / "templates"
 STATIC_DIR = APP_ROOT / "static"
 MEDIA_URL = "/media/{gen_id}/{name}"
 PARAM_KEYS = ("seed", "steps", "cfg", "sampler_name", "scheduler", "width", "height")
+MEDIA_TYPES = {
+    ".png": "image/png",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+}
 
 
 def _merge_tags(parts: list[str]) -> str:
@@ -87,6 +99,30 @@ def _set_text_nodes(graph: dict, positive: str, negative: str) -> dict:
                 raise EngineError("CLIPTextEncode sin inputs dict: no se puede fijar el prompt")
             target_inputs["text"] = text
     return graph
+
+
+def _decode_image_b64(value: Any, label: str) -> bytes:
+    """Decodifica un data URI/base64 (validate=True); EngineError si es invalido."""
+    if not isinstance(value, str) or not value.strip():
+        raise EngineError(f"{label}: imagen requerida")
+    data = value.strip()
+    if data.startswith("data:") and "," in data:
+        data = data.split(",", 1)[1]
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise EngineError(f"{label}: base64 invalido") from exc
+    if not raw:
+        raise EngineError(f"{label}: imagen vacia")
+    return raw
+
+
+def _write_input_png(input_dir: Any, raw: bytes) -> str:
+    """Escribe la imagen en comfy_root/input con nombre uuid y devuelve el nombre."""
+    input_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}.png"
+    (input_dir / name).write_bytes(raw)
+    return name
 
 
 def run_generation(
@@ -167,16 +203,24 @@ def create_app(
         st.init()
     reg = registry if registry is not None else ModelRegistry.load(REGISTRY_PATH)
     factory = engine_factory if engine_factory is not None else (lambda: ComfyEngine(cfg))
-    if queue is None:
-        queue = JobQueue(
-            functools.partial(
-                run_generation,
-                config=cfg,
-                store=st,
-                registry=reg,
-                engine_factory=factory,
+    video_factory = (
+        engine_factory
+        if engine_factory is not None
+        else (lambda: ComfyEngine(cfg, history_timeout_s=VIDEO_HISTORY_TIMEOUT_S))
+    )
+
+    def _dispatch(job: dict) -> None:
+        if job.get("kind") == "video":
+            run_video_generation(
+                job, config=cfg, store=st, engine_factory=video_factory
             )
-        )
+        else:
+            run_generation(
+                job, config=cfg, store=st, registry=reg, engine_factory=factory
+            )
+
+    if queue is None:
+        queue = JobQueue(_dispatch)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -246,6 +290,16 @@ def create_app(
             llm=llm,
         )
         return {"positive": result["positive"], "negative": result["negative"]}
+
+    @app.post("/api/motion")
+    async def api_motion(payload: dict = Body(...)) -> Any:
+        if llm is None:
+            return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
+        return write_motion(
+            payload.get("text"),
+            rating=str(payload.get("rating") or "nsfw"),
+            llm=llm,
+        )
 
     @app.post("/api/generate")
     async def api_generate(payload: dict = Body(...)) -> Any:
@@ -320,6 +374,82 @@ def create_app(
         app.state.jobs[job_id] = job
         return {"job_id": job_id}
 
+    @app.post("/api/video/generate")
+    async def api_video_generate(payload: dict = Body(...)) -> Any:
+        engine_kind = payload.get("engine")
+        if engine_kind not in ("wan", "h3"):
+            raise EngineError("engine invalido; usar wan|h3")
+        aspect = payload.get("aspect") or "vertical"
+        if aspect not in ASPECTS:
+            raise EngineError("aspect invalido; usar vertical|horizontal")
+        first_raw = _decode_image_b64(payload.get("image_b64"), "image")
+        last_raw = None
+        if engine_kind == "h3":
+            last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
+        if engine_kind == "wan":
+            motion_positive = payload.get("motion_positive")
+            if not isinstance(motion_positive, str) or not motion_positive.strip():
+                raise EngineError("motion_positive requerido para wan")
+            motion_positive = motion_positive.strip()
+            prompt = str(payload.get("prompt") or "")
+            motion_negative = payload.get("motion_negative")
+            motion_negative = (
+                motion_negative.strip()
+                if isinstance(motion_negative, str) and motion_negative.strip()
+                else MOTION_NEGATIVE
+            )
+        else:
+            prompt = payload.get("prompt")
+            if not isinstance(prompt, str) or not prompt.strip():
+                raise EngineError("prompt requerido para h3")
+            prompt = prompt.strip()
+            motion_positive = str(payload.get("motion_positive") or "")
+            motion_negative = str(payload.get("motion_negative") or "")
+        seed = payload.get("seed")
+        if seed is None:
+            seed = 42
+        if isinstance(seed, bool):
+            raise EngineError("seed invalido")
+        try:
+            seed = int(seed)
+        except (TypeError, ValueError) as exc:
+            raise EngineError("seed invalido") from exc
+        input_dir = cfg.comfy_root / "input"
+        image_name = _write_input_png(input_dir, first_raw)
+        last_image_name = (
+            _write_input_png(input_dir, last_raw) if last_raw is not None else None
+        )
+        template = WAN_TEMPLATE_PATH if engine_kind == "wan" else H3_TEMPLATE_PATH
+        gen_id = st.add(
+            engine_kind,
+            motion_positive if engine_kind == "wan" else prompt,
+            motion_negative,
+            {
+                "engine": engine_kind,
+                "aspect": aspect,
+                "seed": seed,
+                "image": image_name,
+                "last_image": last_image_name,
+            },
+            kind="video",
+        )
+        job = {
+            "kind": "video",
+            "gen_id": gen_id,
+            "engine": engine_kind,
+            "template": str(template),
+            "image_name": image_name,
+            "last_image_name": last_image_name,
+            "motion_positive": motion_positive,
+            "motion_negative": motion_negative,
+            "prompt": prompt,
+            "aspect": aspect,
+            "seed": seed,
+        }
+        job_id = queue.submit(job)
+        app.state.jobs[job_id] = job
+        return {"job_id": job_id}
+
     @app.get("/api/jobs/{job_id}")
     async def api_job(job_id: str) -> Any:
         try:
@@ -358,9 +488,10 @@ def create_app(
             return JSONResponse(
                 status_code=403, content={"error": "ruta fuera de la galeria"}
             )
-        if candidate.suffix.lower() != ".png" or not candidate.is_file():
+        media_type = MEDIA_TYPES.get(candidate.suffix.lower())
+        if media_type is None or not candidate.is_file():
             return JSONResponse(status_code=404, content={"error": "no encontrado"})
-        return FileResponse(candidate, media_type="image/png")
+        return FileResponse(candidate, media_type=media_type)
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> Any:

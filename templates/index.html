@@ -67,10 +67,76 @@
     </section>
 
     <section id="panel-video" class="panel">
-      <div class="placeholder">
-        <h2>Video</h2>
-        <p>Pestaña de video — F4 (pendiente).</p>
-      </div>
+      <aside class="controls">
+        <label class="field">
+          <span>Motor</span>
+          <select id="video-engine">
+            <option value="wan">Wan 2.2 I2V · 81 frames · 16 fps</option>
+            <option value="h3">MiniMax H3 FL2VA · 8 s · 24 fps</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Imagen fuente (PNG)</span>
+          <input id="video-image" type="file" accept="image/png">
+        </label>
+        <label class="field" id="video-last-field" style="display: none">
+          <span>Último frame (PNG, solo H3)</span>
+          <input id="video-last-image" type="file" accept="image/png">
+        </label>
+
+        <label class="field">
+          <span>Movimiento (lenguaje natural)</span>
+          <textarea id="video-motion" rows="4" placeholder="Describe qué debe pasar en el video..."></textarea>
+        </label>
+        <div class="grid-2">
+          <label class="field">
+            <span>Rating</span>
+            <select id="video-rating">
+              <option value="nsfw">nsfw</option>
+              <option value="sfw">sfw</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>&nbsp;</span>
+            <button id="btn-motion" type="button">Generar motion</button>
+          </label>
+        </div>
+
+        <label class="field" id="video-motion-positive-field">
+          <span>Motion positivo (EN, Wan)</span>
+          <textarea id="video-motion-positive" rows="3" placeholder="English motion prompt..."></textarea>
+        </label>
+        <label class="field" id="video-prompt-field" style="display: none">
+          <span>Prompt H3 (FL2VA)</span>
+          <textarea id="video-prompt" rows="3" placeholder="integrated_multimodal_description: ..."></textarea>
+        </label>
+
+        <div class="grid-2">
+          <label class="field" id="video-aspect-field">
+            <span>Aspecto (Wan)</span>
+            <select id="video-aspect">
+              <option value="vertical">Vertical 432×768</option>
+              <option value="horizontal">Horizontal 768×432</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Seed</span>
+            <input id="video-seed" type="number" value="42">
+          </label>
+        </div>
+
+        <button id="btn-video-generate" class="primary" type="button">Generar video</button>
+        <p id="video-status" class="status">Listo</p>
+      </aside>
+
+      <section class="gallery-panel">
+        <div class="gallery-header">
+          <h2>Galería de video</h2>
+          <button id="btn-video-reload" type="button">Recargar</button>
+        </div>
+        <div id="video-gallery" class="gallery"></div>
+      </section>
     </section>
   </main>
 

@@ -98,7 +98,8 @@ main {
   display: flex;
 }
 
-#panel-image.active {
+#panel-image.active,
+#panel-video.active {
   display: grid;
   grid-template-columns: 380px 1fr;
 }
@@ -213,7 +214,8 @@ input[type="checkbox"] {
   overflow: hidden;
 }
 
-.card img {
+.card img,
+.card video {
   display: block;
   width: 100%;
   aspect-ratio: 320 / 576;

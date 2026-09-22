@@ -21,12 +21,13 @@ CREATE TABLE IF NOT EXISTS generations (
     params TEXT DEFAULT '{}',
     status TEXT NOT NULL,
     outputs TEXT DEFAULT '[]',
-    error TEXT
+    error TEXT,
+    kind TEXT NOT NULL DEFAULT 'image'
 )
 """
 
 _COLUMNS = (
-    "id, created_at, model_id, prompt, negative, params, status, outputs, error"
+    "id, created_at, model_id, prompt, negative, params, status, outputs, error, kind"
 )
 
 
@@ -40,11 +41,19 @@ class Store:
         return sqlite3.connect(str(self.db_path))
 
     def init(self) -> None:
-        """Crea el directorio padre y la tabla si faltan."""
+        """Crea el directorio padre y la tabla si faltan; migra `kind` (F4)."""
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             with closing(self._connect()) as conn, conn:
                 conn.execute(_SCHEMA)
+                columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(generations)")
+                }
+                if "kind" not in columns:
+                    conn.execute(
+                        "ALTER TABLE generations "
+                        "ADD COLUMN kind TEXT NOT NULL DEFAULT 'image'"
+                    )
         except (sqlite3.Error, OSError) as exc:
             raise EngineError(f"store init fallo en {self.db_path}: {exc}") from exc
 
@@ -55,6 +64,7 @@ class Store:
         negative: str = "",
         params: Any = None,
         status: str = "queued",
+        kind: str = "image",
     ) -> int:
         """Inserta una generacion y devuelve su id."""
         created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -63,8 +73,8 @@ class Store:
             with closing(self._connect()) as conn, conn:
                 cursor = conn.execute(
                     "INSERT INTO generations "
-                    "(created_at, model_id, prompt, negative, params, status) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    "(created_at, model_id, prompt, negative, params, status, kind) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         created_at,
                         str(model_id),
@@ -72,6 +82,7 @@ class Store:
                         str(negative),
                         params_json,
                         str(status),
+                        str(kind),
                     ),
                 )
                 return int(cursor.lastrowid)
@@ -118,6 +129,7 @@ class Store:
         status: str | None = None,
         outputs: Any = None,
         error: str | None = None,
+        kind: str | None = None,
     ) -> bool:
         """Actualiza solo los campos dados; False si el id no existe."""
         assignments: list[str] = []
@@ -131,6 +143,9 @@ class Store:
         if error is not None:
             assignments.append("error = ?")
             values.append(str(error))
+        if kind is not None:
+            assignments.append("kind = ?")
+            values.append(str(kind))
         try:
             with closing(self._connect()) as conn, conn:
                 if assignments:
@@ -159,6 +174,7 @@ class Store:
                 "status": row[6],
                 "outputs": json.loads(row[7]),
                 "error": row[8],
+                "kind": row[9] if len(row) > 9 else "image",
             }
         except (TypeError, ValueError) as exc:
             raise EngineError(f"store: JSON malformado en la fila {row[0]}: {exc}") from exc

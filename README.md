@@ -26,19 +26,21 @@ E:\IA\WAIFU
 │  ├─ gate_f1.py      # runner Gate F1: 1 imagen por modelo del registro (M8-11b)
 │  ├─ graphs.py       # grafos API-format: perfil/params e img2img (F3a)
 │  ├─ jobs.py         # cola 1-GPU en serie con worker daemon (F3a)
+│  ├─ motion.py       # motion de video con LLM local inyectable (F4)
 │  ├─ oc_traits.py    # catálogo de traits OC Maker con tags danbooru (F3a)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
-│  ├─ server.py       # webapp FastAPI: API JSON, runner de generación y UI (F3b)
-│  ├─ store.py        # store sqlite3 de generaciones (M8-21)
+│  ├─ server.py       # webapp FastAPI: API JSON, runners y UI (F3b/F4)
+│  ├─ store.py        # store sqlite3 de generaciones con kind image|video (M8-21/F4)
+│  ├─ video.py        # grafos y runner de video Wan/H3 (F4)
 │  └─ health.py       # smoke CLI (python -m app.health)
 ├─ docs/
 │  └─ prompting_anima.md  # manual local de prompting Anima (F2)
 ├─ registry/
 │  └─ models.json     # registro versionado de modelos locales (M8-10)
-├─ static/            # app.css y app.js de la UI (F3b)
+├─ static/            # app.css y app.js de la UI (F3b/F4)
 ├─ templates/
-│  └─ index.html      # UI de una página: pestañas Imagen/Video + OC Maker (F3b)
+│  └─ index.html      # UI de una página: pestañas Imagen/Video + OC Maker (F3b/F4)
 ├─ tests/             # tests CPU, sin red ni GPU
 │  ├─ __init__.py
 │  ├─ test_engine.py
@@ -46,11 +48,18 @@ E:\IA\WAIFU
 │  ├─ test_gate_f1.py
 │  ├─ test_graphs.py
 │  ├─ test_jobs.py
+│  ├─ test_motion.py
 │  ├─ test_oc_traits.py
 │  ├─ test_preprompts.py
 │  ├─ test_registry.py
 │  ├─ test_server.py
-│  └─ test_store.py
+│  ├─ test_server_video.py
+│  ├─ test_store.py
+│  └─ test_video.py
+├─ workflows/         # plantillas API-format certificadas (imagen y video)
+│  ├─ anima_base.json
+│  ├─ wan22_i2v_432x768.api.json    # Wan 2.2 I2V exportado del legacy (F4)
+│  └─ h3_fl2va_vertical.api.json    # MiniMax H3 FL2VA verbatim del certificado (F4)
 ├─ data/           # estado local (ignorado por git)
 ├─ outputs/        # resultados propios (ignorado por git, aún no creado)
 ├─ .gitignore
@@ -155,7 +164,7 @@ El runner `run_generation(job, config, store, registry, engine_factory)` carga
 worker. La UI (`templates/index.html` + `static/app.css` + `static/app.js`, sin CDN) trae la
 pestaña **Imagen** (prompt + «Mejorar prompt», preprompt/modelo, seed/steps/cfg/sampler/scheduler/
 ancho/alto, imagen de referencia + fuerza, Generar con polling y galería) y la pestaña **Video**
-como placeholder de F4, más el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
+(F4, ver abajo), más el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
 
 ### Requisitos y arranque
 
@@ -170,6 +179,51 @@ Las 3 dependencias están instaladas en el venv legacy y fijadas en `requirement
 Por defecto escucha en `127.0.0.1:8765`; el puerto se cambia con `WAIFU_APP_PORT`.
 La generación real requiere ComfyUI arriba (`WAIFU_COMFY_URL`) y GPU libre; los tests corren
 offline con un transporte falso y `start_worker=False` (sin GPU ni LLM reales).
+
+## Video (F4)
+
+La pestaña **Video** es independiente de la de imagen y tiene dos motores, cada uno con su
+plantilla API-format certificada en `workflows\`:
+
+| Motor | Plantilla | Perfil |
+|-------|-----------|--------|
+| **Wan 2.2 I2V** | `workflows\wan22_i2v_432x768.api.json` | I2V (`WanImageToVideo`): 81 frames (4n+1), 16 fps, 20 pasos, CFG 4.0, euler/`simple`, shift 8, GGUF High+Low (`Wan2.2-I2V-A14B-*-Q4_K_S`), CLIP `umt5_xxl_fp8_e4m3fn_scaled` type `wan`, VAE `wan_2.1_vae`; vertical 432×768 (default) u horizontal 768×432 |
+| **MiniMax H3 FL2VA** | `workflows\h3_fl2va_vertical.api.json` | FL2VA (`MiniMaxH3ImageToVideo`) con first/last frame: 576×1024, 192 frames (~8 s a 24 fps), 4 pasos, turbo LoRA, `res_multistep`/`simple`, VAE de video + VAE de audio |
+
+La plantilla Wan se exportó del legacy con la función pura `build_wan_graph`
+(`E:\IA\VIDEO\scripts\nw04_wan_graph.py`, solo lectura) con seed 42, prefijo `waifu/video` y textos
+placeholder neutros; la de H3 es copia verbatim del certificado. `app\video.py` las parchea sobre
+copias profundas: `prepare_wan_graph` fija CLIPTextEncode `5`/`6`, LoadImage `7`, width/height de
+`WanImageToVideo` y la seed de los samplers; `prepare_h3_graph` fija LoadImage `140`/`141`,
+`MiniMaxH3ImageToVideo` `131` y `RandomNoise` `129`; ambos lanzan `EngineError` si faltan nodos o
+campos.
+
+`app\motion.py` escribe el motion positivo con el LLM local: `SYS_PROMPT_MOTION` y
+`MOTION_NEGATIVE` son copias EXACTAS del legacy (`local_prompt_planner\motion.py`), `write_motion`
+valida texto/rating y usa el `llm(system, user) -> str` inyectado (reutiliza
+`load_local_llm` de `app.enhancer`; sin LLM lanza `EngineError("LLM no inyectado")`).
+
+`run_video_generation(job, config, store, engine_factory)` carga la plantilla del job, aplica el
+`prepare_*` según `engine` (`wan`|`h3`), usa `ComfyEngine(history_timeout_s=3600)` por defecto,
+encola (`submit`→`wait`→`outputs` con extensiones mp4/webm) y copia el resultado a
+`data_dir/gallery/<gen_id>/`; un fallo queda en store y job sin propagar. El store migra de forma
+idempotente la columna `kind` (`ALTER TABLE`, default `image`) y las generaciones de video se
+registran con `kind="video"`.
+
+Rutas nuevas: `POST /api/motion` `{text, rating?}` → `{motion_positive, motion_negative}`
+(503 sin LLM), `POST /api/video/generate` `{engine, image_b64, last_image_b64?, motion_positive?,
+motion_negative?, prompt?, aspect, seed?}` → `{job_id}` (400 si el engine/aspect son inválidos, si
+wan no trae motion positivo, si h3 no trae prompt/último frame o si el base64 es inválido),
+`/media` sirve también mp4/webm por extensión y `GET /api/gallery` incluye `kind` y `urls`.
+
+La UI de la pestaña Video (sin CDN) trae select de motor, imagen fuente y (solo H3) último frame,
+textarea de movimiento + rating + «Generar motion», motion positivo (Wan) / prompt (H3), aspecto
+(solo Wan), seed, estado del job con polling y galería de video con `<video controls>`.
+
+**Requisito GPU/ComfyUI**: la generación real necesita el engine arriba (`WAIFU_COMFY_URL`), GPU
+libre y los modelos/custom nodes de cada motor instalados en `E:\IA\VIDEO\ComfyUI` (UnetLoaderGGUF
+para Wan, nodos MiniMax H3 + turbo LoRA para H3). Los tests corren offline con transporte y LLM
+falsos: no tocan GPU ni red.
 
 ## Smoke
 

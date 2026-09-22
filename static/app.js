@@ -14,6 +14,7 @@ const GROUP_LABELS = {
 const state = {
   models: [],
   negative: "",
+  videoNegative: "",
   busy: false,
 };
 
@@ -21,6 +22,12 @@ const $ = (id) => document.getElementById(id);
 
 function setStatus(text, isError = false) {
   const el = $("job-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function setVideoStatus(text, isError = false) {
+  const el = $("video-status");
   el.textContent = text;
   el.classList.toggle("error", Boolean(isError));
 }
@@ -123,7 +130,7 @@ function readFileBase64(file) {
       const text = String(reader.result || "");
       resolve(text.includes(",") ? text.split(",", 2)[1] : text);
     };
-    reader.onerror = () => reject(new Error("No se pudo leer la imagen de referencia"));
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen"));
     reader.readAsDataURL(file);
   });
 }
@@ -183,37 +190,50 @@ async function generate() {
   }
 }
 
-async function pollJob(jobId) {
+async function pollJob(jobId, statusFn = setStatus, onDone = loadGallery) {
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
     if (job.status === "queued" || job.status === "running") {
-      setStatus(job.status === "running" ? "Generando..." : "En cola...");
+      statusFn(job.status === "running" ? "Generando..." : "En cola...");
       continue;
     }
     if (job.status === "error") {
-      setStatus(`Error: ${job.error || "desconocido"}`, true);
+      statusFn(`Error: ${job.error || "desconocido"}`, true);
       return;
     }
-    setStatus("Listo");
-    await loadGallery();
+    statusFn("Listo");
+    await onDone();
     return;
   }
+}
+
+function isVideoUrl(url) {
+  return /\.(mp4|webm)$/i.test(String(url || ""));
 }
 
 function galleryCard(item) {
   const card = document.createElement("figure");
   card.className = "card";
   if (item.urls && item.urls.length) {
-    const img = document.createElement("img");
-    img.src = item.urls[0];
-    img.alt = item.prompt || `Generación ${item.id}`;
-    img.loading = "lazy";
-    card.appendChild(img);
+    const url = item.urls[0];
+    if (isVideoUrl(url)) {
+      const video = document.createElement("video");
+      video.src = url;
+      video.controls = true;
+      video.preload = "metadata";
+      card.appendChild(video);
+    } else {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = item.prompt || `Generación ${item.id}`;
+      img.loading = "lazy";
+      card.appendChild(img);
+    }
   } else {
     const missing = document.createElement("div");
     missing.className = "card-missing";
-    missing.textContent = item.status === "error" ? "Error" : "Sin imagen";
+    missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
     card.appendChild(missing);
   }
   const params = item.params || {};
@@ -232,7 +252,7 @@ function galleryCard(item) {
   }
   const caption = document.createElement("figcaption");
   const title = document.createElement("strong");
-  title.textContent = `#${item.id} · ${item.model_id}`;
+  title.textContent = `#${item.id} · ${item.kind || "image"} · ${item.model_id}`;
   const prompt = document.createElement("span");
   prompt.textContent = item.prompt || "";
   const meta = document.createElement("span");
@@ -243,25 +263,131 @@ function galleryCard(item) {
   return card;
 }
 
+function renderGallery(container, items, emptyText) {
+  container.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = emptyText;
+    container.appendChild(empty);
+    return;
+  }
+  for (const item of items) {
+    container.appendChild(galleryCard(item));
+  }
+}
+
 async function loadGallery() {
   try {
     const data = await api("/api/gallery?limit=50");
-    const gallery = $("gallery");
-    gallery.replaceChildren();
     const items = data.items.slice().reverse();
-    if (!items.length) {
-      const empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = "Sin generaciones todavía.";
-      gallery.appendChild(empty);
-      return;
-    }
-    for (const item of items) {
-      gallery.appendChild(galleryCard(item));
-    }
+    renderGallery(
+      $("gallery"),
+      items.filter((item) => item.kind !== "video"),
+      "Sin generaciones todavía."
+    );
+    renderGallery(
+      $("video-gallery"),
+      items.filter((item) => item.kind === "video"),
+      "Sin videos todavía."
+    );
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+async function generateMotion() {
+  const text = $("video-motion").value.trim();
+  if (!text) {
+    setVideoStatus("Escribe el movimiento a generar", true);
+    return;
+  }
+  setVideoStatus("Generando motion...");
+  try {
+    const data = await postJson("/api/motion", {
+      text,
+      rating: $("video-rating").value,
+    });
+    $("video-motion-positive").value = data.motion_positive;
+    state.videoNegative = data.motion_negative || "";
+    if ($("video-engine").value === "h3" && !$("video-prompt").value.trim()) {
+      $("video-prompt").value = data.motion_positive;
+    }
+    setVideoStatus("Motion listo");
+  } catch (error) {
+    setVideoStatus(error.message, true);
+  }
+}
+
+function readVideoSeed() {
+  const value = Number($("video-seed").value);
+  return Number.isFinite(value) ? Math.trunc(value) : 42;
+}
+
+async function generateVideo() {
+  if (state.busy) {
+    return;
+  }
+  const engine = $("video-engine").value;
+  const file = $("video-image").files[0];
+  if (!file) {
+    setVideoStatus("Sube la imagen fuente", true);
+    return;
+  }
+  const payload = {
+    engine,
+    aspect: $("video-aspect").value,
+    seed: readVideoSeed(),
+  };
+  try {
+    payload.image_b64 = await readFileBase64(file);
+    if (engine === "wan") {
+      const positive = $("video-motion-positive").value.trim();
+      if (!positive) {
+        setVideoStatus("Genera o escribe el motion positivo", true);
+        return;
+      }
+      payload.motion_positive = positive;
+      payload.motion_negative = state.videoNegative || "";
+    } else {
+      const last = $("video-last-image").files[0];
+      if (!last) {
+        setVideoStatus("H3 requiere el último frame", true);
+        return;
+      }
+      const prompt =
+        $("video-prompt").value.trim() || $("video-motion-positive").value.trim();
+      if (!prompt) {
+        setVideoStatus("H3 requiere el prompt", true);
+        return;
+      }
+      payload.last_image_b64 = await readFileBase64(last);
+      payload.prompt = prompt;
+    }
+  } catch (error) {
+    setVideoStatus(error.message, true);
+    return;
+  }
+  state.busy = true;
+  $("btn-video-generate").disabled = true;
+  setVideoStatus("Encolando...");
+  try {
+    const data = await postJson("/api/video/generate", payload);
+    await pollJob(data.job_id, setVideoStatus, loadGallery);
+  } catch (error) {
+    setVideoStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    $("btn-video-generate").disabled = false;
+  }
+}
+
+function applyVideoEngine() {
+  const isWan = $("video-engine").value === "wan";
+  $("video-aspect-field").style.display = isWan ? "" : "none";
+  $("video-motion-positive-field").style.display = isWan ? "" : "none";
+  $("video-prompt-field").style.display = isWan ? "none" : "";
+  $("video-last-field").style.display = isWan ? "none" : "";
 }
 
 async function loadTraits() {
@@ -332,6 +458,10 @@ function bind() {
   $("btn-enhance").addEventListener("click", enhancePrompt);
   $("btn-generate").addEventListener("click", generate);
   $("btn-reload").addEventListener("click", loadGallery);
+  $("btn-motion").addEventListener("click", generateMotion);
+  $("btn-video-generate").addEventListener("click", generateVideo);
+  $("btn-video-reload").addEventListener("click", loadGallery);
+  $("video-engine").addEventListener("change", applyVideoEngine);
   $("model").addEventListener("change", (event) => {
     applyModel(event.target.value).catch((error) => setStatus(error.message, true));
   });
@@ -350,6 +480,7 @@ function bind() {
 
 async function init() {
   bind();
+  applyVideoEngine();
   try {
     await loadModels();
     await loadTraits();
