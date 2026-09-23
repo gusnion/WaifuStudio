@@ -26,6 +26,7 @@ from app.params import (
 from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
+from app.tags import list_groups
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-fake-png"
 MODEL_ID = "anima-2.9b-preview"
@@ -1115,6 +1116,202 @@ class GalleryCapTests(ServerTestCase):
         self.store.add(MODEL_ID, "1girl")
         data = self.make_client().get("/api/gallery", params={"limit": 0}).json()
         self.assertEqual(len(data["items"]), 1)
+
+
+class TagsRoutesTests(ServerTestCase):
+    def test_groups(self):
+        response = self.make_client().get("/api/tags/groups")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"groups": list_groups()})
+        self.assertEqual(len(response.json()["groups"]), 10)
+
+    def test_por_grupo_y_grupo_desconocido(self):
+        client = self.make_client()
+        response = client.get("/api/tags", params={"group": "hair"})
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertTrue(items)
+        self.assertTrue(all(item["group"] == "hair" for item in items))
+        bad = client.get("/api/tags", params={"group": "nope"})
+        self.assertEqual(bad.status_code, 400)
+        self.assertIn("error", bad.json())
+
+    def test_busqueda_y_filtros_combinados(self):
+        client = self.make_client()
+        items = client.get("/api/tags", params={"q": "LONG HAIR"}).json()["items"]
+        self.assertIn("long hair", [item["tag"] for item in items])
+        combined = client.get(
+            "/api/tags", params={"group": "hair", "q": "coleta"}
+        ).json()["items"]
+        self.assertTrue(combined)
+        self.assertTrue(all(item["group"] == "hair" for item in combined))
+
+    def test_sin_filtro_primeros_200_y_limit(self):
+        client = self.make_client()
+        data = client.get("/api/tags").json()
+        self.assertEqual(len(data["items"]), 200)
+        self.assertEqual(
+            data["items"][0],
+            {"tag": "long hair", "label": "Cabello largo", "group": "hair"},
+        )
+        limited = client.get("/api/tags", params={"limit": 0}).json()
+        self.assertEqual(len(limited["items"]), 1)
+
+
+class CharactersRoutesTests(ServerTestCase):
+    def test_crud(self):
+        client = self.make_client()
+        created = client.post(
+            "/api/characters", json={"name": "Aiko", "tags": ["long hair", "smile"]}
+        )
+        self.assertEqual(created.status_code, 200)
+        char_id = created.json()["id"]
+        listing = client.get("/api/characters")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.json()), 1)
+        self.assertEqual(listing.json()[0]["name"], "Aiko")
+        got = client.get(f"/api/characters/{char_id}")
+        self.assertEqual(got.status_code, 200)
+        self.assertEqual(got.json()["tags"], ["long hair", "smile"])
+        updated = client.put(
+            f"/api/characters/{char_id}", json={"name": "Mika", "rating": "nsfw"}
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["name"], "Mika")
+        self.assertEqual(updated.json()["rating"], "nsfw")
+        deleted = client.delete(f"/api/characters/{char_id}")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(client.get(f"/api/characters/{char_id}").status_code, 404)
+
+    def test_validacion_400(self):
+        client = self.make_client()
+        for payload in (
+            {"name": "", "tags": []},
+            {"name": "Aiko", "tags": "long hair"},
+            {"name": "Aiko", "tags": [], "preprompt": "inventado"},
+            {"name": "Aiko", "tags": [], "rating": "explicit"},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(
+                    client.post("/api/characters", json=payload).status_code, 400
+                )
+        client.post("/api/characters", json={"name": "Aiko", "tags": []})
+        duplicate = client.post("/api/characters", json={"name": "Aiko", "tags": []})
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn("error", duplicate.json())
+
+    def test_404(self):
+        client = self.make_client()
+        self.assertEqual(client.get("/api/characters/99").status_code, 404)
+        self.assertEqual(
+            client.put("/api/characters/99", json={"notes": "x"}).status_code, 404
+        )
+        self.assertEqual(client.delete("/api/characters/99").status_code, 404)
+        self.assertEqual(client.get("/api/characters/99/refs").status_code, 404)
+        self.assertEqual(
+            client.delete("/api/characters/99/refs/1").status_code, 404
+        )
+
+
+class CharacterRefsRoutesTests(ServerTestCase):
+    def add_character(self, client) -> int:
+        return client.post(
+            "/api/characters", json={"name": "Aiko", "tags": []}
+        ).json()["id"]
+
+    def test_flujo_refs_y_media(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        gen_id = self.store.add(MODEL_ID, "1girl, smile")
+        self.add_gallery_png(gen_id)
+        self.store.update(gen_id, status="done", outputs=["ok.png"])
+        response = client.post(
+            f"/api/characters/{char_id}/refs", json={"gen_id": gen_id}
+        )
+        self.assertEqual(response.status_code, 200)
+        relpath = response.json()["relpath"]
+        target = self.config.data_dir / "characters" / relpath
+        self.assertTrue(target.is_file())
+        self.assertEqual(target.read_bytes(), PNG_BYTES)
+        refs = client.get(f"/api/characters/{char_id}/refs")
+        self.assertEqual(refs.status_code, 200)
+        self.assertEqual(len(refs.json()), 1)
+        ref = refs.json()[0]
+        self.assertEqual(
+            ref["url"], f"/media/characters/{char_id}/{Path(relpath).name}"
+        )
+        media = client.get(ref["url"])
+        self.assertEqual(media.status_code, 200)
+        self.assertEqual(media.headers["content-type"], "image/png")
+        self.assertEqual(media.content, PNG_BYTES)
+        deleted = client.delete(f"/api/characters/{char_id}/refs/{ref['id']}")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(client.get(f"/api/characters/{char_id}/refs").json(), [])
+        self.assertEqual(client.get(ref["url"]).status_code, 404)
+        self.assertFalse(target.exists())
+
+    def test_refs_404_y_400(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        self.assertEqual(
+            client.post(
+                f"/api/characters/{char_id}/refs", json={"gen_id": 999}
+            ).status_code,
+            404,
+        )
+        empty_gen = self.store.add(MODEL_ID, "1girl")
+        self.assertEqual(
+            client.post(
+                f"/api/characters/{char_id}/refs", json={"gen_id": empty_gen}
+            ).status_code,
+            404,
+        )
+        no_file = self.store.add(MODEL_ID, "1girl")
+        self.store.update(no_file, status="done", outputs=["ghost.png"])
+        self.assertEqual(
+            client.post(
+                f"/api/characters/{char_id}/refs", json={"gen_id": no_file}
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            client.post(f"/api/characters/{char_id}/refs", json={}).status_code, 400
+        )
+        self.assertEqual(
+            client.post("/api/characters/99/refs", json={"gen_id": 1}).status_code,
+            404,
+        )
+
+    def test_delete_ref_desconocida_404(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        self.assertEqual(
+            client.delete(f"/api/characters/{char_id}/refs/999").status_code, 404
+        )
+
+    def test_delete_oc_borra_carpeta_refs(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        gen_id = self.store.add(MODEL_ID, "1girl")
+        self.add_gallery_png(gen_id)
+        self.store.update(gen_id, status="done", outputs=["ok.png"])
+        client.post(f"/api/characters/{char_id}/refs", json={"gen_id": gen_id})
+        directory = self.config.data_dir / "characters" / str(char_id)
+        self.assertTrue(directory.is_dir())
+        self.assertEqual(client.delete(f"/api/characters/{char_id}").status_code, 200)
+        self.assertFalse(directory.exists())
+
+
+class CharacterMediaTests(ServerTestCase):
+    def test_404_y_confinamiento_403(self):
+        client = self.make_client()
+        missing = client.get("/media/characters/1/nope.png")
+        self.assertEqual(missing.status_code, 404)
+        self.assertIn("error", missing.json())
+        (self.config.data_dir / "secret.png").write_bytes(PNG_BYTES)
+        escape = client.get("/media/characters/1/..%2F..%2Fsecret.png")
+        self.assertEqual(escape.status_code, 403)
+        self.assertIn("error", escape.json())
 
 
 class IndexTests(ServerTestCase):

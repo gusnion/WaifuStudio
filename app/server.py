@@ -19,6 +19,7 @@ import os
 import shutil
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Body, FastAPI, Request
@@ -26,6 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.characters import CharacterStore
 from app.config import APP_ROOT, EngineConfig, load_config
 from app.engine import ComfyEngine, EngineError, load_graph
 from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
@@ -50,6 +52,7 @@ from app.progress import ProgressTracker
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
 from app.store import Store
+from app.tags import by_group, list_groups, search
 from app.video import (
     ASPECTS,
     H3_TEMPLATE_PATH,
@@ -70,6 +73,14 @@ MEDIA_TYPES = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
 }
+CHARACTER_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+CHARACTER_REFS_DIRNAME = "characters"
+TAGS_UNFILTERED_LIMIT = 200
 _JOBS: dict[int, dict] = {}
 PROGRESS_KEYS = ("step", "total", "percent", "node", "state")
 
@@ -103,6 +114,11 @@ def _merge_tags(parts: list[str]) -> str:
                 seen.add(folded)
                 merged.append(tag)
     return ", ".join(merged)
+
+
+def _clamp_tags_limit(limit: int) -> int:
+    """Clamp del limit de `/api/tags` a 1..200."""
+    return max(1, min(int(limit), TAGS_UNFILTERED_LIMIT))
 
 
 def _set_text_nodes(graph: dict, positive: str, negative: str) -> dict:
@@ -259,17 +275,30 @@ def create_app(
     *,
     queue: JobQueue | None = None,
     start_worker: bool = True,
+    character_store: CharacterStore | None = None,
 ) -> FastAPI:
     """Construye la app con todas sus dependencias inyectables.
 
     Defaults: `load_config()`, `Store(config.data_dir/'waifu.db')` con `init()`,
-    `ModelRegistry.load(registry/models.json)` y `ComfyEngine(config)`. El
-    lifespan arranca/para la cola salvo `start_worker=False` (tests).
+    `ModelRegistry.load(registry/models.json)`, `ComfyEngine(config)` y
+    `CharacterStore` sobre la misma sqlite con refs en
+    `config.data_dir/characters`. El lifespan arranca/para la cola salvo
+    `start_worker=False` (tests).
     """
     cfg = config if config is not None else load_config()
     st = store if store is not None else Store(cfg.data_dir / "waifu.db")
     if store is None:
         st.init()
+    chars = (
+        character_store
+        if character_store is not None
+        else CharacterStore(
+            cfg.data_dir / "waifu.db",
+            refs_root=cfg.data_dir / CHARACTER_REFS_DIRNAME,
+        )
+    )
+    if character_store is None:
+        chars.init()
     reg = registry if registry is not None else ModelRegistry.load(REGISTRY_PATH)
     factory = engine_factory if engine_factory is not None else (lambda: ComfyEngine(cfg))
     video_factory = (
@@ -309,6 +338,7 @@ def create_app(
     app.state.llm = llm
     app.state.queue = queue
     app.state.jobs = {}
+    app.state.characters = chars
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -342,6 +372,117 @@ def create_app(
     @app.get("/api/traits")
     async def api_traits() -> dict:
         return list_traits()
+
+    @app.get("/api/tags/groups")
+    async def api_tags_groups() -> dict:
+        return {"groups": list_groups()}
+
+    @app.get("/api/tags")
+    async def api_tags(
+        group: str | None = None,
+        q: str | None = None,
+        limit: int = TAGS_UNFILTERED_LIMIT,
+    ) -> dict:
+        limit = _clamp_tags_limit(limit)
+        if group:
+            items = by_group(group)
+            if q:
+                needle = q.strip().lower()
+                items = [
+                    item
+                    for item in items
+                    if needle in item["tag"].lower() or needle in item["label"].lower()
+                ]
+        else:
+            items = search(q if q is not None else "", limit=limit)
+        return {"items": items[:limit]}
+
+    @app.get("/api/characters")
+    async def api_characters() -> list[dict]:
+        return chars.list()
+
+    @app.post("/api/characters")
+    async def api_character_add(payload: dict = Body(...)) -> Any:
+        char_id = chars.add(
+            payload.get("name"),
+            payload.get("tags") if payload.get("tags") is not None else [],
+            preprompt=payload.get("preprompt") or DEFAULT_PREPROMPT,
+            rating=payload.get("rating") or "sfw",
+            notes=payload.get("notes") or "",
+        )
+        return {"id": char_id}
+
+    @app.get("/api/characters/{char_id}")
+    async def api_character_get(char_id: int) -> Any:
+        row = chars.get(char_id)
+        if row is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        return row
+
+    @app.put("/api/characters/{char_id}")
+    async def api_character_update(char_id: int, payload: dict = Body(...)) -> Any:
+        if chars.get(char_id) is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        fields = {
+            key: payload[key]
+            for key in ("name", "tags", "preprompt", "rating", "notes")
+            if key in payload
+        }
+        chars.update(char_id, **fields)
+        return chars.get(char_id)
+
+    @app.delete("/api/characters/{char_id}")
+    async def api_character_delete(char_id: int) -> Any:
+        if not chars.delete(char_id):
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        return {"deleted": True}
+
+    @app.post("/api/characters/{char_id}/refs")
+    async def api_character_ref_add(char_id: int, payload: dict = Body(...)) -> Any:
+        if chars.get(char_id) is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        gen_id = payload.get("gen_id")
+        if isinstance(gen_id, bool) or not isinstance(gen_id, int):
+            raise EngineError("gen_id requerido")
+        row = st.get(gen_id)
+        if row is None:
+            return JSONResponse(
+                status_code=404, content={"error": "generacion desconocida"}
+            )
+        outputs = row.get("outputs") or []
+        first = outputs[0] if outputs else None
+        name = first.get("name") if isinstance(first, dict) else first
+        if not isinstance(name, str) or not name.strip():
+            return JSONResponse(
+                status_code=404, content={"error": "la generacion no tiene salidas"}
+            )
+        src = cfg.data_dir / "gallery" / str(gen_id) / name
+        if not src.is_file():
+            return JSONResponse(
+                status_code=404, content={"error": "archivo de la generacion no encontrado"}
+            )
+        return {"relpath": chars.add_ref(char_id, src)}
+
+    @app.get("/api/characters/{char_id}/refs")
+    async def api_character_refs(char_id: int) -> Any:
+        if chars.get(char_id) is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        items = []
+        for ref in chars.refs(char_id):
+            item = dict(ref)
+            item["url"] = f"/media/characters/{char_id}/{Path(ref['relpath']).name}"
+            items.append(item)
+        return items
+
+    @app.delete("/api/characters/{char_id}/refs/{ref_id}")
+    async def api_character_ref_delete(char_id: int, ref_id: int) -> Any:
+        if chars.get(char_id) is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        if not chars.remove_ref(char_id, ref_id):
+            return JSONResponse(
+                status_code=404, content={"error": "referencia desconocida"}
+            )
+        return {"deleted": True}
 
     @app.get("/api/params")
     async def api_params() -> dict:
@@ -714,6 +855,19 @@ def create_app(
             ]
             items.append(item)
         return {"items": items, "count": st.count()}
+
+    @app.get("/media/characters/{char_id}/{name:path}")
+    async def api_character_media(char_id: int, name: str) -> Any:
+        refs_root = Path(chars.refs_root).resolve()
+        candidate = (refs_root / str(char_id) / name).resolve()
+        if not candidate.is_relative_to(refs_root):
+            return JSONResponse(
+                status_code=403, content={"error": "ruta fuera de las referencias"}
+            )
+        media_type = CHARACTER_MEDIA_TYPES.get(candidate.suffix.lower())
+        if media_type is None or not candidate.is_file():
+            return JSONResponse(status_code=404, content={"error": "no encontrado"})
+        return FileResponse(candidate, media_type=media_type)
 
     @app.get("/media/{gen_id}/{name:path}")
     async def api_media(gen_id: int, name: str) -> Any:

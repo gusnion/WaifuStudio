@@ -20,6 +20,7 @@ Sin nube obligatoria: el engine corre en loopback y la app consume su API local.
 E:\IA\WAIFU
 ├─ app/
 │  ├─ __init__.py
+│  ├─ characters.py   # OCs guardables con referencias en data/waifu.db (M9-B1)
 │  ├─ config.py       # configuración central congelada
 │  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
 │  ├─ enhancer.py     # «Mejorar prompt»: LLM local + RAG + preprompts (M8-20)
@@ -35,18 +36,21 @@ E:\IA\WAIFU
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  ├─ server.py       # webapp FastAPI: API JSON, runners y UI (F3b/F4)
 │  ├─ store.py        # store sqlite3 de generaciones con kind image|video (M8-21/F4)
+│  ├─ tags.py         # catálogo starter de tags Danbooru (M9-B1)
 │  ├─ video.py        # grafos y runner de video Wan/H3 (F4)
 │  └─ health.py       # smoke CLI (python -m app.health)
 ├─ docs/
 │  └─ prompting_anima.md  # manual local de prompting Anima (F2)
 ├─ registry/
 │  ├─ formatos-v1.json  # catálogo legacy de formatos imagen/video, copia verbatim (M9-A1)
-│  └─ models.json     # registro versionado de modelos locales (M8-10)
+│  ├─ models.json     # registro versionado de modelos locales (M8-10)
+│  └─ tags_danbooru.json  # catálogo starter de tags Danbooru (M9-B1)
 ├─ static/            # app.css y app.js de la UI (F3b/F4)
 ├─ templates/
 │  └─ index.html      # UI de una página: pestañas Imagen/Video + OC Maker (F3b/F4)
 ├─ tests/             # tests CPU, sin red ni GPU
 │  ├─ __init__.py
+│  ├─ test_characters.py
 │  ├─ test_engine.py
 │  ├─ test_enhancer.py
 │  ├─ test_formats.py
@@ -61,6 +65,7 @@ E:\IA\WAIFU
 │  ├─ test_server.py
 │  ├─ test_server_video.py
 │  ├─ test_store.py
+│  ├─ test_tags.py
 │  └─ test_video.py
 ├─ workflows/         # plantillas API-format certificadas (imagen y video)
 │  ├─ anima_base.json
@@ -215,6 +220,36 @@ Las 3 dependencias están instaladas en el venv del propio repo y fijadas en `re
 Por defecto escucha en `127.0.0.1:8765`; el puerto se cambia con `WAIFU_APP_PORT`.
 La generación real requiere ComfyUI arriba (`WAIFU_COMFY_URL`) y GPU libre; los tests corren
 offline con un transporte falso y `start_worker=False` (sin GPU ni LLM reales).
+
+## Tags y OCs (M9-B1)
+
+`registry\tags_danbooru.json` es el catálogo **starter** curado de tags Danbooru (349 en 10
+grupos: hair, eyes, face, body, outfit, expression, accessories, setting, action y meta), sin
+red ni descargas; cada entrada es `{tag, label, group}` con tags canónicos (nada inventado) y
+`meta` incluye `score_7/8/9`, `masterpiece`, `best quality`, `sfw`, `nsfw` y `uncensored`.
+`app\tags.py` lo carga desde `APP_ROOT` y expone `GROUPS`, `list_groups()`, `by_group(group)`
+(`EngineError` si no existe), `search(q, limit)` (substring case-insensitive en tag/label, orden
+estable, limit acotado a 1..200), `get(tag)` y `all_tags()`; el dataset completo (3-8k) llega en
+M10 con las descargas.
+
+`app\characters.py` guarda OCs en la MISMA sqlite (`data\waifu.db`) con migración idempotente:
+`characters` (name único, `tags` JSON, `preprompt` de la familia anima, `rating` sfw|nsfw y
+`notes`) y `character_refs` (FK con `ON DELETE CASCADE`). `CharacterStore(db_path)` crea el
+directorio padre en `init()`; `add`/`get`/`list`/`update`/`delete` validan con `EngineError`
+(delete borra refs y su carpeta), `add_ref(id, src_path, *, refs_root)` copia una imagen real
+(png/jpg/jpeg/webp) a `<refs_root>\<id>\<uuid>.<ext>`, `refs(id)` lista las filas y
+`remove_ref(id, ref_id)` borra archivo y fila. `prompt_from_tags(tags)` une con ", " dedup
+case-insensitive en orden estable. Las refs viven en `data\characters\<id>\`.
+
+Rutas nuevas en `app\server.py`: `GET /api/tags/groups` → `{groups}`;
+`GET /api/tags?group=&q=&limit=` → `{items}` (por grupo, búsqueda o ambos; sin filtro, primeros
+200); `GET/POST /api/characters` y `GET/PUT/DELETE /api/characters/{id}` (400 en validación, 404
+si no existe); `POST /api/characters/{id}/refs` `{gen_id}` copia el primer output de
+`data\gallery\<gen_id>\` (404 sin generación/archivo), `GET /api/characters/{id}/refs` añade
+`url` y `DELETE /api/characters/{id}/refs/{ref_id}`; `GET /media/characters/{char_id}/{name}`
+sirve la referencia con confinamiento estricto (`resolve()` + `is_relative_to(refs_root)`: 403
+si escapa, 404 si falta). Todo inyectable vía `create_app(..., character_store=...)` y testeable
+offline.
 
 ## Video (F4)
 
