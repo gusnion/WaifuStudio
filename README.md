@@ -28,6 +28,7 @@ E:\IA\WAIFU
 │  ├─ gate_f1.py      # runner Gate F1: 1 imagen por modelo del registro (M8-11b)
 │  ├─ graphs.py       # grafos API-format: perfil/params e img2img (F3a)
 │  ├─ jobs.py         # cola 1-GPU en serie con worker daemon (F3a)
+│  ├─ loras.py        # biblioteca de LoRAs locales: registro y validación (M9-D1)
 │  ├─ motion.py       # motion de video con LLM local inyectable (F4)
 │  ├─ oc_traits.py    # catálogo de traits OC Maker con tags danbooru (F3a)
 │  ├─ params.py       # enums reales de sampler/scheduler de ComfyUI (M9-A1)
@@ -45,6 +46,7 @@ E:\IA\WAIFU
 │  └─ prompting_anima.md  # manual local de prompting Anima (F2)
 ├─ registry/
 │  ├─ formatos-v1.json  # catálogo legacy de formatos imagen/video, copia verbatim (M9-A1)
+│  ├─ loras.json      # registro versionado de LoRAs locales (M9-D1)
 │  ├─ models.json     # registro versionado de modelos locales (M8-10)
 │  └─ tags_danbooru.json  # catálogo starter de tags Danbooru (M9-B1)
 ├─ static/            # app.css y app.js de la UI (F3b/F4)
@@ -59,6 +61,7 @@ E:\IA\WAIFU
 │  ├─ test_gate_f1.py
 │  ├─ test_graphs.py
 │  ├─ test_jobs.py
+│  ├─ test_loras.py
 │  ├─ test_motion.py
 │  ├─ test_oc_traits.py
 │  ├─ test_params.py
@@ -370,6 +373,41 @@ textarea de movimiento + rating + «Generar motion», motion positivo (Wan) / pr
 libre y los modelos/custom nodes de cada motor instalados en `E:\IA\WAIFU\ComfyUI` (UnetLoaderGGUF
 para Wan, nodos MiniMax H3 + turbo LoRA para H3). Los tests corren offline con transporte y LLM
 falsos: no tocan GPU ni red.
+
+## LoRAs (M9-D1)
+
+`app\loras.py` (CPU, sin red) carga y valida la biblioteca versionada
+`registry\loras.json` (`{"version": 1, "loras": [...]}`). Cada entrada declara
+`id`, `family`, `file` (relativo a `ComfyUI\models\loras`), `display_name`,
+`trigger`, `default_weight` (0..2), `source`, `license` y `notes`; el `_comment`
+del registro recuerda que **los LoRAs de Anima llegan en M10 (descargas
+diferidas)** y solo se registran ficheros presentes en disco:
+
+| id | familia | archivo |
+|----|---------|---------|
+| `lightx2v-wan-high` | `wan` | `lightx2v\wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
+| `lightx2v-wan-low` | `wan` | `lightx2v\wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
+| `reika-kurashiki` | `animagine` | `Reika Kurashiki_1.safetensors` (legacy, no se usa en Anima) |
+| `minimax-h3-fl2v-turbo-4step` | `h3` | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors` (turbo de la plantilla H3) |
+
+API del módulo: `list_loras(family=None)` (orden del JSON), `get(id)`,
+`families()` y `validate_selection([{"id", "weight"?}])`, que normaliza a
+`[{"id", "file", "weight"}]` (weight float 0..2, default el del registro);
+`EngineError` si el id no existe o el peso es inválido.
+
+`app\graphs.py:apply_loras(graph, loras)` devuelve una copia profunda con la
+cadena `lora_1..lora_N` (`LoraLoaderModelOnly`: `lora_name=file`,
+`strength_model=weight`) enganchada al `UNETLoader` (o `UnetLoaderGGUF`): el
+primer nodo toma su `model`, el resto encadena al anterior y todo input `model`
+que apuntara al loader pasa a apuntar al último LoRA. Lista vacía devuelve la
+copia sin cambios; `EngineError` si falta el loader, colisiona un id `lora_N` o
+un item no trae `file`/peso válido.
+
+Rutas: `GET /api/loras?family=` → `{"items": [...], "families": [...]}` y
+`POST /api/generate` acepta `loras: [{"id", "weight"?}]` (400 si es inválido),
+los aplica tras `patch_model` y guarda los `params` del store con `loras`
+normalizados. Los LoRAs de vídeo (wan/h3) se conectarán a los runners de vídeo
+en **M9-F**; hasta entonces la biblioteca queda como registro y validación.
 
 ## Progreso y cancelación (M9-A2b)
 

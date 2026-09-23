@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "_comment": "Los LoRAs de Anima llegan en M10 (descargas diferidas)",
+  "loras": [
+    {
+      "id": "lightx2v-wan-high",
+      "family": "wan",
+      "file": "lightx2v\\wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+      "display_name": "LightX2V Wan 2.2 I2V high noise 4-step",
+      "trigger": "",
+      "default_weight": 1.0,
+      "source": "lightx2v (Apache-2.0)",
+      "license": "Apache-2.0",
+      "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado)"
+    },
+    {
+      "id": "lightx2v-wan-low",
+      "family": "wan",
+      "file": "lightx2v\\wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+      "display_name": "LightX2V Wan 2.2 I2V low noise 4-step",
+      "trigger": "",
+      "default_weight": 1.0,
+      "source": "lightx2v (Apache-2.0)",
+      "license": "Apache-2.0",
+      "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado)"
+    },
+    {
+      "id": "reika-kurashiki",
+      "family": "animagine",
+      "file": "Reika Kurashiki_1.safetensors",
+      "display_name": "Reika Kurashiki (animagine)",
+      "trigger": "",
+      "default_weight": 1.0,
+      "source": "legacy (ComfyUI\\models\\loras)",
+      "license": "legacy (no verificada)",
+      "notes": "legacy; no se usa en Anima (modelo animagine)"
+    },
+    {
+      "id": "minimax-h3-fl2v-turbo-4step",
+      "family": "h3",
+      "file": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "display_name": "MiniMax H3 FL2V turbo 4-step v1.0 768p bf16",
+      "trigger": "",
+      "default_weight": 1.0,
+      "source": "local (ComfyUI\\models\\loras)",
+      "license": "ver procedencia en ComfyUI\\models\\loras (no inventar)",
+      "notes": "turbo 4 pasos de la plantilla H3 (nodo LoraLoaderModelOnly 134 en workflows\\h3_fl2va_vertical.api.json)"
+    }
+  ]
+}

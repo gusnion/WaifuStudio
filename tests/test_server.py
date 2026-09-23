@@ -171,6 +171,41 @@ class ReadRoutesTests(ServerTestCase):
         self.assertEqual(item["urls"], [f"/media/{gen_id}/ok.png"])
 
 
+class LorasRouteTests(ServerTestCase):
+    def test_loras_200_con_items_y_familias(self):
+        response = self.make_client().get("/api/loras")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"items", "families"})
+        self.assertEqual(data["families"], ["wan", "animagine", "h3"])
+        self.assertEqual(
+            [item["id"] for item in data["items"]],
+            [
+                "lightx2v-wan-high",
+                "lightx2v-wan-low",
+                "reika-kurashiki",
+                "minimax-h3-fl2v-turbo-4step",
+            ],
+        )
+
+    def test_loras_filtro_por_familia(self):
+        response = self.make_client().get("/api/loras", params={"family": "wan"})
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(
+            [item["id"] for item in items],
+            ["lightx2v-wan-high", "lightx2v-wan-low"],
+        )
+        self.assertTrue(all(item["family"] == "wan" for item in items))
+
+    def test_loras_familia_desconocida_vacia(self):
+        data = self.make_client().get(
+            "/api/loras", params={"family": "no-existe"}
+        ).json()
+        self.assertEqual(data["items"], [])
+        self.assertIn("wan", data["families"])
+
+
 class ParamsRouteTests(ServerTestCase):
     def test_params_enums_y_defaults(self):
         response = self.make_client().get("/api/params")
@@ -759,6 +794,74 @@ class GenerateEngineParamsValidationTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class GenerateLorasTests(ServerTestCase):
+    REIKA_FILE = "Reika Kurashiki_1.safetensors"
+
+    def payload(self, **overrides) -> dict:
+        data = {
+            "model_id": MODEL_ID,
+            "prompt": "1girl, smile",
+            "preprompt": "ninguno",
+            "params": {"seed": 1},
+        }
+        data.update(overrides)
+        return data
+
+    def test_generate_con_loras_normaliza_y_guarda(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate",
+            json=self.payload(loras=[{"id": "reika-kurashiki", "weight": 0.8}]),
+        )
+        self.assertEqual(response.status_code, 200)
+        expected = [
+            {
+                "id": "reika-kurashiki",
+                "file": self.REIKA_FILE,
+                "weight": 0.8,
+            }
+        ]
+        self.assertEqual(queue.jobs[0]["loras"], expected)
+        self.assertEqual(self.store.list()[0]["params"]["loras"], expected)
+
+    def test_generate_sin_loras_guarda_lista_vacia(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate", json=self.payload()
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["loras"], [])
+        self.assertEqual(self.store.list()[0]["params"]["loras"], [])
+
+    def test_generate_lora_sin_weight_usa_el_default(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate", json=self.payload(loras=[{"id": "lightx2v-wan-high"}])
+        )
+        self.assertEqual(response.status_code, 200)
+        item = queue.jobs[0]["loras"][0]
+        self.assertEqual(item["weight"], 1.0)
+        self.assertTrue(item["file"].endswith(".safetensors"))
+
+    def test_generate_lora_invalida_400(self):
+        for loras in (
+            [{"id": "no-existe"}],
+            [{"id": "reika-kurashiki", "weight": 3.0}],
+            [{"id": "reika-kurashiki", "weight": True}],
+            [{}],
+            ["reika-kurashiki"],
+            {"id": "reika-kurashiki"},
+            "reika-kurashiki",
+        ):
+            with self.subTest(loras=loras):
+                response = self.make_client().post(
+                    "/api/generate", json=self.payload(loras=loras)
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.store.count(), 0)
+
+
 class JobProgressTests(ServerTestCase):
     def payload(self) -> dict:
         return {
@@ -1037,6 +1140,51 @@ class RunGenerationTests(ServerTestCase):
         row = self.store.get(job["gen_id"])
         self.assertEqual(row["status"], "error")
         self.assertIn("no registrado", row["error"])
+
+    def test_lora_en_el_grafo(self):
+        transport = FakeTransport(self.config)
+        job = self.make_job(
+            loras=[{"id": "reika-kurashiki", "weight": 0.8}]
+        )
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+        )
+        self.assertEqual(self.store.get(job["gen_id"])["status"], "done")
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["lora_1"]["class_type"], "LoraLoaderModelOnly")
+        self.assertEqual(
+            graph["lora_1"]["inputs"],
+            {
+                "model": ["1", 0],
+                "lora_name": "Reika Kurashiki_1.safetensors",
+                "strength_model": 0.8,
+            },
+        )
+        self.assertEqual(graph["7"]["inputs"]["model"], ["lora_1", 0])
+
+    def test_dos_loras_en_cadena_en_el_grafo(self):
+        transport = FakeTransport(self.config)
+        job = self.make_job(
+            loras=[
+                {"id": "lightx2v-wan-high", "weight": 0.5},
+                {"id": "lightx2v-wan-low", "weight": 1.0},
+            ]
+        )
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+        )
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["lora_1"]["inputs"]["model"], ["1", 0])
+        self.assertEqual(graph["lora_2"]["inputs"]["model"], ["lora_1", 0])
+        self.assertEqual(graph["7"]["inputs"]["model"], ["lora_2", 0])
 
 
 class RunGenerationProgressTests(ServerTestCase):

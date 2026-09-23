@@ -35,8 +35,16 @@ from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
 from app.enhancer import load_local_llm
 from app.formats import DEFAULT_FORMAT, get_size, list_image_formats
-from app.graphs import DEFAULT_STRENGTH, patch_model, patch_params, to_img2img
+from app.graphs import (
+    DEFAULT_STRENGTH,
+    apply_loras,
+    patch_model,
+    patch_params,
+    to_img2img,
+)
 from app.jobs import JobQueue
+from app.loras import families as lora_families
+from app.loras import list_loras, validate_selection
 from app.motion import MOTION_NEGATIVE, write_motion
 from app.oc_traits import build_prompt, list_traits
 from app.params import (
@@ -206,6 +214,11 @@ def run_generation(
         params = dict(job.get("params") or {})
         graph = load_graph(DEFAULT_GRAPH_PATH)
         graph = patch_model(graph, entry, seed=params.get("seed"))
+        raw_loras = job.get("loras")
+        graph = apply_loras(
+            graph,
+            validate_selection([] if raw_loras is None else raw_loras),
+        )
         applied = {key: params[key] for key in PARAM_KEYS if params.get(key) is not None}
         graph = patch_params(graph, **applied)
         preprompt = job.get("preprompt") or entry.preprompt or DEFAULT_PREPROMPT
@@ -362,6 +375,10 @@ def create_app(
             }
             for entry in reg.models
         ]
+
+    @app.get("/api/loras")
+    async def api_loras(family: str | None = None) -> dict:
+        return {"items": list_loras(family), "families": lora_families()}
 
     @app.get("/api/preprompts")
     async def api_preprompts(family: str = DEFAULT_FAMILY) -> dict:
@@ -631,6 +648,8 @@ def create_app(
         params = payload.get("params") or {}
         if not isinstance(params, dict):
             return JSONResponse(status_code=400, content={"error": "params invalido"})
+        raw_loras = payload.get("loras")
+        loras = validate_selection([] if raw_loras is None else raw_loras)
         size = payload.get("size")
         width = payload.get("width")
         height = payload.get("height")
@@ -728,6 +747,7 @@ def create_app(
         stored_params = dict(params)
         stored_params["preprompt"] = preprompt
         stored_params["rating"] = rating
+        stored_params["loras"] = loras
         if ref_image is not None:
             stored_params["strength"] = strength
             stored_params["ref_image"] = ref_image
@@ -739,6 +759,7 @@ def create_app(
             "negative": negative,
             "preprompt": preprompt,
             "params": params,
+            "loras": loras,
             "ref_image": ref_image,
             "strength": strength,
         }

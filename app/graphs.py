@@ -8,15 +8,22 @@ Solo stdlib; sin red, sin GPU y sin dependencias nuevas.
 from __future__ import annotations
 
 import copy
+import math
 from typing import Any
 
 from app.engine import EngineError
+from app.loras import get as get_lora
 
 KSAMPLER_CLASS = "KSampler"
 LATENT_CLASS = "EmptyLatentImage"
 IMG_REF_ID = "img_ref"
 IMG_ENC_ID = "img_enc"
 DEFAULT_STRENGTH = 0.6
+LORA_CLASS = "LoraLoaderModelOnly"
+LORA_ID_PREFIX = "lora_"
+UNET_LOADER_CLASSES = ("UNETLoader", "UnetLoaderGGUF")
+LORA_WEIGHT_MIN = 0.0
+LORA_WEIGHT_MAX = 2.0
 
 _KSAMPLER_WIDGETS = ("seed", "steps", "cfg", "sampler_name", "scheduler")
 _LATENT_WIDGETS = ("width", "height")
@@ -234,10 +241,122 @@ def to_img2img(graph: dict, image_name: str, strength: float = DEFAULT_STRENGTH)
     return patched
 
 
+def _lora_weight(value: object, position: int) -> float:
+    if isinstance(value, bool):
+        raise EngineError(f"lora #{position}: weight invalido: {value!r}")
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise EngineError(f"lora #{position}: weight invalido: {value!r}") from exc
+    if not math.isfinite(result) or not LORA_WEIGHT_MIN <= result <= LORA_WEIGHT_MAX:
+        raise EngineError(
+            f"lora #{position}: weight fuera de [{LORA_WEIGHT_MIN:g}, "
+            f"{LORA_WEIGHT_MAX:g}]: {value!r}"
+        )
+    return result
+
+
+def _resolve_lora(item: dict, position: int) -> tuple[str, float]:
+    """``(file, weight)`` del item: explicitos o resueltos por ``id``.
+
+    Un item sin ``file``/``weight`` los toma del registro via ``app.loras.get``;
+    sin ``id`` ni ``file`` lanza EngineError (tambien si el id no existe).
+    """
+    lora_id = item.get("id")
+    entry = None
+    if isinstance(lora_id, str) and lora_id.strip():
+        entry = get_lora(lora_id)
+    file = item.get("file")
+    if not isinstance(file, str) or not file.strip():
+        if entry is None:
+            raise EngineError(f"lora #{position}: falta 'file'")
+        file = entry["file"]
+    weight = item.get("weight")
+    if weight is None:
+        weight = entry["default_weight"] if entry is not None else 1.0
+    return file, _lora_weight(weight, position)
+
+
+def _model_loader(graph: dict) -> tuple[str, dict] | None:
+    for class_type in UNET_LOADER_CLASSES:
+        nodes = _nodes_of(graph, class_type)
+        if nodes:
+            return nodes[0]
+    return None
+
+
+def _rewire_model_inputs(graph: dict, loader_id: str, target_id: str) -> None:
+    for node in graph.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        for key, value in inputs.items():
+            if key != "model" or not isinstance(value, (list, tuple)) or len(value) < 2:
+                continue
+            if str(value[0]) == loader_id and value[1] == 0:
+                inputs[key] = [target_id, 0]
+
+
+def apply_loras(graph: dict, loras: list[dict]) -> dict:
+    """Copia de ``graph`` con la cadena ``lora_1..lora_N`` tras el loader.
+
+    Cada item aporta ``file`` (``lora_name``) y ``weight`` (``strength_model``);
+    si falta ``file`` (o ``weight``) se resuelven por ``id`` en
+    ``registry/loras.json`` (default 1.0 sin id). El primer nodo engancha al
+    ``UNETLoader`` (o
+    ``UnetLoaderGGUF``) y el ultimo sustituye al loader en todo input ``model``
+    que apuntara a el. Lista vacia devuelve la copia sin cambios. EngineError si
+    no hay loader, si colisiona algun id ``lora_N`` o si un item/weight es
+    invalido.
+    """
+    patched = copy.deepcopy(graph)
+    if not isinstance(loras, list):
+        raise EngineError(
+            f"loras invalidas: se esperaba lista, recibido {type(loras).__name__}"
+        )
+    if not loras:
+        return patched
+    loader = _model_loader(patched)
+    if loader is None:
+        raise EngineError(
+            "grafo sin UNETLoader/UnetLoaderGGUF: no se pueden aplicar LoRAs"
+        )
+    loader_id, _node = loader
+    for index in range(1, len(loras) + 1):
+        node_id = f"{LORA_ID_PREFIX}{index}"
+        if node_id in patched:
+            raise EngineError(f"id de LoRA ocupado en el grafo: {node_id!r}")
+    chain: list[tuple[str, float]] = []
+    for position, item in enumerate(loras, start=1):
+        if not isinstance(item, dict):
+            raise EngineError(
+                f"lora #{position}: entrada invalida (se esperaba objeto JSON)"
+            )
+        chain.append(_resolve_lora(item, position))
+    _rewire_model_inputs(patched, loader_id, f"{LORA_ID_PREFIX}{len(chain)}")
+    previous = loader_id
+    for index, (file, weight) in enumerate(chain, start=1):
+        node_id = f"{LORA_ID_PREFIX}{index}"
+        patched[node_id] = {
+            "class_type": LORA_CLASS,
+            "inputs": {
+                "model": [previous, 0],
+                "lora_name": file,
+                "strength_model": weight,
+            },
+        }
+        previous = node_id
+    return patched
+
+
 __all__ = [
     "DEFAULT_STRENGTH",
     "IMG_ENC_ID",
     "IMG_REF_ID",
+    "LORA_CLASS",
+    "apply_loras",
     "patch_model",
     "patch_params",
     "to_img2img",

@@ -7,7 +7,15 @@ import unittest
 from pathlib import Path
 
 from app.engine import EngineError, load_graph
-from app.graphs import IMG_ENC_ID, IMG_REF_ID, patch_model, patch_params, to_img2img
+from app.graphs import (
+    IMG_ENC_ID,
+    IMG_REF_ID,
+    LORA_CLASS,
+    apply_loras,
+    patch_model,
+    patch_params,
+    to_img2img,
+)
 from app.registry import ModelEntry, ModelProfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -290,6 +298,175 @@ class ToImg2ImgTests(unittest.TestCase):
 
         self.assertEqual(patched["10"]["inputs"]["latent_image"], [IMG_ENC_ID, 0])
         self.assertEqual(patched["10"]["inputs"]["denoise"], 0.4)
+
+
+class ApplyLorasTests(unittest.TestCase):
+    def test_un_lora_estructura_exacta_y_rewire(self):
+        graph = real_graph()
+
+        patched = apply_loras(
+            graph, [{"file": "reika.safetensors", "weight": 0.8}]
+        )
+
+        self.assertEqual(len(graph), 9)
+        self.assertEqual(len(patched), 10)
+        self.assertEqual(
+            patched["lora_1"],
+            {
+                "class_type": LORA_CLASS,
+                "inputs": {
+                    "model": ["1", 0],
+                    "lora_name": "reika.safetensors",
+                    "strength_model": 0.8,
+                },
+            },
+        )
+        self.assertEqual(patched["7"]["inputs"]["model"], ["lora_1", 0])
+        self.assertEqual(graph["7"]["inputs"]["model"], ["1", 0])
+        self.assertNotIn("lora_1", graph)
+
+    def test_weight_por_defecto_uno(self):
+        patched = apply_loras(real_graph(), [{"file": "x.safetensors"}])
+
+        self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 1.0)
+
+    def test_resuelve_file_y_weight_por_id(self):
+        patched = apply_loras(
+            real_graph(), [{"id": "reika-kurashiki", "weight": 0.8}]
+        )
+
+        self.assertEqual(
+            patched["lora_1"]["inputs"]["lora_name"], "Reika Kurashiki_1.safetensors"
+        )
+        self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 0.8)
+
+    def test_id_sin_weight_usa_el_default_del_registro(self):
+        patched = apply_loras(real_graph(), [{"id": "reika-kurashiki"}])
+
+        self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 1.0)
+
+    def test_id_desconocido_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            apply_loras(real_graph(), [{"id": "no-existe"}])
+
+    def test_cadena_de_dos_loras(self):
+        patched = apply_loras(
+            real_graph(),
+            [
+                {"file": "primera.safetensors", "weight": 0.7},
+                {"file": "segunda.safetensors", "weight": 1.2},
+            ],
+        )
+
+        self.assertEqual(patched["lora_1"]["inputs"]["model"], ["1", 0])
+        self.assertEqual(patched["lora_1"]["inputs"]["lora_name"], "primera.safetensors")
+        self.assertEqual(patched["lora_2"]["inputs"]["model"], ["lora_1", 0])
+        self.assertEqual(patched["lora_2"]["inputs"]["lora_name"], "segunda.safetensors")
+        self.assertEqual(patched["lora_2"]["inputs"]["strength_model"], 1.2)
+        self.assertEqual(patched["7"]["inputs"]["model"], ["lora_2", 0])
+        self.assertEqual(len(patched), 11)
+
+    def test_lista_vacia_devuelve_copia_sin_cambios(self):
+        graph = real_graph()
+        graph["lora_1"] = {"class_type": "Otro", "inputs": {}}
+
+        patched = apply_loras(graph, [])
+
+        self.assertEqual(patched, graph)
+        self.assertIsNot(patched, graph)
+
+    def test_lista_vacia_sin_loader_no_falla(self):
+        graph = real_graph()
+        del graph["1"]
+
+        patched = apply_loras(graph, [])
+
+        self.assertEqual(patched, graph)
+
+    def test_localiza_unetloader_gguf(self):
+        graph = real_graph()
+        graph["1"]["class_type"] = "UnetLoaderGGUF"
+
+        patched = apply_loras(graph, [{"file": "x.safetensors", "weight": 1.0}])
+
+        self.assertEqual(patched["lora_1"]["inputs"]["model"], ["1", 0])
+        self.assertEqual(patched["7"]["inputs"]["model"], ["lora_1", 0])
+
+    def test_sin_loader_lanza_engine_error(self):
+        graph = real_graph()
+        del graph["1"]
+
+        with self.assertRaises(EngineError):
+            apply_loras(graph, [{"file": "x.safetensors", "weight": 1.0}])
+
+    def test_ids_lora_ocupados_lanzan_engine_error(self):
+        for node_id in ("lora_1", "lora_2"):
+            with self.subTest(node_id=node_id):
+                graph = real_graph()
+                graph[node_id] = {"class_type": "Otro", "inputs": {}}
+                with self.assertRaises(EngineError):
+                    apply_loras(
+                        graph,
+                        [
+                            {"file": "a.safetensors", "weight": 1.0},
+                            {"file": "b.safetensors", "weight": 1.0},
+                        ],
+                    )
+
+    def test_rewirea_todos_los_inputs_model_del_loader(self):
+        graph = real_graph()
+        graph["10"] = {
+            "class_type": "BasicScheduler",
+            "inputs": {"model": ["1", 0], "steps": 4},
+        }
+        graph["11"] = {
+            "class_type": "Otro",
+            "inputs": {"clip": ["1", 0], "model": ["3", 0]},
+        }
+
+        patched = apply_loras(graph, [{"file": "x.safetensors", "weight": 1.0}])
+
+        self.assertEqual(patched["10"]["inputs"]["model"], ["lora_1", 0])
+        self.assertEqual(patched["11"]["inputs"]["clip"], ["1", 0])
+        self.assertEqual(patched["11"]["inputs"]["model"], ["3", 0])
+
+    def test_loras_no_lista_lanza_engine_error(self):
+        for loras in (None, {}, "x"):
+            with self.subTest(loras=loras):
+                with self.assertRaises(EngineError):
+                    apply_loras(real_graph(), loras)
+
+    def test_item_no_dict_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            apply_loras(real_graph(), ["x"])
+
+    def test_falta_file_lanza_engine_error(self):
+        for file in (None, "", "   "):
+            with self.subTest(file=file):
+                with self.assertRaises(EngineError):
+                    apply_loras(real_graph(), [{"file": file, "weight": 1.0}])
+
+    def test_weight_invalido_lanza_engine_error(self):
+        for weight in (True, -0.5, 2.5, "abc", [1.0], float("nan")):
+            with self.subTest(weight=weight):
+                with self.assertRaises(EngineError):
+                    apply_loras(
+                        real_graph(), [{"file": "x.safetensors", "weight": weight}]
+                    )
+
+    def test_no_muta_el_original_con_dos_loras(self):
+        graph = real_graph()
+        snapshot = copy.deepcopy(graph)
+
+        apply_loras(
+            graph,
+            [
+                {"file": "a.safetensors", "weight": 0.5},
+                {"file": "b.safetensors", "weight": 1.0},
+            ],
+        )
+
+        self.assertEqual(graph, snapshot)
 
 
 if __name__ == "__main__":
