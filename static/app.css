@@ -176,6 +176,42 @@ input[type="checkbox"] {
   border-color: var(--error);
 }
 
+.generate-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.generate-row .primary {
+  flex: 1;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.progress-track {
+  height: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .gallery-panel {
   display: flex;
   flex-direction: column;

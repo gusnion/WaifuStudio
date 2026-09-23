@@ -31,6 +31,7 @@ E:\IA\WAIFU
 │  ├─ oc_traits.py    # catálogo de traits OC Maker con tags danbooru (F3a)
 │  ├─ params.py       # enums reales de sampler/scheduler de ComfyUI (M9-A1)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
+│  ├─ progress.py     # tracker WS de progreso del engine (M9-A2)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  ├─ server.py       # webapp FastAPI: API JSON, runners y UI (F3b/F4)
 │  ├─ store.py        # store sqlite3 de generaciones con kind image|video (M8-21/F4)
@@ -259,6 +260,26 @@ textarea de movimiento + rating + «Generar motion», motion positivo (Wan) / pr
 libre y los modelos/custom nodes de cada motor instalados en `E:\IA\WAIFU\ComfyUI` (UnetLoaderGGUF
 para Wan, nodos MiniMax H3 + turbo LoRA para H3). Los tests corren offline con transporte y LLM
 falsos: no tocan GPU ni red.
+
+## Progreso y cancelación (M9-A2b)
+
+`run_generation` crea un `ProgressTracker` (WS del engine derivado de
+`comfy_url`, ver `app\progress.py`) antes del submit, lo arranca y lo para en el
+`finally`; el registro `_JOBS[gen_id]` (engine, `prompt_id`, tracker y estado)
+vive en memoria del proceso y se pierde al reiniciar la app.
+
+- `GET /api/jobs/{id}` añade `progress`: `{step, total, percent, node, state}`
+  con nulls si el job no tiene tracker.
+- `POST /api/jobs/{id}/cancel`: 404 si el job no existe, 409 si ya está
+  `done|error|cancelled`; en `queued` llama a `ComfyEngine.delete_queued(prompt_id)`
+  y en `running` a `ComfyEngine.interrupt()`, marca el store como `cancelled` y
+  devuelve `{"status": "cancelled"}`. Un job cancelado antes de arrancar no se
+  ejecuta. Los jobs de **video** aún no se pueden cancelar (llega en M9-F): el
+  endpoint devuelve 409 `cancelar video: pendiente (M9-F)` sin tocar engine ni store.
+- UI (sin CDN): barra de progreso con `paso X/Y` + nodo, polling cada 1 s
+  mientras el job está activo (`queued|running`) y botón **Cancelar** junto a
+  «Generar» visible solo con job activo; al terminar (`done|error|cancelled`)
+  para el polling, recarga la galería y limpia la barra.
 
 ## Smoke
 

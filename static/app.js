@@ -33,6 +33,7 @@ const state = {
   videoItems: [],
   imagePager: null,
   videoPager: null,
+  activeJobId: null,
   busy: false,
 };
 
@@ -374,21 +375,94 @@ async function generate() {
   }
 }
 
-async function pollJob(jobId, statusFn = setStatus, onDone = loadGallery) {
-  for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
-    if (job.status === "queued" || job.status === "running") {
-      statusFn(job.status === "running" ? "Generando..." : "En cola...");
-      continue;
-    }
-    if (job.status === "error") {
-      statusFn(`Error: ${job.error || "desconocido"}`, true);
+function setProgress(progress) {
+  const box = $("job-progress");
+  const fill = $("job-progress-fill");
+  const text = $("job-progress-text");
+  if (!progress) {
+    box.classList.add("hidden");
+    fill.style.width = "0%";
+    text.textContent = "paso -/-";
+    return;
+  }
+  const percent = progress.percent == null ? 0 : Number(progress.percent);
+  const clamped = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  fill.style.width = `${clamped}%`;
+  const step = progress.step == null ? "-" : progress.step;
+  const total = progress.total == null ? "-" : progress.total;
+  let label = `paso ${step}/${total}`;
+  if (progress.node) {
+    label += ` · nodo ${progress.node}`;
+  }
+  text.textContent = label;
+  box.classList.remove("hidden");
+}
+
+function setCancelVisible(visible) {
+  $("btn-cancel").classList.toggle("hidden", !visible);
+}
+
+async function cancelJob() {
+  const jobId = state.activeJobId;
+  if (!jobId) {
+    return;
+  }
+  const button = $("btn-cancel");
+  button.disabled = true;
+  try {
+    await api(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+    setStatus("Cancelado");
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function pollJob(
+  jobId,
+  statusFn = setStatus,
+  onDone = loadGallery,
+  progressFn = setProgress,
+  manageCancel = true
+) {
+  if (manageCancel) {
+    state.activeJobId = jobId;
+    setCancelVisible(true);
+  }
+  try {
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
+      if (job.status === "queued" || job.status === "running") {
+        if (progressFn) {
+          progressFn(job.progress);
+        }
+        statusFn(job.status === "running" ? "Generando..." : "En cola...");
+        continue;
+      }
+      if (job.status === "error") {
+        statusFn(`Error: ${job.error || "desconocido"}`, true);
+        await onDone();
+        return;
+      }
+      if (job.status === "cancelled") {
+        statusFn("Cancelado");
+        await onDone();
+        return;
+      }
+      statusFn("Listo");
+      await onDone();
       return;
     }
-    statusFn("Listo");
-    await onDone();
-    return;
+  } finally {
+    if (manageCancel) {
+      state.activeJobId = null;
+      setCancelVisible(false);
+    }
+    if (progressFn) {
+      progressFn(null);
+    }
   }
 }
 
@@ -632,7 +706,7 @@ async function generateVideo() {
   setVideoStatus("Encolando...");
   try {
     const data = await postJson("/api/video/generate", payload);
-    await pollJob(data.job_id, setVideoStatus, loadGallery);
+    await pollJob(data.job_id, setVideoStatus, loadGallery, null, false);
   } catch (error) {
     setVideoStatus(error.message, true);
   } finally {
@@ -720,6 +794,7 @@ function bind() {
   $("btn-enhance-use").addEventListener("click", useEnhanceResult);
   $("btn-enhance-discard").addEventListener("click", discardEnhanceResult);
   $("btn-generate").addEventListener("click", generate);
+  $("btn-cancel").addEventListener("click", cancelJob);
   $("btn-negative-restore").addEventListener("click", restoreNegative);
   $("btn-ref-clear").addEventListener("click", clearReference);
   $("btn-lightbox-close").addEventListener("click", closeLightbox);

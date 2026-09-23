@@ -165,6 +165,19 @@ class ComfyEngine:
                     return label
         return "absent"
 
+    def delete_queued(self, prompt_id: str) -> bool:
+        """POST /queue: borra el prompt de la cola; True si responde 2xx."""
+        body = json.dumps({"delete": [prompt_id]}).encode("utf-8")
+        status, _ = self._transport(
+            "POST", "/queue", body, {"Content-Type": "application/json"}, self.timeout_s
+        )
+        return 200 <= status < 300
+
+    def interrupt(self) -> bool:
+        """POST /interrupt: cancela la ejecucion en curso; True si responde 2xx."""
+        status, _ = self._transport("POST", "/interrupt", None, None, self.timeout_s)
+        return 200 <= status < 300
+
     def outputs(
         self,
         entry: dict,

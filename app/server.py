@@ -5,6 +5,10 @@
 GPU y el LLM reales no se tocan. `run_generation` parchea el grafo base con el
 modelo/params, copia los PNG a `data_dir/gallery/<gen_id>/` y refleja el estado
 en el store; un fallo queda registrado en store y job sin propagarse al worker.
+
+`_JOBS` es el registro en memoria de progreso/cancelación por `gen_id` (engine,
+`prompt_id`, `ProgressTracker` y estado): vive solo en el proceso, se pierde al
+reiniciar la app y no se comparte entre workers.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ from app.params import (
     is_valid_scheduler,
 )
 from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, get_preprompt, list_preprompts
+from app.progress import ProgressTracker
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
 from app.store import Store
@@ -65,6 +70,23 @@ MEDIA_TYPES = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
 }
+_JOBS: dict[int, dict] = {}
+PROGRESS_KEYS = ("step", "total", "percent", "node", "state")
+
+
+def _progress_ws_url(config: EngineConfig) -> str:
+    """Deriva la URL WS del engine desde `comfy_url` (http->ws, +/ws)."""
+    base = str(config.comfy_url).rstrip("/")
+    if base.startswith("https://"):
+        base = "wss://" + base[len("https://") :]
+    elif base.startswith("http://"):
+        base = "ws://" + base[len("http://") :]
+    return f"{base}/ws"
+
+
+def _empty_progress() -> dict:
+    """Payload de progreso sin tracker: todas las claves a null."""
+    return {key: None for key in PROGRESS_KEYS}
 
 
 def _merge_tags(parts: list[str]) -> str:
@@ -143,12 +165,24 @@ def run_generation(
     store: Store,
     registry: ModelRegistry,
     engine_factory: Callable[[], Any],
+    ws_factory: Any = None,
 ) -> None:
     """Ejecuta un job de imagen: grafo -> engine -> galería -> store.
 
-    No propaga errores: el fallo se guarda en el store y en ``job["error"]``.
+    Registra en `_JOBS` (memoria del proceso, se pierde al reiniciar la app) el
+    engine creado, el `prompt_id` y el tracker de progreso, y no propaga
+    errores: el fallo se guarda en el store y en ``job["error"]``.
     """
     gen_id = job["gen_id"]
+    record = _JOBS.setdefault(
+        gen_id,
+        {"prompt_id": None, "tracker": None, "status": "queued", "engine": None},
+    )
+    if record.get("status") == "cancelled":
+        job["outputs"] = []
+        job["error"] = None
+        return
+    tracker = None
     try:
         entry = registry.get(job["model_id"])
         params = dict(job.get("params") or {})
@@ -168,7 +202,19 @@ def run_generation(
                 graph, job["ref_image"], job.get("strength", DEFAULT_STRENGTH)
             )
         engine = engine_factory()
+        record["engine"] = engine
+        tracker = ProgressTracker(
+            _progress_ws_url(config),
+            engine.client_id,
+            "",
+            ws_factory=ws_factory,
+        )
+        record["tracker"] = tracker
+        record["status"] = "running"
+        tracker.start()
         prompt_id = engine.submit(graph)
+        record["prompt_id"] = prompt_id
+        tracker.prompt_id = prompt_id
         history = engine.wait(prompt_id)
         paths = engine.outputs(history, expected_ext=("png",))
         if not paths:
@@ -183,13 +229,25 @@ def run_generation(
         store.update(gen_id, status="done", outputs=names)
         job["outputs"] = names
         job["error"] = None
+        record["status"] = "done"
     except Exception as exc:
         job["outputs"] = []
         job["error"] = str(exc)
-        try:
-            store.update(gen_id, status="error", error=str(exc))
-        except EngineError:
-            pass
+        if record.get("status") == "cancelled":
+            job["error"] = None
+            try:
+                store.update(gen_id, status="cancelled")
+            except EngineError:
+                pass
+        else:
+            record["status"] = "error"
+            try:
+                store.update(gen_id, status="error", error=str(exc))
+            except EngineError:
+                pass
+    finally:
+        if tracker is not None:
+            tracker.stop()
 
 
 def create_app(
@@ -483,6 +541,12 @@ def create_app(
             "ref_image": ref_image,
             "strength": strength,
         }
+        _JOBS[gen_id] = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+        }
         job_id = queue.submit(job)
         app.state.jobs[job_id] = job
         return {"job_id": job_id}
@@ -572,12 +636,70 @@ def create_app(
         job = app.state.jobs.get(job_id) or {}
         if status == "done" and job.get("error"):
             status = "error"
+        record = _JOBS.get(job.get("gen_id"))
+        if record is not None and record.get("status") == "cancelled":
+            status = "cancelled"
+        tracker = record.get("tracker") if record else None
+        if tracker is not None:
+            snapshot = tracker.snapshot()
+            progress = {
+                "step": snapshot.get("step"),
+                "total": snapshot.get("total"),
+                "percent": tracker.percent(),
+                "node": snapshot.get("node"),
+                "state": snapshot.get("state"),
+            }
+        else:
+            progress = _empty_progress()
         gen_id = job.get("gen_id")
         outputs = [
             {"name": name, "url": MEDIA_URL.format(gen_id=gen_id, name=name)}
             for name in (job.get("outputs") or [])
         ]
-        return {"status": status, "outputs": outputs, "error": job.get("error")}
+        return {
+            "status": status,
+            "outputs": outputs,
+            "error": job.get("error"),
+            "progress": progress,
+        }
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    async def api_job_cancel(job_id: str) -> Any:
+        """Cancela un job; los registros de `_JOBS` viven en memoria."""
+        try:
+            queue_status = queue.status(job_id)
+        except EngineError:
+            return JSONResponse(status_code=404, content={"error": "job desconocido"})
+        job = app.state.jobs.get(job_id) or {}
+        gen_id = job.get("gen_id")
+        record = _JOBS.get(gen_id)
+        row = store.get(gen_id) if gen_id is not None else None
+        if (
+            job.get("kind") == "video"
+            or (record is not None and record.get("kind") == "video")
+            or (row is not None and row.get("kind") == "video")
+        ):
+            return JSONResponse(
+                status_code=409,
+                content={"error": "cancelar video: pendiente (M9-F)"},
+            )
+        status = queue_status
+        if record is not None and record.get("status") in ("done", "error", "cancelled"):
+            status = record["status"]
+        if status not in ("queued", "running"):
+            return JSONResponse(status_code=409, content={"error": "job no cancelable"})
+        engine = record.get("engine") if record else None
+        prompt_id = record.get("prompt_id") if record else None
+        if status == "queued":
+            if engine is not None:
+                engine.delete_queued(prompt_id)
+        elif engine is not None:
+            engine.interrupt()
+        if record is not None:
+            record["status"] = "cancelled"
+        if gen_id is not None:
+            store.update(gen_id, status="cancelled")
+        return {"status": "cancelled"}
 
     @app.get("/api/gallery")
     async def api_gallery(limit: int = 24, offset: int = 0) -> dict:

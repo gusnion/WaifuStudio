@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import tempfile
@@ -10,8 +11,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app import server as server_module
 from app.config import EngineConfig
-from app.engine import ComfyEngine
+from app.engine import ComfyEngine, EngineError
 from app.enhancer import BASE_NEGATIVE, apply_preprompt
 from app.formats import DEFAULT_FORMAT, list_image_formats
 from app.jobs import JobQueue
@@ -84,6 +86,8 @@ class ServerTestCase(unittest.TestCase):
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
         self.registry = ModelRegistry.load(DEFAULT_PATH)
+        server_module._JOBS.clear()
+        self.addCleanup(server_module._JOBS.clear)
 
     def make_client(self, **kwargs) -> TestClient:
         kwargs.setdefault("config", self.config)
@@ -266,6 +270,104 @@ class RecordingQueue:
     def submit(self, job: dict) -> str:
         self.jobs.append(job)
         return f"job-{len(self.jobs)}"
+
+
+class StatusQueue:
+    """Cola inyectada con estados programables por job (sin worker)."""
+
+    def __init__(self) -> None:
+        self.jobs: list[dict] = []
+        self.statuses: dict[str, str] = {}
+
+    def submit(self, job: dict) -> str:
+        job_id = f"job-{len(self.jobs) + 1}"
+        self.jobs.append(job)
+        self.statuses[job_id] = "queued"
+        return job_id
+
+    def status(self, job_id: str) -> str:
+        if job_id not in self.statuses:
+            raise EngineError(f"job desconocido: {job_id!r}")
+        return self.statuses[job_id]
+
+
+class FakeCancelEngine:
+    """Engine falso que registra delete_queued/interrupt sin red."""
+
+    client_id = "cancel-cid"
+
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+        self.interrupts = 0
+
+    def delete_queued(self, prompt_id: str) -> bool:
+        self.deleted.append(prompt_id)
+        return True
+
+    def interrupt(self) -> bool:
+        self.interrupts += 1
+        return True
+
+
+class FakeRunEngine(FakeCancelEngine):
+    """Engine mínimo para `run_generation`: submit/wait/outputs inmediatos."""
+
+    def __init__(self, output_path: Path) -> None:
+        super().__init__()
+        self.client_id = "run-cid"
+        self.output_path = output_path
+
+    def submit(self, graph: dict) -> str:
+        return "p1"
+
+    def wait(self, prompt_id: str) -> dict:
+        return {"status": {"status_str": "success"}, "outputs": {}}
+
+    def outputs(self, entry: dict, *, expected_ext=("png",)) -> list[Path]:
+        return [self.output_path]
+
+
+class CancelThenFailEngine(FakeRunEngine):
+    """Engine falso: marca el job como cancelado y falla en submit."""
+
+    def __init__(self, output_path: Path, on_submit) -> None:
+        super().__init__(output_path)
+        self.on_submit = on_submit
+
+    def submit(self, graph: dict) -> str:
+        self.on_submit()
+        raise EngineError("prompt interrumpido por cancelacion")
+
+
+class FakeTracker:
+    """Tracker falso con snapshot y percent fijos."""
+
+    def __init__(self, snapshot: dict | None = None, percent: float | None = 50.0):
+        self._snapshot = {"step": 3, "total": 6, "node": "9", "state": "running"}
+        if snapshot:
+            self._snapshot.update(snapshot)
+        self._percent = percent
+
+    def snapshot(self) -> dict:
+        return dict(self._snapshot)
+
+    def percent(self) -> float | None:
+        return self._percent
+
+
+class BlockingWs:
+    """WS falso que se queda abierto hasta que el tracker se cancela."""
+
+    async def __aenter__(self):
+        await asyncio.Event().wait()
+        raise AssertionError("inalcanzable")
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+def blocking_ws_factory(url: str) -> BlockingWs:
+    return BlockingWs()
 
 
 class EnhanceRouteTests(ServerTestCase):
@@ -559,6 +661,146 @@ class GenerateEngineParamsValidationTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class JobProgressTests(ServerTestCase):
+    def payload(self) -> dict:
+        return {
+            "model_id": MODEL_ID,
+            "prompt": "1girl, smile",
+            "preprompt": "ninguno",
+            "params": {"seed": 1},
+        }
+
+    def test_job_status_sin_tracker_devuelve_progress_nulo(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        job_id = client.post("/api/generate", json=self.payload()).json()["job_id"]
+        status = client.get(f"/api/jobs/{job_id}").json()
+        self.assertIn("progress", status)
+        self.assertEqual(
+            status["progress"],
+            {"step": None, "total": None, "percent": None, "node": None, "state": None},
+        )
+
+    def test_job_status_con_tracker_publica_snapshot_y_percent(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        job_id = client.post("/api/generate", json=self.payload()).json()["job_id"]
+        gen_id = queue.jobs[0]["gen_id"]
+        server_module._JOBS[gen_id]["tracker"] = FakeTracker()
+        server_module._JOBS[gen_id]["status"] = "running"
+        queue.statuses[job_id] = "running"
+        status = client.get(f"/api/jobs/{job_id}").json()
+        self.assertEqual(status["status"], "running")
+        self.assertEqual(
+            status["progress"],
+            {"step": 3, "total": 6, "percent": 50.0, "node": "9", "state": "running"},
+        )
+
+
+class CancelRouteTests(ServerTestCase):
+    def payload(self) -> dict:
+        return {
+            "model_id": MODEL_ID,
+            "prompt": "1girl, smile",
+            "preprompt": "ninguno",
+            "params": {"seed": 1},
+        }
+
+    def test_cancel_job_desconocido_404(self):
+        client = self.make_client(queue=StatusQueue())
+        response = client.post("/api/jobs/no-existe/cancel")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_cancel_job_terminado_409(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        job_id = client.post("/api/generate", json=self.payload()).json()["job_id"]
+        queue.statuses[job_id] = "done"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("error", response.json())
+        self.assertEqual(self.store.list()[0]["status"], "queued")
+
+    def test_cancel_queued_borra_del_engine_y_marca_store(self):
+        queue = StatusQueue()
+        engine = FakeCancelEngine()
+        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        job_id = client.post("/api/generate", json=self.payload()).json()["job_id"]
+        gen_id = queue.jobs[0]["gen_id"]
+        record = server_module._JOBS[gen_id]
+        record["engine"] = engine
+        record["prompt_id"] = "p1"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "cancelled"})
+        self.assertEqual(engine.deleted, ["p1"])
+        self.assertEqual(engine.interrupts, 0)
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
+        self.assertEqual(client.get(f"/api/jobs/{job_id}").json()["status"], "cancelled")
+
+    def test_cancel_video_409_por_registro_sin_engine_ni_store(self):
+        queue = StatusQueue()
+        engine = FakeCancelEngine()
+        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        gen_id = self.store.add("wan", "motion", "", kind="video")
+        job_id = "job-1"
+        queue.statuses[job_id] = "queued"
+        client.app.state.jobs[job_id] = {"kind": "video", "gen_id": gen_id}
+        server_module._JOBS[gen_id] = {
+            "prompt_id": "p1",
+            "tracker": None,
+            "status": "queued",
+            "engine": engine,
+            "kind": "video",
+        }
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json(), {"error": "cancelar video: pendiente (M9-F)"}
+        )
+        self.assertEqual(engine.deleted, [])
+        self.assertEqual(engine.interrupts, 0)
+        self.assertEqual(server_module._JOBS[gen_id]["status"], "queued")
+        self.assertEqual(self.store.get(gen_id)["status"], "queued")
+
+    def test_cancel_video_409_por_store(self):
+        queue = StatusQueue()
+        engine = FakeCancelEngine()
+        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        gen_id = self.store.add("wan", "motion", "", kind="video")
+        job_id = "job-1"
+        queue.statuses[job_id] = "running"
+        client.app.state.jobs[job_id] = {"gen_id": gen_id}
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json(), {"error": "cancelar video: pendiente (M9-F)"}
+        )
+        self.assertEqual(engine.deleted, [])
+        self.assertEqual(engine.interrupts, 0)
+        self.assertEqual(self.store.get(gen_id)["status"], "queued")
+
+    def test_cancel_running_interrumpe_el_engine(self):
+        queue = StatusQueue()
+        engine = FakeCancelEngine()
+        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        job_id = client.post("/api/generate", json=self.payload()).json()["job_id"]
+        gen_id = queue.jobs[0]["gen_id"]
+        queue.statuses[job_id] = "running"
+        record = server_module._JOBS[gen_id]
+        record["engine"] = engine
+        record["prompt_id"] = "p1"
+        record["status"] = "running"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "cancelled"})
+        self.assertEqual(engine.deleted, [])
+        self.assertEqual(engine.interrupts, 1)
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
+
+
 class RunGenerationTests(ServerTestCase):
     def make_job(self, **overrides) -> dict:
         gen_id = self.store.add(MODEL_ID, "1girl, smile", "", {"seed": 7})
@@ -699,6 +941,92 @@ class RunGenerationTests(ServerTestCase):
         self.assertIn("no registrado", row["error"])
 
 
+class RunGenerationProgressTests(ServerTestCase):
+    def make_job(self) -> dict:
+        gen_id = self.store.add(MODEL_ID, "1girl, smile", "", {"seed": 7})
+        return {
+            "gen_id": gen_id,
+            "model_id": MODEL_ID,
+            "prompt": "1girl, smile",
+            "negative": "",
+            "preprompt": "ninguno",
+            "params": {"seed": 7, "steps": 5, "width": 320, "height": 576},
+            "ref_image": None,
+            "strength": None,
+        }
+
+    def test_registra_engine_prompt_id_y_tracker(self):
+        output = self.root / "fake.png"
+        output.write_bytes(PNG_BYTES)
+        engine = FakeRunEngine(output)
+        job = self.make_job()
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=lambda: engine,
+            ws_factory=blocking_ws_factory,
+        )
+        record = server_module._JOBS[job["gen_id"]]
+        self.assertIs(record["engine"], engine)
+        self.assertEqual(record["prompt_id"], "p1")
+        self.assertEqual(record["status"], "done")
+        tracker = record["tracker"]
+        self.assertIsNotNone(tracker)
+        self.assertFalse(tracker._thread is not None and tracker._thread.is_alive())
+        self.assertEqual(self.store.get(job["gen_id"])["status"], "done")
+        self.assertTrue(
+            (self.config.data_dir / "gallery" / str(job["gen_id"]) / "fake.png").is_file()
+        )
+
+    def test_job_cancelado_antes_del_worker_no_ejecuta(self):
+        output = self.root / "fake.png"
+        output.write_bytes(PNG_BYTES)
+        engine = FakeRunEngine(output)
+        job = self.make_job()
+        server_module._JOBS[job["gen_id"]] = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "cancelled",
+            "engine": None,
+        }
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=lambda: engine,
+            ws_factory=blocking_ws_factory,
+        )
+        self.assertEqual(server_module._JOBS[job["gen_id"]]["status"], "cancelled")
+        self.assertEqual(engine.deleted, [])
+        self.assertEqual(job["outputs"], [])
+        self.assertFalse(
+            (self.config.data_dir / "gallery" / str(job["gen_id"]) / "fake.png").is_file()
+        )
+
+    def test_fallo_tras_cancelar_conserva_cancelled(self):
+        job = self.make_job()
+        gen_id = job["gen_id"]
+        engine = CancelThenFailEngine(
+            self.root / "fake.png",
+            lambda: server_module._JOBS[gen_id].update(status="cancelled"),
+        )
+        run_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=lambda: engine,
+            ws_factory=blocking_ws_factory,
+        )
+        self.assertEqual(server_module._JOBS[gen_id]["status"], "cancelled")
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
+        self.assertIsNone(job["error"])
+        self.assertEqual(job["outputs"], [])
+
+
 class QueueIntegrationTests(ServerTestCase):
     def test_flujo_http_completo_con_worker(self):
         transport = FakeTransport(self.config)
@@ -816,6 +1144,10 @@ class IndexTests(ServerTestCase):
             'id="lightbox"',
             'id="gallery-prev"',
             'id="gallery-next"',
+            'id="btn-cancel"',
+            'id="job-progress"',
+            'id="job-progress-fill"',
+            'id="job-progress-text"',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
@@ -832,6 +1164,9 @@ class IndexTests(ServerTestCase):
             "Reusar",
             "openLightbox",
             "Escape",
+            "/cancel",
+            "setProgress",
+            "setTimeout(resolve, 1000)",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

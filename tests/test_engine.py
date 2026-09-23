@@ -218,6 +218,45 @@ class QueueStateTests(EngineTestCase):
         self.assertEqual(engine.queue_state("pid-1"), "absent")
 
 
+class QueueControlTests(EngineTestCase):
+    def test_delete_queued_payload_exacto_y_true(self):
+        transport = FakeTransport([(200, b"{}")])
+        engine = self.build_engine(transport)
+
+        result = engine.delete_queued("pid-1")
+
+        self.assertIs(result, True)
+        call = transport.calls[0]
+        self.assertEqual(call["method"], "POST")
+        self.assertEqual(call["path"], "/queue")
+        self.assertEqual(call["headers"].get("Content-Type"), "application/json")
+        self.assertEqual(json.loads(call["body"].decode("utf-8")), {"delete": ["pid-1"]})
+
+    def test_delete_queued_false_en_500(self):
+        transport = FakeTransport([(500, b"boom")])
+        engine = self.build_engine(transport)
+
+        self.assertIs(engine.delete_queued("pid-1"), False)
+
+    def test_interrupt_true_sin_body(self):
+        transport = FakeTransport([(200, b"{}")])
+        engine = self.build_engine(transport)
+
+        result = engine.interrupt()
+
+        self.assertIs(result, True)
+        call = transport.calls[0]
+        self.assertEqual(call["method"], "POST")
+        self.assertEqual(call["path"], "/interrupt")
+        self.assertIsNone(call["body"])
+
+    def test_interrupt_false_en_500(self):
+        transport = FakeTransport([(503, b"nope")])
+        engine = self.build_engine(transport)
+
+        self.assertIs(engine.interrupt(), False)
+
+
 class OutputsTests(EngineTestCase):
     def _write(self, name: str) -> Path:
         path = self.tmp / "output" / name
