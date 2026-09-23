@@ -33,6 +33,7 @@ E:\IA\WAIFU
 │  ├─ params.py       # enums reales de sampler/scheduler de ComfyUI (M9-A1)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ progress.py     # tracker WS de progreso del engine (M9-A2)
+│  ├─ prompt_zones.py # zonas del prompt en orden Anima (M9-C)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  ├─ server.py       # webapp FastAPI: API JSON, runners y UI (F3b/F4)
 │  ├─ sheet.py        # hoja de referencia de OCs (collage PNG con Pillow, M9-B2)
@@ -62,6 +63,7 @@ E:\IA\WAIFU
 │  ├─ test_oc_traits.py
 │  ├─ test_params.py
 │  ├─ test_preprompts.py
+│  ├─ test_prompt_zones.py
 │  ├─ test_registry.py
 │  ├─ test_server.py
 │  ├─ test_server_video.py
@@ -288,7 +290,41 @@ guardando un PNG RGB en `out_path`; con los defaults, 3-4 refs dan 512×768.
 `POST /api/characters/{id}/sheet` (`{"ref_ids": [..]?}`, todas si se omite)
 genera `<refs_root>\<id>\sheet_<uuid>.png`, lo registra como ref con el
 `add_ref` de siempre (400 si quedan <2 refs, 404 si el OC no existe) y devuelve
-`{"relpath", "url"}`.
+`{"relpath", "url"}`; el PNG temporal se borra tras registrarlo, así el
+directorio del OC solo contiene archivos registrados.
+
+## Zonas del prompt (M9-C)
+
+`app\prompt_zones.py` (CPU, sin red) parte el prompt en las cinco zonas del orden
+Anima —`quality`, `safety`, `subject`, `character`, `general`— y lo recompone:
+
+- `ZONE_ORDER` y `ZONE_LABELS` (`Calidad/meta`, `Safety`, `Sujeto`, `Personaje`,
+  `General`); `QUALITY_TAGS` (`masterpiece`, `best quality`, `absurdres`,
+  `highres`, `very aesthetic`, `newest`, `score_1..score_9`, `jpeg artifacts`,
+  `sepia`, `watermark`...), `SAFETY_TAGS` (`sfw`, `nsfw`, `uncensored`, `explicit`,
+  `sensitive`, `safe`, `rating_*`) y `SUBJECT_TAGS` (`1girl`, `1boy`, `2girls`,
+  `1other`, `solo`, `multiple girls`, `hetero`, `yuri`, `yaoi`...).
+- `classify_tag(tag)`: normaliza espacios/mayúsculas y resuelve el peso
+  (`(tag:1.2)` → `tag`); el resto (tags del catálogo de `app.tags` o
+  desconocidos) cae siempre en `general`: nunca se adivina `character`.
+- `split_zones(prompt)`: separa por comas, limpia, deduplica case-insensitive por
+  zona y devuelve siempre las 5 claves; `compose_zones(zones)`: une en
+  `ZONE_ORDER`, solo zonas con tags y dedup global; `insert_tag(prompt, tag,
+  zone=None)`: clasifica si no hay zona, inserta en la posición de su zona y no
+  duplica (si ya está, devuelve el prompt intacto); `zones_payload(prompt)`:
+  `[{id, label, tags}]` para la API/UI.
+
+Rutas nuevas en `app\server.py`: `POST /api/prompt/zones` `{text}` →
+`{zones, composed}`, `POST /api/prompt/compose` `{zones}` → `{text}` y
+`POST /api/prompt/insert` `{text, tag, zone?}` → `{text}` (400 con forma
+inválida, tag vacío o zona desconocida).
+
+La UI (sin CDN) añade debajo del prompt una **previsualización coloreada** por
+zona con leyenda, actualizada al escribir (debounce 300 ms vía
+`/api/prompt/zones`), y una fila de **chips por zona** que abren un input y
+añaden el tag con `/api/prompt/insert` (el textarea sigue siendo la fuente de
+verdad); el chip destacado **«+ Personaje»** inserta en la zona `character`
+(el caso del nombre del OC).
 
 ## Video (F4)
 

@@ -13,6 +13,14 @@ const GROUP_LABELS = {
   meta: "Meta",
 };
 
+const ZONE_LABELS = {
+  quality: "Calidad/meta",
+  safety: "Safety",
+  subject: "Sujeto",
+  character: "Personaje",
+  general: "General",
+};
+
 const PAGE_SIZE = 6;
 
 const state = {
@@ -49,6 +57,9 @@ const state = {
 let enhanceResetTimer = null;
 let refObjectUrl = null;
 let ocSearchTimer = null;
+let promptZonesTimer = null;
+let promptZonesSeq = 0;
+let zoneInsertTarget = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -290,6 +301,7 @@ function useEnhanceResult() {
   state.negativeTouched = true;
   state.enhanceResult = null;
   hideEnhanceResult();
+  refreshPromptZones();
   setStatus("Propuesta aplicada");
 }
 
@@ -498,6 +510,7 @@ function reuseGeneration(item) {
     $("negative").value = item.negative;
     state.negativeTouched = true;
   }
+  refreshPromptZones();
   setStatus(`Reusado #${item.id}`);
 }
 
@@ -784,6 +797,110 @@ function mergeIntoPrompt(text, addition) {
   ]);
 }
 
+function renderPromptZones(zones) {
+  const preview = $("prompt-zones-preview");
+  const legend = $("prompt-zones-legend");
+  preview.replaceChildren();
+  legend.replaceChildren();
+  let any = false;
+  for (const zone of zones) {
+    const tags = zone.tags || [];
+    for (const tag of tags) {
+      if (any) {
+        preview.appendChild(document.createTextNode(", "));
+      }
+      const span = document.createElement("span");
+      span.className = `zone-tag zone-${zone.id}`;
+      span.textContent = tag;
+      preview.appendChild(span);
+      any = true;
+    }
+    const item = document.createElement("span");
+    item.className = "zone-legend-item";
+    const swatch = document.createElement("span");
+    swatch.className = `zone-swatch zone-${zone.id}`;
+    const label = document.createElement("span");
+    label.textContent = zone.label;
+    item.append(swatch, label);
+    legend.appendChild(item);
+  }
+  if (!any) {
+    const empty = document.createElement("span");
+    empty.className = "empty";
+    empty.textContent = "Sin tags todavía.";
+    preview.appendChild(empty);
+  }
+}
+
+async function refreshPromptZones() {
+  const text = $("prompt").value;
+  const seq = ++promptZonesSeq;
+  try {
+    const data = await postJson("/api/prompt/zones", { text });
+    if (seq !== promptZonesSeq) {
+      return;
+    }
+    renderPromptZones(data.zones || []);
+  } catch (error) {
+    if (seq === promptZonesSeq) {
+      renderPromptZones([]);
+    }
+  }
+}
+
+function schedulePromptZones() {
+  if (promptZonesTimer) {
+    clearTimeout(promptZonesTimer);
+  }
+  promptZonesTimer = setTimeout(() => {
+    promptZonesTimer = null;
+    refreshPromptZones();
+  }, 300);
+}
+
+function openZoneInsert(zone) {
+  if (!ZONE_LABELS[zone]) {
+    return;
+  }
+  zoneInsertTarget = zone;
+  const input = $("zone-insert-input");
+  input.value = "";
+  input.placeholder =
+    zone === "character"
+      ? "Nombre del personaje..."
+      : `Tag para ${ZONE_LABELS[zone]}...`;
+  $("zone-insert-form").classList.remove("hidden");
+  input.focus();
+}
+
+function closeZoneInsert() {
+  zoneInsertTarget = null;
+  $("zone-insert-form").classList.add("hidden");
+  $("zone-insert-input").value = "";
+}
+
+async function submitZoneInsert(event) {
+  event.preventDefault();
+  const tag = $("zone-insert-input").value.trim();
+  const zone = zoneInsertTarget;
+  if (!tag || !zone) {
+    return;
+  }
+  try {
+    const data = await postJson("/api/prompt/insert", {
+      text: $("prompt").value,
+      tag,
+      zone,
+    });
+    $("prompt").value = data.text || "";
+    closeZoneInsert();
+    await refreshPromptZones();
+    setStatus("Tag añadido");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 async function attachReferenceFromUrl(url, name) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -1002,6 +1119,7 @@ async function useCharacter(character) {
       ? mergeIntoPrompt(current, addition)
       : addition;
   }
+  refreshPromptZones();
   $("preprompt").value = character.preprompt;
   $("rating").value = character.rating;
   state.activeCharacterId = character.id;
@@ -1167,6 +1285,7 @@ function addOcTagsToPrompt() {
   const addition = promptFromTags(state.ocSelectedTags);
   const current = $("prompt").value.trim();
   $("prompt").value = current ? mergeIntoPrompt(current, addition) : addition;
+  refreshPromptZones();
   closeOcModal();
   setStatus("Tags añadidos al prompt");
 }
@@ -1306,6 +1425,12 @@ function bind() {
   $("negative").addEventListener("input", () => {
     state.negativeTouched = true;
   });
+  $("prompt").addEventListener("input", schedulePromptZones);
+  for (const chip of document.querySelectorAll(".zone-chip")) {
+    chip.addEventListener("click", () => openZoneInsert(chip.dataset.zone));
+  }
+  $("zone-insert-form").addEventListener("submit", submitZoneInsert);
+  $("zone-insert-cancel").addEventListener("click", closeZoneInsert);
   $("ref-image").addEventListener("change", updateReferencePreview);
   $("model").addEventListener("change", (event) => {
     applyModel(event.target.value).catch((error) => setStatus(error.message, true));
@@ -1363,6 +1488,7 @@ async function init() {
     await loadCharacters();
     await refreshNegative();
     await loadGallery();
+    await refreshPromptZones();
     setStatus("Listo");
   } catch (error) {
     setStatus(error.message, true);

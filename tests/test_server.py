@@ -258,6 +258,95 @@ class PromptBuildTests(ServerTestCase):
         self.assertIn("error", response.json())
 
 
+class PromptZonesRoutesTests(ServerTestCase):
+    def test_zones_200(self):
+        response = self.make_client().post(
+            "/api/prompt/zones",
+            json={"text": "1girl, masterpiece, nsfw, long hair"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"zones", "composed"})
+        zones = {item["id"]: item for item in data["zones"]}
+        self.assertEqual(
+            [item["id"] for item in data["zones"]],
+            ["quality", "safety", "subject", "character", "general"],
+        )
+        self.assertEqual(zones["quality"]["tags"], ["masterpiece"])
+        self.assertEqual(zones["safety"]["tags"], ["nsfw"])
+        self.assertEqual(zones["subject"]["tags"], ["1girl"])
+        self.assertEqual(zones["character"]["tags"], [])
+        self.assertEqual(zones["general"]["tags"], ["long hair"])
+        self.assertEqual(zones["quality"]["label"], "Calidad/meta")
+        self.assertEqual(data["composed"], "masterpiece, nsfw, 1girl, long hair")
+
+    def test_zones_texto_vacio(self):
+        response = self.make_client().post("/api/prompt/zones", json={"text": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["composed"], "")
+        self.assertEqual(len(response.json()["zones"]), 5)
+
+    def test_zones_sin_text_400(self):
+        client = self.make_client()
+        for payload in ({}, {"text": 3}, {"text": None}):
+            with self.subTest(payload=payload):
+                response = client.post("/api/prompt/zones", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_compose_200(self):
+        response = self.make_client().post(
+            "/api/prompt/compose",
+            json={"zones": {"general": ["blue sky"], "subject": ["1girl"]}},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"text": "1girl, blue sky"})
+
+    def test_compose_forma_invalida_400(self):
+        client = self.make_client()
+        for payload in (
+            {},
+            {"zones": []},
+            {"zones": "x"},
+            {"zones": {"nope": ["1girl"]}},
+            {"zones": {"general": "smile"}},
+            {"zones": {"general": [3]}},
+        ):
+            with self.subTest(payload=payload):
+                response = client.post("/api/prompt/compose", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_insert_200_con_y_sin_zona(self):
+        client = self.make_client()
+        with_zone = client.post(
+            "/api/prompt/insert",
+            json={"text": "1girl, smile", "tag": "hatsune miku", "zone": "character"},
+        )
+        self.assertEqual(with_zone.status_code, 200)
+        self.assertEqual(with_zone.json(), {"text": "1girl, hatsune miku, smile"})
+        auto = client.post(
+            "/api/prompt/insert", json={"text": "1girl, smile", "tag": "masterpiece"}
+        )
+        self.assertEqual(auto.status_code, 200)
+        self.assertEqual(auto.json(), {"text": "masterpiece, 1girl, smile"})
+
+    def test_insert_400(self):
+        client = self.make_client()
+        for payload in (
+            {"text": "1girl", "tag": ""},
+            {"text": "1girl", "tag": "   "},
+            {"text": "1girl"},
+            {"tag": "smile"},
+            {"text": 3, "tag": "smile"},
+            {"text": "1girl", "tag": "smile", "zone": "nope"},
+        ):
+            with self.subTest(payload=payload):
+                response = client.post("/api/prompt/insert", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+
 class CapturingLLM:
     """LLM falso que acepta `temperature` por kwarg y captura las llamadas."""
 
@@ -1407,6 +1496,20 @@ class CharacterSheetRoutesTests(ServerTestCase):
             400,
         )
 
+    def test_hoja_no_deja_huerfanos(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        for _ in range(3):
+            self.add_ref(client, char_id)
+        response = client.post(f"/api/characters/{char_id}/sheet", json={})
+        self.assertEqual(response.status_code, 200)
+        directory = self.config.data_dir / "characters" / str(char_id)
+        on_disk = {path.name for path in directory.iterdir() if path.is_file()}
+        refs = client.get(f"/api/characters/{char_id}/refs").json()
+        registered = {Path(ref["relpath"]).name for ref in refs}
+        self.assertEqual(on_disk, registered)
+        self.assertEqual(len(on_disk), 4)
+
 
 class CharacterMediaTests(ServerTestCase):
     def test_404_y_confinamiento_403(self):
@@ -1451,6 +1554,15 @@ class IndexTests(ServerTestCase):
             'id="job-progress"',
             'id="job-progress-fill"',
             'id="job-progress-text"',
+            'id="prompt-zones"',
+            'id="prompt-zones-preview"',
+            'id="prompt-zones-legend"',
+            'id="prompt-zones-chips"',
+            'id="zone-insert-form"',
+            'id="zone-insert-input"',
+            'id="zone-insert-cancel"',
+            'data-zone="character"',
+            "+ Personaje",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
@@ -1470,6 +1582,11 @@ class IndexTests(ServerTestCase):
             "/cancel",
             "setProgress",
             "setTimeout(resolve, 1000)",
+            "/api/prompt/zones",
+            "/api/prompt/insert",
+            "refreshPromptZones",
+            "openZoneInsert",
+            "}, 300);",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

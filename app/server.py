@@ -48,6 +48,7 @@ from app.params import (
     is_valid_scheduler,
 )
 from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, get_preprompt, list_preprompts
+from app.prompt_zones import compose_zones, insert_tag, split_zones, zones_payload
 from app.progress import ProgressTracker
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
@@ -498,8 +499,11 @@ def create_app(
             )
         refs_root = Path(chars.refs_root)
         sheet_path = refs_root / str(char_id) / f"sheet_{uuid.uuid4().hex}.png"
-        make_sheet([refs_root / ref["relpath"] for ref in refs], sheet_path)
-        relpath = chars.add_ref(char_id, sheet_path)
+        try:
+            make_sheet([refs_root / ref["relpath"] for ref in refs], sheet_path)
+            relpath = chars.add_ref(char_id, sheet_path)
+        finally:
+            sheet_path.unlink(missing_ok=True)
         return {
             "relpath": relpath,
             "url": f"/media/characters/{char_id}/{Path(relpath).name}",
@@ -538,6 +542,31 @@ def create_app(
     @app.post("/api/prompt/build")
     async def api_prompt_build(payload: dict = Body(...)) -> dict:
         return {"prompt": build_prompt(payload.get("trait_ids"))}
+
+    @app.post("/api/prompt/zones")
+    async def api_prompt_zones(payload: dict = Body(...)) -> Any:
+        text = payload.get("text")
+        if not isinstance(text, str):
+            raise EngineError("text requerido")
+        zones = split_zones(text)
+        return {"zones": zones_payload(text), "composed": compose_zones(zones)}
+
+    @app.post("/api/prompt/compose")
+    async def api_prompt_compose(payload: dict = Body(...)) -> Any:
+        zones = payload.get("zones")
+        if not isinstance(zones, dict):
+            raise EngineError("zones requerido (objeto por zona)")
+        return {"text": compose_zones(zones)}
+
+    @app.post("/api/prompt/insert")
+    async def api_prompt_insert(payload: dict = Body(...)) -> Any:
+        text = payload.get("text")
+        if not isinstance(text, str):
+            raise EngineError("text requerido")
+        tag = payload.get("tag")
+        if not isinstance(tag, str) or not tag.strip():
+            raise EngineError("tag requerido")
+        return {"text": insert_tag(text, tag, payload.get("zone"))}
 
     @app.post("/api/enhance")
     async def api_enhance(payload: dict = Body(...)) -> Any:

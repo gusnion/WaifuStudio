@@ -23,6 +23,23 @@
           <span>Prompt</span>
           <textarea id="prompt" rows="5" placeholder="1girl, smile, ..."></textarea>
         </label>
+        <div id="prompt-zones" class="prompt-zones">
+          <div id="prompt-zones-preview" class="zone-preview"></div>
+          <div id="prompt-zones-legend" class="zone-legend"></div>
+          <div id="prompt-zones-chips" class="zone-chips">
+            <button class="zone-chip" type="button" data-zone="quality">Calidad/meta</button>
+            <button class="zone-chip" type="button" data-zone="safety">Safety</button>
+            <button class="zone-chip" type="button" data-zone="subject">Sujeto</button>
+            <button class="zone-chip" type="button" data-zone="character">Personaje</button>
+            <button class="zone-chip" type="button" data-zone="general">General</button>
+            <button id="btn-zone-character" class="zone-chip zone-chip-accent" type="button" data-zone="character">+ Personaje</button>
+          </div>
+          <form id="zone-insert-form" class="zone-insert hidden">
+            <input id="zone-insert-input" type="text" placeholder="Tag para la zona...">
+            <button class="primary" type="submit">Añadir</button>
+            <button id="zone-insert-cancel" type="button">Cancelar</button>
+          </form>
+        </div>
         <div class="enhance-row">
           <button id="btn-enhance" type="button">Mejorar prompt</button>
           <label class="inline-field">
