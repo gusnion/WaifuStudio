@@ -24,14 +24,23 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import APP_ROOT, EngineConfig, load_config
 from app.engine import ComfyEngine, EngineError, load_graph
-from app.enhancer import DEFAULT_LLM_RELATIVE
+from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
 from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
 from app.enhancer import load_local_llm
+from app.formats import DEFAULT_FORMAT, get_size, list_image_formats
 from app.graphs import DEFAULT_STRENGTH, patch_model, patch_params, to_img2img
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, write_motion
 from app.oc_traits import build_prompt, list_traits
+from app.params import (
+    DEFAULT_SAMPLER,
+    DEFAULT_SCHEDULER,
+    SAMPLER_NAMES,
+    SCHEDULER_NAMES,
+    is_valid_sampler,
+    is_valid_scheduler,
+)
 from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, get_preprompt, list_preprompts
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
@@ -276,6 +285,26 @@ def create_app(
     async def api_traits() -> dict:
         return list_traits()
 
+    @app.get("/api/params")
+    async def api_params() -> dict:
+        return {
+            "samplers": list(SAMPLER_NAMES),
+            "schedulers": list(SCHEDULER_NAMES),
+            "default_sampler": DEFAULT_SAMPLER,
+            "default_scheduler": DEFAULT_SCHEDULER,
+        }
+
+    @app.get("/api/formats")
+    async def api_formats() -> dict:
+        return {"formats": list_image_formats(), "default": DEFAULT_FORMAT}
+
+    @app.get("/api/negative")
+    async def api_negative(
+        preprompt: str = DEFAULT_PREPROMPT, family: str = DEFAULT_FAMILY
+    ) -> dict:
+        _positive, negative = apply_preprompt("", family=family, name=preprompt)
+        return {"negative": negative}
+
     @app.post("/api/prompt/build")
     async def api_prompt_build(payload: dict = Body(...)) -> dict:
         return {"prompt": build_prompt(payload.get("trait_ids"))}
@@ -289,6 +318,14 @@ def create_app(
             return JSONResponse(
                 status_code=400, content={"error": "rating invalido; usar sfw|nsfw"}
             )
+        strength = payload.get("strength")
+        if strength is None:
+            strength = DEFAULT_STRENGTH_PRESET
+        if not isinstance(strength, str) or strength not in STRENGTH_PRESETS:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "strength invalido; usar fiel|balanceado|creativo"},
+            )
         if llm is None:
             return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
         result = enhance_prompt(
@@ -296,6 +333,7 @@ def create_app(
             family=str(payload.get("family") or DEFAULT_FAMILY),
             preprompt=str(payload.get("preprompt") or DEFAULT_PREPROMPT),
             rating=rating,
+            strength=strength,
             llm=llm,
         )
         return {"positive": result["positive"], "negative": result["negative"]}
@@ -334,6 +372,64 @@ def create_app(
         params = payload.get("params") or {}
         if not isinstance(params, dict):
             return JSONResponse(status_code=400, content={"error": "params invalido"})
+        size = payload.get("size")
+        width = payload.get("width")
+        height = payload.get("height")
+        if size not in (None, ""):
+            if not isinstance(size, str):
+                return JSONResponse(status_code=400, content={"error": "size invalido"})
+            try:
+                width, height = get_size(size.strip())
+            except EngineError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": f"formato desconocido: {size!r}"},
+                )
+        else:
+            for name, value in (("width", width), ("height", height)):
+                if value is None:
+                    continue
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    return JSONResponse(
+                        status_code=400, content={"error": f"{name} invalido"}
+                    )
+                if not number.is_integer():
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": f"{name} fuera de [64, 4096] o no multiplo de 8"
+                        },
+                    )
+                number = int(number)
+                if not 64 <= number <= 4096 or number % 8:
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": f"{name} fuera de [64, 4096] o no multiplo de 8"
+                        },
+                    )
+                if name == "width":
+                    width = number
+                else:
+                    height = number
+        if width is not None:
+            params = {**params, "width": width}
+        if height is not None:
+            params = {**params, "height": height}
+        sampler_name = params.get("sampler_name")
+        if sampler_name is not None and not is_valid_sampler(sampler_name):
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"sampler invalido: {sampler_name!r}"},
+            )
+        scheduler = params.get("scheduler")
+        if scheduler is not None and not is_valid_scheduler(scheduler):
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"scheduler invalido: {scheduler!r}"},
+            )
         strength = payload.get("strength")
         if strength is not None:
             try:
@@ -484,8 +580,8 @@ def create_app(
         return {"status": status, "outputs": outputs, "error": job.get("error")}
 
     @app.get("/api/gallery")
-    async def api_gallery(limit: int = 50, offset: int = 0) -> dict:
-        limit = max(1, min(int(limit), 200))
+    async def api_gallery(limit: int = 24, offset: int = 0) -> dict:
+        limit = max(1, min(int(limit), 24))
         offset = max(0, int(offset))
         items = []
         for row in st.list(limit=limit, offset=offset):
@@ -541,12 +637,12 @@ def _lazy_llm() -> Callable[[str, str], str]:
     El servidor arranca al instante y el coste de carga lo paga la primera
     peticion a `/api/enhance` o `/api/motion`.
     """
-    loaded: list[Callable[[str, str], str]] = []
+    loaded: list[Callable[..., str]] = []
 
-    def llm(system: str, user: str) -> str:
+    def llm(system: str, user: str, temperature: float | None = None) -> str:
         if not loaded:
             loaded.append(load_local_llm(_live_llm_path()))
-        return loaded[0](system, user)
+        return loaded[0](system, user, temperature=temperature)
 
     return llm
 

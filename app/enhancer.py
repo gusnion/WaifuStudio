@@ -138,6 +138,29 @@ DEFAULT_LLM_RELATIVE = Path(
 
 LlmFn = Callable[[str, str], str]
 
+# Fuerzas del mejorador (M9-A1): temperatura del LLM, notas RAG (`k`) e
+# instruccion extra del mensaje de usuario. `balanceado` no anade instruccion.
+STRENGTH_PRESETS: dict[str, dict[str, Any]] = {
+    "fiel": {
+        "temperature": 0.4,
+        "k": 1,
+        "instruction": (
+            "Mantén exactamente lo pedido; no añadas elementos que el usuario "
+            "no haya pedido."
+        ),
+    },
+    "balanceado": {"temperature": 0.7, "k": 3, "instruction": ""},
+    "creativo": {
+        "temperature": 1.0,
+        "k": 6,
+        "instruction": (
+            "Enriquece con detalles coherentes (pose, expresión, luz, fondo) "
+            "sin contradecir lo pedido."
+        ),
+    },
+}
+DEFAULT_STRENGTH_PRESET = "balanceado"
+
 SCORE_TAG_RE = re.compile(r"^score_\d+$", re.IGNORECASE)
 RATING_RULES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
     "nsfw": (("nsfw", "uncensored"), frozenset({"sfw"})),
@@ -252,32 +275,46 @@ def enhance(
     preprompt: str = "glossy",
     rating: str | None = None,
     llm: LlmFn | None = None,
-    k: int = 3,
+    k: int | None = None,
+    strength: str = DEFAULT_STRENGTH_PRESET,
 ) -> dict[str, str]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
 
-    Antes del preprompt, el texto del LLM se normaliza (en cada tag `_` -> espacio,
-    salvo `score_<N>`, que queda intacto) y se fuerza el rating pedido: `nsfw`
-    garantiza `nsfw` y `uncensored` y elimina `sfw`; `sfw` garantiza `sfw` y
-    elimina `nsfw`/`uncensored`; `rating=None` no toca el rating. El forzado es
-    case-insensitive, deduplica tags repetidos y no anade duplicados. El negativo
-    devuelto es el compuesto de `apply_preprompt` (`BASE_NEGATIVE` + preprompt,
-    dedup case-insensitive). Sin `llm` inyectado lanza EngineError.
+    `strength` (``fiel|balanceado|creativo``, default ``balanceado``) elige la
+    temperatura del LLM, las notas RAG (`k`; un `k` explicito manda) y la
+    instruccion anadida al mensaje de usuario si no esta vacia. La temperatura
+    se pasa al `llm` como kwarg; si el callable no lo acepta (TypeError) se
+    reintenta sin el. Antes del preprompt, el texto del LLM se normaliza (en
+    cada tag `_` -> espacio, salvo `score_<N>`, que queda intacto) y se fuerza
+    el rating pedido: `nsfw` garantiza `nsfw` y `uncensored` y elimina `sfw`;
+    `sfw` garantiza `sfw` y elimina `nsfw`/`uncensored`; `rating=None` no toca
+    el rating. El forzado es case-insensitive, deduplica tags repetidos y no
+    anade duplicados. El negativo devuelto es el compuesto de `apply_preprompt`
+    (`BASE_NEGATIVE` + preprompt, dedup case-insensitive). Sin `llm` inyectado
+    o con `strength` desconocido lanza EngineError.
     """
     text = user_text.strip() if isinstance(user_text, str) else ""
     if not text:
         raise EngineError("enhance: user_text vacio")
+    preset = STRENGTH_PRESETS.get(strength) if isinstance(strength, str) else None
+    if preset is None:
+        raise EngineError(f"strength de mejora desconocido: {strength!r}")
     if llm is None:
         raise EngineError("LLM no inyectado")
     lines = [text]
     if rating:
         lines.append(f"rating tag: {rating}")
-    notes = retrieve(text, k=k)
+    if preset["instruction"]:
+        lines.append(f"instruccion: {preset['instruction']}")
+    notes = retrieve(text, k=preset["k"] if k is None else k)
     if notes:
         lines.append("Notas de referencia (no copiar a la salida):")
         lines.extend(f"- {note}" for note in notes)
     user = "\n".join(lines)
-    raw = llm(SYS_PROMPT, user)
+    try:
+        raw = llm(SYS_PROMPT, user, temperature=preset["temperature"])
+    except TypeError:
+        raw = llm(SYS_PROMPT, user)
     if not isinstance(raw, str):
         raise EngineError("enhance: el LLM no devolvio texto")
     prepared = _enforce_rating(_normalize_tags(raw), rating)
@@ -291,11 +328,12 @@ def load_local_llm(
     max_tokens: int = 192,
     temperature: float = 0.7,
 ) -> LlmFn:
-    """Carga el GGUF local en CPU y devuelve `llm(system, user) -> str`.
+    """Carga el GGUF local en CPU y devuelve `llm(system, user, temperature=None) -> str`.
 
-    `n_gpu_layers=0`, `n_ctx=2048`, `verbose=False`; el callable usa
+    `n_gpu_layers=0`, `n_ctx=2048`, `verbose=False`; el callable acepta una
+    `temperature` por llamada (override del default del cierre) y usa
     `Llama.create_chat_completion(messages=[system, user], max_tokens=...,
-    temperature=...)` y exige contenido de texto no vacio en
+    temperature=...)`; exige contenido de texto no vacio en
     `choices[0]["message"]["content"]` (si no, `EngineError("LLM sin contenido")`).
     Import perezoso de llama_cpp; EngineError si falta el archivo (antes de
     importar). No usar en tests.
@@ -310,15 +348,18 @@ def load_local_llm(
     from llama_cpp import Llama
 
     llama = Llama(model_path=str(path), n_ctx=2048, n_gpu_layers=0, verbose=False)
+    default_temperature = temperature
 
-    def llm(system: str, user: str) -> str:
+    def llm(system: str, user: str, temperature: float | None = None) -> str:
         response = llama.create_chat_completion(
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
             max_tokens=max_tokens,
-            temperature=temperature,
+            temperature=(
+                temperature if temperature is not None else default_temperature
+            ),
         )
         try:
             content = response["choices"][0]["message"]["content"]
@@ -334,7 +375,9 @@ def load_local_llm(
 __all__ = [
     "BASE_NEGATIVE",
     "DEFAULT_LLM_RELATIVE",
+    "DEFAULT_STRENGTH_PRESET",
     "RAG_ENTRIES",
+    "STRENGTH_PRESETS",
     "SYS_PROMPT",
     "apply_preprompt",
     "enhance",

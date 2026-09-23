@@ -12,8 +12,15 @@ from fastapi.testclient import TestClient
 
 from app.config import EngineConfig
 from app.engine import ComfyEngine
-from app.enhancer import BASE_NEGATIVE
+from app.enhancer import BASE_NEGATIVE, apply_preprompt
+from app.formats import DEFAULT_FORMAT, list_image_formats
 from app.jobs import JobQueue
+from app.params import (
+    DEFAULT_SAMPLER,
+    DEFAULT_SCHEDULER,
+    SAMPLER_NAMES,
+    SCHEDULER_NAMES,
+)
 from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
@@ -151,6 +158,67 @@ class ReadRoutesTests(ServerTestCase):
         self.assertEqual(item["urls"], [f"/media/{gen_id}/ok.png"])
 
 
+class ParamsRouteTests(ServerTestCase):
+    def test_params_enums_y_defaults(self):
+        response = self.make_client().get("/api/params")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["samplers"], list(SAMPLER_NAMES))
+        self.assertEqual(data["schedulers"], list(SCHEDULER_NAMES))
+        self.assertEqual(data["default_sampler"], DEFAULT_SAMPLER)
+        self.assertEqual(data["default_scheduler"], DEFAULT_SCHEDULER)
+        self.assertEqual(len(data["samplers"]), 44)
+        self.assertEqual(len(data["schedulers"]), 9)
+        self.assertEqual(
+            set(data), {"samplers", "schedulers", "default_sampler", "default_scheduler"}
+        )
+
+
+class FormatsRouteTests(ServerTestCase):
+    def test_formats_11_y_default(self):
+        response = self.make_client().get("/api/formats")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["default"], DEFAULT_FORMAT)
+        self.assertEqual(data["default"], "retrato_plan")
+        self.assertEqual(len(data["formats"]), 11)
+        self.assertEqual(data["formats"], list_image_formats())
+        first = data["formats"][0]
+        self.assertEqual(set(first), {"id", "label", "width", "height"})
+        self.assertEqual(first["id"], "video_vertical")
+        self.assertEqual((first["width"], first["height"]), (432, 768))
+
+
+class NegativeRouteTests(ServerTestCase):
+    def test_default_glossy(self):
+        response = self.make_client().get("/api/negative")
+        self.assertEqual(response.status_code, 200)
+        negative = response.json()["negative"]
+        self.assertEqual(negative, apply_preprompt("", "anima", "glossy")[1])
+        self.assertTrue(negative.startswith(BASE_NEGATIVE))
+        self.assertIn("bad anatomy", negative)
+
+    def test_family_y_preprompt_explicitos(self):
+        response = self.make_client().get(
+            "/api/negative", params={"preprompt": "anima_default", "family": "anima"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["negative"],
+            apply_preprompt("", "anima", "anima_default")[1],
+        )
+
+    def test_preprompt_o_familia_invalidos_400(self):
+        for params in (
+            {"preprompt": "no-existe"},
+            {"family": "no-existe"},
+        ):
+            with self.subTest(params=params):
+                response = self.make_client().get("/api/negative", params=params)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+
 class PromptBuildTests(ServerTestCase):
     def test_ok(self):
         response = self.make_client().post(
@@ -175,6 +243,29 @@ class PromptBuildTests(ServerTestCase):
         response = self.make_client().post("/api/prompt/build", json={})
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
+
+
+class CapturingLLM:
+    """LLM falso que acepta `temperature` por kwarg y captura las llamadas."""
+
+    def __init__(self, output: str = "1girl, smile") -> None:
+        self.output = output
+        self.calls: list[dict] = []
+
+    def __call__(self, system, user, temperature=None):
+        self.calls.append({"system": system, "user": user, "temperature": temperature})
+        return self.output
+
+
+class RecordingQueue:
+    """Cola inyectada que solo registra los jobs (no arranca worker)."""
+
+    def __init__(self) -> None:
+        self.jobs: list[dict] = []
+
+    def submit(self, job: dict) -> str:
+        self.jobs.append(job)
+        return f"job-{len(self.jobs)}"
 
 
 class EnhanceRouteTests(ServerTestCase):
@@ -226,6 +317,45 @@ class EnhanceRouteTests(ServerTestCase):
                 )
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
+
+
+class EnhanceStrengthRouteTests(ServerTestCase):
+    def test_default_balanceado_temperature_0_7_sin_instruccion(self):
+        llm = CapturingLLM()
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl, smile"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(llm.calls[0]["temperature"], 0.7)
+        self.assertNotIn("instruccion:", llm.calls[0]["user"])
+
+    def test_fiel_pasa_instruccion_y_temperature_0_4(self):
+        llm = CapturingLLM()
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl, smile", "strength": "fiel"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(llm.calls[0]["temperature"], 0.4)
+        self.assertIn("instruccion:", llm.calls[0]["user"])
+
+    def test_creativo_temperature_1_0(self):
+        llm = CapturingLLM()
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl, smile", "strength": "creativo"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(llm.calls[0]["temperature"], 1.0)
+
+    def test_strength_invalido_400_sin_llamar_al_llm(self):
+        for strength in ("loco", "", 5, ["fiel"], {"fiel": True}):
+            with self.subTest(strength=strength):
+                llm = CapturingLLM()
+                response = self.make_client(llm=llm).post(
+                    "/api/enhance", json={"text": "1girl", "strength": strength}
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+                self.assertEqual(llm.calls, [])
 
 
 class GenerateValidationTests(ServerTestCase):
@@ -304,6 +434,129 @@ class GenerateValidationTests(ServerTestCase):
         response = self.make_client().get("/api/jobs/no-existe")
         self.assertEqual(response.status_code, 404)
         self.assertIn("error", response.json())
+
+
+class GenerateSizeTests(ServerTestCase):
+    def payload(self, **overrides) -> dict:
+        data = {
+            "model_id": MODEL_ID,
+            "prompt": "1girl, smile",
+            "preprompt": "ninguno",
+            "params": {"seed": 1},
+        }
+        data.update(overrides)
+        return data
+
+    def test_size_preset_manda_sobre_manual(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate",
+            json=self.payload(size="cuadro_hd", width=64, height=64),
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["params"]["width"], 1024)
+        self.assertEqual(job["params"]["height"], 1024)
+        row = self.store.list()[0]
+        self.assertEqual(row["params"]["width"], 1024)
+        self.assertEqual(row["params"]["height"], 1024)
+
+    def test_manual_valido_se_mezcla_con_params(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate", json=self.payload(width=768, height=1344)
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["params"]["width"], 768)
+        self.assertEqual(job["params"]["height"], 1344)
+        self.assertEqual(job["params"]["seed"], 1)
+
+    def test_size_desconocido_o_no_str_400(self):
+        for size in ("no-existe", 5, ["cuadro_hd"], {"id": "cuadro_hd"}):
+            with self.subTest(size=size):
+                response = self.make_client().post(
+                    "/api/generate", json=self.payload(size=size)
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_medidas_manuales_invalidas_400(self):
+        for width, height in (
+            (63, 768),
+            (768, 4097),
+            (100, 768),
+            (768, 63),
+            ("abc", 768),
+            (768.5, 768),
+            (0, 768),
+        ):
+            with self.subTest(width=width, height=height):
+                response = self.make_client().post(
+                    "/api/generate", json=self.payload(width=width, height=height)
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_medidas_manuales_en_los_limites_ok(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate", json=self.payload(width=64, height=4096)
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["params"]["width"], 64)
+        self.assertEqual(queue.jobs[0]["params"]["height"], 4096)
+
+
+class GenerateEngineParamsValidationTests(ServerTestCase):
+    def payload(self, params: dict) -> dict:
+        return {
+            "model_id": MODEL_ID,
+            "prompt": "1girl",
+            "preprompt": "ninguno",
+            "params": params,
+        }
+
+    def test_sampler_invalido_400(self):
+        for sampler in ("nope", "Euler", 5, True):
+            with self.subTest(sampler=sampler):
+                response = self.make_client().post(
+                    "/api/generate", json=self.payload({"sampler_name": sampler})
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_scheduler_invalido_400(self):
+        for scheduler in ("nope", "SGM_UNIFORM", 5, True):
+            with self.subTest(scheduler=scheduler):
+                response = self.make_client().post(
+                    "/api/generate", json=self.payload({"scheduler": scheduler})
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_sampler_y_scheduler_validos_pasan(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate",
+            json=self.payload(
+                {
+                    "seed": 1,
+                    "sampler_name": "dpmpp_2m",
+                    "scheduler": "karras",
+                }
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["params"]["sampler_name"], "dpmpp_2m")
+        self.assertEqual(queue.jobs[0]["params"]["scheduler"], "karras")
+
+    def test_sin_sampler_ni_scheduler_pasa(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate", json=self.payload({"seed": 1})
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 class RunGenerationTests(ServerTestCase):
@@ -513,6 +766,29 @@ class MediaTests(ServerTestCase):
         self.assertIn("error", response.json())
 
 
+class GalleryCapTests(ServerTestCase):
+    def test_cap_24_manteniendo_offset(self):
+        for index in range(30):
+            self.store.add(MODEL_ID, f"1girl {index}")
+        client = self.make_client()
+        page1 = client.get("/api/gallery", params={"limit": 100}).json()
+        self.assertEqual(page1["count"], 30)
+        self.assertEqual(len(page1["items"]), 24)
+        page2 = client.get("/api/gallery", params={"limit": 24, "offset": 24}).json()
+        self.assertEqual(len(page2["items"]), 6)
+        self.assertEqual(page2["count"], 30)
+        self.assertTrue(
+            set(item["id"] for item in page1["items"]).isdisjoint(
+                item["id"] for item in page2["items"]
+            )
+        )
+
+    def test_limit_minimo_1(self):
+        self.store.add(MODEL_ID, "1girl")
+        data = self.make_client().get("/api/gallery", params={"limit": 0}).json()
+        self.assertEqual(len(data["items"]), 1)
+
+
 class IndexTests(ServerTestCase):
     def test_index_200_con_waifu(self):
         response = self.make_client().get("/")
@@ -521,6 +797,44 @@ class IndexTests(ServerTestCase):
         self.assertIn("/static/app.js", response.text)
         self.assertIn("OC Maker", response.text)
         self.assertIn("Video", response.text)
+
+    def test_index_incluye_controles_nuevos(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="size"',
+            'id="manual-size"',
+            'id="negative"',
+            'id="btn-negative-restore"',
+            'id="sampler"',
+            'id="scheduler"',
+            'id="enhance-strength"',
+            'id="enhance-result"',
+            'id="btn-enhance-use"',
+            'id="btn-enhance-discard"',
+            'id="ref-preview"',
+            'id="btn-ref-clear"',
+            'id="lightbox"',
+            'id="gallery-prev"',
+            'id="gallery-next"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_incluye_endpoints_y_features(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "/api/params",
+            "/api/formats",
+            "/api/negative",
+            "const PAGE_SIZE = 6;",
+            "Mejorando…",
+            "Listo ✓",
+            "Reusar",
+            "openLightbox",
+            "Escape",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
 
 
 if __name__ == "__main__":

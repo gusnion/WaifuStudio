@@ -338,3 +338,118 @@ input[type="checkbox"] {
   gap: 0.45rem;
   cursor: pointer;
 }
+
+.hidden {
+  display: none !important;
+}
+
+.enhance-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.enhance-row .inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.enhance-row .inline-field > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.enhance-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--accent-2);
+  border-radius: 8px;
+}
+
+.enhance-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.enhance-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.enhance-result p {
+  margin: 0;
+  word-break: break-word;
+}
+
+.enhance-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ref-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ref-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.card img {
+  cursor: zoom-in;
+}
+
+.card-action {
+  align-self: flex-start;
+  margin-top: 0.3rem;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  font-size: 1.4rem;
+  line-height: 1;
+}

@@ -23,11 +23,13 @@ E:\IA\WAIFU
 │  ├─ config.py       # configuración central congelada
 │  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
 │  ├─ enhancer.py     # «Mejorar prompt»: LLM local + RAG + preprompts (M8-20)
+│  ├─ formats.py      # catálogo de formatos de imagen registry/formatos-v1.json (M9-A1)
 │  ├─ gate_f1.py      # runner Gate F1: 1 imagen por modelo del registro (M8-11b)
 │  ├─ graphs.py       # grafos API-format: perfil/params e img2img (F3a)
 │  ├─ jobs.py         # cola 1-GPU en serie con worker daemon (F3a)
 │  ├─ motion.py       # motion de video con LLM local inyectable (F4)
 │  ├─ oc_traits.py    # catálogo de traits OC Maker con tags danbooru (F3a)
+│  ├─ params.py       # enums reales de sampler/scheduler de ComfyUI (M9-A1)
 │  ├─ preprompts.py   # catálogo de preprompts por familia (M8-12)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  ├─ server.py       # webapp FastAPI: API JSON, runners y UI (F3b/F4)
@@ -37,6 +39,7 @@ E:\IA\WAIFU
 ├─ docs/
 │  └─ prompting_anima.md  # manual local de prompting Anima (F2)
 ├─ registry/
+│  ├─ formatos-v1.json  # catálogo legacy de formatos imagen/video, copia verbatim (M9-A1)
 │  └─ models.json     # registro versionado de modelos locales (M8-10)
 ├─ static/            # app.css y app.js de la UI (F3b/F4)
 ├─ templates/
@@ -45,11 +48,13 @@ E:\IA\WAIFU
 │  ├─ __init__.py
 │  ├─ test_engine.py
 │  ├─ test_enhancer.py
+│  ├─ test_formats.py
 │  ├─ test_gate_f1.py
 │  ├─ test_graphs.py
 │  ├─ test_jobs.py
 │  ├─ test_motion.py
 │  ├─ test_oc_traits.py
+│  ├─ test_params.py
 │  ├─ test_preprompts.py
 │  ├─ test_registry.py
 │  ├─ test_server.py
@@ -165,9 +170,15 @@ offline: `test_graphs.py` usa el grafo real `workflows\anima_base.json`.
 `app/server.py` (F3b) es la webapp local FastAPI. `create_app(config, store, registry,
 engine_factory, llm, *, queue, start_worker)` inyecta todas las dependencias para los tests.
 Rutas JSON: `GET /api/models`, `GET /api/preprompts?family=`, `GET /api/traits`,
-`POST /api/prompt/build`, `POST /api/enhance` (503 `{"error":"LLM no disponible"}` sin LLM),
-`POST /api/generate` (valida modelo/prompt/base64/strength y escribe la referencia en
-`comfy_root/input/`), `GET /api/jobs/{id}`, `GET /api/gallery?limit&offset` y
+`GET /api/params` (samplers/schedulers reales de ComfyUI y sus defaults),
+`GET /api/formats` (11 presets de imagen + default), `GET /api/negative?preprompt&family`
+(negativo compuesto base+preprompt), `POST /api/prompt/build`,
+`POST /api/enhance` (acepta `strength` `fiel|balanceado|creativo`, default `balanceado`;
+503 `{"error":"LLM no disponible"}` sin LLM),
+`POST /api/generate` (valida modelo/prompt/base64/strength, `size` de preset **o**
+`width`/`height` manuales en [64, 4096] múltiplos de 8, y sampler/scheduler contra los
+enums; escribe la referencia en `comfy_root/input/`), `GET /api/jobs/{id}`,
+`GET /api/gallery?limit&offset` (cap de 24 por página) y
 `GET /media/{gen_id}/{name}` (PNG confinado a `data_dir/gallery/<gen_id>/`, 404/403).
 
 El runner `run_generation(job, config, store, registry, engine_factory)` carga
@@ -175,9 +186,15 @@ El runner `run_generation(job, config, store, registry, engine_factory)` carga
 `ref_image`+`strength`), encola en la `JobQueue` (`submit`→`wait`→`outputs`) y copia los PNG a
 `data_dir/gallery/<gen_id>/` actualizando el store; un fallo queda en store y job sin matar al
 worker. La UI (`templates/index.html` + `static/app.css` + `static/app.js`, sin CDN) trae la
-pestaña **Imagen** (prompt + «Mejorar prompt», preprompt/modelo, seed/steps/cfg/sampler/scheduler/
-ancho/alto, imagen de referencia + fuerza, Generar con polling y galería) y la pestaña **Video**
-(F4, ver abajo), más el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
+pestaña **Imagen**: prompt con «Mejorar prompt» y select de fuerza (Fiel/Balanceado/Creativo,
+default Balanceado) con estados del botón y panel de propuesta (positivo/negativo + «Usar»/
+«Descartar») justo debajo del prompt; preprompt/modelo; sampler y scheduler como `<select>`
+poblados desde `/api/params`; tamaño como `<select>` con los 11 presets + `Manual` (Ancho/Alto
+solo en manual); negativo pre-cargado desde `/api/negative` (se refresca al cambiar preprompt
+si el usuario no lo ha editado) con botón «Restaurar»; imagen de referencia con miniatura y
+botón «Quitar»; Generar con polling y galería de 6 por página (‹ Anterior / página X de Y /
+Siguiente ›), lightbox al clic (X y tecla ESC) y «Reusar» por tarjeta. La pestaña **Video**
+(F4, ver abajo) es independiente, y el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
 
 ### Requisitos y arranque
 

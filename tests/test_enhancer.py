@@ -12,7 +12,9 @@ from unittest import mock
 from app.engine import EngineError
 from app.enhancer import (
     BASE_NEGATIVE,
+    DEFAULT_STRENGTH_PRESET,
     RAG_ENTRIES,
+    STRENGTH_PRESETS,
     SYS_PROMPT,
     apply_preprompt,
     enhance,
@@ -58,6 +60,22 @@ class FakeLLM:
 
     def __call__(self, system: str, user: str) -> str:
         self.calls.append((system, user))
+        return self.output
+
+
+class CapturingLLM:
+    """LLM que acepta `temperature` por kwarg y captura system/user/temperature."""
+
+    def __init__(self, output: str = "1girl, smile") -> None:
+        self.output = output
+        self.calls: list[dict] = []
+
+    def __call__(
+        self, system: str, user: str, temperature: float | None = None
+    ) -> str:
+        self.calls.append(
+            {"system": system, "user": user, "temperature": temperature}
+        )
         return self.output
 
 
@@ -343,6 +361,86 @@ class TagNormalizationTests(unittest.TestCase):
         self.assertEqual(result["positive"], apply_preprompt(raw)[0])
 
 
+class StrengthPresetTests(unittest.TestCase):
+    QUERY = "score_9, quality, safety, nsfw, artist, uncensored"
+
+    def test_presets_golden(self):
+        self.assertEqual(
+            STRENGTH_PRESETS,
+            {
+                "fiel": {
+                    "temperature": 0.4,
+                    "k": 1,
+                    "instruction": (
+                        "Mantén exactamente lo pedido; no añadas elementos que el "
+                        "usuario no haya pedido."
+                    ),
+                },
+                "balanceado": {"temperature": 0.7, "k": 3, "instruction": ""},
+                "creativo": {
+                    "temperature": 1.0,
+                    "k": 6,
+                    "instruction": (
+                        "Enriquece con detalles coherentes (pose, expresión, luz, "
+                        "fondo) sin contradecir lo pedido."
+                    ),
+                },
+            },
+        )
+        self.assertEqual(DEFAULT_STRENGTH_PRESET, "balanceado")
+
+    def test_balanceado_default_sin_instruccion_y_temperature_0_7(self):
+        llm = CapturingLLM()
+        result = enhance("1girl", llm=llm)
+        self.assertEqual(len(llm.calls), 1)
+        self.assertEqual(llm.calls[0]["temperature"], 0.7)
+        self.assertNotIn("instruccion:", llm.calls[0]["user"])
+        self.assertEqual(result["positive"], apply_preprompt("1girl, smile")[0])
+
+    def test_fiel_usa_k_1_e_instruccion_y_temperature_0_4(self):
+        llm = CapturingLLM()
+        enhance(self.QUERY, strength="fiel", llm=llm)
+        user = llm.calls[0]["user"]
+        self.assertEqual(llm.calls[0]["temperature"], 0.4)
+        self.assertIn("instruccion:", user)
+        self.assertIn(STRENGTH_PRESETS["fiel"]["instruction"], user)
+        self.assertEqual(user.count("\n- "), 1)
+
+    def test_creativo_usa_k_6_e_instruccion_y_temperature_1_0(self):
+        self.assertEqual(len(retrieve(self.QUERY, k=6)), 6)
+        llm = CapturingLLM()
+        enhance(self.QUERY, strength="creativo", llm=llm)
+        user = llm.calls[0]["user"]
+        self.assertEqual(llm.calls[0]["temperature"], 1.0)
+        self.assertIn("instruccion:", user)
+        self.assertIn(STRENGTH_PRESETS["creativo"]["instruction"], user)
+        self.assertEqual(user.count("\n- "), 6)
+
+    def test_balanceado_usa_k_3(self):
+        llm = CapturingLLM()
+        enhance(self.QUERY, strength="balanceado", llm=llm)
+        self.assertEqual(llm.calls[0]["user"].count("\n- "), 3)
+
+    def test_k_explicito_manda_sobre_el_preset(self):
+        llm = CapturingLLM()
+        enhance(self.QUERY, strength="creativo", k=0, llm=llm)
+        self.assertNotIn("Notas de referencia", llm.calls[0]["user"])
+
+    def test_strength_desconocido_lanza_engine_error_sin_llamar(self):
+        for strength in ("loco", "", None, 5, ["fiel"]):
+            with self.subTest(strength=strength):
+                llm = CapturingLLM()
+                with self.assertRaises(EngineError):
+                    enhance("1girl", strength=strength, llm=llm)
+                self.assertEqual(llm.calls, [])
+
+    def test_llm_sin_kwarg_temperature_reintenta_sin_el(self):
+        llm = FakeLLM()
+        enhance("1girl", strength="fiel", llm=llm)
+        self.assertEqual(len(llm.calls), 1)
+        self.assertIn("instruccion:", llm.calls[0][1])
+
+
 class LoadLocalLlmTests(unittest.TestCase):
     def test_archivo_ausente_lanza_engine_error_sin_importar_llama(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -384,6 +482,13 @@ class LlmWrapperTests(unittest.TestCase):
         self.assertEqual(call["temperature"], 0.2)
         self.assertEqual(llama.init_kwargs["n_gpu_layers"], 0)
         self.assertEqual(llama.init_kwargs["n_ctx"], 2048)
+
+    def test_temperature_por_llamada_override_del_default(self):
+        llm, llama = self._llm({"choices": [{"message": {"content": "ok"}}]})
+        llm("SYS", "USER")
+        llm("SYS", "USER", temperature=1.0)
+        self.assertEqual(llama.chat_calls[0]["temperature"], 0.2)
+        self.assertEqual(llama.chat_calls[1]["temperature"], 1.0)
 
     def test_respuesta_no_dict_o_sin_choices_lanza_engine_error(self):
         for response in ("texto", {"choices": []}, {}):

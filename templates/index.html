@@ -23,7 +23,31 @@
           <span>Prompt</span>
           <textarea id="prompt" rows="5" placeholder="1girl, smile, ..."></textarea>
         </label>
-        <button id="btn-enhance" type="button">Mejorar prompt</button>
+        <div class="enhance-row">
+          <button id="btn-enhance" type="button">Mejorar prompt</button>
+          <label class="inline-field">
+            <span>Fuerza</span>
+            <select id="enhance-strength">
+              <option value="fiel">Fiel</option>
+              <option value="balanceado" selected>Balanceado</option>
+              <option value="creativo">Creativo</option>
+            </select>
+          </label>
+        </div>
+        <div id="enhance-result" class="enhance-result hidden">
+          <div class="enhance-block">
+            <span class="enhance-label">Positivo propuesto</span>
+            <p id="enhance-positive"></p>
+          </div>
+          <div class="enhance-block">
+            <span class="enhance-label">Negativo propuesto</span>
+            <p id="enhance-negative"></p>
+          </div>
+          <div class="enhance-actions">
+            <button id="btn-enhance-use" class="primary" type="button">Usar</button>
+            <button id="btn-enhance-discard" type="button">Descartar</button>
+          </div>
+        </div>
 
         <label class="field">
           <span>Rating</span>
@@ -41,20 +65,37 @@
           <select id="model"></select>
         </label>
 
+        <label class="field">
+          <span>Tamaño</span>
+          <select id="size"></select>
+        </label>
+        <div id="manual-size" class="grid-2 hidden">
+          <label class="field"><span>Ancho</span><input id="width" type="number" value="768" step="8" min="64" max="4096"></label>
+          <label class="field"><span>Alto</span><input id="height" type="number" value="1344" step="8" min="64" max="4096"></label>
+        </div>
+
         <div class="grid-2">
           <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
           <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
           <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
-          <label class="field"><span>Sampler</span><input id="sampler" type="text" value="euler"></label>
-          <label class="field"><span>Scheduler</span><input id="scheduler" type="text" value="sgm_uniform"></label>
-          <label class="field"><span>Ancho</span><input id="width" type="number" value="320" step="8"></label>
-          <label class="field"><span>Alto</span><input id="height" type="number" value="576" step="8"></label>
+          <label class="field"><span>Sampler</span><select id="sampler"></select></label>
+          <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
         </div>
+
+        <label class="field">
+          <span>Negativo</span>
+          <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
+        </label>
+        <button id="btn-negative-restore" type="button">Restaurar</button>
 
         <label class="field">
           <span>Imagen de referencia (PNG)</span>
           <input id="ref-image" type="file" accept="image/png">
         </label>
+        <div id="ref-preview" class="ref-preview hidden">
+          <img id="ref-thumb" alt="Referencia seleccionada">
+          <button id="btn-ref-clear" type="button">Quitar</button>
+        </div>
         <label class="field">
           <span>Fuerza <output id="strength-value">0.60</output></span>
           <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
@@ -70,6 +111,11 @@
           <button id="btn-reload" type="button">Recargar</button>
         </div>
         <div id="gallery" class="gallery"></div>
+        <div class="pager">
+          <button id="gallery-prev" type="button">‹ Anterior</button>
+          <span id="gallery-page">página 1 de 1</span>
+          <button id="gallery-next" type="button">Siguiente ›</button>
+        </div>
       </section>
     </section>
 
@@ -143,6 +189,11 @@
           <button id="btn-video-reload" type="button">Recargar</button>
         </div>
         <div id="video-gallery" class="gallery"></div>
+        <div class="pager">
+          <button id="video-gallery-prev" type="button">‹ Anterior</button>
+          <span id="video-gallery-page">página 1 de 1</span>
+          <button id="video-gallery-next" type="button">Siguiente ›</button>
+        </div>
       </section>
     </section>
   </main>
@@ -158,6 +209,11 @@
         <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
       </div>
     </div>
+  </div>
+
+  <div id="lightbox" class="lightbox hidden">
+    <button id="btn-lightbox-close" class="lightbox-close" type="button" aria-label="Cerrar">×</button>
+    <img id="lightbox-img" alt="">
   </div>
 
   <script src="/static/app.js"></script>
