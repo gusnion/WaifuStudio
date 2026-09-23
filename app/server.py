@@ -51,6 +51,7 @@ from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, get_preprompt, lis
 from app.progress import ProgressTracker
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
+from app.sheet import make_sheet
 from app.store import Store
 from app.tags import by_group, list_groups, search
 from app.video import (
@@ -473,6 +474,36 @@ def create_app(
             item["url"] = f"/media/characters/{char_id}/{Path(ref['relpath']).name}"
             items.append(item)
         return items
+
+    @app.post("/api/characters/{char_id}/sheet")
+    async def api_character_sheet(
+        char_id: int, payload: dict | None = Body(default=None)
+    ) -> Any:
+        if chars.get(char_id) is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        refs = chars.refs(char_id)
+        ref_ids = payload.get("ref_ids") if isinstance(payload, dict) else None
+        if ref_ids is not None:
+            if not isinstance(ref_ids, list) or any(
+                isinstance(ref_id, bool) or not isinstance(ref_id, int)
+                for ref_id in ref_ids
+            ):
+                raise EngineError("ref_ids invalido; usar lista de enteros")
+            wanted = set(ref_ids)
+            refs = [ref for ref in refs if ref["id"] in wanted]
+        if len(refs) < 2:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "se necesitan al menos 2 referencias para la hoja"},
+            )
+        refs_root = Path(chars.refs_root)
+        sheet_path = refs_root / str(char_id) / f"sheet_{uuid.uuid4().hex}.png"
+        make_sheet([refs_root / ref["relpath"] for ref in refs], sheet_path)
+        relpath = chars.add_ref(char_id, sheet_path)
+        return {
+            "relpath": relpath,
+            "url": f"/media/characters/{char_id}/{Path(relpath).name}",
+        }
 
     @app.delete("/api/characters/{char_id}/refs/{ref_id}")
     async def api_character_ref_delete(char_id: int, ref_id: int) -> Any:

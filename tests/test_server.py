@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app import server as server_module
 from app.config import EngineConfig
@@ -109,6 +110,13 @@ class ServerTestCase(unittest.TestCase):
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / name
         path.write_bytes(PNG_BYTES)
+        return path
+
+    def add_gallery_image(self, gen_id: int, name: str = "ok.png") -> Path:
+        directory = self.config.data_dir / "gallery" / str(gen_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / name
+        Image.new("RGB", (64, 64), (120, 80, 40)).save(path, format="PNG")
         return path
 
 
@@ -1300,6 +1308,104 @@ class CharacterRefsRoutesTests(ServerTestCase):
         self.assertTrue(directory.is_dir())
         self.assertEqual(client.delete(f"/api/characters/{char_id}").status_code, 200)
         self.assertFalse(directory.exists())
+
+
+class CharacterSheetRoutesTests(ServerTestCase):
+    def add_character(self, client, name: str = "Aiko") -> int:
+        return client.post(
+            "/api/characters", json={"name": name, "tags": []}
+        ).json()["id"]
+
+    def add_ref(self, client, char_id: int) -> str:
+        gen_id = self.store.add(MODEL_ID, "1girl, smile")
+        self.add_gallery_image(gen_id)
+        self.store.update(gen_id, status="done", outputs=["ok.png"])
+        return client.post(
+            f"/api/characters/{char_id}/refs", json={"gen_id": gen_id}
+        ).json()["relpath"]
+
+    def test_404_oc_inexistente(self):
+        client = self.make_client()
+        self.assertEqual(
+            client.post("/api/characters/99/sheet", json={}).status_code, 404
+        )
+
+    def test_400_con_menos_de_dos_refs(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        self.assertEqual(
+            client.post(f"/api/characters/{char_id}/sheet", json={}).status_code,
+            400,
+        )
+        self.add_ref(client, char_id)
+        response = client.post(f"/api/characters/{char_id}/sheet", json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_200_crea_y_registra_hoja(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        for _ in range(3):
+            self.add_ref(client, char_id)
+        before = client.get(f"/api/characters/{char_id}/refs").json()
+        response = client.post(f"/api/characters/{char_id}/sheet", json={})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"relpath", "url"})
+        target = self.config.data_dir / "characters" / data["relpath"]
+        self.assertTrue(target.is_file())
+        with Image.open(target) as image:
+            self.assertEqual(image.format, "PNG")
+            self.assertEqual(image.mode, "RGB")
+            self.assertEqual(image.size, (512, 768))
+        self.assertEqual(
+            data["url"],
+            f"/media/characters/{char_id}/{Path(data['relpath']).name}",
+        )
+        media = client.get(data["url"])
+        self.assertEqual(media.status_code, 200)
+        self.assertEqual(media.headers["content-type"], "image/png")
+        refs = client.get(f"/api/characters/{char_id}/refs").json()
+        self.assertEqual(len(refs), len(before) + 1)
+        self.assertEqual(refs[-1]["relpath"], data["relpath"])
+        self.assertEqual(refs[-1]["url"], data["url"])
+
+    def test_sin_body_usa_todas_las_refs(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        self.add_ref(client, char_id)
+        self.add_ref(client, char_id)
+        response = client.post(f"/api/characters/{char_id}/sheet")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("relpath", response.json())
+
+    def test_ref_ids_filtra_y_valida(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        self.add_ref(client, char_id)
+        self.add_ref(client, char_id)
+        refs = client.get(f"/api/characters/{char_id}/refs").json()
+        one = client.post(
+            f"/api/characters/{char_id}/sheet", json={"ref_ids": [refs[0]["id"]]}
+        )
+        self.assertEqual(one.status_code, 400)
+        both = client.post(
+            f"/api/characters/{char_id}/sheet",
+            json={"ref_ids": [ref["id"] for ref in refs]},
+        )
+        self.assertEqual(both.status_code, 200)
+        self.assertEqual(
+            client.post(
+                f"/api/characters/{char_id}/sheet", json={"ref_ids": "x"}
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            client.post(
+                f"/api/characters/{char_id}/sheet", json={"ref_ids": [999, 998]}
+            ).status_code,
+            400,
+        )
 
 
 class CharacterMediaTests(ServerTestCase):

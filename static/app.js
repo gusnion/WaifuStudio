@@ -9,6 +9,8 @@ const GROUP_LABELS = {
   expression: "Expresión",
   accessories: "Accesorios",
   setting: "Entorno",
+  action: "Acción",
+  meta: "Meta",
 };
 
 const PAGE_SIZE = 6;
@@ -35,10 +37,18 @@ const state = {
   videoPager: null,
   activeJobId: null,
   busy: false,
+  characters: [],
+  activeCharacterId: null,
+  ocSelectedTags: [],
+  ocCatalogItems: [],
+  ocEditingId: null,
+  characterRefs: [],
+  ocSaveGenId: null,
 };
 
 let enhanceResetTimer = null;
 let refObjectUrl = null;
+let ocSearchTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -540,12 +550,22 @@ function galleryCard(item) {
   meta.textContent = bits.join(" · ");
   caption.append(title, prompt, meta);
   if (item.kind !== "video") {
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
     const reuse = document.createElement("button");
     reuse.type = "button";
     reuse.className = "card-action";
     reuse.textContent = "Reusar";
     reuse.addEventListener("click", () => reuseGeneration(item));
-    caption.appendChild(reuse);
+    const saveOc = document.createElement("button");
+    saveOc.type = "button";
+    saveOc.className = "card-action";
+    saveOc.textContent = "Guardar en OC";
+    saveOc.addEventListener("click", () => {
+      openOcSaveModal(item).catch((error) => setStatus(error.message, true));
+    });
+    actions.append(reuse, saveOc);
+    caption.appendChild(actions);
   }
   card.appendChild(caption);
   return card;
@@ -723,54 +743,498 @@ function applyVideoEngine() {
   $("video-last-field").style.display = isWan ? "none" : "";
 }
 
-async function loadTraits() {
-  const groups = await api("/api/traits");
-  const container = $("oc-groups");
-  container.replaceChildren();
-  for (const [group, traits] of Object.entries(groups)) {
-    const fieldset = document.createElement("fieldset");
-    const legend = document.createElement("legend");
-    legend.textContent = GROUP_LABELS[group] || group;
-    fieldset.appendChild(legend);
-    const list = document.createElement("div");
-    list.className = "trait-list";
-    for (const trait of traits) {
-      const label = document.createElement("label");
-      label.className = "trait";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = trait.id;
-      const text = document.createElement("span");
-      text.textContent = trait.label;
-      label.append(checkbox, text);
-      list.appendChild(label);
+function setOcStatus(text, isError = false) {
+  const el = $("oc-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function setOcSaveStatus(text, isError = false) {
+  const el = $("oc-save-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function normalizeTags(tags) {
+  const merged = [];
+  const seen = new Set();
+  for (const raw of tags) {
+    const tag = String(raw || "").trim();
+    if (!tag) {
+      continue;
     }
-    fieldset.appendChild(list);
-    container.appendChild(fieldset);
+    const folded = tag.toLowerCase();
+    if (seen.has(folded)) {
+      continue;
+    }
+    seen.add(folded);
+    merged.push(tag);
+  }
+  return merged;
+}
+
+function promptFromTags(tags) {
+  return normalizeTags(tags).join(", ");
+}
+
+function mergeIntoPrompt(text, addition) {
+  return promptFromTags([
+    ...String(text || "").split(","),
+    ...String(addition || "").split(","),
+  ]);
+}
+
+async function attachReferenceFromUrl(url, name) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar la referencia (HTTP ${response.status})`);
+  }
+  const blob = await response.blob();
+  const file = new File([blob], name || "reference.png", {
+    type: blob.type || "image/png",
+  });
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  $("ref-image").files = transfer.files;
+  updateReferencePreview();
+}
+
+function isOcTagSelected(tag) {
+  const folded = tag.toLowerCase();
+  return state.ocSelectedTags.some((item) => item.toLowerCase() === folded);
+}
+
+function renderOcCatalogResults() {
+  const container = $("oc-catalog-results");
+  container.replaceChildren();
+  if (!state.ocCatalogItems.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin resultados.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const item of state.ocCatalogItems) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "oc-chip";
+    chip.textContent =
+      item.label && item.label !== item.tag
+        ? `${item.label} · ${item.tag}`
+        : item.tag;
+    chip.title = item.tag;
+    chip.classList.toggle("selected", isOcTagSelected(item.tag));
+    chip.addEventListener("click", () => toggleOcTag(item.tag));
+    container.appendChild(chip);
   }
 }
 
-async function addTraitsToPrompt() {
-  const ids = Array.from($("oc-groups").querySelectorAll("input:checked")).map(
-    (el) => el.value
-  );
-  if (!ids.length) {
-    setStatus("Selecciona al menos un trait", true);
+function renderOcSelected() {
+  const container = $("oc-selected");
+  container.replaceChildren();
+  if (!state.ocSelectedTags.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Ningún tag seleccionado.";
+    container.appendChild(empty);
     return;
   }
+  for (const tag of state.ocSelectedTags) {
+    const chip = document.createElement("span");
+    chip.className = "oc-selected-chip";
+    const text = document.createElement("span");
+    text.textContent = tag;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "quitar";
+    remove.addEventListener("click", () => toggleOcTag(tag));
+    chip.append(text, remove);
+    container.appendChild(chip);
+  }
+}
+
+async function refreshOcCatalog() {
+  const params = new URLSearchParams();
+  const group = $("oc-catalog-group").value;
+  const query = $("oc-catalog-search").value.trim();
+  if (group) {
+    params.set("group", group);
+  }
+  if (query) {
+    params.set("q", query);
+  }
+  if (!group && !query) {
+    params.set("limit", "60");
+  }
+  const data = await api(`/api/tags?${params.toString()}`);
+  state.ocCatalogItems = data.items || [];
+  renderOcCatalogResults();
+}
+
+async function loadOcCatalog() {
+  const data = await api("/api/tags/groups");
+  const select = $("oc-catalog-group");
+  select.replaceChildren();
+  select.appendChild(option("", "Todos los grupos"));
+  for (const group of data.groups || []) {
+    select.appendChild(option(group, GROUP_LABELS[group] || group));
+  }
+  await refreshOcCatalog();
+}
+
+async function loadOcPreprompts() {
+  const family = state.family || "anima";
+  const data = await api(`/api/preprompts?family=${encodeURIComponent(family)}`);
+  const select = $("oc-form-preprompt");
+  select.replaceChildren();
+  for (const name of data.names || []) {
+    select.appendChild(option(name, name));
+  }
+  select.value = data.default || select.value;
+}
+
+function toggleOcTag(tag) {
+  const folded = tag.toLowerCase();
+  const index = state.ocSelectedTags.findIndex(
+    (item) => item.toLowerCase() === folded
+  );
+  if (index >= 0) {
+    state.ocSelectedTags.splice(index, 1);
+  } else {
+    state.ocSelectedTags.push(tag);
+  }
+  renderOcSelected();
+  renderOcCatalogResults();
+}
+
+function characterById(charId) {
+  return state.characters.find((item) => item.id === charId) || null;
+}
+
+function renderCharacters() {
+  const container = $("oc-list");
+  container.replaceChildren();
+  if (!state.characters.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin OCs guardados.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const character of state.characters) {
+    container.appendChild(characterRow(character));
+  }
+}
+
+function characterRow(character) {
+  const row = document.createElement("div");
+  row.className = "oc-item";
+  row.classList.toggle("active", character.id === state.activeCharacterId);
+  const header = document.createElement("div");
+  header.className = "oc-item-header";
+  const name = document.createElement("strong");
+  name.textContent = character.name;
+  header.appendChild(name);
+  if (character.id === state.activeCharacterId) {
+    const badge = document.createElement("span");
+    badge.className = "oc-item-badge";
+    badge.textContent = "activo";
+    header.appendChild(badge);
+  }
+  const tags = document.createElement("span");
+  tags.className = "oc-item-tags";
+  tags.textContent = (character.tags || []).join(", ") || "sin tags";
+  const actions = document.createElement("div");
+  actions.className = "oc-item-actions";
+  const handlers = [
+    ["Usar", () => useCharacter(character)],
+    ["Editar", () => editCharacter(character)],
+    ["Duplicar", () => duplicateCharacter(character)],
+    ["Eliminar", () => deleteCharacter(character)],
+  ];
+  for (const [label, handler] of handlers) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", () => {
+      Promise.resolve(handler()).catch((error) =>
+        setOcStatus(error.message, true)
+      );
+    });
+    actions.appendChild(button);
+  }
+  row.append(header, tags, actions);
+  return row;
+}
+
+async function loadCharacters() {
+  state.characters = await api("/api/characters");
+  if (
+    state.activeCharacterId != null &&
+    !state.characters.some((item) => item.id === state.activeCharacterId)
+  ) {
+    state.activeCharacterId = null;
+  }
+  renderCharacters();
+}
+
+function fillCharacterForm(character) {
+  state.ocEditingId = character ? character.id : null;
+  state.ocSelectedTags = character ? [...(character.tags || [])] : [];
+  $("oc-form-title").textContent = character
+    ? `Editar «${character.name}»`
+    : "Guardar OC";
+  $("oc-form-name").value = character ? character.name : "";
+  if (character) {
+    $("oc-form-preprompt").value = character.preprompt;
+  }
+  $("oc-form-rating").value = character ? character.rating : "sfw";
+  $("oc-form-notes").value = character ? character.notes : "";
+  renderOcSelected();
+  renderOcCatalogResults();
+}
+
+async function useCharacter(character) {
+  const addition = promptFromTags(character.tags || []);
+  const current = $("prompt").value.trim();
+  if (addition) {
+    $("prompt").value = current
+      ? mergeIntoPrompt(current, addition)
+      : addition;
+  }
+  $("preprompt").value = character.preprompt;
+  $("rating").value = character.rating;
+  state.activeCharacterId = character.id;
+  renderCharacters();
+  await loadCharacterRefs();
+  if (!state.negativeTouched) {
+    await refreshNegative();
+  }
+  const refs = state.characterRefs || [];
+  if (refs.length) {
+    await attachReferenceFromUrl(refs[0].url, refs[0].url.split("/").pop());
+  }
+  closeOcModal();
+  setStatus(`OC «${character.name}» cargado`);
+}
+
+async function editCharacter(character) {
+  fillCharacterForm(character);
+  setOcStatus(`Editando «${character.name}»`);
+}
+
+async function duplicateCharacter(character) {
+  fillCharacterForm(character);
+  state.ocEditingId = null;
+  $("oc-form-title").textContent = "Guardar OC (copia)";
+  $("oc-form-name").value = `${character.name} (copia)`;
+  setOcStatus("Ajusta el nombre y guarda la copia");
+}
+
+async function deleteCharacter(character) {
+  if (!window.confirm(`¿Eliminar el OC «${character.name}» y sus referencias?`)) {
+    return;
+  }
+  await api(`/api/characters/${character.id}`, { method: "DELETE" });
+  if (state.activeCharacterId === character.id) {
+    state.activeCharacterId = null;
+  }
+  if (state.ocEditingId === character.id) {
+    fillCharacterForm(null);
+  }
+  await loadCharacters();
+  await loadCharacterRefs();
+  setOcStatus(`OC «${character.name}» eliminado`);
+}
+
+async function saveCharacter(event) {
+  event.preventDefault();
+  const name = $("oc-form-name").value.trim();
+  if (!name) {
+    setOcStatus("El nombre es obligatorio", true);
+    return;
+  }
+  const payload = {
+    name,
+    tags: state.ocSelectedTags.slice(),
+    preprompt: $("oc-form-preprompt").value,
+    rating: $("oc-form-rating").value,
+    notes: $("oc-form-notes").value,
+  };
   try {
-    const data = await postJson("/api/prompt/build", { trait_ids: ids });
-    const current = $("prompt").value.trim();
-    $("prompt").value = current ? `${current}, ${data.prompt}` : data.prompt;
-    closeOcModal();
-    setStatus("Traits añadidos al prompt");
+    let charId = state.ocEditingId;
+    if (charId == null) {
+      const created = await postJson("/api/characters", payload);
+      charId = created.id;
+    } else {
+      await api(`/api/characters/${charId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
+    state.activeCharacterId = charId;
+    await loadCharacters();
+    fillCharacterForm(characterById(charId));
+    await loadCharacterRefs();
+    setOcStatus(`OC «${name}» guardado`);
   } catch (error) {
-    setStatus(error.message, true);
+    setOcStatus(error.message, true);
+  }
+}
+
+async function loadCharacterRefs() {
+  const container = $("oc-refs");
+  const title = $("oc-refs-title");
+  const button = $("btn-oc-sheet");
+  container.replaceChildren();
+  state.characterRefs = [];
+  if (state.activeCharacterId == null) {
+    title.textContent = "sin OC activo";
+    button.disabled = true;
+    return;
+  }
+  const character = characterById(state.activeCharacterId);
+  const refs = await api(`/api/characters/${state.activeCharacterId}/refs`);
+  state.characterRefs = refs;
+  title.textContent = character ? `de ${character.name}` : "";
+  button.disabled = refs.length < 2;
+  if (!refs.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin referencias. Añádelas desde la galería.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const ref of refs) {
+    const figure = document.createElement("figure");
+    figure.className = "oc-ref";
+    const img = document.createElement("img");
+    img.src = ref.url;
+    img.alt = `Referencia ${ref.id}`;
+    img.loading = "lazy";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Quitar";
+    remove.addEventListener("click", () => {
+      removeCharacterRef(ref).catch((error) =>
+        setOcStatus(error.message, true)
+      );
+    });
+    figure.append(img, remove);
+    container.appendChild(figure);
+  }
+}
+
+async function removeCharacterRef(ref) {
+  await api(`/api/characters/${ref.character_id}/refs/${ref.id}`, {
+    method: "DELETE",
+  });
+  await loadCharacterRefs();
+  setOcStatus("Referencia quitada");
+}
+
+async function createCharacterSheet() {
+  if (state.activeCharacterId == null) {
+    return;
+  }
+  const button = $("btn-oc-sheet");
+  button.disabled = true;
+  setOcStatus("Creando hoja...");
+  try {
+    const data = await postJson(
+      `/api/characters/${state.activeCharacterId}/sheet`,
+      {}
+    );
+    await attachReferenceFromUrl(
+      data.url,
+      `sheet_${state.activeCharacterId}.png`
+    );
+    await loadCharacterRefs();
+    closeOcModal();
+    setStatus("Hoja de referencia adjuntada al panel");
+  } catch (error) {
+    setOcStatus(error.message, true);
+    button.disabled = state.characterRefs.length < 2;
+  }
+}
+
+function addOcTagsToPrompt() {
+  if (!state.ocSelectedTags.length) {
+    setOcStatus("Selecciona al menos un tag del catálogo", true);
+    return;
+  }
+  const addition = promptFromTags(state.ocSelectedTags);
+  const current = $("prompt").value.trim();
+  $("prompt").value = current ? mergeIntoPrompt(current, addition) : addition;
+  closeOcModal();
+  setStatus("Tags añadidos al prompt");
+}
+
+async function openOcSaveModal(item) {
+  state.ocSaveGenId = item.id;
+  setOcSaveStatus(`Imagen #${item.id}`);
+  $("oc-save-name").value = "";
+  await loadCharacters();
+  const select = $("oc-save-select");
+  select.replaceChildren();
+  select.appendChild(option("", "— elegir OC —"));
+  for (const character of state.characters) {
+    select.appendChild(option(String(character.id), character.name));
+  }
+  if (state.activeCharacterId != null) {
+    select.value = String(state.activeCharacterId);
+  }
+  $("oc-save-modal").classList.remove("hidden");
+}
+
+function closeOcSaveModal() {
+  $("oc-save-modal").classList.add("hidden");
+  state.ocSaveGenId = null;
+}
+
+async function confirmOcSave() {
+  const genId = state.ocSaveGenId;
+  if (genId == null) {
+    return;
+  }
+  const button = $("btn-oc-save-confirm");
+  button.disabled = true;
+  try {
+    let charId = $("oc-save-select").value
+      ? Number($("oc-save-select").value)
+      : null;
+    const newName = $("oc-save-name").value.trim();
+    if (newName) {
+      const created = await postJson("/api/characters", {
+        name: newName,
+        tags: [],
+      });
+      charId = created.id;
+    }
+    if (charId == null) {
+      setOcSaveStatus("Elige un OC o escribe un nombre nuevo", true);
+      return;
+    }
+    await postJson(`/api/characters/${charId}/refs`, { gen_id: genId });
+    await loadCharacters();
+    if (state.activeCharacterId === charId) {
+      await loadCharacterRefs();
+    }
+    closeOcSaveModal();
+    setStatus("Referencia guardada en el OC");
+  } catch (error) {
+    setOcSaveStatus(error.message, true);
+  } finally {
+    button.disabled = false;
   }
 }
 
 function openOcModal() {
   $("oc-modal").classList.remove("hidden");
+  loadCharacters()
+    .then(loadCharacterRefs)
+    .catch((error) => setOcStatus(error.message, true));
 }
 
 function closeOcModal() {
@@ -851,10 +1315,38 @@ function bind() {
   });
   $("btn-oc").addEventListener("click", openOcModal);
   $("btn-oc-close").addEventListener("click", closeOcModal);
-  $("btn-oc-add").addEventListener("click", addTraitsToPrompt);
+  $("btn-oc-add").addEventListener("click", addOcTagsToPrompt);
   $("oc-modal").addEventListener("click", (event) => {
     if (event.target === $("oc-modal")) {
       closeOcModal();
+    }
+  });
+  $("oc-catalog-group").addEventListener("change", () => {
+    refreshOcCatalog().catch((error) => setOcStatus(error.message, true));
+  });
+  $("oc-catalog-search").addEventListener("input", () => {
+    if (ocSearchTimer) {
+      clearTimeout(ocSearchTimer);
+    }
+    ocSearchTimer = setTimeout(() => {
+      refreshOcCatalog().catch((error) => setOcStatus(error.message, true));
+    }, 250);
+  });
+  $("oc-form").addEventListener("submit", saveCharacter);
+  $("btn-oc-new").addEventListener("click", () => {
+    fillCharacterForm(null);
+    setOcStatus("Nuevo OC");
+  });
+  $("btn-oc-sheet").addEventListener("click", () => {
+    createCharacterSheet().catch((error) => setOcStatus(error.message, true));
+  });
+  $("btn-oc-save-close").addEventListener("click", closeOcSaveModal);
+  $("btn-oc-save-confirm").addEventListener("click", () => {
+    confirmOcSave().catch((error) => setOcSaveStatus(error.message, true));
+  });
+  $("oc-save-modal").addEventListener("click", (event) => {
+    if (event.target === $("oc-save-modal")) {
+      closeOcSaveModal();
     }
   });
 }
@@ -866,7 +1358,9 @@ async function init() {
     await loadParams();
     await loadFormats();
     await loadModels();
-    await loadTraits();
+    await loadOcCatalog();
+    await loadOcPreprompts();
+    await loadCharacters();
     await refreshNegative();
     await loadGallery();
     setStatus("Listo");

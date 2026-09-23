@@ -208,14 +208,88 @@
   </main>
 
   <div id="oc-modal" class="modal hidden">
-    <div class="modal-box">
+    <div class="modal-box oc-maker">
       <div class="modal-header">
         <h2>OC Maker</h2>
+        <span id="oc-status" class="oc-status">Listo</span>
         <button id="btn-oc-close" type="button">Cerrar</button>
       </div>
-      <div id="oc-groups" class="oc-groups"></div>
+      <div class="oc-body">
+        <section class="oc-section">
+          <h3>Catálogo</h3>
+          <div class="oc-catalog-controls">
+            <select id="oc-catalog-group" aria-label="Grupo de tags"></select>
+            <input id="oc-catalog-search" type="search" placeholder="Buscar tag...">
+          </div>
+          <div id="oc-catalog-results" class="oc-chips"></div>
+          <h3>Seleccionados</h3>
+          <div id="oc-selected" class="oc-chips"></div>
+        </section>
+        <section class="oc-section">
+          <h3>Mis OCs</h3>
+          <div id="oc-list" class="oc-list"></div>
+          <form id="oc-form" class="oc-form">
+            <h3 id="oc-form-title">Guardar OC</h3>
+            <label class="field">
+              <span>Nombre</span>
+              <input id="oc-form-name" type="text" placeholder="Nombre del OC">
+            </label>
+            <div class="grid-2">
+              <label class="field">
+                <span>Preprompt</span>
+                <select id="oc-form-preprompt"></select>
+              </label>
+              <label class="field">
+                <span>Rating</span>
+                <select id="oc-form-rating">
+                  <option value="sfw">sfw</option>
+                  <option value="nsfw">nsfw</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span>Notas</span>
+              <textarea id="oc-form-notes" rows="2" placeholder="Notas del OC..."></textarea>
+            </label>
+            <div class="oc-form-actions">
+              <button id="btn-oc-save" class="primary" type="submit">Guardar</button>
+              <button id="btn-oc-new" type="button">Nuevo</button>
+            </div>
+          </form>
+        </section>
+        <section class="oc-section">
+          <h3>Referencias <span id="oc-refs-title" class="oc-refs-title"></span></h3>
+          <div id="oc-refs" class="oc-refs"></div>
+          <div class="oc-refs-actions">
+            <button id="btn-oc-sheet" type="button" disabled>Crear hoja</button>
+          </div>
+        </section>
+      </div>
       <div class="modal-footer">
         <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="oc-save-modal" class="modal hidden">
+    <div class="modal-box oc-save-box">
+      <div class="modal-header">
+        <h2>Guardar en OC</h2>
+        <button id="btn-oc-save-close" type="button">Cerrar</button>
+      </div>
+      <div class="oc-save-body">
+        <label class="field">
+          <span>OC existente</span>
+          <select id="oc-save-select"></select>
+        </label>
+        <label class="field">
+          <span>o nombre de un OC nuevo</span>
+          <input id="oc-save-name" type="text" placeholder="Nuevo OC">
+        </label>
+        <p id="oc-save-status" class="status">Elige un OC o escribe un nombre.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-oc-save-confirm" class="primary" type="button">Guardar referencia</button>
       </div>
     </div>
   </div>

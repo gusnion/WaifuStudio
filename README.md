@@ -35,6 +35,7 @@ E:\IA\WAIFU
 │  ├─ progress.py     # tracker WS de progreso del engine (M9-A2)
 │  ├─ registry.py     # registro de modelos (M8-10; CLI: python -m app.registry)
 │  ├─ server.py       # webapp FastAPI: API JSON, runners y UI (F3b/F4)
+│  ├─ sheet.py        # hoja de referencia de OCs (collage PNG con Pillow, M9-B2)
 │  ├─ store.py        # store sqlite3 de generaciones con kind image|video (M8-21/F4)
 │  ├─ tags.py         # catálogo starter de tags Danbooru (M9-B1)
 │  ├─ video.py        # grafos y runner de video Wan/H3 (F4)
@@ -64,6 +65,7 @@ E:\IA\WAIFU
 │  ├─ test_registry.py
 │  ├─ test_server.py
 │  ├─ test_server_video.py
+│  ├─ test_sheet.py
 │  ├─ test_store.py
 │  ├─ test_tags.py
 │  └─ test_video.py
@@ -250,6 +252,43 @@ si no existe); `POST /api/characters/{id}/refs` `{gen_id}` copia el primer outpu
 sirve la referencia con confinamiento estricto (`resolve()` + `is_relative_to(refs_root)`: 403
 si escapa, 404 si falta). Todo inyectable vía `create_app(..., character_store=...)` y testeable
 offline.
+
+## OC Maker (M9-B2)
+
+La UI (sin CDN) rediseña el panel modal **OC Maker** en tres columnas:
+
+- **Catálogo**: select de grupos (`/api/tags/groups`) + buscador en vivo
+  (`/api/tags?group&q&limit`), resultados como chips con selección múltiple y la
+  lista visible de tags elegidos, cada uno con «quitar». «Añadir al prompt» sigue
+  funcionando: compone el prompt desde los tags seleccionados (dedup
+  case-insensitive) y cierra el panel.
+- **Mis OCs**: lista de `GET /api/characters` con «Usar» (vuelca los tags en el
+  prompt, fija preprompt/rating y adjunta la primera ref como imagen de
+  referencia del panel de generación si existe), «Editar», «Duplicar» (copia sin
+  id, el guardado crea un OC nuevo) y «Eliminar» (con confirmación). Formulario
+  Guardar/Actualizar con nombre, preprompt, rating y notas; los tags del OC son
+  los seleccionados en el catálogo (`POST`/`PUT /api/characters`).
+- **Referencias**: miniaturas de `GET /api/characters/{id}/refs` servidas por
+  `/media/characters/{id}/{name}`, «Quitar» por ref
+  (`DELETE .../refs/{ref_id}`) y **«Crear hoja»** (habilitado con ≥2 refs), que
+  llama a `POST /api/characters/{id}/sheet`, adjunta el PNG resultante como
+  imagen de referencia del panel y refresca la lista.
+
+Además, cada tarjeta de imagen de la galería tiene **«Guardar en OC»**: abre un
+selector con los OCs existentes o un nombre para crear uno nuevo y hace
+`POST /api/characters/{id}/refs` con el `gen_id` (refresca las refs si ese OC
+está abierto).
+
+`app\sheet.py` (CPU pura, Pillow) expone
+`make_sheet(image_paths, out_path, *, cell=512, cols=2, bg=(24,24,28))`: exige
+≥2 imágenes existentes (`EngineError`), ajusta cada una con `ImageOps.fit` a la
+celda interior y compone la rejilla de `cols` columnas con 8 px de fondo `bg`
+separando las vistas (celdas de retrato 2:3), creando el directorio padre y
+guardando un PNG RGB en `out_path`; con los defaults, 3-4 refs dan 512×768.
+`POST /api/characters/{id}/sheet` (`{"ref_ids": [..]?}`, todas si se omite)
+genera `<refs_root>\<id>\sheet_<uuid>.png`, lo registra como ref con el
+`add_ref` de siempre (400 si quedan <2 refs, 404 si el OC no existe) y devuelve
+`{"relpath", "url"}`.
 
 ## Video (F4)
 
