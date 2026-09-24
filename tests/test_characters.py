@@ -8,7 +8,7 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
-from app.characters import CharacterStore, prompt_from_tags
+from app.characters import CharacterStore, is_sheet, prompt_from_tags
 from app.engine import EngineError
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-ref"
@@ -247,6 +247,71 @@ class RefsTests(CharacterStoreTestCase):
     def test_refs_oc_desconocido(self):
         with self.assertRaises(EngineError):
             self.store.refs(99)
+
+    def test_add_ref_con_name_conserva_el_nombre(self):
+        char_id = self.store.add("Aiko", [])
+        relpath = self.store.add_ref(
+            char_id, self.make_file("sheet_manual.png"), name="sheet_manual.png"
+        )
+        self.assertEqual(relpath, f"{char_id}/sheet_manual.png")
+        target = self.refs_root / relpath
+        self.assertTrue(target.is_file())
+        self.assertEqual(target.read_bytes(), PNG_BYTES)
+        self.assertTrue(is_sheet(relpath))
+
+    def test_add_ref_in_place_no_recopia(self):
+        char_id = self.store.add("Aiko", [])
+        directory = self.refs_root / str(char_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        sheet = directory / "sheet_inplace.png"
+        sheet.write_bytes(PNG_BYTES)
+        relpath = self.store.add_ref(char_id, sheet, name=sheet.name)
+        self.assertEqual(relpath, f"{char_id}/sheet_inplace.png")
+        self.assertEqual(sheet.read_bytes(), PNG_BYTES)
+        self.assertEqual(len(self.store.refs(char_id)), 1)
+
+    def test_add_ref_name_invalido(self):
+        char_id = self.store.add("Aiko", [])
+        src = self.make_file("a.png")
+        for name in ("../escapa.png", "sub/dir.png", "otra.gif", "", "sin_extension"):
+            with self.subTest(name=name):
+                with self.assertRaises(EngineError):
+                    self.store.add_ref(char_id, src, name=name)
+        self.assertEqual(self.store.refs(char_id), [])
+
+    def test_first_non_sheet_ref_salta_hojas(self):
+        char_id = self.store.add("Aiko", [])
+        normal = self.store.add_ref(char_id, self.make_file("a.png"))
+        self.store.add_ref(
+            char_id, self.make_file("b.png"), name="sheet_b.png"
+        )
+        ref = self.store.first_non_sheet_ref(char_id)
+        self.assertIsNotNone(ref)
+        self.assertEqual(ref["relpath"], normal)
+
+    def test_first_non_sheet_ref_none_si_solo_hay_hojas(self):
+        char_id = self.store.add("Aiko", [])
+        self.assertIsNone(self.store.first_non_sheet_ref(char_id))
+        self.store.add_ref(char_id, self.make_file("a.png"), name="sheet_a.png")
+        self.assertIsNone(self.store.first_non_sheet_ref(char_id))
+
+    def test_first_non_sheet_ref_oc_desconocido(self):
+        with self.assertRaises(EngineError):
+            self.store.first_non_sheet_ref(99)
+
+
+class IsSheetTests(unittest.TestCase):
+    def test_prefijo_sheet_en_el_nombre(self):
+        self.assertTrue(is_sheet("3/sheet_abc.png"))
+        self.assertTrue(is_sheet(Path("3/sheet_abc.webp")))
+        self.assertTrue(is_sheet("sheet_suelta.png"))
+
+    def test_otros_nombres_no_son_hoja(self):
+        self.assertFalse(is_sheet("3/abc.png"))
+        self.assertFalse(is_sheet("3/sheet.png"))
+        self.assertFalse(is_sheet("3/Sheet_abc.png"))
+        self.assertFalse(is_sheet("3/mi_sheet_abc.png"))
+        self.assertFalse(is_sheet("sheet_x/img.png"))
 
 
 class PromptFromTagsTests(unittest.TestCase):

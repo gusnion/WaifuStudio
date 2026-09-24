@@ -28,7 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import trainer
-from app.characters import CharacterStore
+from app.characters import CharacterStore, is_sheet
 from app.config import APP_ROOT, EngineConfig, load_config
 from app.engine import ComfyEngine, EngineError, load_graph
 from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
@@ -578,6 +578,7 @@ def create_app(
         for ref in chars.refs(char_id):
             item = dict(ref)
             item["url"] = f"/media/characters/{char_id}/{Path(ref['relpath']).name}"
+            item["is_sheet"] = is_sheet(ref["relpath"])
             items.append(item)
         return items
 
@@ -606,9 +607,10 @@ def create_app(
         sheet_path = refs_root / str(char_id) / f"sheet_{uuid.uuid4().hex}.png"
         try:
             make_sheet([refs_root / ref["relpath"] for ref in refs], sheet_path)
-            relpath = chars.add_ref(char_id, sheet_path)
-        finally:
+        except Exception:
             sheet_path.unlink(missing_ok=True)
+            raise
+        relpath = chars.add_ref(char_id, sheet_path, name=sheet_path.name)
         return {
             "relpath": relpath,
             "url": f"/media/characters/{char_id}/{Path(relpath).name}",
@@ -1156,6 +1158,29 @@ def create_app(
             )
         media_type = CHARACTER_MEDIA_TYPES.get(candidate.suffix.lower())
         if media_type is None or not candidate.is_file():
+            return JSONResponse(status_code=404, content={"error": "no encontrado"})
+        return FileResponse(candidate, media_type=media_type)
+
+    @app.get("/api/refs/{name:path}")
+    async def api_ref(name: str) -> Any:
+        """Sirve una referencia guardada de `comfy_root/input` (solo imagenes).
+
+        Confinamiento estricto al directorio input: 403 si la ruta escapa o la
+        extension no es png/jpg/jpeg/webp, 404 si el archivo no existe. La UI lo
+        usa para re-adjuntar la referencia guardada en `params.ref_image`.
+        """
+        input_root = (cfg.comfy_root / "input").resolve()
+        candidate = (input_root / name).resolve()
+        if not candidate.is_relative_to(input_root):
+            return JSONResponse(
+                status_code=403, content={"error": "ruta fuera de comfy input"}
+            )
+        media_type = CHARACTER_MEDIA_TYPES.get(candidate.suffix.lower())
+        if media_type is None:
+            return JSONResponse(
+                status_code=403, content={"error": "extension no permitida"}
+            )
+        if not candidate.is_file():
             return JSONResponse(status_code=404, content={"error": "no encontrado"})
         return FileResponse(candidate, media_type=media_type)
 

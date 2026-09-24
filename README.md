@@ -191,7 +191,11 @@ Rutas JSON: `GET /api/models`, `GET /api/preprompts?family=`, `GET /api/traits`,
 `POST /api/generate` (valida modelo/prompt/base64/strength, `size` de preset **o**
 `width`/`height` manuales en [64, 4096] múltiplos de 8, y sampler/scheduler contra los
 enums; escribe la referencia en `comfy_root/input/`), `GET /api/jobs/{id}`,
-`GET /api/gallery?limit&offset` (cap de 24 por página) y
+`GET /api/gallery?limit&offset` (cap de 24 por página),
+`GET /api/refs/{name:path}` (sirve una referencia de `comfy_root/input/` con
+confinamiento estricto —`resolve()` + `is_relative_to`— y solo extensiones
+png/jpg/jpeg/webp: 403 si la ruta escapa o la extensión no vale, 404 si falta;
+la UI lo usa para re-adjuntar la ref guardada en `params.ref_image`) y
 `GET /media/{gen_id}/{name}` (PNG confinado a `data_dir/gallery/<gen_id>/`, 404/403).
 
 El runner `run_generation(job, config, store, registry, engine_factory)` carga
@@ -206,7 +210,12 @@ poblados desde `/api/params`; tamaño como `<select>` con los 11 presets + `Manu
 solo en manual); negativo pre-cargado desde `/api/negative` (se refresca al cambiar preprompt
 si el usuario no lo ha editado) con botón «Restaurar»; imagen de referencia con miniatura y
 botón «Quitar»; Generar con polling y galería de 6 por página (‹ Anterior / página X de Y /
-Siguiente ›), lightbox al clic (X y tecla ESC) y «Reusar» por tarjeta. La pestaña **Video**
+Siguiente ›), lightbox al clic (X y tecla ESC) y «Reusar» por tarjeta, que aplica toda la
+configuración guardada de esa generación: modelo, preprompt, rating, negativo,
+seed/steps/cfg/sampler/scheduler, tamaño (selecciona el preset si `width`/`height` coinciden,
+si no `Manual` con esos valores), LoRAs con sus pesos y la referencia (`params.ref_image` +
+`strength`, descargada como blob de `/api/refs/` y adjuntada al input); lo que falte queda en
+blanco sin romper. La pestaña **Video**
 (F4, ver abajo) es independiente, y el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
 
 ### Requisitos y arranque
@@ -252,9 +261,12 @@ M10 con las descargas.
 `characters` (name único, `tags` JSON, `preprompt` de la familia anima, `rating` sfw|nsfw y
 `notes`) y `character_refs` (FK con `ON DELETE CASCADE`). `CharacterStore(db_path)` crea el
 directorio padre en `init()`; `add`/`get`/`list`/`update`/`delete` validan con `EngineError`
-(delete borra refs y su carpeta), `add_ref(id, src_path, *, refs_root)` copia una imagen real
-(png/jpg/jpeg/webp) a `<refs_root>\<id>\<uuid>.<ext>`, `refs(id)` lista las filas y
-`remove_ref(id, ref_id)` borra archivo y fila. `prompt_from_tags(tags)` une con ", " dedup
+(delete borra refs y su carpeta), `add_ref(id, src_path, *, refs_root, name)` copia una imagen
+real (png/jpg/jpeg/webp) a `<refs_root>\<id>\<uuid>.<ext>` o al `name` simple indicado (misma
+extensión, sin rutas; si el origen ya está en esa ruta se registra sin recopiar), `refs(id)`
+lista las filas, `first_non_sheet_ref(id)` devuelve la primera ref que no es hoja (o `None`) y
+`remove_ref(id, ref_id)` borra archivo y fila. `is_sheet(relpath)` detecta las hojas por el
+prefijo `sheet_` del nombre del archivo. `prompt_from_tags(tags)` une con ", " dedup
 case-insensitive en orden estable. Las refs viven en `data\characters\<id>\`.
 
 Rutas nuevas en `app\server.py`: `GET /api/tags/groups` → `{groups}`;
@@ -262,7 +274,8 @@ Rutas nuevas en `app\server.py`: `GET /api/tags/groups` → `{groups}`;
 200); `GET/POST /api/characters` y `GET/PUT/DELETE /api/characters/{id}` (400 en validación, 404
 si no existe); `POST /api/characters/{id}/refs` `{gen_id}` copia el primer output de
 `data\gallery\<gen_id>\` (404 sin generación/archivo), `GET /api/characters/{id}/refs` añade
-`url` y `DELETE /api/characters/{id}/refs/{ref_id}`; `GET /media/characters/{char_id}/{name}`
+`url` e `is_sheet` a cada ref y `DELETE /api/characters/{id}/refs/{ref_id}`;
+`GET /media/characters/{char_id}/{name}`
 sirve la referencia con confinamiento estricto (`resolve()` + `is_relative_to(refs_root)`: 403
 si escapa, 404 si falta). Todo inyectable vía `create_app(..., character_store=...)` y testeable
 offline.
@@ -277,16 +290,21 @@ La UI (sin CDN) rediseña el panel modal **OC Maker** en tres columnas:
   funcionando: compone el prompt desde los tags seleccionados (dedup
   case-insensitive) y cierra el panel.
 - **Mis OCs**: lista de `GET /api/characters` con «Usar» (vuelca los tags en el
-  prompt, fija preprompt/rating y adjunta la primera ref como imagen de
-  referencia del panel de generación si existe), «Editar», «Duplicar» (copia sin
-  id, el guardado crea un OC nuevo) y «Eliminar» (con confirmación). Formulario
-  Guardar/Actualizar con nombre, preprompt, rating y notas; los tags del OC son
-  los seleccionados en el catálogo (`POST`/`PUT /api/characters`).
-- **Referencias**: miniaturas de `GET /api/characters/{id}/refs` servidas por
-  `/media/characters/{id}/{name}`, «Quitar» por ref
-  (`DELETE .../refs/{ref_id}`) y **«Crear hoja»** (habilitado con ≥2 refs), que
-  llama a `POST /api/characters/{id}/sheet`, adjunta el PNG resultante como
-  imagen de referencia del panel y refresca la lista.
+  prompt, fija preprompt/rating y adjunta la **primera ref que no sea hoja**
+  como imagen de referencia del panel si existe; si solo hay hojas no adjunta
+  nada y lo indica), «Editar», «Duplicar» (copia sin id, el guardado crea un OC
+  nuevo) y «Eliminar» (con confirmación). Formulario Guardar/Actualizar con
+  nombre, preprompt, rating y notas; los tags del OC son los seleccionados en el
+  catálogo (`POST`/`PUT /api/characters`).
+- **Referencias**: miniaturas de `GET /api/characters/{id}/refs` (cada item trae
+  `url` e `is_sheet`) servidas por `/media/characters/{id}/{name}`, «Quitar» por
+  ref (`DELETE .../refs/{ref_id}`), **«Usar como referencia»** (adjunta esa
+  imagen como I2I con el `strength` actual; si es una hoja pide confirmación
+  avisando de que puede copiar el mosaico) y **«Crear hoja»** (habilitado con ≥2
+  refs), que llama a `POST /api/characters/{id}/sheet` y refresca la lista
+  **sin adjuntarla**: la hoja se registra con su nombre `sheet_<uuid>.png`, se
+  muestra con badge «hoja», la nota «Para IPAdapter (M10); no recomendada como
+  referencia I2I» y un enlace «Ver/Descargar».
 
 Además, cada tarjeta de imagen de la galería tiene **«Guardar en OC»**: abre un
 selector con los OCs existentes o un nombre para crear uno nuevo y hace
@@ -300,10 +318,11 @@ celda interior y compone la rejilla de `cols` columnas con 8 px de fondo `bg`
 separando las vistas (celdas de retrato 2:3), creando el directorio padre y
 guardando un PNG RGB en `out_path`; con los defaults, 3-4 refs dan 512×768.
 `POST /api/characters/{id}/sheet` (`{"ref_ids": [..]?}`, todas si se omite)
-genera `<refs_root>\<id>\sheet_<uuid>.png`, lo registra como ref con el
-`add_ref` de siempre (400 si quedan <2 refs, 404 si el OC no existe) y devuelve
-`{"relpath", "url"}`; el PNG temporal se borra tras registrarlo, así el
-directorio del OC solo contiene archivos registrados.
+genera `<refs_root>\<id>\sheet_<uuid>.png`, lo registra como ref con
+`add_ref(..., name=...)` conservando el prefijo `sheet_` (400 si quedan <2 refs,
+404 si el OC no existe) y devuelve `{"relpath", "url"}`; la hoja queda como
+catálogo para IPAdapter (M10), no como referencia I2I automática: la UI ya no la
+adjunta al panel, `is_sheet(relpath)` la identifica y «Usar» la salta.
 
 ## Zonas del prompt (M9-C)
 
@@ -461,7 +480,8 @@ familia no tiene entradas, muestra «Aún no hay LoRAs de imagen (llegan con las
 descargas M10)». `POST /api/generate` recibe `loras: [{"id", "weight"}]` con
 los marcados, y el resumen de cada tarjeta de la galería lista los LoRAs usados
 (`lora <id> @ <peso>`); «Reusar» vuelve a marcarlos y ajustar sus pesos desde
-`params.loras` del store.
+`params.loras` del store (además de modelo, preprompt, rating, negativo,
+seed/steps/cfg/sampler/scheduler, tamaño y referencia guardada; ver «Webapp (F3)»).
 
 ## Preprompts propios (M9-D2)
 

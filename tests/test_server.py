@@ -1529,6 +1529,77 @@ class MediaTests(ServerTestCase):
         self.assertIn("error", response.json())
 
 
+class ApiRefsTests(ServerTestCase):
+    def write_input(self, name: str, data: bytes = PNG_BYTES) -> Path:
+        directory = self.config.comfy_root / "input"
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / name
+        path.write_bytes(data)
+        return path
+
+    def test_200_sirve_png_temporal_de_comfy_input(self):
+        self.write_input("ref_ok.png")
+        response = self.make_client().get("/api/refs/ref_ok.png")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertEqual(response.content, PNG_BYTES)
+
+    def test_200_formatos_jpg_y_webp(self):
+        client = self.make_client()
+        for name, media_type in (
+            ("ref.jpg", "image/jpeg"),
+            ("ref.webp", "image/webp"),
+        ):
+            with self.subTest(name=name):
+                self.write_input(name)
+                response = client.get(f"/api/refs/{name}")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.headers["content-type"], media_type)
+
+    def test_traversal_403(self):
+        (self.config.comfy_root / "input").mkdir(parents=True, exist_ok=True)
+        (self.config.comfy_root / "secret.png").write_bytes(PNG_BYTES)
+        response = self.make_client().get("/api/refs/..%2F..%2Fsecret.png")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("error", response.json())
+
+    def test_extension_no_permitida_403(self):
+        self.write_input("nota.txt", b"hola")
+        response = self.make_client().get("/api/refs/nota.txt")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("error", response.json())
+
+    def test_ausente_404(self):
+        response = self.make_client().get("/api/refs/nope.png")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_relee_la_referencia_guardada_por_generate(self):
+        raw = base64.b64encode(PNG_BYTES).decode("ascii")
+        client = self.make_client()
+        response = client.post(
+            "/api/generate",
+            json={
+                "model_id": MODEL_ID,
+                "prompt": "1girl, smile",
+                "preprompt": "ninguno",
+                "params": {"seed": 7, "steps": 12},
+                "ref_image_b64": raw,
+                "strength": 0.45,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        row = self.store.list()[0]
+        self.assertEqual(row["params"]["seed"], 7)
+        self.assertEqual(row["params"]["steps"], 12)
+        self.assertEqual(row["params"]["strength"], 0.45)
+        name = row["params"]["ref_image"]
+        self.assertTrue(name.endswith(".png"))
+        served = client.get(f"/api/refs/{name}")
+        self.assertEqual(served.status_code, 200)
+        self.assertEqual(served.content, PNG_BYTES)
+
+
 class GalleryCapTests(ServerTestCase):
     def test_cap_24_manteniendo_offset(self):
         for index in range(30):
@@ -1674,6 +1745,7 @@ class CharacterRefsRoutesTests(ServerTestCase):
         self.assertEqual(
             ref["url"], f"/media/characters/{char_id}/{Path(relpath).name}"
         )
+        self.assertIs(ref["is_sheet"], False)
         media = client.get(ref["url"])
         self.assertEqual(media.status_code, 200)
         self.assertEqual(media.headers["content-type"], "image/png")
@@ -1791,10 +1863,12 @@ class CharacterSheetRoutesTests(ServerTestCase):
         media = client.get(data["url"])
         self.assertEqual(media.status_code, 200)
         self.assertEqual(media.headers["content-type"], "image/png")
+        self.assertTrue(Path(data["relpath"]).name.startswith("sheet_"))
         refs = client.get(f"/api/characters/{char_id}/refs").json()
         self.assertEqual(len(refs), len(before) + 1)
         self.assertEqual(refs[-1]["relpath"], data["relpath"])
         self.assertEqual(refs[-1]["url"], data["url"])
+        self.assertIs(refs[-1]["is_sheet"], True)
 
     def test_sin_body_usa_todas_las_refs(self):
         client = self.make_client()
@@ -2081,6 +2155,8 @@ class IndexTests(ServerTestCase):
             'id="zone-popover-insert"',
             'data-zone="character"',
             "+ Personaje",
+            'id="oc-refs-note"',
+            "IPAdapter",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
@@ -2108,6 +2184,13 @@ class IndexTests(ServerTestCase):
             "zonePopover",
             "Fijado por el OC",
             "}, 300);",
+            "/api/refs/",
+            "reuseGeneration",
+            "applySavedReference",
+            "isSheetRef",
+            "Usar como referencia",
+            "IPAdapter (M10)",
+            "no se adjunta como referencia I2I",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

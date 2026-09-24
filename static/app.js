@@ -631,16 +631,74 @@ function closeLightbox() {
   $("lightbox-img").removeAttribute("src");
 }
 
-function reuseGeneration(item) {
+async function applySavedReference(params) {
+  const saved = params ? params.ref_image : null;
+  const name = typeof saved === "string" ? saved.trim() : "";
+  if (!name) {
+    if ($("ref-image").files.length) {
+      clearReference();
+    }
+    return;
+  }
+  try {
+    await attachReferenceFromUrl(`/api/refs/${encodeURIComponent(name)}`, name);
+  } catch (error) {
+    clearReference();
+    throw new Error(`referencia guardada no disponible (${error.message})`);
+  }
+  const strength = Number(params.strength);
+  if (Number.isFinite(strength)) {
+    const clamped = Math.max(0.05, Math.min(1, strength));
+    $("strength").value = String(clamped);
+    $("strength-value").textContent = clamped.toFixed(2);
+  }
+}
+
+async function reuseGeneration(item) {
+  const params = item.params || {};
   $("prompt").value = item.prompt || "";
   if (typeof item.negative === "string") {
     $("negative").value = item.negative;
     state.negativeTouched = true;
   }
-  const params = item.params || {};
+  const modelId = item.model_id;
+  if (modelId && state.models.some((model) => model.id === modelId)) {
+    $("model").value = modelId;
+    await applyModel(modelId);
+  }
+  if (typeof params.preprompt === "string") {
+    setSelectValue($("preprompt"), params.preprompt);
+  }
+  if (params.rating === "sfw" || params.rating === "nsfw") {
+    $("rating").value = params.rating;
+  }
+  if (params.seed != null) {
+    $("seed").value = params.seed;
+  }
+  if (params.steps != null) {
+    $("steps").value = params.steps;
+  }
+  if (params.cfg != null) {
+    $("cfg").value = params.cfg;
+  }
+  setSelectValue($("sampler"), params.sampler_name);
+  setSelectValue($("scheduler"), params.scheduler);
+  if (params.width != null || params.height != null) {
+    setSizeFromDefaults(params.width, params.height);
+  }
   applyLorasSelection(Array.isArray(params.loras) ? params.loras : []);
+  let warning = "";
+  try {
+    await applySavedReference(params);
+  } catch (error) {
+    warning = error.message;
+  }
   refreshPromptZones();
-  setStatus(`Reusado #${item.id}`);
+  if (warning) {
+    setStatus(`Reusado #${item.id} · ${warning}`, true);
+  } else {
+    setStatus(`Reusado #${item.id}`);
+  }
 }
 
 function galleryCard(item) {
@@ -703,7 +761,9 @@ function galleryCard(item) {
     reuse.type = "button";
     reuse.className = "card-action";
     reuse.textContent = "Reusar";
-    reuse.addEventListener("click", () => reuseGeneration(item));
+    reuse.addEventListener("click", () => {
+      reuseGeneration(item).catch((error) => setStatus(error.message, true));
+    });
     const saveOc = document.createElement("button");
     saveOc.type = "button";
     saveOc.className = "card-action";
@@ -1262,6 +1322,35 @@ async function attachReferenceFromUrl(url, name) {
   updateReferencePreview();
 }
 
+function refFilename(ref) {
+  const source = String((ref && (ref.url || ref.relpath)) || "");
+  return source.split("/").pop() || "reference.png";
+}
+
+function isSheetRef(ref) {
+  if (ref && ref.is_sheet === true) {
+    return true;
+  }
+  return refFilename(ref).startsWith("sheet_");
+}
+
+async function useRefAsReference(ref) {
+  if (isSheetRef(ref)) {
+    const proceed = window.confirm(
+      "Esta ref es una hoja (catálogo para IPAdapter M10): como referencia I2I puede copiar el mosaico. ¿Adjuntarla igualmente?"
+    );
+    if (!proceed) {
+      return false;
+    }
+  }
+  await attachReferenceFromUrl(ref.url, refFilename(ref));
+  closeOcModal();
+  setStatus(
+    `Referencia adjuntada (fuerza ${Number($("strength").value).toFixed(2)})`
+  );
+  return true;
+}
+
 function isOcTagSelected(tag) {
   const folded = tag.toLowerCase();
   return state.ocSelectedTags.some((item) => item.toLowerCase() === folded);
@@ -1607,11 +1696,15 @@ async function useCharacter(character) {
     await refreshNegative();
   }
   const refs = state.characterRefs || [];
-  if (refs.length) {
-    await attachReferenceFromUrl(refs[0].url, refs[0].url.split("/").pop());
+  const attachable = refs.find((ref) => !isSheetRef(ref));
+  let refNote = "";
+  if (attachable) {
+    await attachReferenceFromUrl(attachable.url, refFilename(attachable));
+  } else if (refs.length) {
+    refNote = " (solo hojas: sin referencia I2I)";
   }
   closeOcModal();
-  setStatus(`OC «${character.name}» cargado`);
+  setStatus(`OC «${character.name}» cargado${refNote}`);
 }
 
 async function editCharacter(character) {
@@ -1705,10 +1798,35 @@ async function loadCharacterRefs() {
   for (const ref of refs) {
     const figure = document.createElement("figure");
     figure.className = "oc-ref";
+    if (isSheetRef(ref)) {
+      figure.classList.add("is-sheet");
+    }
     const img = document.createElement("img");
     img.src = ref.url;
     img.alt = `Referencia ${ref.id}`;
     img.loading = "lazy";
+    figure.appendChild(img);
+    if (isSheetRef(ref)) {
+      const badge = document.createElement("span");
+      badge.className = "oc-ref-badge";
+      badge.textContent = "hoja";
+      const note = document.createElement("p");
+      note.className = "oc-ref-note";
+      note.textContent = "Para IPAdapter (M10); no recomendada como referencia I2I";
+      figure.append(badge, note);
+    }
+    const link = document.createElement("a");
+    link.className = "oc-ref-link";
+    link.href = ref.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Ver/Descargar";
+    const use = document.createElement("button");
+    use.type = "button";
+    use.textContent = "Usar como referencia";
+    use.addEventListener("click", () => {
+      useRefAsReference(ref).catch((error) => setOcStatus(error.message, true));
+    });
     const remove = document.createElement("button");
     remove.type = "button";
     remove.textContent = "Quitar";
@@ -1717,7 +1835,7 @@ async function loadCharacterRefs() {
         setOcStatus(error.message, true)
       );
     });
-    figure.append(img, remove);
+    figure.append(link, use, remove);
     container.appendChild(figure);
   }
 }
@@ -1738,17 +1856,11 @@ async function createCharacterSheet() {
   button.disabled = true;
   setOcStatus("Creando hoja...");
   try {
-    const data = await postJson(
-      `/api/characters/${state.activeCharacterId}/sheet`,
-      {}
-    );
-    await attachReferenceFromUrl(
-      data.url,
-      `sheet_${state.activeCharacterId}.png`
-    );
+    await postJson(`/api/characters/${state.activeCharacterId}/sheet`, {});
     await loadCharacterRefs();
-    closeOcModal();
-    setStatus("Hoja de referencia adjuntada al panel");
+    setOcStatus(
+      "Hoja creada: catálogo para IPAdapter (M10); no se adjunta como referencia I2I"
+    );
   } catch (error) {
     setOcStatus(error.message, true);
     button.disabled = state.characterRefs.length < 2;

@@ -94,6 +94,11 @@ def _validate_notes(notes: object) -> str:
     return notes
 
 
+def is_sheet(relpath: str | Path) -> bool:
+    """True si la ref es una hoja de catalogo (nombre con prefijo `sheet_`)."""
+    return Path(str(relpath)).name.startswith("sheet_")
+
+
 class CharacterStore:
     """Persistencia local de OCs y sus referencias; `init()` antes de usar."""
 
@@ -254,8 +259,14 @@ class CharacterStore:
         src_path: str | Path,
         *,
         refs_root: str | Path | None = None,
+        name: str | None = None,
     ) -> str:
-        """Copia `src_path` a `<refs_root>/<id>/<uuid>.<ext>` y devuelve el relpath."""
+        """Copia `src_path` a `<refs_root>/<id>/<name|uuid>.<ext>`; devuelve relpath.
+
+        Con `name` exige un nombre simple (sin rutas) con la extension del
+        origen; si el origen ya esta en esa ruta se registra sin recopiar (asi
+        las hojas conservan el prefijo `sheet_`).
+        """
         if self.get(char_id) is None:
             raise EngineError(f"OC desconocido: {char_id}")
         src = Path(src_path)
@@ -267,15 +278,24 @@ class CharacterStore:
                 f"extension de referencia no soportada: {extension!r}; "
                 "usar png/jpg/jpeg/webp"
             )
+        if name is None:
+            filename = f"{uuid.uuid4().hex}{extension}"
+        else:
+            provided = Path(str(name))
+            if provided.name != str(name) or provided.suffix.lower() != extension:
+                raise EngineError(f"nombre de referencia invalido: {name!r}")
+            filename = provided.name
         directory = self._character_dir(char_id, refs_root=refs_root)
+        target = (directory / filename).resolve()
+        if not target.is_relative_to(directory):
+            raise EngineError(f"referencia fuera de la carpeta del OC: {filename!r}")
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            name = f"{uuid.uuid4().hex}{extension}"
-            target = directory / name
-            shutil.copy2(src, target)
+            if target != src.resolve():
+                shutil.copy2(src, target)
         except OSError as exc:
             raise EngineError(f"copia de referencia fallo: {exc}") from exc
-        relpath = f"{char_id}/{name}"
+        relpath = f"{char_id}/{filename}"
         try:
             with closing(self._connect()) as conn, conn:
                 conn.execute(
@@ -310,6 +330,13 @@ class CharacterStore:
             }
             for row in rows
         ]
+
+    def first_non_sheet_ref(self, char_id: int) -> dict | None:
+        """Primera ref que no es hoja (orden de id) o None; EngineError si el OC no existe."""
+        for ref in self.refs(char_id):
+            if not is_sheet(ref["relpath"]):
+                return ref
+        return None
 
     def remove_ref(
         self,
@@ -394,4 +421,4 @@ def prompt_from_tags(tags: list[str]) -> str:
     return ", ".join(merged)
 
 
-__all__ = ["CharacterStore", "prompt_from_tags"]
+__all__ = ["CharacterStore", "is_sheet", "prompt_from_tags"]
