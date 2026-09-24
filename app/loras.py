@@ -10,7 +10,9 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import re
+import uuid
 from pathlib import Path
 
 from app.config import APP_ROOT
@@ -106,16 +108,25 @@ def _payload(path: str | Path | None) -> dict:
     return data
 
 
-def load_registry(path: str | Path | None = None) -> dict:
-    """Registro canonico ``{"version": 1, "loras": [...]}`` con ids unicos.
-
-    Conserva ``_comment`` si el JSON lo trae. EngineError si el fichero es
-    ilegible, la version no es 1, falta ``loras`` o una entrada es invalida.
-    """
-    data = _payload(path)
+def _canonical(data: object) -> dict:
+    """Normaliza un payload de registro validando forma, entradas y ids unicos."""
+    if not isinstance(data, dict):
+        raise EngineError(
+            f"registro de loras invalido: se esperaba objeto JSON, "
+            f"recibido {type(data).__name__}"
+        )
+    version = data.get("version")
+    if version != REGISTRY_VERSION:
+        raise EngineError(
+            f"version de registro no soportada: {version!r} "
+            f"(esperada {REGISTRY_VERSION})"
+        )
+    loras = data.get("loras")
+    if not isinstance(loras, list):
+        raise EngineError("registro de loras invalido: falta la lista 'loras'")
     entries: list[dict] = []
     seen: set[str] = set()
-    for item in data["loras"]:
+    for item in loras:
         entry = _entry_from_dict(item)
         if entry["id"] in seen:
             raise EngineError(f"id duplicado en el registro: {entry['id']!r}")
@@ -126,6 +137,54 @@ def load_registry(path: str | Path | None = None) -> dict:
     if isinstance(comment, str) and comment.strip():
         canonical["_comment"] = comment
     return canonical
+
+
+def load_registry(path: str | Path | None = None) -> dict:
+    """Registro canonico ``{"version": 1, "loras": [...]}`` con ids unicos.
+
+    Conserva ``_comment`` si el JSON lo trae. EngineError si el fichero es
+    ilegible, la version no es 1, falta ``loras`` o una entrada es invalida.
+    """
+    return _canonical(_payload(path))
+
+
+def save_registry(payload: dict, *, path: str | Path | None = None) -> Path:
+    """Valida y escribe el registro de forma atomica (tmp + replace).
+
+    Conserva el orden de ``loras`` y ``_comment``; EngineError si el payload no
+    es un registro valido o la escritura falla.
+    """
+    canonical = _canonical(payload)
+    target = Path(path) if path is not None else DEFAULT_PATH
+    tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(
+            json.dumps(canonical, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        os.replace(tmp, target)
+    except OSError as exc:
+        raise EngineError(
+            f"no se pudo guardar el registro de loras {target}: {exc}"
+        ) from exc
+    finally:
+        tmp.unlink(missing_ok=True)
+    return target
+
+
+def add_entry(entry: dict, *, path: str | Path | None = None) -> dict:
+    """Valida ``entry``, la añade al final del registro y guarda (atomico).
+
+    EngineError si la entrada es invalida o su id ya existe. Devuelve una copia
+    de la entrada canonica guardada.
+    """
+    candidate = _entry_from_dict(entry)
+    registry = load_registry(path)
+    if any(item["id"] == candidate["id"] for item in registry["loras"]):
+        raise EngineError(f"id duplicado en el registro: {candidate['id']!r}")
+    registry["loras"].append(candidate)
+    save_registry(registry, path=path)
+    return copy.deepcopy(candidate)
 
 
 def _entries(path: str | Path | None = None) -> list[dict]:
@@ -200,9 +259,11 @@ def validate_selection(
 __all__ = [
     "DEFAULT_PATH",
     "REGISTRY_VERSION",
+    "add_entry",
     "families",
     "get",
     "list_loras",
     "load_registry",
+    "save_registry",
     "validate_selection",
 ]

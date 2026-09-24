@@ -452,6 +452,47 @@ un botón **Gestionar** que abre un mini-modal con la lista de propios (con
 **Borrar**) y un formulario (nombre/positivo/negativo); al guardar o borrar se
 refresca el select y los propios se muestran como `<nombre> (propio)`.
 
+## Entrenador de LoRA (M9-E1)
+
+`app\trainer.py` (CPU, sin GPU, red ni dependencias) orquesta el entrenamiento
+de un LoRA de OC desde la galería; el entrenador real (fork kohya de Anima) se
+instala en **M10**:
+
+1. `prepare_dataset(char, gen_ids, store=..., gallery_root=..., out_dir=...,
+   trigger=...)`: valida el OC, 10..50 `gen_ids` únicos, que cada generación sea
+   `kind="image"` y `status="done"` y que su archivo exista en
+   `data_dir\gallery\<gen_id>\`; copia a `data_dir\trainer\<char_id>\img\NN.png`
+   (NN=01..) con `NN.txt` = `trigger, <prompt_from_tags(tags)>` deduplicado, y
+   escribe `manifest.json`. Devuelve `{"dataset_dir", "images", "captions",
+   "trigger"}` (`EngineError` si algo falla).
+2. `write_config(dataset_dir, out_dir, rank=16, epochs=10, lr=1e-4)`:
+   `data_dir\trainer\train_config.toml` con `source_image_dir`, `output_dir`,
+   `output_name`, `rank`, `epochs`, `lr`, `resolution=512`, `batch_size=1`,
+   `gradient_checkpointing=true` y `optimizer="AdamW8bit"`. El aviso del fichero
+   recuerda **revisar claves contra el fork kohya de Anima al instalar (M10)**.
+3. `run_training(config_path, cmd=None, env=None, log_path=None,
+   timeout_s=4*3600)`: sin `cmd` usa `WAIFU_TRAINER_CMD` (lista separada por
+   espacios; si falta → `EngineError("entrenador no instalado (M10)")`); lanza
+   `cmd + [config_path]` con `subprocess.Popen`, vuelca stdout+stderr al log en
+   streaming (append) y devuelve el exit code; al agotar el timeout mata el
+   proceso y lanza `EngineError`.
+4. `register_lora(char, lora_path, comfy_loras_dir=..., trigger=...,
+   display_name=None)`: exige un `.safetensors` existente, lo copia a
+   `ComfyUI\models\loras\waifu\<char_id>.safetensors` y crea la entrada
+   `oc-<char_id>` (familia `anima`, `default_weight=0.8`, source
+   `entrenado local (M9-E)`, license `local`, notes con fecha) con
+   `loras.add_entry`, que guarda `registry\loras.json` de forma atómica
+   (tmp + replace) conservando el orden.
+5. `train_character(...)` encadena prepare → config → run → register y devuelve
+   el dict de resultado (dataset, config, log, lora, exit code y entry).
+
+Ruta: `POST /api/characters/{id}/train` `{gen_ids, rank?, epochs?, trigger?}`
+valida (404 OC desconocido; 400 `gen_ids` fuera de 10..50, no enteros o
+`rank`/`epochs`/`trigger` inválidos), registra la generación `kind="train"` y
+encola el job; `GET /api/jobs/{id}` responde con `progress` nulo mientras corre
+y `outputs=[ruta lora]` al terminar (o `error`). Cancelar un train devuelve
+**409** (`cancelar train: pendiente (M9-F)`), igual que los jobs de vídeo.
+
 ## Progreso y cancelación (M9-A2b)
 
 `run_generation` crea un `ProgressTracker` (WS del engine derivado de

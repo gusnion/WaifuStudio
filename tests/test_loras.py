@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 from app.engine import EngineError
-from app.loras import DEFAULT_PATH, families, get, list_loras, load_registry
-from app.loras import validate_selection
+from app.loras import DEFAULT_PATH, add_entry, families, get, list_loras
+from app.loras import load_registry, save_registry, validate_selection
 
 ROOT = Path(__file__).resolve().parents[1]
 LORAS_DIR = ROOT / "ComfyUI" / "models" / "loras"
@@ -291,6 +291,93 @@ class TempRegistryTests(unittest.TestCase):
     def test_comment_se_conserva(self):
         self.write({"version": 1, "_comment": "nota", "loras": [entry()]})
         self.assertEqual(load_registry(self.path)["_comment"], "nota")
+
+
+class AddEntryTests(unittest.TestCase):
+    """Alta de entradas con registro temporal (M9-E1)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "loras.json"
+        self.write({"version": 1, "_comment": "nota", "loras": [entry(family="base")]})
+
+    def write(self, payload) -> None:
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_add_entry_al_final_y_persiste(self):
+        added = add_entry(entry(id="nueva", family="anima"), path=self.path)
+        self.assertEqual(added["id"], "nueva")
+        self.assertEqual(added["family"], "anima")
+        self.assertEqual(
+            [item["id"] for item in list_loras(path=self.path)],
+            ["lora-test", "nueva"],
+        )
+        self.assertEqual(load_registry(self.path)["_comment"], "nota")
+
+    def test_add_entry_devuelve_copia(self):
+        added = add_entry(entry(id="nueva"), path=self.path)
+        added["file"] = "mutado.safetensors"
+        self.assertEqual(
+            list_loras(path=self.path)[-1]["file"], "test.safetensors"
+        )
+
+    def test_add_entry_duplicado_lanza_y_no_toca_el_fichero(self):
+        before = self.path.read_text(encoding="utf-8")
+        with self.assertRaises(EngineError) as ctx:
+            add_entry(entry(), path=self.path)
+        self.assertIn("duplicado", str(ctx.exception))
+        self.assertEqual(self.path.read_text(encoding="utf-8"), before)
+
+    def test_add_entry_invalida_lanza_y_no_toca_el_fichero(self):
+        for data in (
+            {},
+            entry(id="Con Mayusculas"),
+            entry(file=""),
+            entry(default_weight=3),
+            entry(trigger=5),
+        ):
+            with self.subTest(data=data):
+                with self.assertRaises(EngineError):
+                    add_entry(data, path=self.path)
+        self.assertEqual(
+            [item["id"] for item in list_loras(path=self.path)], ["lora-test"]
+        )
+
+    def test_add_entry_sin_registro_lanza(self):
+        missing = Path(self._tmp.name) / "no-existe.json"
+        with self.assertRaises(EngineError):
+            add_entry(entry(), path=missing)
+
+    def test_save_registry_conserva_orden_y_comment(self):
+        target = Path(self._tmp.name) / "guardado.json"
+        payload = {
+            "version": 1,
+            "_comment": "otro",
+            "loras": [entry(id="b"), entry(id="a", family="otra")],
+        }
+        self.assertEqual(save_registry(payload, path=target), target)
+        saved = load_registry(target)
+        self.assertEqual([item["id"] for item in saved["loras"]], ["b", "a"])
+        self.assertEqual(saved["_comment"], "otro")
+
+    def test_save_registry_invalido_lanza(self):
+        for payload in (
+            None,
+            [],
+            {"version": 2, "loras": []},
+            {"version": 1},
+            {"version": 1, "loras": "x"},
+            {"version": 1, "loras": [entry(), entry()]},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(EngineError):
+                    save_registry(payload, path=Path(self._tmp.name) / "x.json")
+
+    def test_save_registry_no_deja_tmp(self):
+        target = Path(self._tmp.name) / "sub" / "loras.json"
+        save_registry({"version": 1, "loras": [entry()]}, path=target)
+        self.assertEqual(list(target.parent.glob("*.tmp")), [])
 
 
 if __name__ == "__main__":

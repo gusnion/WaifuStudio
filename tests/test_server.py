@@ -924,6 +924,20 @@ class PrepromptsCustomRoutesTests(ServerTestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("error", response.json())
 
+    def test_almacen_corrupto_devuelve_custom_vacio_y_certificados(self):
+        (self.config.data_dir / "preprompts.json").write_text(
+            "{no-json", encoding="utf-8"
+        )
+        response = self.make_client().get(
+            "/api/preprompts", params={"family": "anima"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["custom"], [])
+        self.assertEqual(data["default"], "glossy")
+        self.assertIn("glossy", data["names"])
+        self.assertIn("anima_default", data["names"])
+
     def test_post_duplicado_y_certificado_400(self):
         client = self.make_client()
         self.assertEqual(
@@ -1791,6 +1805,182 @@ class CharacterSheetRoutesTests(ServerTestCase):
         registered = {Path(ref["relpath"]).name for ref in refs}
         self.assertEqual(on_disk, registered)
         self.assertEqual(len(on_disk), 4)
+
+
+class CharacterTrainRoutesTests(ServerTestCase):
+    def add_character(self, client, name: str = "Aiko") -> int:
+        return client.post(
+            "/api/characters", json={"name": name, "tags": ["long hair", "smile"]}
+        ).json()["id"]
+
+    def test_oc_inexistente_404(self):
+        response = self.make_client().post(
+            "/api/characters/999/train", json={"gen_ids": list(range(10))}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_gen_ids_invalidos_400(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        for gen_ids in (
+            None,
+            "x",
+            10,
+            list(range(9)),
+            list(range(51)),
+            [0, True, *range(2, 10)],
+            [0, "1", *range(2, 10)],
+        ):
+            with self.subTest(gen_ids=gen_ids):
+                response = client.post(
+                    f"/api/characters/{char_id}/train", json={"gen_ids": gen_ids}
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.store.count(), 0)
+
+    def test_rank_epochs_trigger_invalidos_400(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        for payload in (
+            {"gen_ids": list(range(10)), "rank": 0},
+            {"gen_ids": list(range(10)), "rank": True},
+            {"gen_ids": list(range(10)), "rank": "8"},
+            {"gen_ids": list(range(10)), "epochs": -1},
+            {"gen_ids": list(range(10)), "epochs": "x"},
+            {"gen_ids": list(range(10)), "trigger": "  "},
+            {"gen_ids": list(range(10)), "trigger": 5},
+        ):
+            with self.subTest(payload=payload):
+                response = client.post(
+                    f"/api/characters/{char_id}/train", json=payload
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.store.count(), 0)
+
+    def test_encola_job_train_con_params(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        char_id = self.add_character(client)
+        gen_ids = list(range(10))
+        response = client.post(
+            f"/api/characters/{char_id}/train",
+            json={"gen_ids": gen_ids, "rank": 8, "epochs": 2, "trigger": "aiko"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        job = queue.jobs[0]
+        self.assertEqual(job["kind"], "train")
+        self.assertEqual(job["character_id"], char_id)
+        self.assertEqual(job["gen_ids"], gen_ids)
+        self.assertEqual(job["rank"], 8)
+        self.assertEqual(job["epochs"], 2)
+        self.assertEqual(job["trigger"], "aiko")
+        self.assertEqual(job["char"]["name"], "Aiko")
+        row = self.store.list()[0]
+        self.assertEqual(row["kind"], "train")
+        self.assertEqual(row["model_id"], f"oc-{char_id}")
+        self.assertEqual(row["prompt"], "aiko")
+        self.assertEqual(row["params"]["gen_ids"], gen_ids)
+        self.assertEqual(row["params"]["rank"], 8)
+        record = server_module._JOBS[job["gen_id"]]
+        self.assertEqual(record["kind"], "train")
+        self.assertEqual(record["status"], "queued")
+
+    def test_defaults_y_prompt_del_nombre(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        char_id = self.add_character(client)
+        response = client.post(
+            f"/api/characters/{char_id}/train", json={"gen_ids": list(range(10))}
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["rank"], 16)
+        self.assertEqual(job["epochs"], 10)
+        self.assertIsNone(job["trigger"])
+        self.assertEqual(self.store.list()[0]["prompt"], "Aiko")
+
+    def test_job_status_train_progress_nulo_y_outputs(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        char_id = self.add_character(client)
+        job_id = client.post(
+            f"/api/characters/{char_id}/train", json={"gen_ids": list(range(10))}
+        ).json()["job_id"]
+        status = client.get(f"/api/jobs/{job_id}").json()
+        self.assertEqual(status["status"], "queued")
+        self.assertEqual(status["outputs"], [])
+        self.assertIsNone(status["error"])
+        self.assertEqual(
+            status["progress"],
+            {"step": None, "total": None, "percent": None, "node": None, "state": None},
+        )
+
+    def test_cancel_train_409(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        char_id = self.add_character(client)
+        job_id = client.post(
+            f"/api/characters/{char_id}/train", json={"gen_ids": list(range(10))}
+        ).json()["job_id"]
+        queue.statuses[job_id] = "running"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("train", response.json()["error"])
+        gen_id = queue.jobs[0]["gen_id"]
+        self.assertEqual(self.store.get(gen_id)["status"], "queued")
+
+
+class RunTrainingJobTests(ServerTestCase):
+    def make_job(self, **overrides) -> dict:
+        gen_id = self.store.add("oc-1", "aiko", "", {"character_id": 1}, kind="train")
+        job = {
+            "kind": "train",
+            "gen_id": gen_id,
+            "char": {"id": 1, "name": "Aiko", "tags": ["smile"]},
+            "character_id": 1,
+            "gen_ids": list(range(10)),
+            "rank": 16,
+            "epochs": 10,
+            "trigger": "aiko",
+        }
+        job.update(overrides)
+        return job
+
+    def test_exito_marca_store_y_outputs(self):
+        job = self.make_job()
+        lora = self.root / "1.safetensors"
+        lora.write_bytes(b"lora")
+        with mock.patch.object(
+            server_module.trainer,
+            "train_character",
+            return_value={"lora_path": str(lora), "entry": {"id": "oc-1"}},
+        ) as fake:
+            server_module.run_training_job(job, config=self.config, store=self.store)
+        fake.assert_called_once()
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(row["kind"], "train")
+        self.assertEqual(row["outputs"], [str(lora)])
+        self.assertEqual(job["outputs"], [str(lora)])
+        self.assertIsNone(job["error"])
+
+    def test_error_no_propaga_y_marca_store(self):
+        job = self.make_job()
+        with mock.patch.object(
+            server_module.trainer,
+            "train_character",
+            side_effect=EngineError("entrenador no instalado (M10)"),
+        ):
+            server_module.run_training_job(job, config=self.config, store=self.store)
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "error")
+        self.assertIn("M10", row["error"])
+        self.assertEqual(job["outputs"], [])
+        self.assertIn("M10", job["error"])
 
 
 class CharacterMediaTests(ServerTestCase):

@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app import trainer
 from app.characters import CharacterStore
 from app.config import APP_ROOT, EngineConfig, load_config
 from app.engine import ComfyEngine, EngineError, load_graph
@@ -289,6 +290,36 @@ def run_generation(
             tracker.stop()
 
 
+def run_training_job(job: dict, *, config: EngineConfig, store: Store) -> None:
+    """Ejecuta un job de entrenamiento: trainer -> lora -> registry -> store.
+
+    No propaga errores: el fallo se guarda en el store y en ``job["error"]``.
+    """
+    gen_id = job["gen_id"]
+    try:
+        result = trainer.train_character(
+            job["char"],
+            job["gen_ids"],
+            store=store,
+            config=config,
+            trigger=job.get("trigger"),
+            rank=job.get("rank", 16),
+            epochs=job.get("epochs", 10),
+        )
+        outputs = [result["lora_path"]]
+        store.update(gen_id, status="done", outputs=outputs, kind="train")
+        job["outputs"] = outputs
+        job["result"] = result
+        job["error"] = None
+    except Exception as exc:
+        job["outputs"] = []
+        job["error"] = str(exc)
+        try:
+            store.update(gen_id, status="error", error=str(exc), kind="train")
+        except EngineError:
+            pass
+
+
 def create_app(
     config: EngineConfig | None = None,
     store: Store | None = None,
@@ -331,7 +362,9 @@ def create_app(
     )
 
     def _dispatch(job: dict) -> None:
-        if job.get("kind") == "video":
+        if job.get("kind") == "train":
+            run_training_job(job, config=cfg, store=st)
+        elif job.get("kind") == "video":
             run_video_generation(
                 job, config=cfg, store=st, engine_factory=video_factory
             )
@@ -390,10 +423,15 @@ def create_app(
 
     @app.get("/api/preprompts")
     async def api_preprompts(family: str = DEFAULT_FAMILY) -> dict:
+        names = list_preprompts(family)
+        try:
+            custom = sorted(list_custom())
+        except EngineError:
+            custom = []
         return {
             "family": family,
-            "names": list_preprompts(family),
-            "custom": sorted(list_custom()),
+            "names": names,
+            "custom": custom,
             "default": DEFAULT_PREPROMPT,
         }
 
@@ -562,6 +600,70 @@ def create_app(
                 status_code=404, content={"error": "referencia desconocida"}
             )
         return {"deleted": True}
+
+    @app.post("/api/characters/{char_id}/train")
+    async def api_character_train(char_id: int, payload: dict = Body(...)) -> Any:
+        """Valida y encola un job `kind="train"` para el OC (M9-E1)."""
+        row = chars.get(char_id)
+        if row is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        gen_ids = payload.get("gen_ids")
+        if not isinstance(gen_ids, list):
+            raise EngineError("gen_ids requerido (lista de enteros)")
+        if any(
+            isinstance(gen_id, bool) or not isinstance(gen_id, int)
+            for gen_id in gen_ids
+        ):
+            raise EngineError("gen_ids invalido; usar lista de enteros")
+        if not trainer.MIN_IMAGES <= len(gen_ids) <= trainer.MAX_IMAGES:
+            raise EngineError(
+                f"se necesitan entre {trainer.MIN_IMAGES} y {trainer.MAX_IMAGES} "
+                f"imagenes para entrenar: {len(gen_ids)}"
+            )
+        rank = payload.get("rank", 16)
+        if isinstance(rank, bool) or not isinstance(rank, int) or rank <= 0:
+            raise EngineError(f"rank invalido: {rank!r}")
+        epochs = payload.get("epochs", 10)
+        if isinstance(epochs, bool) or not isinstance(epochs, int) or epochs <= 0:
+            raise EngineError(f"epochs invalido: {epochs!r}")
+        trigger = payload.get("trigger")
+        if trigger is not None:
+            if not isinstance(trigger, str) or not trigger.strip():
+                raise EngineError(f"trigger invalido: {trigger!r}")
+            trigger = trigger.strip()
+        gen_id = st.add(
+            f"oc-{char_id}",
+            trigger or row["name"],
+            "",
+            {
+                "character_id": char_id,
+                "gen_ids": list(gen_ids),
+                "rank": rank,
+                "epochs": epochs,
+                "trigger": trigger,
+            },
+            kind="train",
+        )
+        job = {
+            "kind": "train",
+            "gen_id": gen_id,
+            "char": row,
+            "character_id": char_id,
+            "gen_ids": list(gen_ids),
+            "rank": rank,
+            "epochs": epochs,
+            "trigger": trigger,
+        }
+        _JOBS[gen_id] = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "train",
+        }
+        job_id = queue.submit(job)
+        app.state.jobs[job_id] = job
+        return {"job_id": job_id}
 
     @app.get("/api/params")
     async def api_params() -> dict:
@@ -925,14 +1027,20 @@ def create_app(
         gen_id = job.get("gen_id")
         record = _JOBS.get(gen_id)
         row = store.get(gen_id) if gen_id is not None else None
-        if (
-            job.get("kind") == "video"
-            or (record is not None and record.get("kind") == "video")
-            or (row is not None and row.get("kind") == "video")
-        ):
+        kinds = (
+            job.get("kind"),
+            record.get("kind") if record else None,
+            row.get("kind") if row else None,
+        )
+        if "video" in kinds:
             return JSONResponse(
                 status_code=409,
                 content={"error": "cancelar video: pendiente (M9-F)"},
+            )
+        if "train" in kinds:
+            return JSONResponse(
+                status_code=409,
+                content={"error": "cancelar train: pendiente (M9-F)"},
             )
         status = queue_status
         if record is not None and record.get("status") in ("done", "error", "cancelled"):
@@ -1054,4 +1162,5 @@ __all__ = [
     "create_app",
     "main",
     "run_generation",
+    "run_training_job",
 ]
