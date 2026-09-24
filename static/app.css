@@ -1036,20 +1036,71 @@ input[type="checkbox"] {
   line-height: 1;
 }
 
-.loras-list {
+.lora-chips {
   display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.5rem 0.55rem;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
-.lora-row {
+.lora-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+
+.lora-chip-name {
+  word-break: break-word;
+}
+
+.lora-chip-weight {
+  color: var(--muted);
+}
+
+.lora-chip-remove {
+  padding: 0 0.2rem;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lora-chip-remove:hover {
+  color: var(--accent-2);
+}
+
+.lora-box {
+  width: min(620px, 100%);
+}
+
+.lora-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+}
+
+.lora-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.lora-option {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 .lora-check {
@@ -1259,4 +1310,30 @@ input[type="checkbox"] {
 
 .advanced > .field {
   padding: 0.5rem 0.55rem;
+}
+
+.panel-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.panel-section > .section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.55rem;
+}
+
+.panel-section .prompt-zones {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+#btn-lora-modal {
+  width: 100%;
 }

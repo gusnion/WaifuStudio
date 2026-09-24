@@ -526,9 +526,11 @@ en **M9-F**; hasta entonces la biblioteca queda como registro y validación.
 
 ## LoRAs en la UI (M9-D2)
 
-El panel **Imagen** trae una sección **LoRAs de imagen** poblada desde
-`GET /api/loras?family=<familia del modelo>`: por cada LoRA, checkbox + slider
-de peso (0..2, paso 0.05, default el `default_weight` del registro). Si la
+El panel **Imagen** trae una sección **LoRAs** plegable poblada desde
+`GET /api/loras?family=<familia del modelo>`: en el panel se ve «Elegir LoRAs (N)» con chips
+compactos de los seleccionados (nombre + peso, «×» para quitar) y el modal `#lora-modal`
+(M9-B-fix6, ver abajo) concentra la elección con checkbox + slider de peso (0..2, paso 0.05,
+default el `default_weight` del registro). Si la
 familia no tiene entradas, muestra «No hay LoRAs de imagen registradas. Añádelas en
 `registry\loras.json` con familia `anima` (o espera las descargas de M10)». Para registrar una a
 mano: deja el `.safetensors` bajo `ComfyUI\models\loras` (con su subcarpeta si la tiene) y añade
@@ -681,6 +683,34 @@ no ejecuta nada todavía (sin GPU, red ni dependencias nuevas).
   «Generar» habilitado solo con prompt; al pulsar, si no está instalado muestra el 503 del servidor.
 - **M10** traerá la descarga/integración del par INT8 ConvRot + text encoder + VAE y el job real
   (encolado, progreso y galería) sobre este contrato.
+
+## Arreglos UI (M9-B-fix6)
+
+Cuatro arreglos sobre la UI de Imagen (solo `templates\index.html`, `static\app.css`, `static\app.js`):
+
+- **OC Maker no abría**: `bind()` moría en `for (const id of ("zone-ocs-extras", "zone-ocs-traits"))`
+  (expresión coma: iteraba los caracteres de `"zone-ocs-traits"`), así que `$("z")` era `null` y
+  `.addEventListener` lanzaba TypeError antes de enlazar `#btn-oc`; el resto de listeners
+  anteriores ya funcionaba. Ahora todo `bind()` usa el helper `on(id, evento, fn)`, que si falta
+  el elemento hace `console.error` y sigue con el siguiente (sin lanzar); `REQUIRED_IDS` solo avisa
+  con el banner «UI desactualizada: recarga con Ctrl+F5» y `bind()` ya no aborta. Además
+  `openOcModal()` va en try/catch: si algo falla al abrir, lo registra en consola, lo refleja en el
+  estado del modal y muestra el banner.
+- **Un solo botón «Personaje»**: se elimina el botón duplicado `#btn-zone-character` («+ Personaje»)
+  y queda el chip «Personaje» de la fila con la clase `zone-chip-accent`, que abre el mismo
+  popover con «Mis OCs» + tags manuales.
+- **Panel con secciones plegables**: `<details class="advanced panel-section" data-section="...">`
+  para «Prompt por zonas» (abierta por defecto), «Opciones de generación», «Tamaño», «LoRAs (N)»,
+  «Negativo (avanzado)» e «Imagen de referencia» (cerradas); quedan fijos arriba Modelo, Preprompt,
+  Rating, prompt + «Mejorar prompt» y al final Generar. El estado abierto/cerrado por sección se
+  persiste en `localStorage` (`waifu.ui.section.<sección>` = `1`/`0`) y se restaura al arrancar.
+- **Selector de LoRAs en ventana**: el panel muestra «Elegir LoRAs (N)» + chips compactos de los
+  seleccionados (nombre + peso `@ x.xx` con «×» para quitar) y el modal `#lora-modal` trae
+  buscador, lista con checkbox + slider 0-2 (`default_weight`), contador de seleccionados,
+  «Quitar todos» y «Listo». El payload de `/api/generate` no cambia (`loras: [{id, weight}]`) y
+  «Reusar» restaura la selección desde `params.loras` reflejándola en chips y modal.
+
+Verificado con `node --check static\app.js` y la suite CPU (718 tests OK, sin GPU/red).
 
 ## Smoke
 

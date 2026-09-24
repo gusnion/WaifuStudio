@@ -74,6 +74,7 @@ const state = {
   ocSaveGenId: null,
   loras: [],
   loraControls: {},
+  loraSelection: new Map(),
   customPreprompts: [],
   trainCharacterId: null,
   trainItems: [],
@@ -98,6 +99,16 @@ let zoneOcApplied = [];
 let zoneOcCharacter = null;
 
 const $ = (id) => document.getElementById(id);
+
+function on(id, event, handler) {
+  const el = $(id);
+  if (!el) {
+    console.error(`bind: falta #${id} (¿UI desactualizada? recarga con Ctrl+F5)`);
+    return false;
+  }
+  el.addEventListener(event, handler);
+  return true;
+}
 
 function showUiBanner(message) {
   let banner = $("ui-banner");
@@ -268,25 +279,157 @@ async function loadLoras() {
   const family = state.family || "anima";
   const data = await api(`/api/loras?family=${encodeURIComponent(family)}`);
   state.loras = data.items || [];
+  state.loraSelection = new Map();
   renderLoras();
 }
 
-function renderLoras() {
+function loraById(loraId) {
+  return state.loras.find((lora) => lora.id === loraId) || null;
+}
+
+function clampLoraWeight(value) {
+  const weight = Number(value);
+  if (!Number.isFinite(weight)) {
+    return null;
+  }
+  return Math.max(0, Math.min(2, weight));
+}
+
+function emptyLoraMessage(text) {
+  const empty = document.createElement("p");
+  empty.className = "empty";
+  empty.textContent = text;
+  return empty;
+}
+
+function renderLoraChips() {
   const container = $("loras-list");
-  state.loraControls = {};
+  if (!container) {
+    return;
+  }
   container.replaceChildren();
   if (!state.loras.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty";
-    empty.textContent =
-      "No hay LoRAs de imagen registradas. Añádelas en registry/loras.json " +
-      "con familia anima (o espera las descargas de M10)";
-    container.appendChild(empty);
+    container.appendChild(
+      emptyLoraMessage(
+        "No hay LoRAs de imagen registradas. Añádelas en registry/loras.json " +
+          "con familia anima (o espera las descargas de M10)"
+      )
+    );
+    return;
+  }
+  if (!state.loraSelection.size) {
+    container.appendChild(emptyLoraMessage("Ningún LoRA seleccionado."));
     return;
   }
   for (const lora of state.loras) {
+    if (!state.loraSelection.has(lora.id)) {
+      continue;
+    }
+    const weight = Number(state.loraSelection.get(lora.id));
+    const chip = document.createElement("span");
+    chip.className = "lora-chip";
+    const name = document.createElement("span");
+    name.className = "lora-chip-name";
+    name.textContent = lora.display_name || lora.id;
+    name.title = `${lora.id} @ ${weight.toFixed(2)}`;
+    const value = document.createElement("span");
+    value.className = "lora-chip-weight";
+    value.textContent = `@ ${weight.toFixed(2)}`;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "lora-chip-remove";
+    remove.textContent = "×";
+    remove.title = "Quitar";
+    remove.addEventListener("click", () => setLoraSelected(lora.id, false));
+    chip.append(name, value, remove);
+    container.appendChild(chip);
+  }
+}
+
+function updateLoraCounters() {
+  const total = state.loraSelection.size;
+  const button = $("btn-lora-modal");
+  if (button) {
+    button.textContent = `Elegir LoRAs (${total})`;
+  }
+  const summary = $("loras-count");
+  if (summary) {
+    summary.textContent = String(total);
+  }
+  const modalCount = $("lora-selected-count");
+  if (modalCount) {
+    modalCount.textContent = `${total} seleccionado${total === 1 ? "" : "s"}`;
+  }
+}
+
+function syncLoraControls(loraId) {
+  const controls = state.loraControls[loraId];
+  const lora = loraById(loraId);
+  if (!controls || !lora) {
+    return;
+  }
+  const selected = state.loraSelection.has(loraId);
+  const stored = selected ? Number(state.loraSelection.get(loraId)) : NaN;
+  const weight = Number.isFinite(stored) ? stored : Number(lora.default_weight);
+  controls.check.checked = selected;
+  controls.weight.value = String(weight);
+  controls.value.textContent = weight.toFixed(2);
+}
+
+function setLoraSelected(loraId, selected, weight) {
+  const lora = loraById(loraId);
+  if (!lora) {
+    return false;
+  }
+  if (selected) {
+    const wanted = clampLoraWeight(weight);
+    state.loraSelection.set(
+      loraId,
+      wanted == null ? Number(lora.default_weight) : wanted
+    );
+  } else {
+    state.loraSelection.delete(loraId);
+  }
+  syncLoraControls(loraId);
+  renderLoraChips();
+  updateLoraCounters();
+  return true;
+}
+
+function renderLoraModalList() {
+  const container = $("lora-options");
+  if (!container) {
+    return;
+  }
+  const search = $("lora-search");
+  const query = (search ? search.value : "").trim().toLowerCase();
+  container.replaceChildren();
+  state.loraControls = {};
+  if (!state.loras.length) {
+    container.appendChild(
+      emptyLoraMessage(
+        "No hay LoRAs de imagen registradas. Añádelas en registry/loras.json " +
+          "con familia anima (o espera las descargas de M10)"
+      )
+    );
+    return;
+  }
+  const items = state.loras.filter((lora) => {
+    if (!query) {
+      return true;
+    }
+    const haystack = [lora.id, lora.display_name || "", lora.trigger || ""]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+  if (!items.length) {
+    container.appendChild(emptyLoraMessage("Sin resultados."));
+    return;
+  }
+  for (const lora of items) {
     const row = document.createElement("div");
-    row.className = "lora-row";
+    row.className = "lora-option";
     const label = document.createElement("label");
     label.className = "lora-check";
     const check = document.createElement("input");
@@ -303,13 +446,25 @@ function renderLoras() {
     weight.min = "0";
     weight.max = "2";
     weight.step = "0.05";
-    weight.value = String(lora.default_weight);
     weight.dataset.loraWeight = lora.id;
+    const stored = state.loraSelection.has(lora.id)
+      ? Number(state.loraSelection.get(lora.id))
+      : Number(lora.default_weight);
+    weight.value = String(Number.isFinite(stored) ? stored : lora.default_weight);
     const value = document.createElement("output");
     value.className = "lora-weight-value";
-    value.textContent = Number(lora.default_weight).toFixed(2);
+    value.textContent = Number(weight.value).toFixed(2);
+    check.checked = state.loraSelection.has(lora.id);
+    check.addEventListener("change", () => {
+      setLoraSelected(lora.id, check.checked, weight.value);
+    });
     weight.addEventListener("input", () => {
       value.textContent = Number(weight.value).toFixed(2);
+      if (state.loraSelection.has(lora.id)) {
+        state.loraSelection.set(lora.id, Number(weight.value));
+        renderLoraChips();
+        updateLoraCounters();
+      }
     });
     weightBox.append(weight, value);
     row.append(label, weightBox);
@@ -318,14 +473,48 @@ function renderLoras() {
   }
 }
 
+function renderLoras() {
+  renderLoraChips();
+  updateLoraCounters();
+  renderLoraModalList();
+}
+
+function openLoraModal() {
+  const modal = $("lora-modal");
+  if (!modal) {
+    console.error("lora: falta #lora-modal (¿UI desactualizada?)");
+    return;
+  }
+  const search = $("lora-search");
+  if (search) {
+    search.value = "";
+  }
+  renderLoraModalList();
+  updateLoraCounters();
+  modal.classList.remove("hidden");
+}
+
+function closeLoraModal() {
+  const modal = $("lora-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
+function clearLoraSelection() {
+  state.loraSelection = new Map();
+  renderLoraModalList();
+  renderLoraChips();
+  updateLoraCounters();
+}
+
 function readLorasPayload() {
   const selection = [];
   for (const lora of state.loras) {
-    const controls = state.loraControls[lora.id];
-    if (!controls || !controls.check.checked) {
+    if (!state.loraSelection.has(lora.id)) {
       continue;
     }
-    const weight = Number(controls.weight.value);
+    const weight = Number(state.loraSelection.get(lora.id));
     selection.push({
       id: lora.id,
       weight: Number.isFinite(weight) ? weight : lora.default_weight,
@@ -335,30 +524,24 @@ function readLorasPayload() {
 }
 
 function applyLorasSelection(loras) {
-  const wanted = new Map();
+  const known = new Set(state.loras.map((lora) => lora.id));
+  state.loraSelection = new Map();
   for (const item of loras || []) {
-    if (item && typeof item.id === "string") {
-      wanted.set(item.id, Number(item.weight));
+    if (!item || typeof item.id !== "string" || !known.has(item.id)) {
+      continue;
     }
+    const lora = loraById(item.id);
+    const wanted = clampLoraWeight(item.weight);
+    state.loraSelection.set(
+      item.id,
+      wanted == null ? Number(lora.default_weight) : wanted
+    );
   }
   for (const lora of state.loras) {
-    const controls = state.loraControls[lora.id];
-    if (!controls) {
-      continue;
-    }
-    if (!wanted.has(lora.id)) {
-      controls.check.checked = false;
-      controls.weight.value = String(lora.default_weight);
-      controls.value.textContent = Number(lora.default_weight).toFixed(2);
-      continue;
-    }
-    const weight = wanted.get(lora.id);
-    controls.check.checked = true;
-    if (Number.isFinite(weight)) {
-      controls.weight.value = String(weight);
-      controls.value.textContent = weight.toFixed(2);
-    }
+    syncLoraControls(lora.id);
   }
+  renderLoraChips();
+  updateLoraCounters();
 }
 
 async function applyModel(modelId) {
@@ -1294,17 +1477,7 @@ async function insertPromptTags(tags, zone) {
 }
 
 function selectLora(loraId, weight) {
-  const controls = state.loraControls[loraId];
-  if (!controls) {
-    return false;
-  }
-  controls.check.checked = true;
-  const value = Number(weight);
-  if (Number.isFinite(value)) {
-    controls.weight.value = String(value);
-    controls.value.textContent = value.toFixed(2);
-  }
-  return true;
+  return setLoraSelected(loraId, true, weight);
 }
 
 async function fetchCharacterProfile(character, mode) {
@@ -2611,9 +2784,16 @@ async function startTrain() {
 }
 
 function openOcModal() {
-  resetOcForm();
-  setOcStatus("Modo crear: formulario limpio");
-  $("oc-modal").classList.remove("hidden");
+  try {
+    resetOcForm();
+    setOcStatus("Modo crear: formulario limpio");
+    $("oc-modal").classList.remove("hidden");
+  } catch (error) {
+    console.error("openOcModal: no se pudo abrir el OC Maker", error);
+    setOcStatus(`No se pudo abrir el OC Maker: ${error.message}`, true);
+    showUiBanner("OC Maker no disponible: recarga con Ctrl+F5");
+    return;
+  }
   loadCharacters()
     .then(loadCharacterRefs)
     .catch((error) => setOcStatus(error.message, true));
@@ -2633,6 +2813,52 @@ function switchTab(tab) {
   $("panel-image").classList.toggle("active", image);
   $("panel-video").classList.toggle("active", video);
   $("panel-editor").classList.toggle("active", editor);
+}
+
+const PANEL_SECTIONS = {
+  zones: true,
+  params: false,
+  size: false,
+  loras: false,
+  negative: false,
+  ref: false,
+};
+
+function panelSectionKey(name) {
+  return `waifu.ui.section.${name}`;
+}
+
+function readStoredSection(name) {
+  try {
+    return window.localStorage.getItem(panelSectionKey(name));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function storeSection(name, open) {
+  try {
+    window.localStorage.setItem(panelSectionKey(name), open ? "1" : "0");
+  } catch (_error) {
+    /* localStorage bloqueado: la sección sigue funcionando sin persistir */
+  }
+}
+
+function initPanelSections() {
+  const sections = document.querySelectorAll("details.panel-section[data-section]");
+  if (!sections.length) {
+    console.error("initPanelSections: no hay secciones con data-section");
+    return;
+  }
+  for (const details of sections) {
+    const name = details.dataset.section;
+    const stored = readStoredSection(name);
+    const fallback = PANEL_SECTIONS[name] !== false;
+    details.open = stored == null ? fallback : stored === "1";
+    details.addEventListener("toggle", () => {
+      storeSection(name, details.open);
+    });
+  }
 }
 
 const REQUIRED_IDS = [
@@ -2707,6 +2933,12 @@ const REQUIRED_IDS = [
   "train-rank",
   "train-epochs",
   "train-trigger",
+  "btn-lora-modal",
+  "lora-modal",
+  "btn-lora-close",
+  "btn-lora-done",
+  "btn-lora-clear",
+  "lora-search",
 ];
 
 function bind() {
@@ -2715,22 +2947,21 @@ function bind() {
     showUiBanner("UI desactualizada: recarga con Ctrl+F5");
     setStatus("UI desactualizada: recarga con Ctrl+F5", true);
     console.error("bind: faltan elementos de la UI", missing);
-    return false;
   }
   state.imagePager = makePager("gallery");
   state.videoPager = makePager("video-gallery");
-  $("tab-image").addEventListener("click", () => switchTab("image"));
-  $("tab-video").addEventListener("click", () => switchTab("video"));
-  $("tab-editor").addEventListener("click", () => switchTab("editor"));
-  $("btn-enhance").addEventListener("click", enhancePrompt);
-  $("btn-enhance-use").addEventListener("click", useEnhanceResult);
-  $("btn-enhance-discard").addEventListener("click", discardEnhanceResult);
-  $("btn-generate").addEventListener("click", generate);
-  $("btn-cancel").addEventListener("click", cancelJob);
-  $("btn-negative-restore").addEventListener("click", restoreNegative);
-  $("btn-ref-clear").addEventListener("click", clearReference);
-  $("btn-lightbox-close").addEventListener("click", closeLightbox);
-  $("lightbox").addEventListener("click", (event) => {
+  on("tab-image", "click", () => switchTab("image"));
+  on("tab-video", "click", () => switchTab("video"));
+  on("tab-editor", "click", () => switchTab("editor"));
+  on("btn-enhance", "click", enhancePrompt);
+  on("btn-enhance-use", "click", useEnhanceResult);
+  on("btn-enhance-discard", "click", discardEnhanceResult);
+  on("btn-generate", "click", generate);
+  on("btn-cancel", "click", cancelJob);
+  on("btn-negative-restore", "click", restoreNegative);
+  on("btn-ref-clear", "click", clearReference);
+  on("btn-lightbox-close", "click", closeLightbox);
+  on("lightbox", "click", (event) => {
     if (event.target === $("lightbox")) {
       closeLightbox();
     }
@@ -2739,69 +2970,71 @@ function bind() {
     if (event.key === "Escape") {
       closeLightbox();
       closePrepromptModal();
-      if (!$("oc-train-modal").classList.contains("hidden")) {
+      closeLoraModal();
+      const trainModal = $("oc-train-modal");
+      if (trainModal && !trainModal.classList.contains("hidden")) {
         closeTrainModal();
         return;
       }
       closeOcModal();
     }
   });
-  $("gallery-prev").addEventListener("click", () => {
+  on("gallery-prev", "click", () => {
     state.imagePager.page -= 1;
     renderGalleries();
   });
-  $("gallery-next").addEventListener("click", () => {
+  on("gallery-next", "click", () => {
     state.imagePager.page += 1;
     renderGalleries();
   });
-  $("video-gallery-prev").addEventListener("click", () => {
+  on("video-gallery-prev", "click", () => {
     state.videoPager.page -= 1;
     renderGalleries();
   });
-  $("video-gallery-next").addEventListener("click", () => {
+  on("video-gallery-next", "click", () => {
     state.videoPager.page += 1;
     renderGalleries();
   });
-  $("btn-reload").addEventListener("click", () => {
+  on("btn-reload", "click", () => {
     state.imagePager.page = 1;
     loadGallery();
   });
-  $("btn-video-reload").addEventListener("click", () => {
+  on("btn-video-reload", "click", () => {
     state.videoPager.page = 1;
     loadGallery();
   });
-  $("btn-motion").addEventListener("click", improveMotion);
-  $("btn-video-generate").addEventListener("click", generateVideo);
-  $("btn-video-cancel").addEventListener("click", cancelJob);
-  $("video-engine").addEventListener("change", applyVideoEngine);
-  $("video-mode").addEventListener("change", applyVideoEngine);
-  $("video-seconds").addEventListener("input", updateVideoDurationInfo);
-  $("video-motion-negative").addEventListener("input", () => {
+  on("btn-motion", "click", improveMotion);
+  on("btn-video-generate", "click", generateVideo);
+  on("btn-video-cancel", "click", cancelJob);
+  on("video-engine", "change", applyVideoEngine);
+  on("video-mode", "change", applyVideoEngine);
+  on("video-seconds", "input", updateVideoDurationInfo);
+  on("video-motion-negative", "input", () => {
     state.videoNegativeTouched = true;
   });
-  $("editor-prompt").addEventListener("input", updateEditorControls);
-  $("editor-refs").addEventListener("change", (event) => {
+  on("editor-prompt", "input", updateEditorControls);
+  on("editor-refs", "change", (event) => {
     addEditorRefs(event.target.files).catch((error) =>
       setEditorStatus(error.message, true)
     );
   });
-  $("btn-editor-generate").addEventListener("click", generateEditor);
-  $("size").addEventListener("change", applySizeSelection);
-  $("preprompt").addEventListener("change", () => {
+  on("btn-editor-generate", "click", generateEditor);
+  on("size", "change", applySizeSelection);
+  on("preprompt", "change", () => {
     refreshNegative().catch((error) => setStatus(error.message, true));
   });
-  $("btn-preprompt-manage").addEventListener("click", openPrepromptModal);
-  $("btn-preprompt-close").addEventListener("click", closePrepromptModal);
-  $("preprompt-form").addEventListener("submit", saveCustomPreprompt);
-  $("preprompt-modal").addEventListener("click", (event) => {
+  on("btn-preprompt-manage", "click", openPrepromptModal);
+  on("btn-preprompt-close", "click", closePrepromptModal);
+  on("preprompt-form", "submit", saveCustomPreprompt);
+  on("preprompt-modal", "click", (event) => {
     if (event.target === $("preprompt-modal")) {
       closePrepromptModal();
     }
   });
-  $("negative").addEventListener("input", () => {
+  on("negative", "input", () => {
     state.negativeTouched = true;
   });
-  $("prompt").addEventListener("input", schedulePromptZones);
+  on("prompt", "input", schedulePromptZones);
   for (const chip of document.querySelectorAll(".zone-chip")) {
     chip.addEventListener("click", () => {
       openZoneInsert(chip.dataset.zone).catch((error) =>
@@ -2809,16 +3042,16 @@ function bind() {
       );
     });
   }
-  $("zone-insert-form").addEventListener("submit", submitZoneInsert);
-  $("zone-insert-cancel").addEventListener("click", closeZoneInsert);
-  $("zone-popover-close").addEventListener("click", closeZoneInsert);
-  $("zone-popover-search").addEventListener("input", renderZonePopoverGroups);
-  $("zone-popover-insert").addEventListener("click", () => {
+  on("zone-insert-form", "submit", submitZoneInsert);
+  on("zone-insert-cancel", "click", closeZoneInsert);
+  on("zone-popover-close", "click", closeZoneInsert);
+  on("zone-popover-search", "input", renderZonePopoverGroups);
+  on("zone-popover-insert", "click", () => {
     insertZoneSelection().catch((error) => setStatus(error.message, true));
   });
-  $("zone-popover-clear").addEventListener("click", clearZoneSelection);
-  for (const id of ("zone-ocs-extras", "zone-ocs-traits")) {
-    $(id).addEventListener("change", () => {
+  on("zone-popover-clear", "click", clearZoneSelection);
+  for (const id of ["zone-ocs-extras", "zone-ocs-traits"]) {
+    on(id, "change", () => {
       if (zoneOcCharacter) {
         applyOcFromPicker(zoneOcCharacter).catch((error) =>
           setZoneOcStatus(error.message, true)
@@ -2826,25 +3059,35 @@ function bind() {
       }
     });
   }
-  $("ref-image").addEventListener("change", updateReferencePreview);
-  $("model").addEventListener("change", (event) => {
+  on("ref-image", "change", updateReferencePreview);
+  on("model", "change", (event) => {
     applyModel(event.target.value).catch((error) => setStatus(error.message, true));
   });
-  $("strength").addEventListener("input", (event) => {
+  on("strength", "input", (event) => {
     $("strength-value").textContent = Number(event.target.value).toFixed(2);
   });
-  $("btn-oc").addEventListener("click", openOcModal);
-  $("btn-oc-close").addEventListener("click", closeOcModal);
-  $("btn-oc-add").addEventListener("click", addOcTagsToPrompt);
-  $("oc-modal").addEventListener("click", (event) => {
+  on("btn-lora-modal", "click", openLoraModal);
+  on("btn-lora-close", "click", closeLoraModal);
+  on("btn-lora-done", "click", closeLoraModal);
+  on("btn-lora-clear", "click", clearLoraSelection);
+  on("lora-search", "input", renderLoraModalList);
+  on("lora-modal", "click", (event) => {
+    if (event.target === $("lora-modal")) {
+      closeLoraModal();
+    }
+  });
+  on("btn-oc", "click", openOcModal);
+  on("btn-oc-close", "click", closeOcModal);
+  on("btn-oc-add", "click", addOcTagsToPrompt);
+  on("oc-modal", "click", (event) => {
     if (event.target === $("oc-modal")) {
       closeOcModal();
     }
   });
-  $("oc-catalog-group").addEventListener("change", () => {
+  on("oc-catalog-group", "change", () => {
     refreshOcCatalog().catch((error) => setOcStatus(error.message, true));
   });
-  $("oc-catalog-search").addEventListener("input", () => {
+  on("oc-catalog-search", "input", () => {
     if (ocSearchTimer) {
       clearTimeout(ocSearchTimer);
     }
@@ -2852,44 +3095,44 @@ function bind() {
       refreshOcCatalog().catch((error) => setOcStatus(error.message, true));
     }, 250);
   });
-  $("oc-form").addEventListener("submit", saveCharacter);
-  $("btn-oc-new").addEventListener("click", () => {
+  on("oc-form", "submit", saveCharacter);
+  on("btn-oc-new", "click", () => {
     startNewOc().catch((error) => setOcStatus(error.message, true));
   });
-  $("btn-oc-cancel-edit").addEventListener("click", () => {
+  on("btn-oc-cancel-edit", "click", () => {
     cancelOcEdit().catch((error) => setOcStatus(error.message, true));
   });
-  $("btn-oc-sheet").addEventListener("click", () => {
+  on("btn-oc-sheet", "click", () => {
     createCharacterSheet().catch((error) => setOcStatus(error.message, true));
   });
-  $("btn-oc-extras-move").addEventListener("click", () => {
+  on("btn-oc-extras-move", "click", () => {
     moveOcExtrasToGeneral().catch((error) => setOcStatus(error.message, true));
   });
-  $("btn-oc-save-close").addEventListener("click", closeOcSaveModal);
-  $("btn-oc-save-confirm").addEventListener("click", () => {
+  on("btn-oc-save-close", "click", closeOcSaveModal);
+  on("btn-oc-save-confirm", "click", () => {
     confirmOcSave().catch((error) => setOcSaveStatus(error.message, true));
   });
-  $("oc-save-modal").addEventListener("click", (event) => {
+  on("oc-save-modal", "click", (event) => {
     if (event.target === $("oc-save-modal")) {
       closeOcSaveModal();
     }
   });
-  $("btn-oc-train-close").addEventListener("click", closeTrainModal);
-  $("oc-train-modal").addEventListener("click", (event) => {
+  on("btn-oc-train-close", "click", closeTrainModal);
+  on("oc-train-modal", "click", (event) => {
     if (event.target === $("oc-train-modal")) {
       closeTrainModal();
     }
   });
-  $("btn-train-more").addEventListener("click", () => {
+  on("btn-train-more", "click", () => {
     loadTrainGalleryPage().catch((error) => setTrainStatus(error.message, true));
   });
-  $("btn-train-start").addEventListener("click", () => {
+  on("btn-train-start", "click", () => {
     startTrain().catch((error) => setTrainStatus(error.message, true));
   });
-  $("train-rank").addEventListener("change", updateTrainControls);
-  $("train-epochs").addEventListener("input", updateTrainControls);
-  $("train-trigger").addEventListener("input", updateTrainControls);
-  return true;
+  on("train-rank", "change", updateTrainControls);
+  on("train-epochs", "input", updateTrainControls);
+  on("train-trigger", "input", updateTrainControls);
+  return missing.length === 0;
 }
 
 async function init() {
@@ -2908,6 +3151,7 @@ async function init() {
     if (bound === false) {
       failures.push("bind");
     }
+    await settle("secciones", initPanelSections);
     await settle("video", () => {
       applyVideoEngine();
       updateVideoDurationInfo();
