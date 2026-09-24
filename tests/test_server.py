@@ -1191,6 +1191,34 @@ class CancelRouteTests(ServerTestCase):
         self.assertEqual(engine.interrupts, 1)
         self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
 
+    def test_cancel_queued_sin_store_inyectado_marca_el_store_real(self):
+        """Camino real `create_app(start_worker=False)` sin store inyectado.
+
+        Con el bug (handler usando el parametro `store`, None en produccion)
+        este POST devolvia 500; debe usar `app.state.store` y marcar cancelled.
+        """
+        patcher = mock.patch.dict(
+            os.environ, {"WAIFU_DATA_DIR": str(self.config.data_dir)}
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        app = create_app(start_worker=False)
+        client = TestClient(app)
+        self.addCleanup(client.close)
+        response = client.post("/api/generate", json=self.payload())
+        self.assertEqual(response.status_code, 200)
+        job_id = response.json()["job_id"]
+        cancel = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(cancel.status_code, 200)
+        self.assertEqual(cancel.json(), {"status": "cancelled"})
+        real_store = Store(self.config.data_dir / "waifu.db")
+        rows = real_store.list()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "cancelled")
+        self.assertEqual(
+            client.get(f"/api/jobs/{job_id}").json()["status"], "cancelled"
+        )
+
 
 class RunGenerationTests(ServerTestCase):
     def make_job(self, **overrides) -> dict:

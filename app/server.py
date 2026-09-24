@@ -1228,7 +1228,7 @@ def create_app(
         job = app.state.jobs.get(job_id) or {}
         gen_id = job.get("gen_id")
         record = _JOBS.get(gen_id)
-        row = store.get(gen_id) if gen_id is not None else None
+        row = app.state.store.get(gen_id) if gen_id is not None else None
         kinds = (
             job.get("kind"),
             record.get("kind") if record else None,
@@ -1254,7 +1254,7 @@ def create_app(
         if record is not None:
             record["status"] = "cancelled"
         if gen_id is not None:
-            store.update(gen_id, status="cancelled")
+            app.state.store.update(gen_id, status="cancelled")
         return {"status": "cancelled"}
 
     @app.get("/api/gallery")
