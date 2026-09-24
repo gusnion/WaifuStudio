@@ -23,6 +23,11 @@ const ZONE_LABELS = {
 
 const PAGE_SIZE = 6;
 
+const TRAIN_PAGE = 24;
+const TRAIN_MIN = 10;
+const TRAIN_MAX = 50;
+const TRAIN_TRIGGER_RE = /^[a-z0-9_-]{2,32}$/;
+
 const state = {
   models: [],
   family: "anima",
@@ -56,6 +61,12 @@ const state = {
   loras: [],
   loraControls: {},
   customPreprompts: [],
+  trainCharacterId: null,
+  trainItems: [],
+  trainSelected: new Set(),
+  trainOffset: 0,
+  trainBusy: false,
+  trainJobId: null,
 };
 
 let enhanceResetTimer = null;
@@ -1289,6 +1300,7 @@ function characterRow(character) {
   actions.className = "oc-item-actions";
   const handlers = [
     ["Usar", () => useCharacter(character)],
+    ["Generar LoRA", () => openTrainModal(character)],
     ["Editar", () => editCharacter(character)],
     ["Duplicar", () => duplicateCharacter(character)],
     ["Eliminar", () => deleteCharacter(character)],
@@ -1615,6 +1627,210 @@ async function confirmOcSave() {
   }
 }
 
+function setTrainStatus(text, isError = false) {
+  const el = $("oc-train-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function validTrainTrigger(trigger) {
+  return TRAIN_TRIGGER_RE.test(trigger);
+}
+
+function readTrainEpochs() {
+  const value = Number($("train-epochs").value);
+  return Number.isInteger(value) ? value : NaN;
+}
+
+function updateTrainControls() {
+  const count = state.trainSelected.size;
+  $("train-counter").textContent =
+    `${count} seleccionadas (mín. ${TRAIN_MIN}, máx. ${TRAIN_MAX})`;
+  const trigger = $("train-trigger").value.trim();
+  const triggerOk = validTrainTrigger(trigger);
+  $("train-trigger-hint").classList.toggle("error", Boolean(trigger) && !triggerOk);
+  const epochs = readTrainEpochs();
+  const epochsOk = epochs >= 5 && epochs <= 30;
+  $("btn-train-start").disabled =
+    state.trainBusy ||
+    count < TRAIN_MIN ||
+    count > TRAIN_MAX ||
+    !triggerOk ||
+    !epochsOk;
+}
+
+function trainGalleryItem(item) {
+  const figure = document.createElement("figure");
+  figure.className = "train-item";
+  figure.classList.toggle("selected", state.trainSelected.has(item.id));
+  const label = document.createElement("label");
+  label.className = "train-check";
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.checked = state.trainSelected.has(item.id);
+  check.addEventListener("change", () => {
+    if (check.checked) {
+      state.trainSelected.add(item.id);
+    } else {
+      state.trainSelected.delete(item.id);
+    }
+    figure.classList.toggle("selected", check.checked);
+    updateTrainControls();
+  });
+  const img = document.createElement("img");
+  img.src = (item.urls && item.urls[0]) || "";
+  img.alt = item.prompt || `Imagen #${item.id}`;
+  img.loading = "lazy";
+  label.append(check, img);
+  const idTag = document.createElement("span");
+  idTag.className = "train-item-id";
+  idTag.textContent = `#${item.id}`;
+  figure.append(label, idTag);
+  return figure;
+}
+
+function renderTrainGallery() {
+  const container = $("train-gallery");
+  container.replaceChildren();
+  if (!state.trainItems.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin imágenes listas en la galería.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const item of state.trainItems) {
+    container.appendChild(trainGalleryItem(item));
+  }
+}
+
+async function loadTrainGalleryPage() {
+  const data = await api(
+    `/api/gallery?limit=${TRAIN_PAGE}&offset=${state.trainOffset}`
+  );
+  const raw = data.items || [];
+  const seen = new Set(state.trainItems.map((item) => item.id));
+  for (const item of raw) {
+    if (item.kind === "image" && item.status === "done" && !seen.has(item.id)) {
+      state.trainItems.push(item);
+      seen.add(item.id);
+    }
+  }
+  state.trainOffset += TRAIN_PAGE;
+  $("btn-train-more").classList.toggle(
+    "hidden",
+    state.trainOffset >= (data.count || 0)
+  );
+  renderTrainGallery();
+  updateTrainControls();
+}
+
+function openTrainModal(character) {
+  state.trainCharacterId = character.id;
+  state.trainItems = [];
+  state.trainSelected = new Set();
+  state.trainOffset = 0;
+  state.trainJobId = null;
+  $("oc-train-title").textContent = `Entrenar LoRA de ${character.name}`;
+  $("train-rank").value = "16";
+  $("train-epochs").value = "10";
+  $("train-trigger").value = `oc_${character.id}`;
+  $("train-gallery").replaceChildren();
+  $("btn-train-more").classList.add("hidden");
+  $("oc-train-modal").classList.remove("hidden");
+  updateTrainControls();
+  setTrainStatus("Cargando galería...");
+  loadTrainGalleryPage()
+    .then(() => setTrainStatus(`Elige entre ${TRAIN_MIN} y ${TRAIN_MAX} imágenes`))
+    .catch((error) => setTrainStatus(error.message, true));
+}
+
+function closeTrainModal() {
+  $("oc-train-modal").classList.add("hidden");
+}
+
+function setTrainProgress(progress) {
+  const box = $("train-progress");
+  const fill = $("train-progress-fill");
+  const text = $("train-progress-text");
+  const percent = progress && progress.percent != null ? Number(progress.percent) : null;
+  if (percent == null || !Number.isFinite(percent)) {
+    box.classList.add("hidden");
+    fill.style.width = "0%";
+    text.textContent = "paso -/-";
+    return;
+  }
+  fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  const step = progress.step == null ? "-" : progress.step;
+  const total = progress.total == null ? "-" : progress.total;
+  text.textContent = `paso ${step}/${total}`;
+  box.classList.remove("hidden");
+}
+
+function trainJobStatus(text, isError = false) {
+  setTrainStatus(text === "Generando..." ? "Entrenando..." : text, isError);
+}
+
+async function startTrain() {
+  if (state.trainBusy || state.trainCharacterId == null) {
+    return;
+  }
+  const trigger = $("train-trigger").value.trim();
+  const epochs = readTrainEpochs();
+  const genIds = state.trainItems
+    .filter((item) => state.trainSelected.has(item.id))
+    .map((item) => item.id);
+  if (genIds.length < TRAIN_MIN || genIds.length > TRAIN_MAX) {
+    setTrainStatus(`Elige entre ${TRAIN_MIN} y ${TRAIN_MAX} imágenes`, true);
+    return;
+  }
+  if (!validTrainTrigger(trigger)) {
+    setTrainStatus("Trigger inválido: solo [a-z0-9_-]{2,32}", true);
+    return;
+  }
+  if (!(epochs >= 5 && epochs <= 30)) {
+    setTrainStatus("Epochs fuera de [5, 30]", true);
+    return;
+  }
+  state.trainBusy = true;
+  updateTrainControls();
+  setTrainStatus("Encolando...");
+  try {
+    const data = await postJson(
+      `/api/characters/${state.trainCharacterId}/train`,
+      {
+        gen_ids: genIds,
+        rank: Number($("train-rank").value),
+        epochs,
+        trigger,
+      }
+    );
+    state.trainJobId = data.job_id;
+    const jobId = data.job_id;
+    await pollJob(
+      jobId,
+      trainJobStatus,
+      async () => {
+        const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
+        if (job.status === "done") {
+          const outputs = job.outputs || [];
+          setTrainStatus(
+            outputs.length ? `LoRA listo: ${outputs[0].name}` : "LoRA listo"
+          );
+          await loadLoras();
+        }
+      },
+      setTrainProgress,
+      false
+    );
+  } catch (error) {
+    setTrainStatus(error.message, true);
+  } finally {
+    state.trainBusy = false;
+    updateTrainControls();
+  }
+}
+
 function openOcModal() {
   resetOcForm();
   setOcStatus("Modo crear: formulario limpio");
@@ -1658,6 +1874,10 @@ function bind() {
     if (event.key === "Escape") {
       closeLightbox();
       closePrepromptModal();
+      if (!$("oc-train-modal").classList.contains("hidden")) {
+        closeTrainModal();
+        return;
+      }
       closeOcModal();
     }
   });
@@ -1754,6 +1974,21 @@ function bind() {
       closeOcSaveModal();
     }
   });
+  $("btn-oc-train-close").addEventListener("click", closeTrainModal);
+  $("oc-train-modal").addEventListener("click", (event) => {
+    if (event.target === $("oc-train-modal")) {
+      closeTrainModal();
+    }
+  });
+  $("btn-train-more").addEventListener("click", () => {
+    loadTrainGalleryPage().catch((error) => setTrainStatus(error.message, true));
+  });
+  $("btn-train-start").addEventListener("click", () => {
+    startTrain().catch((error) => setTrainStatus(error.message, true));
+  });
+  $("train-rank").addEventListener("change", updateTrainControls);
+  $("train-epochs").addEventListener("input", updateTrainControls);
+  $("train-trigger").addEventListener("input", updateTrainControls);
 }
 
 async function init() {

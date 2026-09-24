@@ -322,6 +322,53 @@
     </div>
   </div>
 
+  <div id="oc-train-modal" class="modal hidden">
+    <div class="modal-box oc-train-box">
+      <div class="modal-header">
+        <h2 id="oc-train-title">Entrenar LoRA</h2>
+        <span id="oc-train-status" class="oc-status">Listo</span>
+        <button id="btn-oc-train-close" type="button">Cerrar</button>
+      </div>
+      <div class="oc-train-body">
+        <p class="train-note">Requiere el entrenador instalado (llega con las descargas M10); sin él el job fallará con un mensaje claro.</p>
+        <p class="train-note">El dataset debe ser de 10-50 imágenes coherentes del mismo OC.</p>
+        <div class="train-params">
+          <label class="field">
+            <span>Rank</span>
+            <select id="train-rank">
+              <option value="8">8</option>
+              <option value="16" selected>16</option>
+              <option value="32">32</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Epochs</span>
+            <input id="train-epochs" type="number" value="10" min="5" max="30" step="1">
+          </label>
+          <label class="field">
+            <span>Trigger</span>
+            <input id="train-trigger" type="text" placeholder="oc_1" maxlength="32">
+            <small id="train-trigger-hint" class="train-hint">solo [a-z0-9_-]{2,32}</small>
+          </label>
+        </div>
+        <div class="train-gallery-head">
+          <strong id="train-counter">0 seleccionadas (mín. 10, máx. 50)</strong>
+          <button id="btn-train-more" class="hidden" type="button">Cargar más</button>
+        </div>
+        <div id="train-gallery" class="train-gallery"></div>
+        <div id="train-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="train-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="train-progress-text" class="progress-text">paso -/-</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-train-start" class="primary" type="button" disabled>Entrenar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="preprompt-modal" class="modal hidden">
     <div class="modal-box preprompt-box">
       <div class="modal-header">

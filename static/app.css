@@ -896,3 +896,103 @@ input[type="checkbox"] {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+.oc-train-box {
+  width: min(760px, 100%);
+}
+
+.oc-train-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+}
+
+.train-note {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.train-params {
+  display: grid;
+  grid-template-columns: 0.7fr 0.7fr 1.6fr;
+  gap: 0.5rem;
+}
+
+.train-hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.train-hint.error {
+  color: var(--error);
+}
+
+.train-gallery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.train-gallery-head strong {
+  font-size: 0.85rem;
+}
+
+.train-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 0.5rem;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.train-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.train-check {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.train-check input[type="checkbox"] {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  z-index: 1;
+}
+
+.train-check img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0e0f13;
+}
+
+.train-item.selected .train-check img {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.train-item-id {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: center;
+}
