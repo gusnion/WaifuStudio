@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -865,6 +867,132 @@ class GenerateLorasTests(ServerTestCase):
                 )
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
+        self.assertEqual(self.store.count(), 0)
+
+
+class PrepromptsCustomRoutesTests(ServerTestCase):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.dict(
+            os.environ, {"WAIFU_DATA_DIR": str(self.config.data_dir)}
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def payload(self, **overrides) -> dict:
+        data = {
+            "model_id": MODEL_ID,
+            "prompt": "1girl, smile",
+            "preprompt": "ninguno",
+            "params": {"seed": 1},
+        }
+        data.update(overrides)
+        return data
+
+    def test_post_get_delete_200(self):
+        client = self.make_client()
+        created = client.post(
+            "/api/preprompts/custom",
+            json={
+                "name": "mi_estilo",
+                "positive": "cinematic lighting",
+                "negative": "blurry",
+            },
+        )
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(created.json(), {"name": "mi_estilo"})
+        data = client.get("/api/preprompts", params={"family": "anima"}).json()
+        self.assertEqual(data["family"], "anima")
+        self.assertEqual(data["default"], "glossy")
+        self.assertIn("glossy", data["names"])
+        self.assertIn("mi_estilo", data["names"])
+        self.assertEqual(data["custom"], ["mi_estilo"])
+        negative = client.get(
+            "/api/negative", params={"preprompt": "mi_estilo"}
+        ).json()["negative"]
+        self.assertTrue(negative.startswith(BASE_NEGATIVE))
+        self.assertIn("blurry", negative)
+        deleted = client.delete("/api/preprompts/custom/mi_estilo")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(deleted.json(), {"deleted": True})
+        after = client.get("/api/preprompts").json()
+        self.assertEqual(after["custom"], [])
+        self.assertNotIn("mi_estilo", after["names"])
+
+    def test_delete_desconocido_404(self):
+        response = self.make_client().delete("/api/preprompts/custom/no-existe")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_post_duplicado_y_certificado_400(self):
+        client = self.make_client()
+        self.assertEqual(
+            client.post(
+                "/api/preprompts/custom",
+                json={"name": "mi_estilo", "positive": "uno"},
+            ).status_code,
+            200,
+        )
+        duplicate = client.post(
+            "/api/preprompts/custom",
+            json={"name": "mi_estilo", "positive": "dos"},
+        )
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn("error", duplicate.json())
+        certified = client.post(
+            "/api/preprompts/custom",
+            json={"name": "glossy", "positive": "hostil"},
+        )
+        self.assertEqual(certified.status_code, 400)
+        self.assertIn("error", certified.json())
+
+    def test_post_validacion_400(self):
+        client = self.make_client()
+        for payload in (
+            {},
+            {"name": "mal nombre", "positive": "x"},
+            {"name": "MAL", "positive": "x"},
+            {"name": "ok", "positive": "  "},
+            {"name": "ok"},
+            {"name": "ok", "positive": 5},
+            {"name": "ok", "positive": "x", "negative": 5},
+        ):
+            with self.subTest(payload=payload):
+                response = client.post("/api/preprompts/custom", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(
+            client.get("/api/preprompts").json()["custom"], []
+        )
+
+    def test_generate_con_preprompt_custom_ok(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        client.post(
+            "/api/preprompts/custom",
+            json={"name": "mi_estilo", "positive": "cinematic lighting"},
+        )
+        response = client.post(
+            "/api/generate", json=self.payload(preprompt="mi_estilo")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["preprompt"], "mi_estilo")
+        self.assertEqual(self.store.list()[0]["params"]["preprompt"], "mi_estilo")
+
+    def test_generate_con_preprompt_desconocido_400(self):
+        response = self.make_client().post(
+            "/api/generate", json=self.payload(preprompt="no-existe")
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+        self.assertEqual(self.store.count(), 0)
+
+    def test_generate_con_preprompt_no_str_400(self):
+        response = self.make_client().post(
+            "/api/generate", json=self.payload(preprompt=["glossy"])
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
         self.assertEqual(self.store.count(), 0)
 
 

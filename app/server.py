@@ -55,7 +55,15 @@ from app.params import (
     is_valid_sampler,
     is_valid_scheduler,
 )
-from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, get_preprompt, list_preprompts
+from app.preprompts import (
+    DEFAULT_FAMILY,
+    DEFAULT_PREPROMPT,
+    delete_custom,
+    get_preprompt,
+    list_custom,
+    list_preprompts,
+    save_custom,
+)
 from app.prompt_zones import compose_zones, insert_tag, split_zones, zones_payload
 from app.progress import ProgressTracker
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
@@ -385,8 +393,27 @@ def create_app(
         return {
             "family": family,
             "names": list_preprompts(family),
+            "custom": sorted(list_custom()),
             "default": DEFAULT_PREPROMPT,
         }
+
+    @app.post("/api/preprompts/custom")
+    async def api_preprompt_custom_add(payload: dict = Body(...)) -> dict:
+        negative = payload.get("negative")
+        name = save_custom(
+            payload.get("name"),
+            payload.get("positive"),
+            "" if negative is None else negative,
+        )
+        return {"name": name}
+
+    @app.delete("/api/preprompts/custom/{name}")
+    async def api_preprompt_custom_delete(name: str) -> Any:
+        if not delete_custom(name):
+            return JSONResponse(
+                status_code=404, content={"error": "preprompt propio desconocido"}
+            )
+        return {"deleted": True}
 
     @app.get("/api/traits")
     async def api_traits() -> dict:
@@ -637,6 +664,8 @@ def create_app(
         if not isinstance(negative, str):
             return JSONResponse(status_code=400, content={"error": "negative invalido"})
         preprompt = payload.get("preprompt") or entry.preprompt or DEFAULT_PREPROMPT
+        if not isinstance(preprompt, str):
+            return JSONResponse(status_code=400, content={"error": "preprompt invalido"})
         get_preprompt(entry.family, preprompt)
         rating = payload.get("rating")
         if rating is None:

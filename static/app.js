@@ -52,6 +52,9 @@ const state = {
   ocEditingId: null,
   characterRefs: [],
   ocSaveGenId: null,
+  loras: [],
+  loraControls: {},
+  customPreprompts: [],
 };
 
 let enhanceResetTimer = null;
@@ -189,18 +192,124 @@ async function loadModels() {
   }
 }
 
+async function loadPrepromptOptions() {
+  const family = state.family || "anima";
+  const data = await api(`/api/preprompts?family=${encodeURIComponent(family)}`);
+  state.customPreprompts = data.custom || [];
+  const custom = new Set(state.customPreprompts);
+  const select = $("preprompt");
+  const previous = select.value;
+  select.replaceChildren();
+  for (const name of data.names || []) {
+    select.appendChild(option(name, custom.has(name) ? `${name} (propio)` : name));
+  }
+  setSelectValue(select, previous);
+  return data;
+}
+
+async function loadLoras() {
+  const family = state.family || "anima";
+  const data = await api(`/api/loras?family=${encodeURIComponent(family)}`);
+  state.loras = data.items || [];
+  renderLoras();
+}
+
+function renderLoras() {
+  const container = $("loras-list");
+  state.loraControls = {};
+  container.replaceChildren();
+  if (!state.loras.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Aún no hay LoRAs de imagen (llegan con las descargas M10)";
+    container.appendChild(empty);
+    return;
+  }
+  for (const lora of state.loras) {
+    const row = document.createElement("div");
+    row.className = "lora-row";
+    const label = document.createElement("label");
+    label.className = "lora-check";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.dataset.loraId = lora.id;
+    const name = document.createElement("span");
+    name.textContent = lora.display_name || lora.id;
+    name.title = lora.trigger ? `${lora.id} · trigger: ${lora.trigger}` : lora.id;
+    label.append(check, name);
+    const weightBox = document.createElement("div");
+    weightBox.className = "lora-weight";
+    const weight = document.createElement("input");
+    weight.type = "range";
+    weight.min = "0";
+    weight.max = "2";
+    weight.step = "0.05";
+    weight.value = String(lora.default_weight);
+    weight.dataset.loraWeight = lora.id;
+    const value = document.createElement("output");
+    value.className = "lora-weight-value";
+    value.textContent = Number(lora.default_weight).toFixed(2);
+    weight.addEventListener("input", () => {
+      value.textContent = Number(weight.value).toFixed(2);
+    });
+    weightBox.append(weight, value);
+    row.append(label, weightBox);
+    container.appendChild(row);
+    state.loraControls[lora.id] = { check, weight, value };
+  }
+}
+
+function readLorasPayload() {
+  const selection = [];
+  for (const lora of state.loras) {
+    const controls = state.loraControls[lora.id];
+    if (!controls || !controls.check.checked) {
+      continue;
+    }
+    const weight = Number(controls.weight.value);
+    selection.push({
+      id: lora.id,
+      weight: Number.isFinite(weight) ? weight : lora.default_weight,
+    });
+  }
+  return selection;
+}
+
+function applyLorasSelection(loras) {
+  const wanted = new Map();
+  for (const item of loras || []) {
+    if (item && typeof item.id === "string") {
+      wanted.set(item.id, Number(item.weight));
+    }
+  }
+  for (const lora of state.loras) {
+    const controls = state.loraControls[lora.id];
+    if (!controls) {
+      continue;
+    }
+    if (!wanted.has(lora.id)) {
+      controls.check.checked = false;
+      controls.weight.value = String(lora.default_weight);
+      controls.value.textContent = Number(lora.default_weight).toFixed(2);
+      continue;
+    }
+    const weight = wanted.get(lora.id);
+    controls.check.checked = true;
+    if (Number.isFinite(weight)) {
+      controls.weight.value = String(weight);
+      controls.value.textContent = weight.toFixed(2);
+    }
+  }
+}
+
 async function applyModel(modelId) {
   const model = state.models.find((item) => item.id === modelId);
   if (!model) {
     return;
   }
   state.family = model.family || "anima";
-  const data = await api(`/api/preprompts?family=${encodeURIComponent(model.family)}`);
+  const data = await loadPrepromptOptions();
   const select = $("preprompt");
-  select.replaceChildren();
-  for (const name of data.names) {
-    select.appendChild(option(name, name));
-  }
   select.value =
     model.preprompt && data.names.includes(model.preprompt) ? model.preprompt : data.default;
   const defaults = model.defaults || {};
@@ -213,6 +322,7 @@ async function applyModel(modelId) {
   setSelectValue($("sampler"), defaults.sampler_name);
   setSelectValue($("scheduler"), defaults.scheduler);
   setSizeFromDefaults(defaults.width, defaults.height);
+  await loadLoras();
   if (!state.negativeTouched) {
     await refreshNegative();
   }
@@ -375,6 +485,7 @@ async function generate() {
     negative: $("negative").value,
     preprompt: $("preprompt").value,
     rating: $("rating").value,
+    loras: readLorasPayload(),
     params: readBaseParams(),
     ...sizePayload,
   };
@@ -510,6 +621,8 @@ function reuseGeneration(item) {
     $("negative").value = item.negative;
     state.negativeTouched = true;
   }
+  const params = item.params || {};
+  applyLorasSelection(Array.isArray(params.loras) ? params.loras : []);
   refreshPromptZones();
   setStatus(`Reusado #${item.id}`);
 }
@@ -552,6 +665,11 @@ function galleryCard(item) {
   }
   if (params.strength != null) {
     bits.push(`fuerza ${params.strength}`);
+  }
+  if (Array.isArray(params.loras)) {
+    for (const lora of params.loras) {
+      bits.push(`lora ${lora.id} @ ${lora.weight}`);
+    }
   }
   const caption = document.createElement("figcaption");
   const title = document.createElement("strong");
@@ -1018,12 +1136,100 @@ async function loadOcCatalog() {
 async function loadOcPreprompts() {
   const family = state.family || "anima";
   const data = await api(`/api/preprompts?family=${encodeURIComponent(family)}`);
+  const custom = new Set(data.custom || []);
   const select = $("oc-form-preprompt");
   select.replaceChildren();
   for (const name of data.names || []) {
-    select.appendChild(option(name, name));
+    select.appendChild(option(name, custom.has(name) ? `${name} (propio)` : name));
   }
   select.value = data.default || select.value;
+}
+
+function setPrepromptStatus(text, isError = false) {
+  const el = $("preprompt-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function customPrepromptRow(name) {
+  const row = document.createElement("div");
+  row.className = "oc-item";
+  const header = document.createElement("div");
+  header.className = "oc-item-header";
+  const title = document.createElement("strong");
+  title.textContent = `${name} (propio)`;
+  header.appendChild(title);
+  const actions = document.createElement("div");
+  actions.className = "oc-item-actions";
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.textContent = "Borrar";
+  remove.addEventListener("click", () => {
+    deleteCustomPreprompt(name).catch((error) =>
+      setPrepromptStatus(error.message, true)
+    );
+  });
+  actions.appendChild(remove);
+  row.append(header, actions);
+  return row;
+}
+
+async function refreshCustomPreprompts() {
+  await loadPrepromptOptions();
+  const container = $("preprompt-custom-list");
+  container.replaceChildren();
+  if (!state.customPreprompts.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin preprompts propios.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const name of state.customPreprompts) {
+    container.appendChild(customPrepromptRow(name));
+  }
+}
+
+async function saveCustomPreprompt(event) {
+  event.preventDefault();
+  try {
+    const data = await postJson("/api/preprompts/custom", {
+      name: $("preprompt-form-name").value.trim(),
+      positive: $("preprompt-form-positive").value,
+      negative: $("preprompt-form-negative").value,
+    });
+    await refreshCustomPreprompts();
+    setSelectValue($("preprompt"), data.name);
+    await refreshNegative();
+    $("preprompt-form").reset();
+    setPrepromptStatus(`Preprompt «${data.name}» guardado (propio)`);
+  } catch (error) {
+    setPrepromptStatus(error.message, true);
+  }
+}
+
+async function deleteCustomPreprompt(name) {
+  if (!window.confirm(`¿Borrar el preprompt propio «${name}»?`)) {
+    return;
+  }
+  await api(`/api/preprompts/custom/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  await refreshCustomPreprompts();
+  await refreshNegative();
+  setPrepromptStatus(`Preprompt «${name}» borrado`);
+}
+
+function openPrepromptModal() {
+  $("preprompt-modal").classList.remove("hidden");
+  setPrepromptStatus("Listo");
+  refreshCustomPreprompts().catch((error) =>
+    setPrepromptStatus(error.message, true)
+  );
+}
+
+function closePrepromptModal() {
+  $("preprompt-modal").classList.add("hidden");
 }
 
 function toggleOcTag(tag) {
@@ -1405,6 +1611,7 @@ function bind() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeLightbox();
+      closePrepromptModal();
     }
   });
   $("gallery-prev").addEventListener("click", () => {
@@ -1437,6 +1644,14 @@ function bind() {
   $("size").addEventListener("change", applySizeSelection);
   $("preprompt").addEventListener("change", () => {
     refreshNegative().catch((error) => setStatus(error.message, true));
+  });
+  $("btn-preprompt-manage").addEventListener("click", openPrepromptModal);
+  $("btn-preprompt-close").addEventListener("click", closePrepromptModal);
+  $("preprompt-form").addEventListener("submit", saveCustomPreprompt);
+  $("preprompt-modal").addEventListener("click", (event) => {
+    if (event.target === $("preprompt-modal")) {
+      closePrepromptModal();
+    }
   });
   $("negative").addEventListener("input", () => {
     state.negativeTouched = true;

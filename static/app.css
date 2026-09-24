@@ -798,3 +798,88 @@ input[type="checkbox"] {
   font-size: 1.4rem;
   line-height: 1;
 }
+
+.loras-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.5rem 0.55rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.lora-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.lora-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.lora-check span {
+  font-size: 0.82rem;
+  word-break: break-word;
+}
+
+.lora-weight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lora-weight input[type="range"] {
+  flex: 1;
+}
+
+.lora-weight-value {
+  min-width: 2.4rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.preprompt-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.preprompt-row select {
+  flex: 1;
+}
+
+.preprompt-box {
+  width: min(560px, 100%);
+}
+
+.preprompt-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+}
+
+.preprompt-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.preprompt-section h3 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

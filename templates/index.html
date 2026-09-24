@@ -73,14 +73,22 @@
             <option value="nsfw">nsfw</option>
           </select>
         </label>
-        <label class="field">
+        <div class="field">
           <span>Preprompt</span>
-          <select id="preprompt"></select>
-        </label>
+          <div class="preprompt-row">
+            <select id="preprompt"></select>
+            <button id="btn-preprompt-manage" type="button">Gestionar</button>
+          </div>
+        </div>
         <label class="field">
           <span>Modelo</span>
           <select id="model"></select>
         </label>
+
+        <div class="field">
+          <span>LoRAs de imagen</span>
+          <div id="loras-list" class="loras-list"></div>
+        </div>
 
         <label class="field">
           <span>Tamaño</span>
@@ -309,6 +317,40 @@
       </div>
       <div class="modal-footer">
         <button id="btn-oc-save-confirm" class="primary" type="button">Guardar referencia</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="preprompt-modal" class="modal hidden">
+    <div class="modal-box preprompt-box">
+      <div class="modal-header">
+        <h2>Preprompts propios</h2>
+        <span id="preprompt-status" class="oc-status">Listo</span>
+        <button id="btn-preprompt-close" type="button">Cerrar</button>
+      </div>
+      <div class="preprompt-body">
+        <section class="preprompt-section">
+          <h3>Mis preprompts</h3>
+          <div id="preprompt-custom-list" class="oc-list"></div>
+        </section>
+        <form id="preprompt-form" class="oc-form">
+          <h3>Nuevo preprompt</h3>
+          <label class="field">
+            <span>Nombre</span>
+            <input id="preprompt-form-name" type="text" placeholder="mi_estilo (slug [a-z0-9_-])">
+          </label>
+          <label class="field">
+            <span>Positivo</span>
+            <textarea id="preprompt-form-positive" rows="2" placeholder="masterpiece, best quality, ..."></textarea>
+          </label>
+          <label class="field">
+            <span>Negativo</span>
+            <textarea id="preprompt-form-negative" rows="2" placeholder="worst quality, blurry, ..."></textarea>
+          </label>
+          <div class="oc-form-actions">
+            <button id="btn-preprompt-save" class="primary" type="submit">Guardar</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

@@ -418,6 +418,40 @@ los aplica tras `patch_model` y guarda los `params` del store con `loras`
 normalizados. Los LoRAs de vídeo (wan/h3) se conectarán a los runners de vídeo
 en **M9-F**; hasta entonces la biblioteca queda como registro y validación.
 
+## LoRAs en la UI (M9-D2)
+
+El panel **Imagen** trae una sección **LoRAs de imagen** poblada desde
+`GET /api/loras?family=<familia del modelo>`: por cada LoRA, checkbox + slider
+de peso (0..2, paso 0.05, default el `default_weight` del registro). Si la
+familia no tiene entradas, muestra «Aún no hay LoRAs de imagen (llegan con las
+descargas M10)». `POST /api/generate` recibe `loras: [{"id", "weight"}]` con
+los marcados, y el resumen de cada tarjeta de la galería lista los LoRAs usados
+(`lora <id> @ <peso>`); «Reusar» vuelve a marcarlos y ajustar sus pesos desde
+`params.loras` del store.
+
+## Preprompts propios (M9-D2)
+
+`app\preprompts.py` añade preprompts del usuario sobre `data_dir\preprompts.json`
+(`{"custom": {"<slug>": {"positive", "negative"}}}`), con escritura atómica
+(tmp + `os.replace`) y creación del `data_dir` si falta. `save_custom(name,
+positive, negative="")` exige slug `[a-z0-9_-]{2,32}` y positivo no vacío, y
+rechaza los cuatro certificados (`anima_default`, `glossy`, `not_glossy`,
+`ninguno`) y los duplicados exactos; `delete_custom(name)` devuelve `False` si
+no existe y `list_custom()` es una copia del mapa. `get_preprompt(family,
+name)` resuelve primero el certificado y luego el propio, y
+`list_preprompts(family)` añade los propios al final sin duplicar (un almacén
+corrupto no rompe los certificados).
+
+Rutas: `GET /api/preprompts?family=` devuelve además `custom` (lista de
+nombres; `names`/`default` intactos), `POST /api/preprompts/custom`
+`{name, positive, negative?}` → `{"name"}` (400 si es inválido) y
+`DELETE /api/preprompts/custom/{name}` → `{"deleted": true}` (404 si no
+existe). `POST /api/generate` valida `preprompt` contra certificados y propios
+(400 si no existe o no es texto). En la UI, junto al selector de preprompt hay
+un botón **Gestionar** que abre un mini-modal con la lista de propios (con
+**Borrar**) y un formulario (nombre/positivo/negativo); al guardar o borrar se
+refresca el select y los propios se muestran como `<nombre> (propio)`.
+
 ## Progreso y cancelación (M9-A2b)
 
 `run_generation` crea un `ProgressTracker` (WS del engine derivado de
