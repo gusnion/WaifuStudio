@@ -509,6 +509,19 @@ input[type="checkbox"] {
   color: var(--accent-2);
 }
 
+.oc-form.editing {
+  border-color: var(--accent-2);
+}
+
+.oc-form.editing h3 {
+  color: var(--accent);
+}
+
+#btn-oc-cancel-edit {
+  margin-left: auto;
+  color: var(--muted);
+}
+
 .oc-form-actions {
   display: flex;
   gap: 0.4rem;

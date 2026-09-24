@@ -50,6 +50,7 @@ const state = {
   ocSelectedTags: [],
   ocCatalogItems: [],
   ocEditingId: null,
+  ocPrepromptDefault: "",
   characterRefs: [],
   ocSaveGenId: null,
   loras: [],
@@ -1142,6 +1143,7 @@ async function loadOcPreprompts() {
   for (const name of data.names || []) {
     select.appendChild(option(name, custom.has(name) ? `${name} (propio)` : name));
   }
+  state.ocPrepromptDefault = data.default || "";
   select.value = data.default || select.value;
 }
 
@@ -1317,20 +1319,62 @@ async function loadCharacters() {
   renderCharacters();
 }
 
-function fillCharacterForm(character) {
-  state.ocEditingId = character ? character.id : null;
-  state.ocSelectedTags = character ? [...(character.tags || [])] : [];
-  $("oc-form-title").textContent = character
-    ? `Editar «${character.name}»`
-    : "Guardar OC";
-  $("oc-form-name").value = character ? character.name : "";
-  if (character) {
-    $("oc-form-preprompt").value = character.preprompt;
-  }
-  $("oc-form-rating").value = character ? character.rating : "sfw";
-  $("oc-form-notes").value = character ? character.notes : "";
+function isOcEditing() {
+  return state.ocEditingId != null;
+}
+
+function updateOcFormMode() {
+  const editing = isOcEditing();
+  const character = editing ? characterById(state.ocEditingId) : null;
+  $("oc-form-title").textContent = editing
+    ? `Editando: ${character ? character.name : "OC"}`
+    : "Crear OC";
+  $("btn-oc-save").textContent = editing ? "Guardar cambios" : "Guardar OC";
+  $("btn-oc-cancel-edit").classList.toggle("hidden", !editing);
+  $("oc-form").classList.toggle("editing", editing);
+}
+
+function resetOcForm() {
+  state.ocEditingId = null;
+  state.ocSelectedTags = [];
+  $("oc-form-name").value = "";
+  const preprompt = $("oc-form-preprompt");
+  preprompt.value =
+    state.ocPrepromptDefault ||
+    (preprompt.options.length ? preprompt.options[0].value : "");
+  $("oc-form-rating").value = "sfw";
+  $("oc-form-notes").value = "";
+  updateOcFormMode();
   renderOcSelected();
   renderOcCatalogResults();
+}
+
+function fillCharacterForm(character) {
+  if (!character) {
+    resetOcForm();
+    return;
+  }
+  state.ocEditingId = character.id;
+  state.ocSelectedTags = [...(character.tags || [])];
+  $("oc-form-name").value = character.name;
+  $("oc-form-preprompt").value = character.preprompt;
+  $("oc-form-rating").value = character.rating;
+  $("oc-form-notes").value = character.notes;
+  updateOcFormMode();
+  renderOcSelected();
+  renderOcCatalogResults();
+}
+
+async function startNewOc() {
+  resetOcForm();
+  await loadCharacterRefs();
+  setOcStatus("Modo crear: nuevo OC");
+}
+
+async function cancelOcEdit() {
+  resetOcForm();
+  await loadCharacterRefs();
+  setOcStatus("Edición cancelada: modo crear");
 }
 
 async function useCharacter(character) {
@@ -1360,14 +1404,14 @@ async function useCharacter(character) {
 
 async function editCharacter(character) {
   fillCharacterForm(character);
-  setOcStatus(`Editando «${character.name}»`);
+  setOcStatus(`Editando: ${character.name}`);
 }
 
 async function duplicateCharacter(character) {
   fillCharacterForm(character);
   state.ocEditingId = null;
-  $("oc-form-title").textContent = "Guardar OC (copia)";
   $("oc-form-name").value = `${character.name} (copia)`;
+  updateOcFormMode();
   setOcStatus("Ajusta el nombre y guarda la copia");
 }
 
@@ -1380,7 +1424,7 @@ async function deleteCharacter(character) {
     state.activeCharacterId = null;
   }
   if (state.ocEditingId === character.id) {
-    fillCharacterForm(null);
+    resetOcForm();
   }
   await loadCharacters();
   await loadCharacterRefs();
@@ -1406,6 +1450,7 @@ async function saveCharacter(event) {
     if (charId == null) {
       const created = await postJson("/api/characters", payload);
       charId = created.id;
+      state.activeCharacterId = charId;
     } else {
       await api(`/api/characters/${charId}`, {
         method: "PUT",
@@ -1413,9 +1458,8 @@ async function saveCharacter(event) {
         body: JSON.stringify(payload),
       });
     }
-    state.activeCharacterId = charId;
     await loadCharacters();
-    fillCharacterForm(characterById(charId));
+    resetOcForm();
     await loadCharacterRefs();
     setOcStatus(`OC «${name}» guardado`);
   } catch (error) {
@@ -1572,6 +1616,8 @@ async function confirmOcSave() {
 }
 
 function openOcModal() {
+  resetOcForm();
+  setOcStatus("Modo crear: formulario limpio");
   $("oc-modal").classList.remove("hidden");
   loadCharacters()
     .then(loadCharacterRefs)
@@ -1612,6 +1658,7 @@ function bind() {
     if (event.key === "Escape") {
       closeLightbox();
       closePrepromptModal();
+      closeOcModal();
     }
   });
   $("gallery-prev").addEventListener("click", () => {
@@ -1690,8 +1737,10 @@ function bind() {
   });
   $("oc-form").addEventListener("submit", saveCharacter);
   $("btn-oc-new").addEventListener("click", () => {
-    fillCharacterForm(null);
-    setOcStatus("Nuevo OC");
+    startNewOc().catch((error) => setOcStatus(error.message, true));
+  });
+  $("btn-oc-cancel-edit").addEventListener("click", () => {
+    cancelOcEdit().catch((error) => setOcStatus(error.message, true));
   });
   $("btn-oc-sheet").addEventListener("click", () => {
     createCharacterSheet().catch((error) => setOcStatus(error.message, true));
