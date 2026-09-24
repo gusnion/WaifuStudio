@@ -1,7 +1,8 @@
-"""Tests CPU de grafos y runner de video (F4). Sin red, GPU ni engine real."""
+"""Tests CPU de grafos y runner de video (F4/M9-F1). Sin red, GPU ni engine real."""
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import sqlite3
@@ -16,11 +17,15 @@ from app.motion import MOTION_NEGATIVE
 from app.store import Store
 from app.video import (
     H3_TEMPLATE_PATH,
+    WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
     build_video_graph,
+    frames_for_seconds,
     prepare_h3_graph,
+    prepare_wan_flf_graph,
     prepare_wan_graph,
     run_video_generation,
+    vram_hint,
 )
 
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
@@ -161,6 +166,252 @@ class PrepareWanTests(unittest.TestCase):
                     prepare_wan_graph(self.graph, **(base | override))
 
 
+class PrepareWanFlfTests(unittest.TestCase):
+    def setUp(self):
+        self.graph = load_graph(WAN_FLF_TEMPLATE_PATH)
+        self.snapshot = copy.deepcopy(self.graph)
+
+    def test_plantilla_certificada(self):
+        self.assertEqual(len(self.graph), 16)
+        self.assertEqual(
+            self.graph["5"]["inputs"]["text"], "1girl, walking, cinematic motion"
+        )
+        self.assertEqual(self.graph["6"]["inputs"]["text"], MOTION_NEGATIVE)
+        self.assertEqual(self.graph["7"]["inputs"]["image"], "ref_first.png")
+        self.assertEqual(self.graph["8"]["inputs"]["image"], "ref_last.png")
+        self.assertEqual(self.graph["9"]["class_type"], "WanFirstLastFrameToVideo")
+        self.assertEqual(self.graph["9"]["inputs"]["start_image"], ["7", 0])
+        self.assertEqual(self.graph["9"]["inputs"]["end_image"], ["8", 0])
+        self.assertEqual(self.graph["9"]["inputs"]["width"], 432)
+        self.assertEqual(self.graph["9"]["inputs"]["height"], 768)
+        self.assertEqual(self.graph["9"]["inputs"]["length"], 81)
+        self.assertEqual(self.graph["15"]["inputs"]["fps"], 16.0)
+        self.assertEqual(self.graph["16"]["inputs"]["filename_prefix"], "waifu/video_flf")
+        self.assertEqual(self.graph["12"]["inputs"]["noise_seed"], 42)
+
+    def test_parcheo_exacto(self):
+        patched = prepare_wan_flf_graph(
+            self.graph,
+            first_image_name="first-0001.png",
+            last_image_name="last-0001.png",
+            motion_positive="She walks slowly toward the camera.",
+            motion_negative="no motion",
+            width=432,
+            height=768,
+            seed=7,
+        )
+        self.assertEqual(
+            patched["5"]["inputs"]["text"], "She walks slowly toward the camera."
+        )
+        self.assertEqual(patched["6"]["inputs"]["text"], "no motion")
+        self.assertEqual(patched["7"]["inputs"]["image"], "first-0001.png")
+        self.assertEqual(patched["8"]["inputs"]["image"], "last-0001.png")
+        self.assertEqual(patched["9"]["inputs"]["width"], 432)
+        self.assertEqual(patched["9"]["inputs"]["height"], 768)
+        self.assertEqual(patched["9"]["inputs"]["length"], 81)
+        self.assertEqual(patched["12"]["inputs"]["noise_seed"], 7)
+        self.assertEqual(patched["13"]["inputs"]["noise_seed"], 7)
+
+    def test_frames_patch_4n1(self):
+        patched = prepare_wan_flf_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            motion_positive="m",
+            motion_negative="n",
+            seed=1,
+            frames=129,
+        )
+        self.assertEqual(patched["9"]["inputs"]["length"], 129)
+        for bad in (128, 4, 0, True, "81"):
+            with self.subTest(frames=bad):
+                with self.assertRaises(EngineError):
+                    prepare_wan_flf_graph(
+                        self.graph,
+                        first_image_name="a.png",
+                        last_image_name="b.png",
+                        motion_positive="m",
+                        motion_negative="n",
+                        seed=1,
+                        frames=bad,
+                    )
+
+    def test_localiza_loadimage_por_orden(self):
+        reordered = {
+            key: self.graph[key]
+            for key in ("8", "7", *(key for key in self.graph if key not in ("7", "8")))
+        }
+        patched = prepare_wan_flf_graph(
+            reordered,
+            first_image_name="A.png",
+            last_image_name="B.png",
+            motion_positive="m",
+            motion_negative="n",
+            seed=1,
+        )
+        self.assertEqual(patched["8"]["inputs"]["image"], "A.png")
+        self.assertEqual(patched["7"]["inputs"]["image"], "B.png")
+
+    def test_no_muta_el_original(self):
+        prepare_wan_flf_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            motion_positive="m",
+            motion_negative="n",
+            seed=9,
+            frames=129,
+        )
+        self.assertEqual(self.graph, self.snapshot)
+
+    def test_nodos_ausentes_o_menos_de_dos_loadimage(self):
+        for node_id in ("5", "6", "9"):
+            with self.subTest(node_id=node_id):
+                broken = copy.deepcopy(self.graph)
+                del broken[node_id]
+                with self.assertRaises(EngineError):
+                    prepare_wan_flf_graph(
+                        broken,
+                        first_image_name="a.png",
+                        last_image_name="b.png",
+                        motion_positive="m",
+                        motion_negative="n",
+                        seed=1,
+                    )
+        broken = copy.deepcopy(self.graph)
+        del broken["8"]
+        with self.assertRaises(EngineError):
+            prepare_wan_flf_graph(
+                broken,
+                first_image_name="a.png",
+                last_image_name="b.png",
+                motion_positive="m",
+                motion_negative="n",
+                seed=1,
+            )
+
+    def test_clase_incorrecta_o_campo_ausente(self):
+        broken = copy.deepcopy(self.graph)
+        broken["9"]["class_type"] = "WanImageToVideo"
+        with self.assertRaises(EngineError):
+            prepare_wan_flf_graph(
+                broken,
+                first_image_name="a.png",
+                last_image_name="b.png",
+                motion_positive="m",
+                motion_negative="n",
+                seed=1,
+            )
+        for node_id, field in (("5", "text"), ("7", "image"), ("9", "width"), ("9", "length")):
+            with self.subTest(node_id=node_id, field=field):
+                broken = copy.deepcopy(self.graph)
+                del broken[node_id]["inputs"][field]
+                with self.assertRaises(EngineError):
+                    prepare_wan_flf_graph(
+                        broken,
+                        first_image_name="a.png",
+                        last_image_name="b.png",
+                        motion_positive="m",
+                        motion_negative="n",
+                        seed=1,
+                        frames=129 if field == "length" else None,
+                    )
+
+    def test_sin_samplers_lanza_engine_error(self):
+        broken = copy.deepcopy(self.graph)
+        del broken["12"]
+        del broken["13"]
+        with self.assertRaises(EngineError):
+            prepare_wan_flf_graph(
+                broken,
+                first_image_name="a.png",
+                last_image_name="b.png",
+                motion_positive="m",
+                motion_negative="n",
+                seed=1,
+            )
+
+    def test_entradas_invalidas_lanzan_engine_error(self):
+        cases = (
+            {"first_image_name": "  "},
+            {"last_image_name": None},
+            {"motion_positive": ""},
+            {"motion_negative": None},
+            {"width": 431},
+            {"height": "alto"},
+            {"seed": "abc"},
+        )
+        base = {
+            "first_image_name": "a.png",
+            "last_image_name": "b.png",
+            "motion_positive": "m",
+            "motion_negative": "n",
+            "width": 432,
+            "height": 768,
+            "seed": 1,
+        }
+        for override in cases:
+            with self.subTest(override=override):
+                with self.assertRaises(EngineError):
+                    prepare_wan_flf_graph(self.graph, **(base | override))
+
+
+class FramesForSecondsTests(unittest.TestCase):
+    def test_tabla_certificada(self):
+        for seconds, frames in ((1, 17), (5, 81), (8, 129), (15, 241)):
+            with self.subTest(seconds=seconds):
+                self.assertEqual(frames_for_seconds(seconds), frames)
+
+    def test_siempre_4n1(self):
+        for seconds in range(1, 16):
+            with self.subTest(seconds=seconds):
+                self.assertEqual(frames_for_seconds(seconds) % 4, 1)
+
+    def test_fps_distinto_y_fracciones(self):
+        self.assertEqual(frames_for_seconds(1, fps=8), 9)
+        self.assertEqual(frames_for_seconds(1, fps=24), 25)
+        self.assertEqual(frames_for_seconds(1.5), 25)
+
+    def test_fuera_de_rango_o_invalidos(self):
+        for value in (0, 0.5, 15.1, 16, 20, -1, "abc", None, True):
+            with self.subTest(seconds=value):
+                with self.assertRaises(EngineError):
+                    frames_for_seconds(value)
+        for value in (0, -16, "16", None, True):
+            with self.subTest(fps=value):
+                with self.assertRaises(EngineError):
+                    frames_for_seconds(5, fps=value)
+
+
+class VramHintTests(unittest.TestCase):
+    def test_tramos(self):
+        self.assertIn("cabe en 12 GB (perfil certificado)", vram_hint(81, 432, 768))
+        self.assertIn("cabe en 12 GB (perfil certificado)", vram_hint(17, 432, 768))
+        self.assertIn("ajustado, más lento", vram_hint(82, 432, 768))
+        self.assertIn("ajustado, más lento", vram_hint(121, 432, 768))
+        self.assertIn(
+            "riesgo de OOM en 12 GB; no certificado", vram_hint(122, 432, 768)
+        )
+        self.assertIn(
+            "riesgo de OOM en 12 GB; no certificado", vram_hint(241, 432, 768)
+        )
+
+    def test_incluye_frames_y_tamano(self):
+        self.assertIn("81 frames a 432x768", vram_hint(81, 432, 768))
+
+    def test_invalidos(self):
+        for args in (
+            (0, 432, 768),
+            ("81", 432, 768),
+            (True, 432, 768),
+            (81, 0, 768),
+            (81, 432, "alto"),
+        ):
+            with self.subTest(args=args):
+                with self.assertRaises(EngineError):
+                    vram_hint(*args)
+
+
 class PrepareH3Tests(unittest.TestCase):
     def setUp(self):
         self.graph = load_graph(H3_TEMPLATE_PATH)
@@ -264,6 +515,52 @@ class BuildVideoGraphTests(unittest.TestCase):
                 }
             )
 
+    def test_mode_invalido(self):
+        with self.assertRaises(EngineError):
+            build_video_graph(
+                {
+                    "engine": "wan",
+                    "template": str(WAN_TEMPLATE_PATH),
+                    "mode": "nope",
+                    "image_name": "f.png",
+                    "motion_positive": "m",
+                    "motion_negative": "n",
+                    "seed": 1,
+                }
+            )
+
+    def test_flf_por_plantilla_y_frames(self):
+        graph = build_video_graph(
+            {
+                "engine": "wan",
+                "template": str(WAN_FLF_TEMPLATE_PATH),
+                "image_name": "a.png",
+                "last_image_name": "b.png",
+                "motion_positive": "m",
+                "motion_negative": "n",
+                "seed": 1,
+                "frames": 129,
+            }
+        )
+        self.assertEqual(graph["9"]["class_type"], "WanFirstLastFrameToVideo")
+        self.assertEqual(graph["9"]["inputs"]["length"], 129)
+        self.assertEqual(graph["7"]["inputs"]["image"], "a.png")
+        self.assertEqual(graph["8"]["inputs"]["image"], "b.png")
+
+    def test_i2v_frames_patch(self):
+        graph = build_video_graph(
+            {
+                "engine": "wan",
+                "template": str(WAN_TEMPLATE_PATH),
+                "image_name": "a.png",
+                "motion_positive": "m",
+                "motion_negative": "n",
+                "seed": 1,
+                "frames": 129,
+            }
+        )
+        self.assertEqual(graph["9"]["inputs"]["length"], 129)
+
 
 class VideoTestCase(unittest.TestCase):
     def setUp(self):
@@ -315,6 +612,21 @@ class FakeVideoTransport:
                 }
             ).encode("utf-8")
         raise AssertionError(f"transporte inesperado: {method} {path}")
+
+
+class BlockingWs:
+    """WS falso que se queda abierto hasta que el tracker se cancela."""
+
+    async def __aenter__(self):
+        await asyncio.Event().wait()
+        raise AssertionError("inalcanzable")
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+def blocking_ws_factory(url: str) -> BlockingWs:
+    return BlockingWs()
 
 
 class RunVideoTests(VideoTestCase):
@@ -438,6 +750,115 @@ class RunVideoTests(VideoTestCase):
         self.assertEqual(row["status"], "error")
         self.assertIn("engine invalido", row["error"])
         self.assertEqual(transport.submits, [])
+
+    def test_flf2v_end_to_end(self):
+        transport = FakeVideoTransport(self.config)
+        gen_id = self.store.add("wan", "motion", "", {"seed": 7}, kind="video")
+        job = {
+            "kind": "video",
+            "gen_id": gen_id,
+            "engine": "wan",
+            "mode": "flf2v",
+            "template": str(WAN_FLF_TEMPLATE_PATH),
+            "image_name": "first.png",
+            "last_image_name": "last.png",
+            "motion_positive": "She walks slowly.",
+            "motion_negative": "no motion",
+            "prompt": "",
+            "aspect": "vertical",
+            "frames": 129,
+            "seed": 7,
+        }
+        run_video_generation(
+            job, config=self.config, store=self.store, engine_factory=self.factory(transport)
+        )
+        row = self.store.get(gen_id)
+        self.assertEqual(row["status"], "done")
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["7"]["inputs"]["image"], "first.png")
+        self.assertEqual(graph["8"]["inputs"]["image"], "last.png")
+        self.assertEqual(graph["9"]["inputs"]["length"], 129)
+        self.assertEqual(graph["5"]["inputs"]["text"], "She walks slowly.")
+
+    def test_registra_engine_prompt_id_y_tracker(self):
+        transport = FakeVideoTransport(self.config)
+        record = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "video",
+        }
+        job = self.make_job()
+        run_video_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+            ws_factory=blocking_ws_factory,
+            record=record,
+        )
+        self.assertIsNotNone(record["engine"])
+        self.assertEqual(record["prompt_id"], "p1")
+        self.assertEqual(record["status"], "done")
+        tracker = record["tracker"]
+        self.assertIsNotNone(tracker)
+        self.assertFalse(tracker._thread is not None and tracker._thread.is_alive())
+
+    def test_record_cancelado_antes_de_arrancar_no_ejecuta(self):
+        transport = FakeVideoTransport(self.config)
+        record = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "cancelled",
+            "engine": None,
+            "kind": "video",
+        }
+        job = self.make_job()
+        run_video_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+            record=record,
+        )
+        self.assertEqual(transport.submits, [])
+        self.assertEqual(job["outputs"], [])
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(self.store.get(job["gen_id"])["status"], "queued")
+
+    def test_fallo_tras_cancelar_conserva_cancelled(self):
+        record = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "video",
+        }
+
+        class CancelThenFail:
+            client_id = "cancel-fail"
+
+            def submit(self, graph):
+                record["status"] = "cancelled"
+                return "p1"
+
+            def wait(self, prompt_id):
+                raise EngineError("prompt interrumpido por cancelacion")
+
+        job = self.make_job()
+        run_video_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=lambda: CancelThenFail(),
+            ws_factory=blocking_ws_factory,
+            record=record,
+        )
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(self.store.get(job["gen_id"])["status"], "cancelled")
+        self.assertIsNone(job["error"])
+        self.assertEqual(job["outputs"], [])
 
 
 class StoreKindMigrationTests(unittest.TestCase):

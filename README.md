@@ -369,10 +369,11 @@ idempotente la columna `kind` (`ALTER TABLE`, default `image`) y las generacione
 registran con `kind="video"`.
 
 Rutas nuevas: `POST /api/motion` `{text, rating?}` → `{motion_positive, motion_negative}`
-(503 sin LLM), `POST /api/video/generate` `{engine, image_b64, last_image_b64?, motion_positive?,
-motion_negative?, prompt?, aspect, seed?}` → `{job_id}` (400 si el engine/aspect son inválidos, si
-wan no trae motion positivo, si h3 no trae prompt/último frame o si el base64 es inválido),
-`/media` sirve también mp4/webm por extensión y `GET /api/gallery` incluye `kind` y `urls`.
+(503 sin LLM), `POST /api/video/generate` `{engine?, mode?, seconds?, image_b64, last_image_b64?,
+motion_positive?, motion_negative?, prompt?, aspect, seed?}` → `{job_id, frames, vram_hint}`
+(M9-F1; 400 si el engine/mode/seconds/aspect son inválidos, si wan no trae motion positivo, si
+h3 no trae prompt/último frame o si el base64 es inválido), `/media` sirve también mp4/webm por
+extensión y `GET /api/gallery` incluye `kind` y `urls`.
 
 La UI de la pestaña Video (sin CDN) trae select de motor, imagen fuente y (solo H3) último frame,
 textarea de movimiento + rating + «Generar motion», motion positivo (Wan) / prompt (H3), aspecto
@@ -503,15 +504,48 @@ vive en memoria del proceso y se pierde al reiniciar la app.
 - `GET /api/jobs/{id}` añade `progress`: `{step, total, percent, node, state}`
   con nulls si el job no tiene tracker.
 - `POST /api/jobs/{id}/cancel`: 404 si el job no existe, 409 si ya está
-  `done|error|cancelled`; en `queued` llama a `ComfyEngine.delete_queued(prompt_id)`
-  y en `running` a `ComfyEngine.interrupt()`, marca el store como `cancelled` y
+  `done|error|cancelled` (o si es un train); en `queued` llama a
+  `ComfyEngine.delete_queued(prompt_id)` y en `running` a
+  `ComfyEngine.interrupt()`, marca el store como `cancelled` y
   devuelve `{"status": "cancelled"}`. Un job cancelado antes de arrancar no se
-  ejecuta. Los jobs de **video** aún no se pueden cancelar (llega en M9-F): el
-  endpoint devuelve 409 `cancelar video: pendiente (M9-F)` sin tocar engine ni store.
+  ejecuta. Imagen y **vídeo** comparten esta semántica desde M9-F1; el train
+  sigue devolviendo 409 (`cancelar train: pendiente (M9-F)`).
 - UI (sin CDN): barra de progreso con `paso X/Y` + nodo, polling cada 1 s
   mientras el job está activo (`queued|running`) y botón **Cancelar** junto a
   «Generar» visible solo con job activo; al terminar (`done|error|cancelled`)
   para el polling, recarga la galería y limpia la barra.
+
+## Vídeo FLF2V, duración y cancelar (M9-F1)
+
+`app\video.py` amplía el backend de vídeo sin tocar lo existente:
+
+- **Plantilla FLF2V**: `workflows\wan22_flf2v_432x768.api.json` (16 nodos) se exportó del legacy
+  con la función pura `build_wan_graph` en modo `FLF2V` (81 frames, 16 fps, seed 42, prefijo
+  `waifu/video_flf`, `ref_first.png`/`ref_last.png`, 432×768 y `MOTION_NEGATIVE` de
+  `app.motion`). `prepare_wan_flf_graph(graph, *, first_image_name, last_image_name,
+  motion_positive, motion_negative, width=432, height=768, seed, frames=None)` parchea sobre copia
+  profunda los dos `LoadImage` **por orden de inserción** del grafo (el export inserta el primero
+  antes que el último y `WanFirstLastFrameToVideo` los enlaza como `start_image`/`end_image`; se
+  exigen exactamente dos), los `CLIPTextEncode` `5`/`6`, width/height del nodo FLF, la seed de los
+  samplers y, si se pasa, `length` (4n+1).
+- **Duración**: `frames_for_seconds(seconds, fps=16)` devuelve el menor length 4n+1 >=
+  `ceil(seconds*fps)` (`needed + ((4 - (needed-1) % 4) % 4)`); 1..15 s y `EngineError` fuera.
+  Valores reales con fps 16: 1→17, 5→81, 8→129, 15→241. `prepare_wan_graph` acepta `frames` y
+  parchea `length` del nodo I2V.
+- **VRAM 12 GB**: `vram_hint(frames, width, height)` documenta la tabla del perfil 432×768 (16 fps,
+  20 pasos, GGUF Q4_K_S): <=81 frames «cabe en 12 GB (perfil certificado)», 82..121 «ajustado, más
+  lento» (sin certificar) y >121 «riesgo de OOM en 12 GB; no certificado».
+- **API**: `POST /api/video/generate` acepta `mode` (`i2v`|`flf2v`, default `i2v`), `seconds` (1-15,
+  default 5), `motion_negative` opcional (vacío o ausente usa `MOTION_NEGATIVE`) y
+  `last_image_b64` (obligatorio en `flf2v`); `engine` sigue siendo `wan`|`h3` y si falta la clave el
+  default es `wan` (400 si mode/seconds/engine/aspect son inválidos, si falta el motion positivo de
+  wan o las imágenes). Responde `{job_id, frames, vram_hint}`; en `flf2v` usa la plantilla FLF con
+  dos frames y `h3` no admite `mode=flf2v`.
+- **Progreso/cancelar**: el job de vídeo registra `_JOBS[gen_id]` con `kind="video"`, `engine` y
+  `ProgressTracker` (start antes del submit, stop en el `finally`, `ws_factory` inyectable) igual
+  que imagen, así que `GET /api/jobs/{id}` sirve `progress` también para vídeo y
+  `POST /api/jobs/{id}/cancel` deja de devolver 409: `queued` → `delete_queued`, `running` →
+  `interrupt` (solo el train sigue en 409).
 
 ## Smoke
 

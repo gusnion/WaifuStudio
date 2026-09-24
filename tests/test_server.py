@@ -1089,7 +1089,7 @@ class CancelRouteTests(ServerTestCase):
         self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
         self.assertEqual(client.get(f"/api/jobs/{job_id}").json()["status"], "cancelled")
 
-    def test_cancel_video_409_por_registro_sin_engine_ni_store(self):
+    def test_cancel_video_queued_borra_del_engine_y_marca_store(self):
         queue = StatusQueue()
         engine = FakeCancelEngine()
         client = self.make_client(queue=queue, engine_factory=lambda: engine)
@@ -1105,31 +1105,24 @@ class CancelRouteTests(ServerTestCase):
             "kind": "video",
         }
         response = client.post(f"/api/jobs/{job_id}/cancel")
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(
-            response.json(), {"error": "cancelar video: pendiente (M9-F)"}
-        )
-        self.assertEqual(engine.deleted, [])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "cancelled"})
+        self.assertEqual(engine.deleted, ["p1"])
         self.assertEqual(engine.interrupts, 0)
-        self.assertEqual(server_module._JOBS[gen_id]["status"], "queued")
-        self.assertEqual(self.store.get(gen_id)["status"], "queued")
+        self.assertEqual(server_module._JOBS[gen_id]["status"], "cancelled")
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
 
-    def test_cancel_video_409_por_store(self):
+    def test_cancel_video_por_store_marca_cancelled(self):
         queue = StatusQueue()
-        engine = FakeCancelEngine()
-        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        client = self.make_client(queue=queue)
         gen_id = self.store.add("wan", "motion", "", kind="video")
         job_id = "job-1"
         queue.statuses[job_id] = "running"
         client.app.state.jobs[job_id] = {"gen_id": gen_id}
         response = client.post(f"/api/jobs/{job_id}/cancel")
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(
-            response.json(), {"error": "cancelar video: pendiente (M9-F)"}
-        )
-        self.assertEqual(engine.deleted, [])
-        self.assertEqual(engine.interrupts, 0)
-        self.assertEqual(self.store.get(gen_id)["status"], "queued")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "cancelled"})
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
 
     def test_cancel_running_interrumpe_el_engine(self):
         queue = StatusQueue()

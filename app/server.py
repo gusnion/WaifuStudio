@@ -76,8 +76,11 @@ from app.video import (
     ASPECTS,
     H3_TEMPLATE_PATH,
     VIDEO_HISTORY_TIMEOUT_S,
+    WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
+    frames_for_seconds,
     run_video_generation,
+    vram_hint,
 )
 
 APP_HOST = "127.0.0.1"
@@ -365,8 +368,22 @@ def create_app(
         if job.get("kind") == "train":
             run_training_job(job, config=cfg, store=st)
         elif job.get("kind") == "video":
+            record = _JOBS.setdefault(
+                job["gen_id"],
+                {
+                    "prompt_id": None,
+                    "tracker": None,
+                    "status": "queued",
+                    "engine": None,
+                    "kind": "video",
+                },
+            )
             run_video_generation(
-                job, config=cfg, store=st, engine_factory=video_factory
+                job,
+                config=cfg,
+                store=st,
+                engine_factory=video_factory,
+                record=record,
             )
         else:
             run_generation(
@@ -906,15 +923,41 @@ def create_app(
 
     @app.post("/api/video/generate")
     async def api_video_generate(payload: dict = Body(...)) -> Any:
-        engine_kind = payload.get("engine")
+        """Encola un video (M9-F1): mode i2v|flf2v, segundos y negativo editable.
+
+        `engine` sigue siendo `wan|h3`; si falta la clave, default `wan` (el
+        `mode` de Wan elige plantilla I2V o FLF2V y `seconds` fija los frames
+        4n+1). La respuesta añade `frames` y `vram_hint` (tabla de 12 GB).
+        """
+        if "engine" in payload:
+            engine_kind = payload.get("engine")
+        else:
+            engine_kind = "wan"
         if engine_kind not in ("wan", "h3"):
             raise EngineError("engine invalido; usar wan|h3")
+        mode = payload.get("mode") or "i2v"
+        if mode not in ("i2v", "flf2v"):
+            raise EngineError("mode invalido; usar i2v|flf2v")
+        if engine_kind == "h3" and mode != "i2v":
+            raise EngineError("mode flf2v solo aplica a engine wan")
         aspect = payload.get("aspect") or "vertical"
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
+        seconds = payload.get("seconds")
+        if seconds is None:
+            seconds = 5
+        if isinstance(seconds, bool):
+            raise EngineError("seconds invalido; usar un numero entre 1 y 15")
+        try:
+            seconds = float(seconds)
+        except (TypeError, ValueError) as exc:
+            raise EngineError("seconds invalido; usar un numero entre 1 y 15") from exc
+        frames = frames_for_seconds(seconds)
+        width, height = ASPECTS[aspect]
+        hint = vram_hint(frames, width, height)
         first_raw = _decode_image_b64(payload.get("image_b64"), "image")
         last_raw = None
-        if engine_kind == "h3":
+        if engine_kind == "h3" or mode == "flf2v":
             last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
         if engine_kind == "wan":
             motion_positive = payload.get("motion_positive")
@@ -923,6 +966,8 @@ def create_app(
             motion_positive = motion_positive.strip()
             prompt = str(payload.get("prompt") or "")
             motion_negative = payload.get("motion_negative")
+            if motion_negative is not None and not isinstance(motion_negative, str):
+                raise EngineError("motion_negative invalido")
             motion_negative = (
                 motion_negative.strip()
                 if isinstance(motion_negative, str) and motion_negative.strip()
@@ -949,14 +994,22 @@ def create_app(
         last_image_name = (
             _write_input_png(input_dir, last_raw) if last_raw is not None else None
         )
-        template = WAN_TEMPLATE_PATH if engine_kind == "wan" else H3_TEMPLATE_PATH
+        if engine_kind == "h3":
+            template = H3_TEMPLATE_PATH
+        elif mode == "flf2v":
+            template = WAN_FLF_TEMPLATE_PATH
+        else:
+            template = WAN_TEMPLATE_PATH
         gen_id = st.add(
             engine_kind,
             motion_positive if engine_kind == "wan" else prompt,
             motion_negative,
             {
                 "engine": engine_kind,
+                "mode": mode,
                 "aspect": aspect,
+                "seconds": seconds,
+                "frames": frames,
                 "seed": seed,
                 "image": image_name,
                 "last_image": last_image_name,
@@ -967,6 +1020,7 @@ def create_app(
             "kind": "video",
             "gen_id": gen_id,
             "engine": engine_kind,
+            "mode": mode,
             "template": str(template),
             "image_name": image_name,
             "last_image_name": last_image_name,
@@ -974,11 +1028,20 @@ def create_app(
             "motion_negative": motion_negative,
             "prompt": prompt,
             "aspect": aspect,
+            "seconds": seconds,
+            "frames": frames,
             "seed": seed,
+        }
+        _JOBS[gen_id] = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "video",
         }
         job_id = queue.submit(job)
         app.state.jobs[job_id] = job
-        return {"job_id": job_id}
+        return {"job_id": job_id, "frames": frames, "vram_hint": hint}
 
     @app.get("/api/jobs/{job_id}")
     async def api_job(job_id: str) -> Any:
@@ -1018,7 +1081,11 @@ def create_app(
 
     @app.post("/api/jobs/{job_id}/cancel")
     async def api_job_cancel(job_id: str) -> Any:
-        """Cancela un job; los registros de `_JOBS` viven en memoria."""
+        """Cancela un job (imagen o video); los registros de `_JOBS` viven en memoria.
+
+        Misma semántica que imagen (M9-F1): `queued` borra del engine con
+        `delete_queued`, `running` interrumpe; el train sigue devolviendo 409.
+        """
         try:
             queue_status = queue.status(job_id)
         except EngineError:
@@ -1032,11 +1099,6 @@ def create_app(
             record.get("kind") if record else None,
             row.get("kind") if row else None,
         )
-        if "video" in kinds:
-            return JSONResponse(
-                status_code=409,
-                content={"error": "cancelar video: pendiente (M9-F)"},
-            )
         if "train" in kinds:
             return JSONResponse(
                 status_code=409,

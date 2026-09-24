@@ -10,14 +10,20 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app import server as server_module
 from app.config import EngineConfig
-from app.engine import ComfyEngine
+from app.engine import ComfyEngine, EngineError
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, SYS_PROMPT_MOTION
 from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app
 from app.store import Store
-from app.video import H3_TEMPLATE_PATH, WAN_TEMPLATE_PATH, run_video_generation
+from app.video import (
+    H3_TEMPLATE_PATH,
+    WAN_FLF_TEMPLATE_PATH,
+    WAN_TEMPLATE_PATH,
+    run_video_generation,
+)
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-fake-png"
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
@@ -43,6 +49,43 @@ class RecordingQueue:
     def submit(self, job: dict) -> str:
         self.jobs.append(job)
         return f"job-{len(self.jobs)}"
+
+
+class StatusQueue:
+    """Cola inyectada con estados mutables (patron de test_server.py)."""
+
+    def __init__(self) -> None:
+        self.jobs: list[dict] = []
+        self.statuses: dict[str, str] = {}
+
+    def submit(self, job: dict) -> str:
+        self.jobs.append(job)
+        job_id = f"job-{len(self.jobs)}"
+        self.statuses[job_id] = "queued"
+        return job_id
+
+    def status(self, job_id: str) -> str:
+        if job_id not in self.statuses:
+            raise EngineError(f"job desconocido: {job_id!r}")
+        return self.statuses[job_id]
+
+
+class FakeCancelEngine:
+    """Engine falso que registra delete_queued/interrupt sin red."""
+
+    client_id = "cancel-cid"
+
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+        self.interrupts = 0
+
+    def delete_queued(self, prompt_id: str) -> bool:
+        self.deleted.append(prompt_id)
+        return True
+
+    def interrupt(self) -> bool:
+        self.interrupts += 1
+        return True
 
 
 class FakeVideoTransport:
@@ -94,6 +137,8 @@ class ServerVideoTestCase(unittest.TestCase):
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
         self.registry = ModelRegistry.load(DEFAULT_PATH)
+        server_module._JOBS.clear()
+        self.addCleanup(server_module._JOBS.clear)
 
     def make_client(self, **kwargs) -> TestClient:
         kwargs.setdefault("config", self.config)
@@ -215,6 +260,35 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         self.assertEqual(self.input_files(), [])
         self.assertEqual(self.store.count(), 0)
 
+    def test_mode_invalido_400(self):
+        for value in ("nope", 5):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(mode=value))
+
+    def test_flf2v_sin_last_image_400(self):
+        self.assert_400(
+            {
+                "mode": "flf2v",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+            }
+        )
+        self.assert_400(self.payload(mode="flf2v", last_image_b64=None))
+        self.assert_400(self.payload(mode="flf2v", last_image_b64="%%%mal%%%"))
+
+    def test_mode_flf2v_con_h3_400(self):
+        self.assert_400(
+            self.payload(engine="h3", mode="flf2v", last_image_b64=PNG_B64, prompt="p")
+        )
+
+    def test_seconds_fuera_de_rango_o_invalidos_400(self):
+        for value in (0, 0.5, 16, 20, -1, "abc", True):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(seconds=value))
+
+    def test_motion_negative_no_str_400(self):
+        self.assert_400(self.payload(motion_negative=123))
+
 
 class VideoGenerateEnqueueTests(ServerVideoTestCase):
     def test_wan_encola_job_y_registra_kind_video(self):
@@ -230,14 +304,20 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"job_id": "job-1"})
+        data = response.json()
+        self.assertEqual(data["job_id"], "job-1")
+        self.assertEqual(data["frames"], 81)
+        self.assertIn("cabe en 12 GB (perfil certificado)", data["vram_hint"])
         self.assertEqual(len(queue.jobs), 1)
         job = queue.jobs[0]
         self.assertEqual(job["kind"], "video")
         self.assertEqual(job["engine"], "wan")
+        self.assertEqual(job["mode"], "i2v")
         self.assertEqual(job["template"], str(WAN_TEMPLATE_PATH))
         self.assertEqual(job["aspect"], "horizontal")
         self.assertEqual(job["seed"], 13)
+        self.assertEqual(job["seconds"], 5.0)
+        self.assertEqual(job["frames"], 81)
         self.assertEqual(job["motion_positive"], "She walks slowly.")
         self.assertEqual(job["motion_negative"], MOTION_NEGATIVE)
         self.assertIsNone(job["last_image_name"])
@@ -249,8 +329,90 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(row["model_id"], "wan")
         self.assertEqual(row["prompt"], "She walks slowly.")
         self.assertEqual(row["params"]["engine"], "wan")
+        self.assertEqual(row["params"]["mode"], "i2v")
         self.assertEqual(row["params"]["aspect"], "horizontal")
         self.assertEqual(row["params"]["seed"], 13)
+        self.assertEqual(row["params"]["frames"], 81)
+        self.assertEqual(row["params"]["seconds"], 5.0)
+
+    def test_seconds_6_encola_frames_97_y_hint_ajustado(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "seconds": 6,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["frames"], 97)
+        self.assertIn("ajustado, más lento", data["vram_hint"])
+        self.assertEqual(queue.jobs[0]["frames"], 97)
+
+    def test_seconds_8_encola_frames_129_y_hint_oom(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "seconds": 8,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["frames"], 129)
+        self.assertIn("riesgo de OOM en 12 GB; no certificado", data["vram_hint"])
+        self.assertEqual(queue.jobs[0]["frames"], 129)
+
+    def test_flf2v_sin_engine_usa_plantilla_flf_y_dos_frames(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "mode": "flf2v",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "seconds": 5,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["frames"], 81)
+        self.assertIn("cabe en 12 GB (perfil certificado)", data["vram_hint"])
+        job = queue.jobs[0]
+        self.assertEqual(job["engine"], "wan")
+        self.assertEqual(job["mode"], "flf2v")
+        self.assertEqual(job["template"], str(WAN_FLF_TEMPLATE_PATH))
+        self.assertEqual(job["frames"], 81)
+        files = self.input_files()
+        self.assertEqual(len(files), 2)
+        self.assertEqual(
+            {job["image_name"], job["last_image_name"]},
+            {path.name for path in files},
+        )
+        row = self.store.list()[0]
+        self.assertEqual(row["params"]["mode"], "flf2v")
+        self.assertEqual(row["params"]["seconds"], 5.0)
+
+    def test_negativo_editable_se_usa_y_se_guarda(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "motion_negative": "custom negative",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["motion_negative"], "custom negative")
+        self.assertEqual(self.store.list()[0]["negative"], "custom negative")
 
     def test_h3_encola_job_con_dos_frames(self):
         queue = RecordingQueue()
@@ -280,6 +442,73 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(row["kind"], "video")
         self.assertEqual(row["model_id"], "h3")
         self.assertEqual(row["prompt"], "integrated_multimodal_description: test")
+
+
+class VideoCancelTests(ServerVideoTestCase):
+    def payload(self) -> dict:
+        return {
+            "engine": "wan",
+            "image_b64": PNG_B64,
+            "motion_positive": "She walks slowly.",
+        }
+
+    def test_cancel_video_queued_200_y_delete_queued(self):
+        queue = StatusQueue()
+        engine = FakeCancelEngine()
+        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        job_id = client.post("/api/video/generate", json=self.payload()).json()["job_id"]
+        gen_id = queue.jobs[0]["gen_id"]
+        record = server_module._JOBS[gen_id]
+        self.assertEqual(record["kind"], "video")
+        record["engine"] = engine
+        record["prompt_id"] = "p1"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "cancelled"})
+        self.assertEqual(engine.deleted, ["p1"])
+        self.assertEqual(engine.interrupts, 0)
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
+        self.assertEqual(client.get(f"/api/jobs/{job_id}").json()["status"], "cancelled")
+
+    def test_cancel_video_running_200_e_interrupt(self):
+        queue = StatusQueue()
+        engine = FakeCancelEngine()
+        client = self.make_client(queue=queue, engine_factory=lambda: engine)
+        job_id = client.post("/api/video/generate", json=self.payload()).json()["job_id"]
+        gen_id = queue.jobs[0]["gen_id"]
+        queue.statuses[job_id] = "running"
+        record = server_module._JOBS[gen_id]
+        record["engine"] = engine
+        record["prompt_id"] = "p1"
+        record["status"] = "running"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(engine.deleted, [])
+        self.assertEqual(engine.interrupts, 1)
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(self.store.get(gen_id)["status"], "cancelled")
+
+    def test_cancel_video_terminado_409(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        job_id = client.post("/api/video/generate", json=self.payload()).json()["job_id"]
+        queue.statuses[job_id] = "done"
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("error", response.json())
+
+    def test_cancel_train_sigue_409(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        gen_id = self.store.add("oc-1", "aiko", "", {}, kind="train")
+        job_id = "job-train"
+        queue.statuses[job_id] = "running"
+        client.app.state.jobs[job_id] = {"kind": "train", "gen_id": gen_id}
+        response = client.post(f"/api/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("train", response.json()["error"])
+        self.assertEqual(self.store.get(gen_id)["status"], "queued")
 
 
 class VideoQueueIntegrationTests(ServerVideoTestCase):
