@@ -83,7 +83,7 @@ class AddGetTests(StoreTestCase):
         self.assertEqual(self.store.get(image_id)["kind"], "image")
         self.assertEqual(self.store.get(video_id)["kind"], "video")
         self.assertEqual(
-            [row["kind"] for row in self.store.list()], ["image", "video"]
+            [row["kind"] for row in self.store.list(order="asc")], ["image", "video"]
         )
         self.assertTrue(self.store.update(video_id, kind="image"))
         self.assertEqual(self.store.get(video_id)["kind"], "image")
@@ -107,13 +107,29 @@ class ListCountTests(StoreTestCase):
     def test_list_orden_y_paginacion(self):
         for index in range(5):
             self.store.add("m", f"prompt {index}")
-        ids = [row["id"] for row in self.store.list()]
-        self.assertEqual(ids, [1, 2, 3, 4, 5])
-        self.assertEqual([row["id"] for row in self.store.list(limit=2)], [1, 2])
+        self.assertEqual([row["id"] for row in self.store.list()], [5, 4, 3, 2, 1])
         self.assertEqual(
-            [row["id"] for row in self.store.list(limit=2, offset=2)], [3, 4]
+            [row["id"] for row in self.store.list(order="asc")], [1, 2, 3, 4, 5]
+        )
+        self.assertEqual(
+            [row["id"] for row in self.store.list(limit=2, order="asc")], [1, 2]
+        )
+        self.assertEqual(
+            [row["id"] for row in self.store.list(limit=2, offset=2, order="asc")],
+            [3, 4],
+        )
+        self.assertEqual([row["id"] for row in self.store.list(limit=2)], [5, 4])
+        self.assertEqual(
+            [row["id"] for row in self.store.list(limit=2, offset=2)], [3, 2]
         )
         self.assertEqual(self.store.list(limit=10, offset=10), [])
+
+    def test_list_order_invalido_lanza_engine_error(self):
+        self.store.add("m", "p")
+        for order in ("sideways", "", None, 5):
+            with self.subTest(order=order):
+                with self.assertRaises(EngineError):
+                    self.store.list(order=order)
 
     def test_count(self):
         self.assertEqual(self.store.count(), 0)

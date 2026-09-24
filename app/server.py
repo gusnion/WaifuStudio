@@ -928,7 +928,7 @@ def create_app(
         limit = max(1, min(int(limit), 24))
         offset = max(0, int(offset))
         items = []
-        for row in st.list(limit=limit, offset=offset):
+        for row in st.list(limit=limit, offset=offset, order="desc"):
             item = dict(row)
             item["urls"] = [
                 MEDIA_URL.format(gen_id=row["id"], name=name)

@@ -170,6 +170,12 @@ class ReadRoutesTests(ServerTestCase):
         self.assertEqual(item["status"], "done")
         self.assertEqual(item["urls"], [f"/media/{gen_id}/ok.png"])
 
+    def test_gallery_mas_nueva_primero(self):
+        ids = [self.store.add(MODEL_ID, f"1girl {index}") for index in range(3)]
+        data = self.make_client().get("/api/gallery").json()
+        self.assertEqual(data["count"], 3)
+        self.assertEqual([item["id"] for item in data["items"]], list(reversed(ids)))
+
 
 class LorasRouteTests(ServerTestCase):
     def test_loras_200_con_items_y_familias(self):

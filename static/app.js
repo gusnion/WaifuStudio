@@ -444,7 +444,7 @@ async function cancelJob() {
 async function pollJob(
   jobId,
   statusFn = setStatus,
-  onDone = loadGallery,
+  onDone = reloadGalleryFirstPage,
   progressFn = setProgress,
   manageCancel = true
 ) {
@@ -622,13 +622,23 @@ function renderGalleries() {
 async function loadGallery() {
   try {
     const data = await api("/api/gallery?limit=24");
-    const items = data.items.slice().reverse();
+    const items = data.items || [];
     state.galleryItems = items.filter((item) => item.kind !== "video");
     state.videoItems = items.filter((item) => item.kind === "video");
     renderGalleries();
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+async function reloadGalleryFirstPage() {
+  if (state.imagePager) {
+    state.imagePager.page = 1;
+  }
+  if (state.videoPager) {
+    state.videoPager.page = 1;
+  }
+  await loadGallery();
 }
 
 function makePager(prefix) {
@@ -739,7 +749,13 @@ async function generateVideo() {
   setVideoStatus("Encolando...");
   try {
     const data = await postJson("/api/video/generate", payload);
-    await pollJob(data.job_id, setVideoStatus, loadGallery, null, false);
+    await pollJob(
+      data.job_id,
+      setVideoStatus,
+      reloadGalleryFirstPage,
+      null,
+      false
+    );
   } catch (error) {
     setVideoStatus(error.message, true);
   } finally {

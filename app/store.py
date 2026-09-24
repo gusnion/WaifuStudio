@@ -100,13 +100,20 @@ class Store:
             raise EngineError(f"store get {gen_id} fallo: {exc}") from exc
         return self._row_to_dict(row) if row is not None else None
 
-    def list(self, limit: int = 50, offset: int = 0) -> list[dict]:
-        """Generaciones en orden de id ascendente (paginado)."""
+    def list(
+        self, limit: int = 50, offset: int = 0, order: str = "desc"
+    ) -> list[dict]:
+        """Generaciones paginadas por id; `order` es `asc` o `desc`."""
+        direction = str(order).strip().lower()
+        if direction not in ("asc", "desc"):
+            raise EngineError(
+                f"store list: orden invalido {order!r} (usa asc|desc)"
+            )
         try:
             with closing(self._connect()) as conn, conn:
                 rows = conn.execute(
                     f"SELECT {_COLUMNS} FROM generations "
-                    "ORDER BY id LIMIT ? OFFSET ?",
+                    f"ORDER BY id {direction.upper()} LIMIT ? OFFSET ?",
                     (int(limit), int(offset)),
                 ).fetchall()
         except sqlite3.Error as exc:

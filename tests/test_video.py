@@ -467,7 +467,7 @@ class StoreKindMigrationTests(unittest.TestCase):
         video_id = store.add("wan", "motion", kind="video")
         self.assertEqual(store.get(video_id)["kind"], "video")
         self.assertEqual(
-            [row["kind"] for row in store.list()], ["image", "video"]
+            [row["kind"] for row in store.list(order="asc")], ["image", "video"]
         )
 
     def test_init_idempotente(self):
