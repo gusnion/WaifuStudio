@@ -23,6 +23,8 @@ const ZONE_LABELS = {
 
 const PAGE_SIZE = 6;
 
+const OC_TRAIT_GROUPS = ["hair", "eyes", "face", "body"];
+
 const TRAIN_PAGE = 24;
 const TRAIN_MIN = 10;
 const TRAIN_MAX = 50;
@@ -53,6 +55,7 @@ const state = {
   characters: [],
   activeCharacterId: null,
   ocSelectedTags: [],
+  ocExtras: [],
   ocCatalogItems: [],
   ocEditingId: null,
   ocPrepromptDefault: "",
@@ -79,6 +82,8 @@ let zonePopoverOptions = null;
 let zonePopoverSubcat = null;
 let zonePopoverSelected = new Set();
 let zonePopoverSeq = 0;
+let zoneOcApplied = [];
+let zoneOcCharacter = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -1007,6 +1012,63 @@ function mergeIntoPrompt(text, addition) {
   ]);
 }
 
+function promptTagsFromText(text) {
+  return String(text || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function removePromptTags(tags) {
+  const folded = new Set(normalizeTags(tags).map((tag) => tag.toLowerCase()));
+  if (!folded.size) {
+    return;
+  }
+  const kept = String($("prompt").value || "")
+    .split(",")
+    .filter((part) => {
+      const tag = part.trim();
+      return tag && !folded.has(tag.toLowerCase());
+    });
+  $("prompt").value = kept.join(", ");
+}
+
+async function insertPromptTags(tags, zone) {
+  const added = [];
+  let text = $("prompt").value;
+  for (const tag of tags) {
+    const present = String(text || "")
+      .split(",")
+      .some((part) => part.trim().toLowerCase() === tag.toLowerCase());
+    const data = await postJson("/api/prompt/insert", { text, tag, zone });
+    text = data.text || text;
+    if (!present) {
+      added.push(tag);
+    }
+  }
+  $("prompt").value = text;
+  return added;
+}
+
+function selectLora(loraId, weight) {
+  const controls = state.loraControls[loraId];
+  if (!controls) {
+    return false;
+  }
+  controls.check.checked = true;
+  const value = Number(weight);
+  if (Number.isFinite(value)) {
+    controls.weight.value = String(value);
+    controls.value.textContent = value.toFixed(2);
+  }
+  return true;
+}
+
+async function fetchCharacterProfile(character, mode) {
+  const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
+  return api(`/api/characters/${character.id}/profile${query}`);
+}
+
 function renderPromptZones(zones) {
   const preview = $("prompt-zones-preview");
   const legend = $("prompt-zones-legend");
@@ -1137,7 +1199,7 @@ function renderZonePopoverGroups() {
     empty.className = "empty";
     empty.textContent =
       zoneInsertTarget === "character"
-        ? "Los personajes (OC) llegan en M9-B3; añade el tag a mano."
+        ? "Elige un OC en «Mis OCs» o añade el tag a mano."
         : "Sin opciones.";
     container.appendChild(empty);
     return;
@@ -1211,6 +1273,69 @@ function renderZonePopoverSelected() {
   }
 }
 
+function setZoneOcStatus(text, isError = false) {
+  const el = $("zone-ocs-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function renderZoneOcList() {
+  const container = $("zone-ocs-list");
+  container.replaceChildren();
+  if (!state.characters.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin OCs guardados.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const character of state.characters) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "zone-oc";
+    button.textContent = character.name;
+    button.title = (character.tags || []).join(", ") || "sin rasgos";
+    button.addEventListener("click", () => {
+      applyOcFromPicker(character).catch((error) =>
+        setZoneOcStatus(error.message, true)
+      );
+    });
+    container.appendChild(button);
+  }
+}
+
+async function applyOcFromPicker(character) {
+  const mode = $("zone-ocs-traits").checked ? "traits" : "auto";
+  const profile = await fetchCharacterProfile(character, mode);
+  removePromptTags(zoneOcApplied);
+  zoneOcApplied = await insertPromptTags(
+    promptTagsFromText(profile.text),
+    "character"
+  );
+  zoneOcCharacter = character;
+  const notes = [`modo ${profile.mode}`];
+  if (profile.lora) {
+    $("zone-ocs-traits-label").classList.remove("hidden");
+    const selected = selectLora(profile.lora.id, profile.lora.default_weight);
+    notes.push(
+      selected
+        ? `LoRA ${profile.lora.id} @ ${profile.lora.default_weight} seleccionado`
+        : `LoRA ${profile.lora.id} fuera del panel (familia activa)`
+    );
+  } else {
+    $("zone-ocs-traits-label").classList.add("hidden");
+    $("zone-ocs-traits").checked = false;
+  }
+  if ($("zone-ocs-extras").checked && (profile.extras || []).length) {
+    const extraAdded = await insertPromptTags(profile.extras, "general");
+    zoneOcApplied = zoneOcApplied.concat(extraAdded);
+    notes.push(`extras a General: ${profile.extras.join(", ")}`);
+  }
+  await refreshPromptZones();
+  setZoneOcStatus(`OC «${character.name}» aplicado · ${notes.join(" · ")}`);
+  setStatus(`OC «${character.name}» aplicado a la zona Personaje`);
+}
+
 async function openZoneInsert(zone) {
   if (!ZONE_LABELS[zone]) {
     return;
@@ -1219,6 +1344,20 @@ async function openZoneInsert(zone) {
   zonePopoverOptions = null;
   zonePopoverSubcat = null;
   zonePopoverSelected = new Set();
+  zoneOcApplied = [];
+  zoneOcCharacter = null;
+  const isCharacter = zone === "character";
+  $("zone-popover-ocs").classList.toggle("hidden", !isCharacter);
+  $("zone-ocs-extras").checked = true;
+  $("zone-ocs-traits").checked = false;
+  $("zone-ocs-traits-label").classList.add("hidden");
+  setZoneOcStatus("");
+  if (isCharacter) {
+    renderZoneOcList();
+    loadCharacters()
+      .then(renderZoneOcList)
+      .catch((error) => setZoneOcStatus(error.message, true));
+  }
   $("zone-popover").classList.remove("hidden");
   $("zone-popover-title").textContent = ZONE_LABELS[zone];
   $("zone-popover-search").value = "";
@@ -1253,12 +1392,16 @@ function closeZoneInsert() {
   zonePopoverOptions = null;
   zonePopoverSubcat = null;
   zonePopoverSelected = new Set();
+  zoneOcApplied = [];
+  zoneOcCharacter = null;
   $("zone-popover").classList.add("hidden");
   $("zone-popover-search").value = "";
   $("zone-popover-tabs").replaceChildren();
   $("zone-popover-groups").replaceChildren();
   $("zone-popover-selected").replaceChildren();
   $("zone-popover-note").classList.add("hidden");
+  $("zone-popover-ocs").classList.add("hidden");
+  setZoneOcStatus("");
   $("zone-insert-input").value = "";
 }
 
@@ -1405,21 +1548,83 @@ function renderOcSelected() {
   }
 }
 
+function renderOcExtras() {
+  const box = $("oc-extras-box");
+  const container = $("oc-extras");
+  container.replaceChildren();
+  box.classList.toggle("hidden", !state.ocExtras.length);
+  for (const tag of state.ocExtras) {
+    const chip = document.createElement("span");
+    chip.className = "oc-selected-chip";
+    const text = document.createElement("span");
+    text.textContent = tag;
+    chip.appendChild(text);
+    container.appendChild(chip);
+  }
+}
+
+async function moveOcExtrasToGeneral() {
+  const extras = state.ocExtras.slice();
+  if (!extras.length) {
+    return;
+  }
+  const added = await insertPromptTags(extras, "general");
+  await refreshPromptZones();
+  let removed = false;
+  if (
+    state.ocEditingId != null &&
+    window.confirm(
+      `Extras insertados en General${
+        added.length ? "" : " (ya estaban en el prompt)"
+      }. ¿Quitarlos también del OC?`
+    )
+  ) {
+    await api(`/api/characters/${state.ocEditingId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ extras: [] }),
+    });
+    state.ocExtras = [];
+    renderOcExtras();
+    await loadCharacters();
+    removed = true;
+  }
+  setOcStatus(
+    removed
+      ? "Extras movidos a General y quitados del OC"
+      : "Extras insertados en General (siguen en el OC)"
+  );
+}
+
 async function refreshOcCatalog() {
-  const params = new URLSearchParams();
   const group = $("oc-catalog-group").value;
   const query = $("oc-catalog-search").value.trim();
+  let items = [];
   if (group) {
+    const params = new URLSearchParams();
     params.set("group", group);
+    if (query) {
+      params.set("q", query);
+    }
+    const data = await api(`/api/tags?${params.toString()}`);
+    items = data.items || [];
+  } else {
+    const results = await Promise.all(
+      OC_TRAIT_GROUPS.map((name) =>
+        api(`/api/tags?group=${encodeURIComponent(name)}`)
+      )
+    );
+    items = results.flatMap((data) => data.items || []);
+    if (query) {
+      const needle = query.toLowerCase();
+      items = items.filter(
+        (item) =>
+          item.tag.toLowerCase().includes(needle) ||
+          String(item.label || "").toLowerCase().includes(needle)
+      );
+    }
   }
-  if (query) {
-    params.set("q", query);
-  }
-  if (!group && !query) {
-    params.set("limit", "60");
-  }
-  const data = await api(`/api/tags?${params.toString()}`);
-  state.ocCatalogItems = data.items || [];
+  state.ocCatalogItems = items;
   renderOcCatalogResults();
 }
 
@@ -1427,8 +1632,11 @@ async function loadOcCatalog() {
   const data = await api("/api/tags/groups");
   const select = $("oc-catalog-group");
   select.replaceChildren();
-  select.appendChild(option("", "Todos los grupos"));
+  select.appendChild(option("", "Todos los rasgos"));
   for (const group of data.groups || []) {
+    if (!OC_TRAIT_GROUPS.includes(group)) {
+      continue;
+    }
     select.appendChild(option(group, GROUP_LABELS[group] || group));
   }
   await refreshOcCatalog();
@@ -1582,9 +1790,12 @@ function characterRow(character) {
     badge.textContent = "activo";
     header.appendChild(badge);
   }
+  const extrasCount = (character.extras || []).length;
   const tags = document.createElement("span");
   tags.className = "oc-item-tags";
-  tags.textContent = (character.tags || []).join(", ") || "sin tags";
+  tags.textContent = `${(character.tags || []).join(", ") || "sin rasgos"}${
+    extrasCount ? ` · +${extrasCount} extras` : ""
+  }`;
   const actions = document.createElement("div");
   actions.className = "oc-item-actions";
   const handlers = [
@@ -1638,6 +1849,7 @@ function updateOcFormMode() {
 function resetOcForm() {
   state.ocEditingId = null;
   state.ocSelectedTags = [];
+  state.ocExtras = [];
   $("oc-form-name").value = "";
   const preprompt = $("oc-form-preprompt");
   preprompt.value =
@@ -1647,6 +1859,7 @@ function resetOcForm() {
   $("oc-form-notes").value = "";
   updateOcFormMode();
   renderOcSelected();
+  renderOcExtras();
   renderOcCatalogResults();
 }
 
@@ -1657,12 +1870,14 @@ function fillCharacterForm(character) {
   }
   state.ocEditingId = character.id;
   state.ocSelectedTags = [...(character.tags || [])];
+  state.ocExtras = [...(character.extras || [])];
   $("oc-form-name").value = character.name;
   $("oc-form-preprompt").value = character.preprompt;
   $("oc-form-rating").value = character.rating;
   $("oc-form-notes").value = character.notes;
   updateOcFormMode();
   renderOcSelected();
+  renderOcExtras();
   renderOcCatalogResults();
 }
 
@@ -1679,14 +1894,21 @@ async function cancelOcEdit() {
 }
 
 async function useCharacter(character) {
-  const addition = promptFromTags(character.tags || []);
-  const current = $("prompt").value.trim();
-  if (addition) {
-    $("prompt").value = current
-      ? mergeIntoPrompt(current, addition)
-      : addition;
+  const profile = await fetchCharacterProfile(character, "auto");
+  await insertPromptTags(promptTagsFromText(profile.text), "character");
+  let loraNote = "";
+  if (profile.lora) {
+    const selected = selectLora(profile.lora.id, profile.lora.default_weight);
+    loraNote = selected
+      ? ` · LoRA ${profile.lora.id} @ ${profile.lora.default_weight}`
+      : ` · LoRA ${profile.lora.id} fuera del panel (familia activa)`;
   }
-  refreshPromptZones();
+  let extrasNote = "";
+  if ((profile.extras || []).length) {
+    await insertPromptTags(profile.extras, "general");
+    extrasNote = ` · extras a General: ${profile.extras.join(", ")}`;
+  }
+  await refreshPromptZones();
   $("preprompt").value = character.preprompt;
   $("rating").value = character.rating;
   state.activeCharacterId = character.id;
@@ -1704,7 +1926,9 @@ async function useCharacter(character) {
     refNote = " (solo hojas: sin referencia I2I)";
   }
   closeOcModal();
-  setStatus(`OC «${character.name}» cargado${refNote}`);
+  setStatus(
+    `OC «${character.name}» cargado (${profile.mode})${loraNote}${extrasNote}${refNote}`
+  );
 }
 
 async function editCharacter(character) {
@@ -2251,6 +2475,15 @@ function bind() {
     insertZoneSelection().catch((error) => setStatus(error.message, true));
   });
   $("zone-popover-clear").addEventListener("click", clearZoneSelection);
+  for (const id of ("zone-ocs-extras", "zone-ocs-traits")) {
+    $(id).addEventListener("change", () => {
+      if (zoneOcCharacter) {
+        applyOcFromPicker(zoneOcCharacter).catch((error) =>
+          setZoneOcStatus(error.message, true)
+        );
+      }
+    });
+  }
   $("ref-image").addEventListener("change", updateReferencePreview);
   $("model").addEventListener("change", (event) => {
     applyModel(event.target.value).catch((error) => setStatus(error.message, true));
@@ -2286,6 +2519,9 @@ function bind() {
   });
   $("btn-oc-sheet").addEventListener("click", () => {
     createCharacterSheet().catch((error) => setOcStatus(error.message, true));
+  });
+  $("btn-oc-extras-move").addEventListener("click", () => {
+    moveOcExtrasToGeneral().catch((error) => setOcStatus(error.message, true));
   });
   $("btn-oc-save-close").addEventListener("click", closeOcSaveModal);
   $("btn-oc-save-confirm").addEventListener("click", () => {

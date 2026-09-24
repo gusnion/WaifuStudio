@@ -1,17 +1,41 @@
-"""Tests CPU de OCs con referencias (M9-B1). Sin red ni GPU."""
+"""Tests CPU de OCs con referencias (M9-B1) y rasgos/extras (M9-B3).
+
+Sin red ni GPU.
+"""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest import mock
 
-from app.characters import CharacterStore, is_sheet, prompt_from_tags
+from app import loras
+from app.characters import (
+    CharacterStore,
+    is_sheet,
+    prompt_from_extras,
+    prompt_from_tags,
+    split_character_tags,
+)
 from app.engine import EngineError
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-ref"
+
+LEGACY_SCHEMA = """
+CREATE TABLE characters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    tags TEXT NOT NULL DEFAULT '[]',
+    preprompt TEXT NOT NULL DEFAULT 'glossy',
+    rating TEXT NOT NULL DEFAULT 'sfw',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+)
+"""
 
 
 class CharacterStoreTestCase(unittest.TestCase):
@@ -45,7 +69,16 @@ class InitTests(CharacterStoreTestCase):
             ]
         self.assertEqual(
             char_columns,
-            ["id", "name", "tags", "preprompt", "rating", "notes", "created_at"],
+            [
+                "id",
+                "name",
+                "tags",
+                "extras",
+                "preprompt",
+                "rating",
+                "notes",
+                "created_at",
+            ],
         )
         self.assertEqual(ref_columns, ["id", "character_id", "relpath", "created_at"])
 
@@ -54,19 +87,94 @@ class InitTests(CharacterStoreTestCase):
         self.assertEqual(self.store.list(), [])
 
 
+class ExtrasMigrationTests(unittest.TestCase):
+    def test_init_migra_extras_en_bd_legacy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "nested" / "waifu.db"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            with closing(sqlite3.connect(str(db_path))) as conn, conn:
+                conn.execute(LEGACY_SCHEMA)
+                conn.execute(
+                    "INSERT INTO characters (name, tags, created_at) "
+                    "VALUES (?, ?, ?)",
+                    ("Vieja", json.dumps(["long hair"]), "2026-01-01"),
+                )
+            store = CharacterStore(db_path, refs_root=root / "refs")
+            store.init()
+            store.init()
+            with closing(sqlite3.connect(str(db_path))) as conn:
+                columns = [
+                    row[1] for row in conn.execute("PRAGMA table_info(characters)")
+                ]
+            self.assertIn("extras", columns)
+            row = store.get(1)
+            self.assertEqual(row["tags"], ["long hair"])
+            self.assertEqual(row["extras"], [])
+
+    def test_get_separa_extras_legacy_de_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "waifu.db"
+            with closing(sqlite3.connect(str(db_path))) as conn, conn:
+                conn.execute(LEGACY_SCHEMA)
+                conn.execute(
+                    "INSERT INTO characters (name, tags, created_at) "
+                    "VALUES (?, ?, ?)",
+                    (
+                        "Vieja",
+                        json.dumps(["long hair", "school uniform", "smile"]),
+                        "2026-01-01",
+                    ),
+                )
+            store = CharacterStore(db_path, refs_root=root / "refs")
+            store.init()
+            row = store.get(1)
+            self.assertEqual(row["tags"], ["long hair"])
+            self.assertEqual(row["extras"], ["school uniform", "smile"])
+            self.assertEqual(store.list()[0]["extras"], ["school uniform", "smile"])
+            self.assertTrue(store.update(1, tags=row["tags"]))
+            self.assertEqual(store.get(1)["extras"], ["school uniform", "smile"])
+
+
 class AddGetTests(CharacterStoreTestCase):
     def test_add_devuelve_id_y_defaults(self):
-        char_id = self.store.add("Aiko", ["long hair", "smile"])
+        char_id = self.store.add("Aiko", ["long hair", "blue eyes"])
         self.assertEqual(char_id, 1)
         row = self.store.get(char_id)
         self.assertEqual(row["id"], char_id)
         self.assertEqual(row["name"], "Aiko")
-        self.assertEqual(row["tags"], ["long hair", "smile"])
+        self.assertEqual(row["tags"], ["long hair", "blue eyes"])
+        self.assertEqual(row["extras"], [])
         self.assertEqual(row["preprompt"], "glossy")
         self.assertEqual(row["rating"], "sfw")
         self.assertEqual(row["notes"], "")
         self.assertTrue(row["created_at"])
         self.assertEqual(self.store.list(), [row])
+
+    def test_add_separa_extras_sin_perder_nada(self):
+        char_id = self.store.add(
+            "Aiko", ["long hair", "school uniform", "from above", "long hair"]
+        )
+        row = self.store.get(char_id)
+        self.assertEqual(row["tags"], ["long hair"])
+        self.assertEqual(row["extras"], ["school uniform", "from above"])
+
+    def test_add_acepta_extras_explicito_y_dedup(self):
+        char_id = self.store.add(
+            "Aiko",
+            ["long hair", "blue sky"],
+            extras=["school uniform", "Blue Sky", "nsfw"],
+        )
+        row = self.store.get(char_id)
+        self.assertEqual(row["tags"], ["long hair"])
+        self.assertEqual(row["extras"], ["blue sky", "school uniform", "nsfw"])
+
+    def test_add_extras_invalido(self):
+        with self.assertRaises(EngineError):
+            self.store.add("Aiko", ["long hair"], extras="school uniform")
+        with self.assertRaises(EngineError):
+            self.store.add("Aiko", ["long hair"], extras=["school uniform", 3])
 
     def test_add_normaliza_name_y_tags(self):
         char_id = self.store.add("  Aiko  ", [" long hair ", "long hair", "", "  "])
@@ -167,6 +275,41 @@ class UpdateTests(CharacterStoreTestCase):
 
     def test_update_inexistente_false(self):
         self.assertFalse(self.store.update(99, notes="x"))
+
+    def test_update_tags_preserva_extras_y_suma_los_nuevos(self):
+        char_id = self.store.add(
+            "Aiko", ["long hair", "school uniform", "from above"]
+        )
+        self.assertTrue(self.store.update(char_id, tags=["twintails", "blue sky"]))
+        row = self.store.get(char_id)
+        self.assertEqual(row["tags"], ["twintails"])
+        self.assertEqual(
+            row["extras"], ["school uniform", "from above", "blue sky"]
+        )
+        self.assertTrue(self.store.update(char_id, tags=["long hair"]))
+        row = self.store.get(char_id)
+        self.assertEqual(row["tags"], ["long hair"])
+        self.assertEqual(
+            row["extras"], ["school uniform", "from above", "blue sky"]
+        )
+
+    def test_update_extras_reemplaza(self):
+        char_id = self.store.add("Aiko", ["long hair", "school uniform"])
+        self.assertTrue(self.store.update(char_id, extras=["nsfw"]))
+        row = self.store.get(char_id)
+        self.assertEqual(row["tags"], ["long hair"])
+        self.assertEqual(row["extras"], ["nsfw"])
+        self.assertTrue(self.store.update(char_id, extras=[]))
+        self.assertEqual(self.store.get(char_id)["extras"], [])
+
+    def test_update_tags_con_extras_reemplaza_base(self):
+        char_id = self.store.add("Aiko", ["long hair", "school uniform"])
+        self.assertTrue(
+            self.store.update(char_id, tags=["twintails", "blue sky"], extras=["nsfw"])
+        )
+        row = self.store.get(char_id)
+        self.assertEqual(row["tags"], ["twintails"])
+        self.assertEqual(row["extras"], ["nsfw", "blue sky"])
 
 
 class DeleteTests(CharacterStoreTestCase):
@@ -336,6 +479,151 @@ class PromptFromTagsTests(unittest.TestCase):
             prompt_from_tags("long hair")
         with self.assertRaises(EngineError):
             prompt_from_tags(["smile", 3])
+
+
+class SplitCharacterTagsTests(unittest.TestCase):
+    def test_catalogo_real_separa_rasgos_y_extras(self):
+        split = split_character_tags(
+            [
+                "long hair",
+                "blue eyes",
+                "school uniform",
+                "from above",
+                "nsfw",
+                "blue sky",
+            ]
+        )
+        self.assertEqual(split["traits"], ["long hair", "blue eyes"])
+        self.assertEqual(
+            split["extras"],
+            ["school uniform", "from above", "nsfw", "blue sky"],
+        )
+
+    def test_calidad_sujeto_y_desconocidos_van_a_extras(self):
+        split = split_character_tags(
+            ["masterpiece", "1girl", "tag raro", "twintails", "smile"]
+        )
+        self.assertEqual(split["traits"], ["twintails"])
+        self.assertEqual(
+            split["extras"], ["masterpiece", "1girl", "tag raro", "smile"]
+        )
+
+    def test_normaliza_dedup_y_vacios(self):
+        split = split_character_tags([" long hair ", "LONG HAIR", "", "  "])
+        self.assertEqual(split["traits"], ["long hair"])
+        self.assertEqual(split["extras"], [])
+
+    def test_entrada_invalida(self):
+        with self.assertRaises(EngineError):
+            split_character_tags("long hair")
+        with self.assertRaises(EngineError):
+            split_character_tags(["long hair", 3])
+
+
+class PromptFromExtrasTests(unittest.TestCase):
+    def test_dedup_y_orden_estable(self):
+        self.assertEqual(
+            prompt_from_extras(["school uniform", "blue sky", "school uniform"]),
+            "school uniform, blue sky",
+        )
+
+    def test_dedup_case_insensitive_y_vacios(self):
+        self.assertEqual(
+            prompt_from_extras(["Blue Sky", "blue sky", "", " nsfw "]),
+            "Blue Sky, nsfw",
+        )
+        self.assertEqual(prompt_from_extras([]), "")
+
+    def test_entrada_invalida(self):
+        with self.assertRaises(EngineError):
+            prompt_from_extras("school uniform")
+        with self.assertRaises(EngineError):
+            prompt_from_extras(["school uniform", 3])
+
+
+class ProfileTests(CharacterStoreTestCase):
+    def write_loras(self, entries: list[dict]) -> Path:
+        path = self.root / "loras.json"
+        path.write_text(
+            json.dumps({"version": 1, "loras": entries}), encoding="utf-8"
+        )
+        return path
+
+    def lora_entry(self, lora_id: str, trigger: str = "aiko") -> dict:
+        return {
+            "id": lora_id,
+            "family": "anima",
+            "file": f"{lora_id}.safetensors",
+            "display_name": lora_id,
+            "trigger": trigger,
+            "default_weight": 0.8,
+            "source": "test",
+            "license": "test",
+        }
+
+    def test_auto_sin_lora_usa_rasgos_y_expone_extras(self):
+        char_id = self.store.add(
+            "Aiko", ["long hair", "blue eyes", "school uniform"]
+        )
+        path = self.write_loras([self.lora_entry("otro-lora")])
+        with mock.patch.object(loras, "DEFAULT_PATH", path):
+            payload = self.store.profile(char_id)
+        self.assertEqual(payload["mode"], "traits")
+        self.assertEqual(payload["text"], "long hair, blue eyes")
+        self.assertEqual(payload["extras"], ["school uniform"])
+        self.assertIsNone(payload["lora"])
+
+    def test_auto_con_lora_usa_trigger(self):
+        char_id = self.store.add("Aiko", ["long hair"])
+        path = self.write_loras([self.lora_entry(f"oc-{char_id}")])
+        with mock.patch.object(loras, "DEFAULT_PATH", path):
+            payload = self.store.profile(char_id)
+        self.assertEqual(payload["mode"], "trigger")
+        self.assertEqual(payload["text"], "aiko")
+        self.assertEqual(
+            payload["lora"],
+            {"id": f"oc-{char_id}", "default_weight": 0.8},
+        )
+
+    def test_auto_con_trigger_vacio_cae_a_rasgos(self):
+        char_id = self.store.add("Aiko", ["long hair"])
+        path = self.write_loras([self.lora_entry(f"oc-{char_id}", trigger="")])
+        with mock.patch.object(loras, "DEFAULT_PATH", path):
+            payload = self.store.profile(char_id)
+        self.assertEqual(payload["mode"], "traits")
+        self.assertEqual(payload["text"], "long hair")
+        self.assertEqual(payload["lora"]["id"], f"oc-{char_id}")
+
+    def test_trigger_explicito(self):
+        char_id = self.store.add("Aiko", ["long hair"])
+        path = self.write_loras([self.lora_entry(f"oc-{char_id}", "mika_oc")])
+        with mock.patch.object(loras, "DEFAULT_PATH", path):
+            payload = self.store.profile(char_id, "trigger")
+        self.assertEqual(payload["mode"], "trigger")
+        self.assertEqual(payload["text"], "mika_oc")
+
+    def test_traits_explicito_con_lora(self):
+        char_id = self.store.add("Aiko", ["long hair"])
+        path = self.write_loras([self.lora_entry(f"oc-{char_id}")])
+        with mock.patch.object(loras, "DEFAULT_PATH", path):
+            payload = self.store.profile(char_id, "traits")
+        self.assertEqual(payload["mode"], "traits")
+        self.assertEqual(payload["text"], "long hair")
+        self.assertEqual(payload["lora"]["id"], f"oc-{char_id}")
+
+    def test_trigger_sin_lora_error(self):
+        char_id = self.store.add("Aiko", ["long hair"])
+        path = self.write_loras([self.lora_entry("otro-lora")])
+        with mock.patch.object(loras, "DEFAULT_PATH", path):
+            with self.assertRaises(EngineError):
+                self.store.profile(char_id, "trigger")
+
+    def test_mode_invalido_y_oc_inexistente(self):
+        char_id = self.store.add("Aiko", [])
+        with self.assertRaises(EngineError):
+            self.store.profile(char_id, "nope")
+        with self.assertRaises(EngineError):
+            self.store.profile(99)
 
 
 if __name__ == "__main__":

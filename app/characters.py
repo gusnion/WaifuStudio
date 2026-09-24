@@ -1,10 +1,13 @@
-"""OCs guardables con referencias (M9-B1) en la sqlite de WAIFU.
+"""OCs guardables con referencias (M9-B1) y rasgos/extras (M9-B3) en la sqlite.
 
 ``CharacterStore`` comparte ``data/waifu.db`` con las generaciones: la tabla
-``characters`` guarda name unico, tags (JSON), preprompt de la familia anima,
-rating y notes; ``character_refs`` apunta a copias locales bajo
-``refs_root/<id>/<uuid>.<ext>``. ``prompt_from_tags`` compone el prompt positivo
-deduplicado y en orden estable. Sin red ni GPU.
+``characters`` guarda name unico, tags (JSON, solo rasgos del personaje),
+extras (JSON: ropa/entorno/safety...), preprompt de la familia anima, rating y
+notes; ``character_refs`` apunta a copias locales bajo
+``refs_root/<id>/<uuid>.<ext>``. ``split_character_tags`` separa rasgos de
+extras con el catalogo real (``app.prompt_zones``), ``prompt_from_tags`` y
+``prompt_from_extras`` componen textos deduplicados y ``profile`` resuelve
+trigger vs rasgos buscando el LoRA ``oc-<id>`` en ``app.loras``. Sin red ni GPU.
 """
 
 from __future__ import annotations
@@ -18,8 +21,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app import loras
 from app.engine import EngineError
 from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT, list_preprompts
+from app.prompt_zones import classify_tag, general_subcat
 
 RATINGS = ("sfw", "nsfw")
 REF_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
@@ -29,6 +34,7 @@ CREATE TABLE IF NOT EXISTS characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     tags TEXT NOT NULL DEFAULT '[]',
+    extras TEXT NOT NULL DEFAULT '[]',
     preprompt TEXT NOT NULL DEFAULT 'glossy',
     rating TEXT NOT NULL DEFAULT 'sfw',
     notes TEXT NOT NULL DEFAULT '',
@@ -45,7 +51,7 @@ CREATE TABLE IF NOT EXISTS character_refs (
 )
 """
 
-_CHARACTER_COLUMNS = "id, name, tags, preprompt, rating, notes, created_at"
+_CHARACTER_COLUMNS = "id, name, tags, extras, preprompt, rating, notes, created_at"
 _REF_COLUMNS = "id, character_id, relpath, created_at"
 
 
@@ -94,6 +100,29 @@ def _validate_notes(notes: object) -> str:
     return notes
 
 
+def _merge_extras(*groups: list[str]) -> list[str]:
+    """Une listas de extras deduplicando case-insensitive (primera aparicion)."""
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for tag in group:
+            folded = tag.lower()
+            if folded in seen:
+                continue
+            seen.add(folded)
+            merged.append(tag)
+    return merged
+
+
+def _split_for_storage(
+    tags: object, extras: object = None
+) -> tuple[list[str], list[str]]:
+    """Valida ``tags`` y ``extras`` y devuelve ``(traits, extras)`` sin perder nada."""
+    split = split_character_tags(tags)
+    explicit = _validate_tags(extras) if extras is not None else []
+    return split["traits"], _merge_extras(split["extras"], explicit)
+
+
 def is_sheet(relpath: str | Path) -> bool:
     """True si la ref es una hoja de catalogo (nombre con prefijo `sheet_`)."""
     return Path(str(relpath)).name.startswith("sheet_")
@@ -116,12 +145,23 @@ class CharacterStore:
         return connection
 
     def init(self) -> None:
-        """Crea el directorio padre y las tablas si faltan (idempotente)."""
+        """Crea el directorio padre y las tablas si faltan (idempotente).
+
+        Migra ``characters.extras`` (M9-B3) con ``ALTER TABLE`` si falta.
+        """
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             with closing(self._connect()) as conn, conn:
                 conn.execute(_CHARACTERS_SCHEMA)
                 conn.execute(_REFS_SCHEMA)
+                columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(characters)")
+                }
+                if "extras" not in columns:
+                    conn.execute(
+                        "ALTER TABLE characters "
+                        "ADD COLUMN extras TEXT NOT NULL DEFAULT '[]'"
+                    )
         except (sqlite3.Error, OSError) as exc:
             raise EngineError(f"characters init fallo en {self.db_path}: {exc}") from exc
 
@@ -132,10 +172,15 @@ class CharacterStore:
         preprompt: str = DEFAULT_PREPROMPT,
         rating: str = "sfw",
         notes: str = "",
+        extras: list[str] | None = None,
     ) -> int:
-        """Inserta un OC y devuelve su id; EngineError si la validacion falla."""
+        """Inserta un OC y devuelve su id; EngineError si la validacion falla.
+
+        ``tags`` guarda solo rasgos del personaje; el resto (ropa/entorno/
+        safety...) pasa a ``extras`` junto con ``extras`` explicito.
+        """
         clean_name = _validate_name(name)
-        clean_tags = _validate_tags(tags)
+        traits, clean_extras = _split_for_storage(tags, extras)
         clean_preprompt = _validate_preprompt(preprompt)
         clean_rating = _validate_rating(rating)
         clean_notes = _validate_notes(notes)
@@ -149,11 +194,12 @@ class CharacterStore:
                     raise EngineError(f"nombre de OC ya existe: {clean_name!r}")
                 cursor = conn.execute(
                     "INSERT INTO characters "
-                    "(name, tags, preprompt, rating, notes, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    "(name, tags, extras, preprompt, rating, notes, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         clean_name,
-                        json.dumps(clean_tags),
+                        json.dumps(traits),
+                        json.dumps(clean_extras),
                         clean_preprompt,
                         clean_rating,
                         clean_notes,
@@ -189,25 +235,91 @@ class CharacterStore:
             raise EngineError(f"characters list fallo: {exc}") from exc
         return [self._row_to_dict(row) for row in rows]
 
+    def profile(self, char_id: int, mode: str = "auto") -> dict:
+        """Perfil de prompt del OC (M9-B3): trigger/rasgos, extras y LoRA.
+
+        ``mode`` es ``auto|trigger|traits``: ``auto`` usa el trigger del LoRA
+        ``oc-<id>`` si esta registrado y no esta vacio, si no los rasgos;
+        ``trigger`` exige LoRA registrado (EngineError si falta); ``traits``
+        compone los rasgos. Devuelve ``{"text", "mode", "extras", "lora"}`` con
+        el modo resuelto y el LoRA ``{"id", "default_weight"}`` o None.
+        EngineError si el OC no existe o el mode es invalido.
+        """
+        if mode not in ("auto", "trigger", "traits"):
+            raise EngineError(
+                f"mode de perfil invalido; usar auto|trigger|traits: {mode!r}"
+            )
+        row = self.get(char_id)
+        if row is None:
+            raise EngineError(f"OC desconocido: {char_id}")
+        try:
+            lora = loras.get(f"oc-{char_id}")
+        except EngineError:
+            lora = None
+        resolved = mode
+        if mode == "auto":
+            resolved = (
+                "trigger"
+                if lora is not None and lora["trigger"].strip()
+                else "traits"
+            )
+        if resolved == "trigger":
+            if lora is None:
+                raise EngineError(f"OC sin LoRA entrenado: oc-{char_id}")
+            text = lora["trigger"].strip()
+            if not text:
+                raise EngineError(f"LoRA {lora['id']!r} sin trigger")
+        else:
+            text = prompt_from_tags(row["tags"])
+        return {
+            "text": text,
+            "mode": resolved,
+            "extras": list(row["extras"]),
+            "lora": (
+                {"id": lora["id"], "default_weight": lora["default_weight"]}
+                if lora is not None
+                else None
+            ),
+        }
+
     def update(
         self,
         char_id: int,
         *,
         name: str | None = None,
         tags: list[str] | None = None,
+        extras: list[str] | None = None,
         preprompt: str | None = None,
         rating: str | None = None,
         notes: str | None = None,
     ) -> bool:
-        """Actualiza solo los campos dados; False si el id no existe."""
+        """Actualiza solo los campos dados; False si el id no existe.
+
+        Con ``tags`` los rasgos reemplazan a los guardados y los extras que
+        traiga se suman a los existentes (o a ``extras``, que los reemplaza);
+        sin tocar ``tags``/``extras`` los extras se preservan.
+        """
         assignments: list[str] = []
         values: list[Any] = []
         if name is not None:
             assignments.append("name = ?")
             values.append(_validate_name(name))
         if tags is not None:
+            split = split_character_tags(tags)
+            stored = self.get(char_id)
+            if extras is not None:
+                current_extras = _validate_tags(extras)
+            elif stored is not None:
+                current_extras = list(stored["extras"])
+            else:
+                current_extras = []
             assignments.append("tags = ?")
-            values.append(json.dumps(_validate_tags(tags)))
+            assignments.append("extras = ?")
+            values.append(json.dumps(split["traits"]))
+            values.append(json.dumps(_merge_extras(current_extras, split["extras"])))
+        elif extras is not None:
+            assignments.append("extras = ?")
+            values.append(json.dumps(_validate_tags(extras)))
         if preprompt is not None:
             assignments.append("preprompt = ?")
             values.append(_validate_preprompt(preprompt))
@@ -386,19 +498,56 @@ class CharacterStore:
 
     @staticmethod
     def _row_to_dict(row: tuple) -> dict:
+        """Fila a dict separando rasgos/extras, tambien en filas legacy.
+
+        Las filas guardadas antes de M9-B3 pueden traer extras dentro de
+        ``tags``; aqui se separan en la respuesta (sin reescribir la fila) para
+        que ``get``/``list`` devuelvan siempre ``tags`` (rasgos) y ``extras``.
+        """
         try:
             tags = json.loads(row[2])
+            extras = json.loads(row[3])
         except (TypeError, ValueError) as exc:
-            raise EngineError(f"characters: JSON de tags malformado en {row[0]}: {exc}") from exc
+            raise EngineError(
+                f"characters: JSON de tags/extras malformado en {row[0]}: {exc}"
+            ) from exc
+        if not isinstance(tags, (list, tuple)) or not isinstance(extras, (list, tuple)):
+            raise EngineError(f"characters: tags/extras no son listas en {row[0]}")
+        split = split_character_tags(tags)
         return {
             "id": row[0],
             "name": row[1],
-            "tags": tags,
-            "preprompt": row[3],
-            "rating": row[4],
-            "notes": row[5],
-            "created_at": row[6],
+            "tags": split["traits"],
+            "extras": _merge_extras(split["extras"], _validate_tags(extras)),
+            "preprompt": row[4],
+            "rating": row[5],
+            "notes": row[6],
+            "created_at": row[7],
         }
+
+
+def split_character_tags(tags: list[str]) -> dict:
+    """Separa tags de OC en ``traits`` (rasgos) y ``extras`` (M9-B3).
+
+    Usa el catalogo real de ``app.prompt_zones``: ``traits`` son los tags de
+    subcategoria ``rasgos`` (grupos hair/eyes/face/body); ``extras`` el resto
+    de general (ropa/accesorios/accion/expresion/camara/fondo/otros) y tambien
+    calidad/safety/sujeto (no definen al personaje). Dedup case-insensitive en
+    orden estable; EngineError si ``tags`` no es lista de str.
+    """
+    traits: list[str] = []
+    extras: list[str] = []
+    seen: set[str] = set()
+    for tag in _validate_tags(tags):
+        folded = tag.lower()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        if classify_tag(tag) == "general" and general_subcat(tag) == "rasgos":
+            traits.append(tag)
+        else:
+            extras.append(tag)
+    return {"traits": traits, "extras": extras}
 
 
 def prompt_from_tags(tags: list[str]) -> str:
@@ -421,4 +570,17 @@ def prompt_from_tags(tags: list[str]) -> str:
     return ", ".join(merged)
 
 
-__all__ = ["CharacterStore", "is_sheet", "prompt_from_tags"]
+def prompt_from_extras(extras: list[str]) -> str:
+    """Une extras con ', ' deduplicando (case-insensitive) y en orden estable."""
+    if not isinstance(extras, (list, tuple)):
+        raise EngineError(f"extras debe ser lista de str: {extras!r}")
+    return prompt_from_tags(extras)
+
+
+__all__ = [
+    "CharacterStore",
+    "is_sheet",
+    "prompt_from_extras",
+    "prompt_from_tags",
+    "split_character_tags",
+]

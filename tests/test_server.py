@@ -14,6 +14,7 @@ from unittest import mock
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from app import loras as loras_module
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
@@ -1667,7 +1668,8 @@ class CharactersRoutesTests(ServerTestCase):
     def test_crud(self):
         client = self.make_client()
         created = client.post(
-            "/api/characters", json={"name": "Aiko", "tags": ["long hair", "smile"]}
+            "/api/characters",
+            json={"name": "Aiko", "tags": ["long hair", "school uniform"]},
         )
         self.assertEqual(created.status_code, 200)
         char_id = created.json()["id"]
@@ -1675,18 +1677,38 @@ class CharactersRoutesTests(ServerTestCase):
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(len(listing.json()), 1)
         self.assertEqual(listing.json()[0]["name"], "Aiko")
+        self.assertEqual(listing.json()[0]["tags"], ["long hair"])
+        self.assertEqual(listing.json()[0]["extras"], ["school uniform"])
         got = client.get(f"/api/characters/{char_id}")
         self.assertEqual(got.status_code, 200)
-        self.assertEqual(got.json()["tags"], ["long hair", "smile"])
+        self.assertEqual(got.json()["tags"], ["long hair"])
+        self.assertEqual(got.json()["extras"], ["school uniform"])
         updated = client.put(
-            f"/api/characters/{char_id}", json={"name": "Mika", "rating": "nsfw"}
+            f"/api/characters/{char_id}",
+            json={"name": "Mika", "rating": "nsfw", "extras": []},
         )
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.json()["name"], "Mika")
         self.assertEqual(updated.json()["rating"], "nsfw")
+        self.assertEqual(updated.json()["extras"], [])
         deleted = client.delete(f"/api/characters/{char_id}")
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(client.get(f"/api/characters/{char_id}").status_code, 404)
+
+    def test_add_con_extras_explicito(self):
+        client = self.make_client()
+        created = client.post(
+            "/api/characters",
+            json={
+                "name": "Aiko",
+                "tags": ["long hair"],
+                "extras": ["blue sky"],
+            },
+        )
+        self.assertEqual(created.status_code, 200)
+        row = client.get(f"/api/characters/{created.json()['id']}").json()
+        self.assertEqual(row["tags"], ["long hair"])
+        self.assertEqual(row["extras"], ["blue sky"])
 
     def test_validacion_400(self):
         client = self.make_client()
@@ -1716,6 +1738,91 @@ class CharactersRoutesTests(ServerTestCase):
         self.assertEqual(
             client.delete("/api/characters/99/refs/1").status_code, 404
         )
+
+
+class CharacterProfileRoutesTests(ServerTestCase):
+    def add_character(self, client, tags=None, extras=None) -> int:
+        payload = {"name": "Aiko", "tags": tags if tags is not None else []}
+        if extras is not None:
+            payload["extras"] = extras
+        return client.post("/api/characters", json=payload).json()["id"]
+
+    def write_loras(self, entries: list[dict]) -> Path:
+        path = self.config.data_dir / "loras-test.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"version": 1, "loras": entries}), encoding="utf-8"
+        )
+        return path
+
+    def lora_entry(self, lora_id: str, trigger: str = "aiko") -> dict:
+        return {
+            "id": lora_id,
+            "family": "anima",
+            "file": f"{lora_id}.safetensors",
+            "display_name": lora_id,
+            "trigger": trigger,
+            "default_weight": 0.7,
+            "source": "test",
+            "license": "test",
+        }
+
+    def test_200_traits_con_extras(self):
+        client = self.make_client()
+        char_id = self.add_character(
+            client, ["long hair", "school uniform", "blue sky"]
+        )
+        path = self.write_loras([self.lora_entry("otro-lora")])
+        with mock.patch.object(loras_module, "DEFAULT_PATH", path):
+            response = client.get(f"/api/characters/{char_id}/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "text": "long hair",
+                "mode": "traits",
+                "extras": ["school uniform", "blue sky"],
+                "lora": None,
+            },
+        )
+
+    def test_200_auto_trigger_y_traits_con_lora(self):
+        client = self.make_client()
+        char_id = self.add_character(client, ["long hair", "blue eyes"])
+        path = self.write_loras([self.lora_entry(f"oc-{char_id}", "aiko_oc")])
+        with mock.patch.object(loras_module, "DEFAULT_PATH", path):
+            auto = client.get(f"/api/characters/{char_id}/profile")
+            traits = client.get(
+                f"/api/characters/{char_id}/profile", params={"mode": "traits"}
+            )
+            trigger = client.get(
+                f"/api/characters/{char_id}/profile", params={"mode": "trigger"}
+            )
+        self.assertEqual(auto.status_code, 200)
+        self.assertEqual(auto.json()["mode"], "trigger")
+        self.assertEqual(auto.json()["text"], "aiko_oc")
+        self.assertEqual(
+            auto.json()["lora"], {"id": f"oc-{char_id}", "default_weight": 0.7}
+        )
+        self.assertEqual(traits.json()["mode"], "traits")
+        self.assertEqual(traits.json()["text"], "long hair, blue eyes")
+        self.assertEqual(traits.json()["lora"]["id"], f"oc-{char_id}")
+        self.assertEqual(trigger.json()["text"], "aiko_oc")
+
+    def test_404_oc_inexistente(self):
+        client = self.make_client()
+        response = client.get("/api/characters/99/profile")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_400_mode_invalido(self):
+        client = self.make_client()
+        char_id = self.add_character(client, ["long hair"])
+        response = client.get(
+            f"/api/characters/{char_id}/profile", params={"mode": "nope"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
 
 
 class CharacterRefsRoutesTests(ServerTestCase):
@@ -2191,6 +2298,42 @@ class IndexTests(ServerTestCase):
             "Usar como referencia",
             "IPAdapter (M10)",
             "no se adjunta como referencia I2I",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
+class CharacterProfileUiStaticTests(ServerTestCase):
+    def test_index_incluye_oc_picker_y_extras(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="zone-popover-ocs"',
+            'id="zone-ocs-list"',
+            'id="zone-ocs-extras"',
+            'id="zone-ocs-traits"',
+            "aplicar extras del OC a General",
+            "usar rasgos en vez del trigger",
+            'id="oc-extras-box"',
+            'id="btn-oc-extras-move"',
+            "Mover a General",
+            "Solo rasgos del personaje",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_compone_oc_via_profile(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "OC_TRAIT_GROUPS",
+            "/api/characters/${character.id}/profile",
+            "?mode=",
+            "fetchCharacterProfile",
+            "applyOcFromPicker",
+            "zoneOcApplied",
+            "selectLora",
+            "moveOcExtrasToGeneral",
+            "insertPromptTags",
+            "removePromptTags",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

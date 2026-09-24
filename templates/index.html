@@ -42,6 +42,19 @@
             <input id="zone-popover-search" type="search" placeholder="Buscar opciones...">
             <div id="zone-popover-tabs" class="zone-popover-tabs"></div>
             <p id="zone-popover-note" class="zone-popover-note hidden"></p>
+            <div id="zone-popover-ocs" class="zone-popover-ocs hidden">
+              <strong class="zone-popover-ocs-title">Mis OCs</strong>
+              <div id="zone-ocs-list" class="zone-ocs-list"></div>
+              <label id="zone-ocs-extras-label" class="zone-option">
+                <input id="zone-ocs-extras" type="checkbox" checked>
+                <span>aplicar extras del OC a General</span>
+              </label>
+              <label id="zone-ocs-traits-label" class="zone-option hidden">
+                <input id="zone-ocs-traits" type="checkbox">
+                <span>usar rasgos en vez del trigger</span>
+              </label>
+              <p id="zone-ocs-status" class="zone-popover-note"></p>
+            </div>
             <div id="zone-popover-groups" class="zone-popover-groups"></div>
             <div id="zone-popover-selected" class="zone-popover-selected"></div>
             <form id="zone-insert-form" class="zone-insert">
@@ -257,6 +270,7 @@
       <div class="oc-body">
         <section class="oc-section">
           <h3>Catálogo</h3>
+          <p id="oc-catalog-note" class="oc-refs-note">Solo rasgos del personaje (pelo/ojos/cara/cuerpo); ropa/entorno se eligen en Composición (General).</p>
           <div class="oc-catalog-controls">
             <select id="oc-catalog-group" aria-label="Grupo de tags"></select>
             <input id="oc-catalog-search" type="search" placeholder="Buscar tag...">
@@ -265,6 +279,12 @@
           <div class="oc-selected-box">
             <h3>Seleccionados</h3>
             <div id="oc-selected" class="oc-chips"></div>
+          </div>
+          <div id="oc-extras-box" class="oc-extras-box hidden">
+            <h3>Extras guardados</h3>
+            <p id="oc-extras-note" class="oc-refs-note">Ropa/entorno guardados en el OC (legacy). No definen al personaje; «Mover a General» los inserta en el prompt actual y, si confirmas, los quita del OC.</p>
+            <div id="oc-extras" class="oc-chips"></div>
+            <button id="btn-oc-extras-move" type="button">Mover a General</button>
           </div>
         </section>
         <section class="oc-section">

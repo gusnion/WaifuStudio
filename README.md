@@ -20,7 +20,7 @@ Sin nube obligatoria: el engine corre en loopback y la app consume su API local.
 E:\IA\WAIFU
 ├─ app/
 │  ├─ __init__.py
-│  ├─ characters.py   # OCs guardables con referencias en data/waifu.db (M9-B1)
+│  ├─ characters.py   # OCs con referencias, rasgos/extras y perfil en data/waifu.db (M9-B1/B3)
 │  ├─ config.py       # configuración central congelada
 │  ├─ engine.py       # cliente API del engine ComfyUI (M8-03)
 │  ├─ enhancer.py     # «Mejorar prompt»: LLM local + RAG + preprompts (M8-20)
@@ -389,6 +389,47 @@ checkboxes con etiquetas visibles, input manual + «Añadir» e «Insertar»
 (varias llamadas a `/api/prompt/insert`), tabs por subcategoría en general y
 la subcategoría Rasgos bloqueada con la nota «Fijado por el OC» cuando hay un
 OC activo.
+
+## OCs en Personaje y rasgos/extras (M9-B3)
+
+`app\characters.py` separa los rasgos del personaje de los extras de escena con el
+catálogo real de `app.prompt_zones`:
+
+- **Migración idempotente**: `characters` añade `extras TEXT NOT NULL DEFAULT '[]'`
+  (`ALTER TABLE` en `init()` si falta, como el `kind` del store); las BD antiguas
+  quedan con `extras` vacío y `get`/`list` devuelven siempre `tags` (rasgos) y
+  `extras`.
+- `split_character_tags(tags)`: `traits` = subcategoría `rasgos` (grupos
+  hair/eyes/face/body); `extras` = ropa/accesorios/acción/expresión/cámara/fondo/
+  otros y también calidad/safety/sujeto (no definen al personaje). Dedup
+  case-insensitive en orden estable.
+- `add`/`update` normalizan: `tags` guarda solo rasgos y los extras se separan a
+  `extras` (aceptan además `extras` explícito); `update(tags=...)` preserva los
+  extras guardados y suma los nuevos, `update(extras=...)` los reemplaza. Nada se
+  pierde. `prompt_from_extras(extras)` usa el mismo dedup/orden que
+  `prompt_from_tags`.
+- `CharacterStore.profile(char_id, mode="auto")`: busca el LoRA `oc-<id>` en
+  `app.loras` y devuelve `{"text", "mode", "extras", "lora"}`; `auto` usa el
+  trigger si hay LoRA y no está vacío, si no los rasgos; `traits` compone los
+  rasgos (con LoRA o sin él) y `trigger` sin LoRA lanza `EngineError`.
+
+`GET /api/characters/{id}/profile?mode=auto|trigger|traits` publica ese payload
+(404 si el OC no existe, 400 con `mode` inválido); el CRUD devuelve `extras` en
+las filas y acepta `extras` en `POST`/`PUT`.
+
+La UI mantiene el **OC Maker** pero el catálogo del formulario se limita a los
+grupos de rasgos (pelo/ojos/cara/cuerpo) con la nota «Solo rasgos del personaje;
+ropa/entorno se eligen en Composición (General)»; los extras guardados (legacy)
+se listan aparte con «Mover a General», que los inserta en el prompt actual
+(zona general vía `/api/prompt/insert`) y, solo si el usuario confirma, los quita
+del OC. El botón «Usar» y el picker **«+ Personaje»** componen vía `profile`: el
+popover de la zona Personaje muestra **«Mis OCs»**, inserta el `text` en
+`character`, autoselecciona el LoRA `oc-<id>` con su `default_weight` en el panel
+LoRAs (avisando si no está en la familia activa), ofrece el checkbox «aplicar
+extras del OC a General» (default ON, por subcategoría) y, cuando hay LoRA, el
+toggle «usar rasgos en vez del trigger» (repite con `mode=traits`); «Usar» hace
+lo mismo desde el modal sin romper las referencias (sigue adjuntando la primera
+ref que no sea hoja).
 
 ## Video (F4)
 

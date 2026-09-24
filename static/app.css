@@ -414,6 +414,22 @@ input[type="checkbox"] {
   padding-right: 0.2rem;
 }
 
+.oc-extras-box {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  padding: 0.55rem;
+  background: var(--panel-2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.oc-extras-box button {
+  align-self: flex-start;
+}
+
 .oc-chip {
   padding: 0.25rem 0.55rem;
   border-radius: 999px;
@@ -778,6 +794,35 @@ input[type="checkbox"] {
 .zone-popover-note {
   margin: 0;
   color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.zone-popover-ocs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.zone-popover-ocs-title {
+  color: var(--accent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.zone-ocs-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.zone-oc {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
   font-size: 0.75rem;
 }
 

@@ -516,6 +516,7 @@ def create_app(
             preprompt=payload.get("preprompt") or DEFAULT_PREPROMPT,
             rating=payload.get("rating") or "sfw",
             notes=payload.get("notes") or "",
+            extras=payload.get("extras"),
         )
         return {"id": char_id}
 
@@ -526,13 +527,20 @@ def create_app(
             return JSONResponse(status_code=404, content={"error": "OC desconocido"})
         return row
 
+    @app.get("/api/characters/{char_id}/profile")
+    async def api_character_profile(char_id: int, mode: str = "auto") -> Any:
+        """Perfil del OC (M9-B3): trigger/rasgos, extras y LoRA oc-<id>."""
+        if chars.get(char_id) is None:
+            return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+        return chars.profile(char_id, mode)
+
     @app.put("/api/characters/{char_id}")
     async def api_character_update(char_id: int, payload: dict = Body(...)) -> Any:
         if chars.get(char_id) is None:
             return JSONResponse(status_code=404, content={"error": "OC desconocido"})
         fields = {
             key: payload[key]
-            for key in ("name", "tags", "preprompt", "rating", "notes")
+            for key in ("name", "tags", "extras", "preprompt", "rating", "notes")
             if key in payload
         }
         chars.update(char_id, **fields)
