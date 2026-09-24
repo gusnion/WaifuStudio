@@ -21,6 +21,7 @@ from app.enhancer import (
     load_local_llm,
     retrieve,
 )
+from app.prompt_zones import canonical_order
 
 GOLDEN_SYS_PROMPT = (
     "You are the local prompt planner for an anime image generator trained on danbooru tags.\n"
@@ -244,7 +245,7 @@ class EnhanceTests(unittest.TestCase):
             self.assertIn(note, user)
         expected_raw = "1girl, smile, masterpiece, nsfw, uncensored"
         expected_positive, expected_negative = apply_preprompt(expected_raw)
-        self.assertEqual(result["positive"], expected_positive)
+        self.assertEqual(result["positive"], canonical_order(expected_positive))
         self.assertEqual(result["negative"], expected_negative)
         self.assertEqual(result["raw"], expected_raw)
 
@@ -347,7 +348,7 @@ class TagNormalizationTests(unittest.TestCase):
     def test_normalizacion_antes_del_preprompt(self):
         llm = FakeLLM("coastal_city, score_9")
         result = enhance("1girl", preprompt="ninguno", llm=llm, k=0)
-        self.assertEqual(result["positive"], "coastal city, score_9")
+        self.assertEqual(result["positive"], "score_9, coastal city")
 
     def test_score_en_mayusculas_queda_intacto(self):
         llm = FakeLLM("SCORE_9, score_12")
@@ -359,6 +360,48 @@ class TagNormalizationTests(unittest.TestCase):
         result = enhance("1girl", llm=FakeLLM(raw), k=0)
         self.assertEqual(result["raw"], raw)
         self.assertEqual(result["positive"], apply_preprompt(raw)[0])
+
+
+class CanonicalPositiveTests(unittest.TestCase):
+    """El positivo de `enhance` sale reordenado por `canonical_order` (M9-C2)."""
+
+    def test_llm_desordenado_queda_canonico_sin_preprompt(self):
+        llm = FakeLLM("blue sky, long hair, nsfw, 1girl, masterpiece, school uniform")
+        result = enhance("dibujo", rating="nsfw", preprompt="ninguno", llm=llm, k=0)
+        self.assertEqual(
+            result["raw"],
+            "blue sky, long hair, nsfw, 1girl, masterpiece, school uniform, "
+            "uncensored",
+        )
+        self.assertEqual(
+            result["positive"],
+            "masterpiece, nsfw, uncensored, 1girl, long hair, school uniform, "
+            "blue sky",
+        )
+
+    def test_calidad_primero_y_general_por_subcategorias_con_preprompt(self):
+        llm = FakeLLM("blue sky, long hair, 1girl, smile")
+        result = enhance("x", llm=llm, k=0)
+        self.assertEqual(
+            result["positive"],
+            "masterpiece, best quality, absurdres, highres, score_7, score_8, "
+            "score_9, 1girl, long hair, smile, blue sky",
+        )
+
+    def test_negativo_no_se_reordena(self):
+        llm = FakeLLM("1girl, smile")
+        result = enhance("x", llm=llm, k=0)
+        self.assertEqual(
+            result["negative"], apply_preprompt("1girl, smile", "anima", "glossy")[1]
+        )
+
+    def test_raw_conserva_el_orden_del_llm(self):
+        llm = FakeLLM("blue sky, long hair, nsfw, 1girl, masterpiece")
+        result = enhance("x", rating="nsfw", preprompt="ninguno", llm=llm, k=0)
+        self.assertEqual(
+            result["raw"],
+            "blue sky, long hair, nsfw, 1girl, masterpiece, uncensored",
+        )
 
 
 class StrengthPresetTests(unittest.TestCase):

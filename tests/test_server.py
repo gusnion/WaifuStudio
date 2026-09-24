@@ -26,6 +26,7 @@ from app.params import (
     SAMPLER_NAMES,
     SCHEDULER_NAMES,
 )
+from app.prompt_zones import CAMERA_TAGS
 from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
@@ -389,6 +390,48 @@ class PromptZonesRoutesTests(ServerTestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
 
+    def test_options_general_200(self):
+        response = self.make_client().get(
+            "/api/prompt/options", params={"zone": "general"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"zone", "subgroups"})
+        self.assertEqual(data["zone"], "general")
+        ids = [sub["id"] for sub in data["subgroups"]]
+        self.assertIn("camara", ids)
+        self.assertIn("rasgos", ids)
+        self.assertIn("otros", ids)
+        camara = next(sub for sub in data["subgroups"] if sub["id"] == "camara")
+        self.assertEqual(
+            [item["tag"] for item in camara["tags"]], list(CAMERA_TAGS)
+        )
+        for item in camara["tags"]:
+            self.assertEqual(set(item), {"tag", "label"})
+
+    def test_options_quality_safety_subject_character_200(self):
+        client = self.make_client()
+        for zone in ("quality", "safety", "subject"):
+            with self.subTest(zone=zone):
+                response = client.get("/api/prompt/options", params={"zone": zone})
+                self.assertEqual(response.status_code, 200)
+                data = response.json()
+                self.assertEqual(data["zone"], zone)
+                self.assertEqual([sub["id"] for sub in data["subgroups"]], [zone])
+                self.assertTrue(data["subgroups"][0]["tags"])
+        character = client.get(
+            "/api/prompt/options", params={"zone": "character"}
+        ).json()
+        self.assertEqual(character, {"zone": "character", "subgroups": []})
+
+    def test_options_zona_invalida_400(self):
+        client = self.make_client()
+        for params in ({}, {"zone": ""}, {"zone": "nope"}):
+            with self.subTest(params=params):
+                response = client.get("/api/prompt/options", params=params)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
 
 class CapturingLLM:
     """LLM falso que acepta `temperature` por kwarg y captura las llamadas."""
@@ -527,9 +570,14 @@ class EnhanceRouteTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertIn("1girl, smile", data["positive"])
-        self.assertTrue(data["positive"].endswith("sfw"))
-        self.assertIn("masterpiece", data["positive"])
+        tags = [tag.strip() for tag in data["positive"].split(",")]
+        self.assertIn("masterpiece", tags)
+        self.assertIn("sfw", tags)
+        self.assertIn("1girl", tags)
+        self.assertIn("smile", tags)
+        self.assertLess(tags.index("masterpiece"), tags.index("sfw"))
+        self.assertLess(tags.index("sfw"), tags.index("1girl"))
+        self.assertLess(tags.index("1girl"), tags.index("smile"))
         self.assertIn("worst quality", data["negative"])
 
     def test_sin_llm_503(self):
@@ -2026,6 +2074,11 @@ class IndexTests(ServerTestCase):
             'id="zone-insert-form"',
             'id="zone-insert-input"',
             'id="zone-insert-cancel"',
+            'id="zone-popover"',
+            'id="zone-popover-search"',
+            'id="zone-popover-tabs"',
+            'id="zone-popover-groups"',
+            'id="zone-popover-insert"',
             'data-zone="character"',
             "+ Personaje",
         ):
@@ -2048,9 +2101,12 @@ class IndexTests(ServerTestCase):
             "setProgress",
             "setTimeout(resolve, 1000)",
             "/api/prompt/zones",
+            "/api/prompt/options",
             "/api/prompt/insert",
             "refreshPromptZones",
             "openZoneInsert",
+            "zonePopover",
+            "Fijado por el OC",
             "}, 300);",
         ):
             with self.subTest(marker=marker):

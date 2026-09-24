@@ -338,6 +338,39 @@ añaden el tag con `/api/prompt/insert` (el textarea sigue siendo la fuente de
 verdad); el chip destacado **«+ Personaje»** inserta en la zona `character`
 (el caso del nombre del OC).
 
+## Opciones por zona y orden canónico (M9-C2)
+
+`app\prompt_zones.py` añade la capa de opciones y el orden canónico:
+
+- `GENERAL_SUBCATS` y `GENERAL_SUBCAT_LABELS`: subcategorías de `general` en
+  orden —`rasgos`, `ropa`, `accesorios`, `accion`, `expresion`, `camara`,
+  `fondo`, `otros`— con labels ES (`Rasgos`, `Ropa`, `Accesorios`,
+  `Acción/Pose`, `Expresión`, `Cámara`, `Fondo/Escena`, `Otros`).
+- `general_subcat(tag)`: `CAMERA_TAGS` (~21 encuadres/ángulos: `close-up`,
+  `portrait`, `full body`, `from above`, `dutch angle`, `looking at viewer`,
+  `depth of field`...) manda siempre; si no, el grupo del catálogo
+  (`hair/eyes/face/body`→`rasgos`, `outfit`→`ropa`, `accessories`→`accesorios`,
+  `action`→`accion`, `expression`→`expresion`, `setting`→`fondo`) y
+  desconocido/no-catálogo→`otros`.
+- `canonical_order(text)`: reordena por zonas (`quality`, `safety`, `subject`,
+  `character`, `general`) y dentro de general por `GENERAL_SUBCATS`; dedup
+  global case-insensitive preservando la primera aparición, pesos `(tag:1.2)`
+  intactos y cadenas vacías ignoradas.
+- `zones_payload(prompt)`: la zona `general` añade `subcats: [{id, label,
+  tags}]` (solo subcategorías con tags).
+- `prompt_options(zone)`: `{zone, subgroups: [{id, label, tags: [{tag,
+  label}]}]}`; quality/safety/subject desde las listas curadas de C1, general
+  desde `CAMERA_TAGS` + catálogo por subcategoría (sin duplicar) y `character`
+  vacío (los OCs llegan en M9-B3); `EngineError` (400) con zona inválida.
+
+`GET /api/prompt/options?zone=` publica esas opciones. `enhance` aplica
+`canonical_order` al positivo compuesto (preprompt incluido) sin tocar el
+negativo ni el `raw`. La UI abre un **popover** por chip con buscador,
+checkboxes con etiquetas visibles, input manual + «Añadir» e «Insertar»
+(varias llamadas a `/api/prompt/insert`), tabs por subcategoría en general y
+la subcategoría Rasgos bloqueada con la nota «Fijado por el OC» cuando hay un
+OC activo.
+
 ## Video (F4)
 
 La pestaña **Video** es independiente de la de imagen y tiene dos motores, cada uno con su

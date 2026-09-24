@@ -65,7 +65,13 @@ from app.preprompts import (
     list_preprompts,
     save_custom,
 )
-from app.prompt_zones import compose_zones, insert_tag, split_zones, zones_payload
+from app.prompt_zones import (
+    compose_zones,
+    insert_tag,
+    prompt_options,
+    split_zones,
+    zones_payload,
+)
 from app.progress import ProgressTracker
 from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
@@ -713,6 +719,10 @@ def create_app(
             raise EngineError("text requerido")
         zones = split_zones(text)
         return {"zones": zones_payload(text), "composed": compose_zones(zones)}
+
+    @app.get("/api/prompt/options")
+    async def api_prompt_options(zone: str | None = None) -> Any:
+        return prompt_options(zone)
 
     @app.post("/api/prompt/compose")
     async def api_prompt_compose(payload: dict = Body(...)) -> Any:

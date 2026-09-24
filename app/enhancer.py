@@ -18,6 +18,7 @@ from typing import Any, Callable
 from app.config import load_config
 from app.engine import EngineError
 from app.preprompts import get_preprompt
+from app.prompt_zones import canonical_order
 
 # Copia EXACTA (texto, sin reformatear) del SYS_PROMPT legacy (:69-80).
 SYS_PROMPT = (
@@ -289,9 +290,12 @@ def enhance(
     el rating pedido: `nsfw` garantiza `nsfw` y `uncensored` y elimina `sfw`;
     `sfw` garantiza `sfw` y elimina `nsfw`/`uncensored`; `rating=None` no toca
     el rating. El forzado es case-insensitive, deduplica tags repetidos y no
-    anade duplicados. El negativo devuelto es el compuesto de `apply_preprompt`
-    (`BASE_NEGATIVE` + preprompt, dedup case-insensitive). Sin `llm` inyectado
-    o con `strength` desconocido lanza EngineError.
+    anade duplicados. El positivo devuelto pasa por
+    `app.prompt_zones.canonical_order` DESPUES de componer el preprompt
+    (calidad/meta primero y general por subcategorias); el negativo devuelto es
+    el compuesto de `apply_preprompt` (`BASE_NEGATIVE` + preprompt, dedup
+    case-insensitive) y no se reordena. Sin `llm` inyectado o con `strength`
+    desconocido lanza EngineError.
     """
     text = user_text.strip() if isinstance(user_text, str) else ""
     if not text:
@@ -319,6 +323,7 @@ def enhance(
         raise EngineError("enhance: el LLM no devolvio texto")
     prepared = _enforce_rating(_normalize_tags(raw), rating)
     positive, negative = apply_preprompt(prepared, family=family, name=preprompt)
+    positive = canonical_order(positive)
     return {"positive": positive, "negative": negative, "raw": prepared}
 
 

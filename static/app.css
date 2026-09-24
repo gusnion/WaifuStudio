@@ -701,6 +701,102 @@ input[type="checkbox"] {
   flex: 1;
 }
 
+.zone-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--accent-2);
+  border-radius: 6px;
+}
+
+.zone-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.zone-popover-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.zone-tab {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.zone-tab.active {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.zone-tab.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.zone-popover-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.zone-popover-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.zone-option {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.zone-option-label {
+  color: var(--muted);
+}
+
+.zone-popover-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 1.3rem;
+}
+
+.zone-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.zone-selected-remove {
+  padding: 0 0.2rem;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.zone-popover-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
 .enhance-row {
   display: flex;
   align-items: flex-end;

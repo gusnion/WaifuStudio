@@ -34,11 +34,26 @@
             <button class="zone-chip" type="button" data-zone="general">General</button>
             <button id="btn-zone-character" class="zone-chip zone-chip-accent" type="button" data-zone="character">+ Personaje</button>
           </div>
-          <form id="zone-insert-form" class="zone-insert hidden">
-            <input id="zone-insert-input" type="text" placeholder="Tag para la zona...">
-            <button class="primary" type="submit">Añadir</button>
-            <button id="zone-insert-cancel" type="button">Cancelar</button>
-          </form>
+          <div id="zone-popover" class="zone-popover hidden">
+            <div class="zone-popover-head">
+              <strong id="zone-popover-title">Zona</strong>
+              <button id="zone-popover-close" type="button">Cerrar</button>
+            </div>
+            <input id="zone-popover-search" type="search" placeholder="Buscar opciones...">
+            <div id="zone-popover-tabs" class="zone-popover-tabs"></div>
+            <p id="zone-popover-note" class="zone-popover-note hidden"></p>
+            <div id="zone-popover-groups" class="zone-popover-groups"></div>
+            <div id="zone-popover-selected" class="zone-popover-selected"></div>
+            <form id="zone-insert-form" class="zone-insert">
+              <input id="zone-insert-input" type="text" placeholder="Tag manual...">
+              <button class="primary" type="submit">Añadir</button>
+              <button id="zone-insert-cancel" type="button">Cancelar</button>
+            </form>
+            <div class="zone-popover-actions">
+              <button id="zone-popover-insert" class="primary" type="button">Insertar</button>
+              <button id="zone-popover-clear" type="button">Limpiar selección</button>
+            </div>
+          </div>
         </div>
         <div class="enhance-row">
           <button id="btn-enhance" type="button">Mejorar prompt</button>
