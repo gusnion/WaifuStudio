@@ -186,42 +186,50 @@
         <label class="field">
           <span>Motor</span>
           <select id="video-engine">
-            <option value="wan">Wan 2.2 I2V · 81 frames · 16 fps</option>
+            <option value="wan">Wan 2.2 · 16 fps · 432×768</option>
             <option value="h3">MiniMax H3 FL2VA · 8 s · 24 fps</option>
+          </select>
+        </label>
+        <label class="field" id="video-mode-field">
+          <span>Modo (Wan)</span>
+          <select id="video-mode">
+            <option value="i2v">I2V · solo imagen inicial</option>
+            <option value="flf2v">FLF2V · imagen inicial + final</option>
           </select>
         </label>
 
         <label class="field">
-          <span>Imagen fuente (PNG)</span>
+          <span>Imagen inicial (first frame)</span>
           <input id="video-image" type="file" accept="image/png">
         </label>
         <label class="field" id="video-last-field" style="display: none">
-          <span>Último frame (PNG, solo H3)</span>
+          <span>Imagen final (last frame)</span>
           <input id="video-last-image" type="file" accept="image/png">
         </label>
 
-        <label class="field">
-          <span>Movimiento (lenguaje natural)</span>
+        <label class="field" id="video-motion-field">
+          <span>Movimiento (qué pasa en el video)</span>
           <textarea id="video-motion" rows="4" placeholder="Describe qué debe pasar en el video..."></textarea>
         </label>
-        <div class="grid-2">
-          <label class="field">
+        <div class="enhance-row" id="video-motion-actions">
+          <button id="btn-motion" type="button">Mejorar prompt (video)</button>
+          <label class="inline-field">
             <span>Rating</span>
             <select id="video-rating">
               <option value="nsfw">nsfw</option>
               <option value="sfw">sfw</option>
             </select>
           </label>
-          <label class="field">
-            <span>&nbsp;</span>
-            <button id="btn-motion" type="button">Generar motion</button>
-          </label>
         </div>
 
-        <label class="field" id="video-motion-positive-field">
-          <span>Motion positivo (EN, Wan)</span>
-          <textarea id="video-motion-positive" rows="3" placeholder="English motion prompt..."></textarea>
-        </label>
+        <details id="video-negative-details" class="advanced">
+          <summary>Avanzado: negativo de video</summary>
+          <label class="field">
+            <span>Negativo de video (opcional)</span>
+            <textarea id="video-motion-negative" rows="3" placeholder="automático: anti-censura + anti-menores"></textarea>
+          </label>
+        </details>
+
         <label class="field" id="video-prompt-field" style="display: none">
           <span>Prompt H3 (FL2VA)</span>
           <textarea id="video-prompt" rows="3" placeholder="integrated_multimodal_description: ..."></textarea>
@@ -241,8 +249,24 @@
           </label>
         </div>
 
-        <button id="btn-video-generate" class="primary" type="button">Generar video</button>
+        <div class="field" id="video-seconds-field">
+          <span>Duración (Wan)</span>
+          <input id="video-seconds" type="range" min="1" max="15" step="0.5" value="5">
+          <p id="video-seconds-info" class="field-hint">≈ 5 s → 81 frames (16 fps)</p>
+          <p class="field-warn">VRAM 12 GB: ≤5 s certificado · 6-7.5 s ajustado · &gt;7.5 s riesgo</p>
+        </div>
+
+        <div class="generate-row">
+          <button id="btn-video-generate" class="primary" type="button">Generar video</button>
+          <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
+        </div>
         <p id="video-status" class="status">Listo</p>
+        <div id="video-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="video-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="video-progress-text" class="progress-text">paso -/-</p>
+        </div>
       </aside>
 
       <section class="gallery-panel">

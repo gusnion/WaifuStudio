@@ -1171,3 +1171,43 @@ input[type="checkbox"] {
   font-size: 0.72rem;
   text-align: center;
 }
+
+.field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.field-warn {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.advanced {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.advanced > summary {
+  padding: 0.45rem 0.55rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.advanced[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.advanced > .field {
+  padding: 0.5rem 0.55rem;
+}

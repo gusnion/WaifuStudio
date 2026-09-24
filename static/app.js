@@ -22,6 +22,7 @@ const ZONE_LABELS = {
 };
 
 const PAGE_SIZE = 6;
+const VIDEO_FPS = 16;
 
 const OC_TRAIT_GROUPS = ["hair", "eyes", "face", "body"];
 
@@ -45,7 +46,9 @@ const state = {
   negativeTouched: false,
   enhanceResult: null,
   pendingEnhance: false,
-  videoNegative: "",
+  pendingMotion: false,
+  videoNegativeTouched: false,
+  videoVramHint: "",
   galleryItems: [],
   videoItems: [],
   imagePager: null,
@@ -73,6 +76,7 @@ const state = {
 };
 
 let enhanceResetTimer = null;
+let motionResetTimer = null;
 let refObjectUrl = null;
 let ocSearchTimer = null;
 let promptZonesTimer = null;
@@ -529,10 +533,10 @@ async function generate() {
   }
 }
 
-function setProgress(progress) {
-  const box = $("job-progress");
-  const fill = $("job-progress-fill");
-  const text = $("job-progress-text");
+function setProgress(progress, prefix = "job") {
+  const box = $(`${prefix}-progress`);
+  const fill = $(`${prefix}-progress-fill`);
+  const text = $(`${prefix}-progress-text`);
   if (!progress) {
     box.classList.add("hidden");
     fill.style.width = "0%";
@@ -552,22 +556,27 @@ function setProgress(progress) {
   box.classList.remove("hidden");
 }
 
-function setCancelVisible(visible) {
-  $("btn-cancel").classList.toggle("hidden", !visible);
+function setVideoProgress(progress) {
+  setProgress(progress, "video");
 }
 
-async function cancelJob() {
+function setCancelVisible(visible, buttonId = "btn-cancel") {
+  $(buttonId).classList.toggle("hidden", !visible);
+}
+
+async function cancelJob(event) {
   const jobId = state.activeJobId;
   if (!jobId) {
     return;
   }
-  const button = $("btn-cancel");
+  const button = event && event.currentTarget ? event.currentTarget : $("btn-cancel");
+  const statusFn = button.id === "btn-video-cancel" ? setVideoStatus : setStatus;
   button.disabled = true;
   try {
     await api(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
-    setStatus("Cancelado");
+    statusFn("Cancelado");
   } catch (error) {
-    setStatus(error.message, true);
+    statusFn(error.message, true);
   } finally {
     button.disabled = false;
   }
@@ -578,11 +587,12 @@ async function pollJob(
   statusFn = setStatus,
   onDone = reloadGalleryFirstPage,
   progressFn = setProgress,
-  manageCancel = true
+  manageCancel = true,
+  cancelButtonId = "btn-cancel"
 ) {
   if (manageCancel) {
     state.activeJobId = jobId;
-    setCancelVisible(true);
+    setCancelVisible(true, cancelButtonId);
   }
   try {
     for (;;) {
@@ -612,7 +622,7 @@ async function pollJob(
   } finally {
     if (manageCancel) {
       state.activeJobId = null;
-      setCancelVisible(false);
+      setCancelVisible(false, cancelButtonId);
     }
     if (progressFn) {
       progressFn(null);
@@ -871,32 +881,76 @@ function clearReference() {
   setStatus("Referencia quitada");
 }
 
-async function generateMotion() {
-  const text = $("video-motion").value.trim();
-  if (!text) {
-    setVideoStatus("Escribe el movimiento a generar", true);
+async function improveMotion() {
+  if (state.pendingMotion) {
     return;
   }
-  setVideoStatus("Generando motion...");
+  const text = $("video-motion").value.trim();
+  if (!text) {
+    setVideoStatus("Escribe el movimiento para mejorarlo", true);
+    return;
+  }
+  const button = $("btn-motion");
+  state.pendingMotion = true;
+  button.disabled = true;
+  button.textContent = "Mejorando…";
+  setVideoStatus("Mejorando prompt de video...");
   try {
     const data = await postJson("/api/motion", {
       text,
       rating: $("video-rating").value,
     });
-    $("video-motion-positive").value = data.motion_positive;
-    state.videoNegative = data.motion_negative || "";
-    if ($("video-engine").value === "h3" && !$("video-prompt").value.trim()) {
-      $("video-prompt").value = data.motion_positive;
+    $("video-motion").value = data.motion_positive || "";
+    if (!state.videoNegativeTouched && data.motion_negative) {
+      $("video-motion-negative").value = data.motion_negative;
     }
-    setVideoStatus("Motion listo");
+    button.textContent = "Listo ✓";
+    setVideoStatus("Prompt de video mejorado");
   } catch (error) {
+    button.textContent = "Error";
     setVideoStatus(error.message, true);
+  } finally {
+    state.pendingMotion = false;
+    button.disabled = false;
+    if (motionResetTimer) {
+      clearTimeout(motionResetTimer);
+    }
+    motionResetTimer = setTimeout(() => {
+      if (!state.pendingMotion) {
+        button.textContent = "Mejorar prompt (video)";
+      }
+    }, 1600);
   }
 }
 
 function readVideoSeed() {
   const value = Number($("video-seed").value);
   return Number.isFinite(value) ? Math.trunc(value) : 42;
+}
+
+function readVideoSeconds() {
+  const value = Number($("video-seconds").value);
+  return Number.isFinite(value) ? value : 5;
+}
+
+function secondsToFrames(seconds) {
+  const needed = Math.ceil(seconds * VIDEO_FPS);
+  return needed + ((4 - ((needed - 1) % 4)) % 4);
+}
+
+function updateVideoDurationInfo() {
+  const seconds = readVideoSeconds();
+  const label = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+  $("video-seconds-info").textContent =
+    `≈ ${label} s → ${secondsToFrames(seconds)} frames (${VIDEO_FPS} fps)`;
+}
+
+function setVideoJobStatus(text, isError = false) {
+  if (state.videoVramHint && !isError) {
+    setVideoStatus(`${text} · ${state.videoVramHint}`);
+    return;
+  }
+  setVideoStatus(text, isError);
 }
 
 async function generateVideo() {
@@ -906,7 +960,7 @@ async function generateVideo() {
   const engine = $("video-engine").value;
   const file = $("video-image").files[0];
   if (!file) {
-    setVideoStatus("Sube la imagen fuente", true);
+    setVideoStatus("Sube la imagen inicial (first frame)", true);
     return;
   }
   const payload = {
@@ -914,24 +968,38 @@ async function generateVideo() {
     aspect: $("video-aspect").value,
     seed: readVideoSeed(),
   };
+  state.videoVramHint = "";
   try {
     payload.image_b64 = await readFileBase64(file);
     if (engine === "wan") {
-      const positive = $("video-motion-positive").value.trim();
+      const mode = $("video-mode").value;
+      const positive = $("video-motion").value.trim();
       if (!positive) {
-        setVideoStatus("Genera o escribe el motion positivo", true);
+        setVideoStatus("Escribe el movimiento del video", true);
         return;
       }
+      payload.mode = mode;
+      payload.seconds = readVideoSeconds();
       payload.motion_positive = positive;
-      payload.motion_negative = state.videoNegative || "";
+      const negative = $("video-motion-negative").value.trim();
+      if (negative) {
+        payload.motion_negative = negative;
+      }
+      if (mode === "flf2v") {
+        const last = $("video-last-image").files[0];
+        if (!last) {
+          setVideoStatus("FLF2V requiere la imagen final (last frame)", true);
+          return;
+        }
+        payload.last_image_b64 = await readFileBase64(last);
+      }
     } else {
       const last = $("video-last-image").files[0];
       if (!last) {
-        setVideoStatus("H3 requiere el último frame", true);
+        setVideoStatus("H3 requiere la imagen final (last frame)", true);
         return;
       }
-      const prompt =
-        $("video-prompt").value.trim() || $("video-motion-positive").value.trim();
+      const prompt = $("video-prompt").value.trim();
       if (!prompt) {
         setVideoStatus("H3 requiere el prompt", true);
         return;
@@ -948,27 +1016,37 @@ async function generateVideo() {
   setVideoStatus("Encolando...");
   try {
     const data = await postJson("/api/video/generate", payload);
+    if (engine === "wan" && data.vram_hint) {
+      state.videoVramHint = data.vram_hint;
+    }
     await pollJob(
       data.job_id,
-      setVideoStatus,
+      setVideoJobStatus,
       reloadGalleryFirstPage,
-      null,
-      false
+      setVideoProgress,
+      true,
+      "btn-video-cancel"
     );
   } catch (error) {
     setVideoStatus(error.message, true);
   } finally {
     state.busy = false;
+    state.videoVramHint = "";
     $("btn-video-generate").disabled = false;
   }
 }
 
 function applyVideoEngine() {
   const isWan = $("video-engine").value === "wan";
+  const showLast = !isWan || $("video-mode").value === "flf2v";
+  $("video-mode-field").style.display = isWan ? "" : "none";
   $("video-aspect-field").style.display = isWan ? "" : "none";
-  $("video-motion-positive-field").style.display = isWan ? "" : "none";
+  $("video-seconds-field").style.display = isWan ? "" : "none";
+  $("video-motion-field").style.display = isWan ? "" : "none";
+  $("video-motion-actions").style.display = isWan ? "" : "none";
+  $("video-negative-details").style.display = isWan ? "" : "none";
   $("video-prompt-field").style.display = isWan ? "none" : "";
-  $("video-last-field").style.display = isWan ? "none" : "";
+  $("video-last-field").style.display = showLast ? "" : "none";
 }
 
 function setOcStatus(text, isError = false) {
@@ -2441,9 +2519,15 @@ function bind() {
     state.videoPager.page = 1;
     loadGallery();
   });
-  $("btn-motion").addEventListener("click", generateMotion);
+  $("btn-motion").addEventListener("click", improveMotion);
   $("btn-video-generate").addEventListener("click", generateVideo);
+  $("btn-video-cancel").addEventListener("click", cancelJob);
   $("video-engine").addEventListener("change", applyVideoEngine);
+  $("video-mode").addEventListener("change", applyVideoEngine);
+  $("video-seconds").addEventListener("input", updateVideoDurationInfo);
+  $("video-motion-negative").addEventListener("input", () => {
+    state.videoNegativeTouched = true;
+  });
   $("size").addEventListener("change", applySizeSelection);
   $("preprompt").addEventListener("change", () => {
     refreshNegative().catch((error) => setStatus(error.message, true));
@@ -2552,6 +2636,7 @@ function bind() {
 async function init() {
   bind();
   applyVideoEngine();
+  updateVideoDurationInfo();
   try {
     await loadParams();
     await loadFormats();
