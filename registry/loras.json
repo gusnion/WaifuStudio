@@ -45,6 +45,17 @@
       "source": "local (ComfyUI\\models\\loras)",
       "license": "ver procedencia en ComfyUI\\models\\loras (no inventar)",
       "notes": "turbo 4 pasos de la plantilla H3 (nodo LoraLoaderModelOnly 134 en workflows\\h3_fl2va_vertical.api.json)"
+    },
+    {
+      "id": "miku-nakano-anima",
+      "family": "anima",
+      "file": "anima\\Miku_Nakano_Anima_v0.7.safetensors",
+      "display_name": "Miku Nakano (Anima v0.7)",
+      "trigger": "M1kuNakan0_anima",
+      "default_weight": 1.0,
+      "source": "civitai.com/models/1158201 v3020851",
+      "license": "Anima License (CircleStone Labs LLC)",
+      "notes": "Anima base (28 bloques): nativo con anima-official-aesthetic-v11; en 2.9B requiere patch 28->40 (M10), peso 0.5-0.7. Triggers/recomendados en la ficha."
     }
   ]
 }

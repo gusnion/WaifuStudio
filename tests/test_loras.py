@@ -18,8 +18,11 @@ REAL_IDS = [
     "lightx2v-wan-low",
     "reika-kurashiki",
     "minimax-h3-fl2v-turbo-4step",
+    "miku-nakano-anima",
 ]
 REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_1.safetensors"
+MIKU_ID = "miku-nakano-anima"
+MIKU_FILE = "anima\\Miku_Nakano_Anima_v0.7.safetensors"
 
 
 def entry(**overrides) -> dict:
@@ -43,11 +46,11 @@ class RealRegistryTests(unittest.TestCase):
         self.assertEqual(DEFAULT_PATH, ROOT / "registry" / "loras.json")
         self.assertTrue(DEFAULT_PATH.is_file())
 
-    def test_cuatro_entradas_en_orden_del_json(self):
+    def test_cinco_entradas_en_orden_del_json(self):
         self.assertEqual([item["id"] for item in list_loras()], REAL_IDS)
 
     def test_familias_en_orden_de_aparicion(self):
-        self.assertEqual(families(), ["wan", "animagine", "h3"])
+        self.assertEqual(families(), ["wan", "animagine", "h3", "anima"])
 
     def test_campos_de_cada_entrada(self):
         expected = {
@@ -103,6 +106,34 @@ class RealRegistryTests(unittest.TestCase):
             "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
         )
 
+    def test_miku_nakano_anima_registrada_y_en_disco(self):
+        miku = get(MIKU_ID)
+        self.assertEqual(miku["family"], "anima")
+        self.assertEqual(miku["file"], MIKU_FILE)
+        self.assertEqual(miku["display_name"], "Miku Nakano (Anima v0.7)")
+        self.assertEqual(miku["trigger"], "M1kuNakan0_anima")
+        self.assertEqual(miku["default_weight"], 1.0)
+        self.assertIn("1158201", miku["source"])
+        self.assertIn("v3020851", miku["source"])
+        self.assertIn("Anima", miku["notes"])
+        self.assertIn("28", miku["notes"])
+        self.assertIn("2.9B", miku["notes"])
+        self.assertIn("M10", miku["notes"])
+        path = LORAS_DIR / miku["file"]
+        self.assertTrue(path.is_file(), f"falta en disco: {path}")
+        self.assertEqual(path.stat().st_size, 132299512)
+        self.assertEqual(
+            validate_selection([{"id": MIKU_ID}]),
+            [{"id": MIKU_ID, "file": MIKU_FILE, "weight": 1.0}],
+        )
+        normalized = validate_selection([{"id": MIKU_ID, "weight": 0.6}])
+        self.assertEqual(normalized[0]["weight"], 0.6)
+
+    def test_filtro_anima_solo_miku(self):
+        self.assertEqual(
+            [item["id"] for item in list_loras("anima")], [MIKU_ID]
+        )
+
     def test_comment_m10(self):
         payload = load_registry()
         self.assertEqual(payload["version"], 1)
@@ -121,6 +152,9 @@ class RealRegistryTests(unittest.TestCase):
             [item["id"] for item in list_loras("h3")],
             ["minimax-h3-fl2v-turbo-4step"],
         )
+        anima = list_loras("anima")
+        self.assertEqual([item["id"] for item in anima], [MIKU_ID])
+        self.assertEqual(anima[0]["default_weight"], 1.0)
         self.assertEqual(list_loras("no-existe"), [])
 
     def test_get_devuelve_copia_e_inexistente_lanza(self):

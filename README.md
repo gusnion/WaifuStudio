@@ -491,7 +491,7 @@ falsos: no tocan GPU ni red.
 `registry\loras.json` (`{"version": 1, "loras": [...]}`). Cada entrada declara
 `id`, `family`, `file` (relativo a `ComfyUI\models\loras`, admite subcarpetas), `display_name`,
 `trigger`, `default_weight` (0..2), `source`, `license` y `notes`; el `_comment`
-del registro recuerda que **los LoRAs de Anima llegan en M10 (descargas
+del registro recuerda que **el resto de LoRAs de Anima llegan en M10 (descargas
 diferidas)** y solo se registran ficheros presentes en disco:
 
 | id | familia | archivo |
@@ -500,6 +500,10 @@ diferidas)** y solo se registran ficheros presentes en disco:
 | `lightx2v-wan-low` | `wan` | `lightx2v\wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
 | `reika-kurashiki` | `animagine` | `Reika Kurashiki\Reika Kurashiki_1.safetensors` (legacy, no se usa en Anima) |
 | `minimax-h3-fl2v-turbo-4step` | `h3` | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors` (turbo de la plantilla H3) |
+| `miku-nakano-anima` | `anima` | `anima\Miku_Nakano_Anima_v0.7.safetensors` (Anima base 28 bloques: nativo con `anima-official-aesthetic-v11`; en los 2.9B, patch 28→40 de M10 y peso 0.5-0.7) |
+
+Uso para Miku: modelo `anima-official-aesthetic-v11`, LoRA `miku-nakano-anima`,
+peso 1.0 y trigger `M1kuNakan0_anima` + tags de apariencia.
 
 API del módulo: `list_loras(family=None)` (orden del JSON), `get(id)`,
 `families()` y `validate_selection([{"id", "weight"?}])`, que normaliza a

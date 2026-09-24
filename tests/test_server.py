@@ -187,7 +187,7 @@ class LorasRouteTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(set(data), {"items", "families"})
-        self.assertEqual(data["families"], ["wan", "animagine", "h3"])
+        self.assertEqual(data["families"], ["wan", "animagine", "h3", "anima"])
         self.assertEqual(
             [item["id"] for item in data["items"]],
             [
@@ -195,6 +195,7 @@ class LorasRouteTests(ServerTestCase):
                 "lightx2v-wan-low",
                 "reika-kurashiki",
                 "minimax-h3-fl2v-turbo-4step",
+                "miku-nakano-anima",
             ],
         )
 
@@ -207,6 +208,19 @@ class LorasRouteTests(ServerTestCase):
             ["lightx2v-wan-high", "lightx2v-wan-low"],
         )
         self.assertTrue(all(item["family"] == "wan" for item in items))
+
+    def test_loras_familia_anima_devuelve_miku(self):
+        data = self.make_client().get(
+            "/api/loras", params={"family": "anima"}
+        ).json()
+        self.assertEqual(len(data["items"]), 1)
+        item = data["items"][0]
+        self.assertEqual(item["id"], "miku-nakano-anima")
+        self.assertEqual(item["family"], "anima")
+        self.assertEqual(item["file"], "anima\\Miku_Nakano_Anima_v0.7.safetensors")
+        self.assertEqual(item["trigger"], "M1kuNakan0_anima")
+        self.assertEqual(item["default_weight"], 1.0)
+        self.assertIn("anima", data["families"])
 
     def test_loras_familia_desconocida_vacia(self):
         data = self.make_client().get(

@@ -346,6 +346,16 @@ class ApplyLorasTests(unittest.TestCase):
 
         self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 1.0)
 
+    def test_id_miku_anima_usa_su_file_y_peso_uno(self):
+        patched = apply_loras(real_graph(), [{"id": "miku-nakano-anima"}])
+
+        self.assertEqual(
+            patched["lora_1"]["inputs"]["lora_name"],
+            "anima\\Miku_Nakano_Anima_v0.7.safetensors",
+        )
+        self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 1.0)
+        self.assertEqual(patched["7"]["inputs"]["model"], ["lora_1", 0])
+
     def test_id_desconocido_lanza_engine_error(self):
         with self.assertRaises(EngineError):
             apply_loras(real_graph(), [{"id": "no-existe"}])
