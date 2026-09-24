@@ -24,144 +24,121 @@
           <span>Modelo</span>
           <select id="model"></select>
         </label>
-        <div class="field">
-          <span>Preprompt</span>
-          <div class="preprompt-row">
-            <select id="preprompt"></select>
-            <button id="btn-preprompt-manage" type="button">Gestionar</button>
-          </div>
-        </div>
-        <label class="field">
-          <span>Rating</span>
-          <select id="rating">
-            <option value="sfw">sfw</option>
-            <option value="nsfw">nsfw</option>
-          </select>
-        </label>
 
-        <label class="field">
-          <span>Prompt</span>
-          <textarea id="prompt" rows="5" placeholder="1girl, smile, ..."></textarea>
-        </label>
-        <div class="enhance-row">
-          <button id="btn-enhance" type="button">Mejorar prompt</button>
-          <label class="inline-field">
-            <span>Fuerza</span>
-            <select id="enhance-strength">
-              <option value="fiel">Fiel</option>
-              <option value="balanceado" selected>Balanceado</option>
-              <option value="creativo">Creativo</option>
+        <div class="prompt-block">
+          <label class="field">
+            <span>Prompt</span>
+            <textarea id="prompt" rows="5" placeholder="1girl, smile, ..."></textarea>
+          </label>
+          <div class="enhance-row">
+            <button id="btn-enhance" type="button">Mejorar prompt</button>
+            <label class="inline-field">
+              <span>Fuerza</span>
+              <select id="enhance-strength">
+                <option value="fiel">Fiel</option>
+                <option value="balanceado" selected>Balanceado</option>
+                <option value="creativo">Creativo</option>
+              </select>
+            </label>
+          </div>
+          <div id="enhance-result" class="enhance-result hidden">
+            <div class="enhance-block">
+              <span class="enhance-label">Positivo propuesto</span>
+              <p id="enhance-positive"></p>
+            </div>
+            <div class="enhance-block">
+              <span class="enhance-label">Negativo propuesto</span>
+              <p id="enhance-negative"></p>
+            </div>
+            <div class="enhance-actions">
+              <button id="btn-enhance-use" class="primary" type="button">Usar</button>
+              <button id="btn-enhance-discard" type="button">Descartar</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>Preprompt</span>
+            <div class="preprompt-row">
+              <select id="preprompt"></select>
+              <button id="btn-preprompt-manage" type="button">Gestionar</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>Rating</span>
+            <select id="rating">
+              <option value="sfw">sfw</option>
+              <option value="nsfw">nsfw</option>
             </select>
           </label>
-        </div>
-        <div id="enhance-result" class="enhance-result hidden">
-          <div class="enhance-block">
-            <span class="enhance-label">Positivo propuesto</span>
-            <p id="enhance-positive"></p>
-          </div>
-          <div class="enhance-block">
-            <span class="enhance-label">Negativo propuesto</span>
-            <p id="enhance-negative"></p>
-          </div>
-          <div class="enhance-actions">
-            <button id="btn-enhance-use" class="primary" type="button">Usar</button>
-            <button id="btn-enhance-discard" type="button">Descartar</button>
-          </div>
-        </div>
 
-        <details id="section-zones" class="advanced panel-section" data-section="zones" open>
-          <summary>Prompt por zonas</summary>
-          <div class="section-body">
-            <div id="prompt-zones" class="prompt-zones">
-              <div id="prompt-zones-preview" class="zone-preview"></div>
-              <div id="prompt-zones-legend" class="zone-legend"></div>
-              <div id="prompt-zones-chips" class="zone-chips">
-                <button class="zone-chip" type="button" data-zone="quality">Calidad/meta</button>
-                <button class="zone-chip" type="button" data-zone="safety">Safety</button>
-                <button class="zone-chip" type="button" data-zone="subject">Sujeto</button>
-                <button class="zone-chip zone-chip-accent" type="button" data-zone="character" title="+ Personaje · Mis OCs y tags manuales">Personaje</button>
-                <button class="zone-chip" type="button" data-zone="general">General</button>
-              </div>
-              <div id="zone-popover" class="zone-popover hidden">
-                <div class="zone-popover-head">
-                  <strong id="zone-popover-title">Zona</strong>
-                  <button id="zone-popover-close" type="button">Cerrar</button>
+          <details id="section-zones" class="advanced panel-section" data-section="zones" open>
+            <summary>Prompt por zonas</summary>
+            <div class="section-body">
+              <div id="prompt-zones" class="prompt-zones">
+                <div id="prompt-zones-preview" class="zone-preview"></div>
+                <div id="prompt-zones-legend" class="zone-legend"></div>
+                <div id="prompt-zones-chips" class="zone-chips">
+                  <button class="zone-chip" type="button" data-zone="quality">Calidad/meta</button>
+                  <button class="zone-chip" type="button" data-zone="safety">Safety</button>
+                  <button class="zone-chip" type="button" data-zone="subject">Sujeto</button>
+                  <button class="zone-chip zone-chip-accent" type="button" data-zone="character" title="+ Personaje · Mis OCs y tags manuales">Personaje</button>
+                  <button class="zone-chip" type="button" data-zone="general">General</button>
                 </div>
-                <input id="zone-popover-search" type="search" placeholder="Buscar opciones...">
-                <div id="zone-popover-tabs" class="zone-popover-tabs"></div>
-                <p id="zone-popover-note" class="zone-popover-note hidden"></p>
-                <div id="zone-popover-ocs" class="zone-popover-ocs hidden">
-                  <strong class="zone-popover-ocs-title">Mis OCs</strong>
-                  <div id="zone-ocs-list" class="zone-ocs-list"></div>
-                  <label id="zone-ocs-extras-label" class="zone-option">
-                    <input id="zone-ocs-extras" type="checkbox" checked>
-                    <span>aplicar extras del OC a General</span>
-                  </label>
-                  <label id="zone-ocs-traits-label" class="zone-option hidden">
-                    <input id="zone-ocs-traits" type="checkbox">
-                    <span>usar rasgos en vez del trigger</span>
-                  </label>
-                  <p id="zone-ocs-status" class="zone-popover-note"></p>
-                </div>
-                <div id="zone-popover-groups" class="zone-popover-groups"></div>
-                <div id="zone-popover-selected" class="zone-popover-selected"></div>
-                <form id="zone-insert-form" class="zone-insert">
-                  <input id="zone-insert-input" type="text" placeholder="Tag manual...">
-                  <button class="primary" type="submit">Añadir</button>
-                  <button id="zone-insert-cancel" type="button">Cancelar</button>
-                </form>
-                <div class="zone-popover-actions">
-                  <button id="zone-popover-insert" class="primary" type="button">Insertar</button>
-                  <button id="zone-popover-clear" type="button">Limpiar selección</button>
+                <div id="zone-popover" class="zone-popover hidden">
+                  <div class="zone-popover-head">
+                    <strong id="zone-popover-title">Zona</strong>
+                    <button id="zone-popover-close" type="button">Cerrar</button>
+                  </div>
+                  <input id="zone-popover-search" type="search" placeholder="Buscar opciones...">
+                  <div id="zone-popover-tabs" class="zone-popover-tabs"></div>
+                  <p id="zone-popover-note" class="zone-popover-note hidden"></p>
+                  <div id="zone-popover-ocs" class="zone-popover-ocs hidden">
+                    <strong class="zone-popover-ocs-title">Mis OCs</strong>
+                    <div id="zone-ocs-list" class="zone-ocs-list"></div>
+                    <label id="zone-ocs-extras-label" class="zone-option">
+                      <input id="zone-ocs-extras" type="checkbox" checked>
+                      <span>aplicar extras del OC a General</span>
+                    </label>
+                    <label id="zone-ocs-traits-label" class="zone-option hidden">
+                      <input id="zone-ocs-traits" type="checkbox">
+                      <span>usar rasgos en vez del trigger</span>
+                    </label>
+                    <p id="zone-ocs-status" class="zone-popover-note"></p>
+                  </div>
+                  <div id="zone-popover-groups" class="zone-popover-groups"></div>
+                  <div id="zone-popover-selected" class="zone-popover-selected"></div>
+                  <form id="zone-insert-form" class="zone-insert">
+                    <input id="zone-insert-input" type="text" placeholder="Tag manual...">
+                    <button class="primary" type="submit">Añadir</button>
+                    <button id="zone-insert-cancel" type="button">Cancelar</button>
+                  </form>
+                  <div class="zone-popover-actions">
+                    <button id="zone-popover-insert" class="primary" type="button">Insertar</button>
+                    <button id="zone-popover-clear" type="button">Limpiar selección</button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </details>
+          </details>
+        </div>
 
-        <details id="section-params" class="advanced panel-section" data-section="params">
-          <summary>Opciones de generación</summary>
-          <div class="section-body">
-            <div class="grid-2">
-              <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
-              <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
-              <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
-              <label class="field"><span>Sampler</span><select id="sampler"></select></label>
-              <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
-            </div>
+        <div class="generate-row">
+          <button id="btn-generate" class="primary" type="button">Generar</button>
+          <button id="btn-cancel" class="hidden" type="button">Cancelar</button>
+        </div>
+        <p id="job-status" class="status">Listo</p>
+        <div id="job-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="job-progress-fill" class="progress-fill"></div>
           </div>
-        </details>
-
-        <details id="section-size" class="advanced panel-section" data-section="size">
-          <summary>Tamaño</summary>
-          <div class="section-body">
-            <label class="field">
-              <span>Tamaño</span>
-              <select id="size"></select>
-            </label>
-            <div id="manual-size" class="grid-2 hidden">
-              <label class="field"><span>Ancho</span><input id="width" type="number" value="768" step="8" min="64" max="4096"></label>
-              <label class="field"><span>Alto</span><input id="height" type="number" value="1344" step="8" min="64" max="4096"></label>
-            </div>
-          </div>
-        </details>
+          <p id="job-progress-text" class="progress-text">paso -/-</p>
+        </div>
 
         <details id="section-loras" class="advanced panel-section" data-section="loras">
           <summary>LoRAs (<span id="loras-count">0</span>)</summary>
           <div class="section-body">
             <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
             <div id="loras-list" class="lora-chips"></div>
-          </div>
-        </details>
-
-        <details id="section-negative" class="advanced panel-section" data-section="negative">
-          <summary>Negativo (avanzado)</summary>
-          <div class="section-body">
-            <label class="field">
-              <span>Negativo</span>
-              <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
-            </label>
-            <button id="btn-negative-restore" type="button">Restaurar</button>
           </div>
         </details>
 
@@ -183,17 +160,38 @@
           </div>
         </details>
 
-        <div class="generate-row">
-          <button id="btn-generate" class="primary" type="button">Generar</button>
-          <button id="btn-cancel" class="hidden" type="button">Cancelar</button>
-        </div>
-        <p id="job-status" class="status">Listo</p>
-        <div id="job-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="job-progress-fill" class="progress-fill"></div>
+        <details id="section-params" class="advanced panel-section" data-section="params">
+          <summary>Opciones de generación</summary>
+          <div class="section-body">
+            <div class="grid-2">
+              <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
+              <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
+              <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
+              <label class="field"><span>Sampler</span><select id="sampler"></select></label>
+              <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
+            </div>
+            <div id="section-size" class="section-subblock">
+              <label class="field">
+                <span>Tamaño</span>
+                <select id="size"></select>
+              </label>
+              <div id="manual-size" class="grid-2 hidden">
+                <label class="field"><span>Ancho</span><input id="width" type="number" value="768" step="8" min="64" max="4096"></label>
+                <label class="field"><span>Alto</span><input id="height" type="number" value="1344" step="8" min="64" max="4096"></label>
+              </div>
+            </div>
+            <details id="section-negative" class="advanced panel-section" data-section="negative">
+              <summary>Negativo (avanzado)</summary>
+              <div class="section-body">
+                <label class="field">
+                  <span>Negativo</span>
+                  <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
+                </label>
+                <button id="btn-negative-restore" type="button">Restaurar</button>
+              </div>
+            </details>
           </div>
-          <p id="job-progress-text" class="progress-text">paso -/-</p>
-        </div>
+        </details>
       </aside>
 
       <section class="gallery-panel">

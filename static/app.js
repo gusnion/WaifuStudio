@@ -2818,7 +2818,6 @@ function switchTab(tab) {
 const PANEL_SECTIONS = {
   zones: true,
   params: false,
-  size: false,
   loras: false,
   negative: false,
   ref: false,

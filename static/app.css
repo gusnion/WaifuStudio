@@ -113,6 +113,12 @@ main {
   padding-right: 0.3rem;
 }
 
+.prompt-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -1326,6 +1332,12 @@ input[type="checkbox"] {
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.55rem;
+}
+
+.section-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .panel-section .prompt-zones {

@@ -712,6 +712,37 @@ Cuatro arreglos sobre la UI de Imagen (solo `templates\index.html`, `static\app.
 
 Verificado con `node --check static\app.js` y la suite CPU (718 tests OK, sin GPU/red).
 
+## Reorden del panel de Imagen (M9-B-fix7)
+
+Reorden del panel lateral de la pestaña Imagen según el flujo real de uso (solo `templates\index.html`,
+`static\app.css`, `static\app.js` y este README; sin GPU, red, dependencias, endpoints ni cambios en
+el payload de `/api/generate`):
+
+1. **Modelo** (fijo): selector `#model` arriba del todo.
+2. **Prompting** (fijo, no colapsable, envuelto en `.prompt-block`): `#prompt` + «Mejorar prompt» con
+   fuerza (`#enhance-strength`), `#enhance-result`, `#preprompt` + «Gestionar» y `#rating`; dentro, la
+   sección plegable «Prompt por zonas» (`#section-zones`, abierta por defecto) con preview coloreada y
+   chips.
+3. **Generar** (fijo): `#btn-generate` + `#btn-cancel`, `#job-status` y `#job-progress` justo después
+   del prompting (ya no al final del panel).
+4. **LoRAs (N)** (`#section-loras`, plegable, cerrada por defecto): «Elegir LoRAs (N)» + chips.
+5. **Imagen de referencia** (`#section-ref`, plegable, cerrada por defecto).
+6. **Opciones de generación** (`#section-params`, plegable, cerrada por defecto): seed, pasos, cfg,
+   sampler y scheduler, más **Tamaño** (`#size` + `#manual-size` con ancho/alto) dentro de la misma
+   sección; el **Negativo (avanzado)** queda como sub-sección plegable anidada (`#section-negative`)
+   dentro de Opciones (en vez de sección propia al final) para mantenerlo a mano sin añadir otro
+   bloque suelto a la columna.
+
+Compatibilidad: se conservan todos los ids; `#section-size` deja de ser `<details>` y pasa a ser el
+bloque no plegable `#section-size.section-subblock` dentro de Opciones. El mecanismo de
+`localStorage` (`waifu.ui.section.<sección>` = `1`/`0`) se mantiene para `zones`, `params`, `loras`,
+`negative` y `ref` (claves sin cambios ni migración); la clave antigua `size` deja de usarse al
+fusionarse Tamaño en Opciones. Por defecto: Prompt por zonas abierta; LoRAs, referencia, opciones y
+negativo cerradas.
+
+Verificado con `node --check static\app.js`, la suite CPU (718 tests OK, sin GPU/red) y conteo
+DOM↔JS sin ids perdidos.
+
 ## Smoke
 
 ```
