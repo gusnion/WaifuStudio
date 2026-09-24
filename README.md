@@ -641,6 +641,30 @@ vive en memoria del proceso y se pierde al reiniciar la app.
   `POST /api/jobs/{id}/cancel` deja de devolver 409: `queued` → `delete_queued`, `running` →
   `interrupt` (solo el train sigue en 409).
 
+## Pestaña Editor (M9-G)
+
+Esqueleto de la tercera pestaña **Editor (Qwen-Image 2.1)** con guarda de «modelo no instalado»;
+no ejecuta nada todavía (sin GPU, red ni dependencias nuevas).
+
+- `GET /api/editor/status` → `{"installed", "model", "expected", "note"}` con
+  `model: "qwen-image-2.1"` y `note: "La descarga e integración llegan en M10"`. `installed` exige
+  que existan **todos** los archivos esperados (rutas relativas a `ComfyUI/models`, no se inventa
+  que existan):
+  - `diffusion_models/qwen_image_2.1_int8_convrot.safetensors`
+  - `text_encoders/qwen_image_2.1_text_encoder_int8_convrot.safetensors`
+  - `vae/qwen_image_vae.safetensors`
+- `POST /api/editor/generate` `{prompt, mode ("generate"|"edit", default generate), ref_images_b64?,
+  size? {width,height}, seed?}`: valida la forma (400) con prompt no vacío, `mode` válido, máximo
+  **10** referencias base64 válidas, `size` en `[512, 2048]` múltiplos de 16 y `seed` entera. Si la
+  validación pasa: **503** `{"error": "modelo no instalado (M10)"}` cuando falta el modelo y **501**
+  `{"error": "integracion pendiente (M10)"}` cuando está instalado (placeholder honesto, sin job).
+- UI (sin CDN, resto intacto): tercera pestaña con banner ámbar «Qwen-Image 2.1 no instalado — llega
+  con las descargas M10» (verde si instalado), prompt, modo Generar/Editar, hasta 10 referencias con
+  miniaturas y «Quitar», ancho/alto manuales (nota 2K máx: 512-2048, múltiplos de 16), seed y
+  «Generar» habilitado solo con prompt; al pulsar, si no está instalado muestra el 503 del servidor.
+- **M10** traerá la descarga/integración del par INT8 ConvRot + text encoder + VAE y el job real
+  (encolado, progreso y galería) sobre este contrato.
+
 ## Smoke
 
 ```

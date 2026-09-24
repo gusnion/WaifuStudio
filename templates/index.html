@@ -12,6 +12,7 @@
     <nav class="tabs">
       <button id="tab-image" class="tab active" type="button">Imagen</button>
       <button id="tab-video" class="tab" type="button">Video</button>
+      <button id="tab-editor" class="tab" type="button">Editor</button>
     </nav>
     <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
   </header>
@@ -280,6 +281,49 @@
           <span id="video-gallery-page">página 1 de 1</span>
           <button id="video-gallery-next" type="button">Siguiente ›</button>
         </div>
+      </section>
+    </section>
+
+    <section id="panel-editor" class="panel">
+      <aside class="controls">
+        <p id="editor-banner" class="editor-banner">Comprobando Qwen-Image 2.1…</p>
+        <label class="field">
+          <span>Prompt</span>
+          <textarea id="editor-prompt" rows="5" placeholder="Describe qué generar o editar..."></textarea>
+        </label>
+        <label class="field">
+          <span>Modo</span>
+          <select id="editor-mode">
+            <option value="generate">Generar</option>
+            <option value="edit">Editar</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Imágenes de referencia (hasta 10)</span>
+          <input id="editor-refs" type="file" accept="image/*" multiple>
+        </label>
+        <div id="editor-refs-preview" class="editor-refs"></div>
+        <p class="field-hint">Referencias opcionales (modo Editar); máximo 10.</p>
+        <div class="grid-2">
+          <label class="field"><span>Ancho</span><input id="editor-width" type="number" value="1024" step="16" min="512" max="2048"></label>
+          <label class="field"><span>Alto</span><input id="editor-height" type="number" value="1024" step="16" min="512" max="2048"></label>
+        </div>
+        <p class="field-hint">2K máx: 512-2048, múltiplos de 16.</p>
+        <label class="field">
+          <span>Seed</span>
+          <input id="editor-seed" type="number" value="42">
+        </label>
+        <div class="generate-row">
+          <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
+        </div>
+        <p id="editor-status" class="status">Listo</p>
+      </aside>
+
+      <section class="gallery-panel">
+        <div class="gallery-header">
+          <h2>Editor (Qwen-Image 2.1)</h2>
+        </div>
+        <p class="editor-placeholder">Qwen-Image 2.1 (INT8 ConvRot + text encoder + VAE) llega con las descargas M10. Hasta entonces, «Generar» solo valida la petición y responde con la guarda honesta.</p>
       </section>
     </section>
   </main>

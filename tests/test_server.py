@@ -2339,5 +2339,208 @@ class CharacterProfileUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class EditorStatusTests(ServerTestCase):
+    def test_status_forma_e_installed_false_con_temp_root(self):
+        response = self.make_client().get("/api/editor/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"installed", "model", "expected", "note"})
+        self.assertIs(data["installed"], False)
+        self.assertEqual(data["model"], "qwen-image-2.1")
+        self.assertIsInstance(data["expected"], list)
+        self.assertEqual(data["expected"], list(server_module.EDITOR_MODEL_FILES))
+        self.assertTrue(
+            all(isinstance(item, str) and item for item in data["expected"])
+        )
+        self.assertTrue(
+            all(not Path(item).is_absolute() for item in data["expected"])
+        )
+        self.assertIn("M10", data["note"])
+
+    def test_installed_true_solo_con_todos_los_archivos(self):
+        for relative in server_module.EDITOR_MODEL_FILES:
+            path = self.config.comfy_root / "models" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake-model")
+        data = self.make_client().get("/api/editor/status").json()
+        self.assertIs(data["installed"], True)
+
+    def test_installed_false_con_archivos_parciales(self):
+        relative = server_module.EDITOR_MODEL_FILES[0]
+        path = self.config.comfy_root / "models" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fake-model")
+        data = self.make_client().get("/api/editor/status").json()
+        self.assertIs(data["installed"], False)
+
+
+class EditorGenerateValidationTests(ServerTestCase):
+    def test_prompt_vacio_o_no_str_400(self):
+        client = self.make_client()
+        for payload in ({}, {"prompt": ""}, {"prompt": "   "}, {"prompt": 7}):
+            with self.subTest(payload=payload):
+                response = client.post("/api/editor/generate", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_mode_invalido_400(self):
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl", "mode": "nope"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("mode", response.json()["error"])
+
+    def test_mode_ausente_default_generate(self):
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl"}
+        )
+        self.assertEqual(response.status_code, 503)
+
+    def test_mas_de_diez_refs_400(self):
+        refs = [base64.b64encode(b"img").decode("ascii")] * 11
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl", "ref_images_b64": refs}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("10", response.json()["error"])
+
+    def test_refs_no_lista_400(self):
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl", "ref_images_b64": "no"}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_b64_invalido_400(self):
+        client = self.make_client()
+        for refs in (["@@no-base64@@"], [""], [None]):
+            with self.subTest(refs=refs):
+                response = client.post(
+                    "/api/editor/generate",
+                    json={"prompt": "1girl", "ref_images_b64": refs},
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_size_fuera_de_rango_o_no_multiplo_16_400(self):
+        client = self.make_client()
+        for size in (
+            {"width": 511, "height": 1024},
+            {"width": 1024, "height": 2049},
+            {"width": 1000, "height": 1024},
+            {"width": 1024.5, "height": 1024},
+            {"width": "x", "height": 1024},
+            {"width": 1024},
+            {"width": True, "height": 1024},
+        ):
+            with self.subTest(size=size):
+                response = client.post(
+                    "/api/editor/generate", json={"prompt": "1girl", "size": size}
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_size_no_dict_400(self):
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl", "size": [1024, 1024]}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_seed_invalida_400(self):
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl", "seed": "x"}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_validaciones_antes_de_la_guarda_503(self):
+        response = self.make_client().post(
+            "/api/editor/generate",
+            json={"prompt": "", "mode": "nope", "size": {"width": 1, "height": 1}},
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class EditorGenerateGuardTests(ServerTestCase):
+    def test_503_sin_instalacion(self):
+        response = self.make_client().post(
+            "/api/editor/generate",
+            json={
+                "prompt": "1girl, smile",
+                "mode": "generate",
+                "size": {"width": 1024, "height": 1024},
+                "seed": 42,
+            },
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "modelo no instalado (M10)"})
+
+    def test_503_con_refs_y_edit(self):
+        ref = base64.b64encode(PNG_BYTES).decode("ascii")
+        response = self.make_client().post(
+            "/api/editor/generate",
+            json={"prompt": "edit this", "mode": "edit", "ref_images_b64": [ref]},
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "modelo no instalado (M10)"})
+
+    def test_501_con_instalacion_simulada(self):
+        for relative in server_module.EDITOR_MODEL_FILES:
+            path = self.config.comfy_root / "models" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake-model")
+        response = self.make_client().post(
+            "/api/editor/generate",
+            json={
+                "prompt": "1girl",
+                "mode": "edit",
+                "ref_images_b64": [base64.b64encode(b"img").decode("ascii")],
+                "size": {"width": 512, "height": 2048},
+                "seed": 7,
+            },
+        )
+        self.assertEqual(response.status_code, 501)
+        self.assertEqual(response.json(), {"error": "integracion pendiente (M10)"})
+
+
+class EditorUiStaticTests(ServerTestCase):
+    def test_index_incluye_pestana_y_controles_editor(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="tab-editor"',
+            ">Editor<",
+            'id="panel-editor"',
+            'id="editor-banner"',
+            'id="editor-prompt"',
+            'id="editor-mode"',
+            ">Generar<",
+            ">Editar<",
+            'id="editor-refs"',
+            'id="editor-refs-preview"',
+            'id="editor-width"',
+            'id="editor-height"',
+            'id="editor-seed"',
+            'id="btn-editor-generate"',
+            'id="editor-status"',
+            "múltiplos de 16",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_incluye_editor_y_guarda(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "/api/editor/status",
+            "/api/editor/generate",
+            'switchTab("editor")',
+            "Qwen-Image 2.1 no instalado",
+            "Qwen-Image 2.1 instalado",
+            "EDITOR_REF_LIMIT",
+            "EDITOR_SIZE_MIN",
+            "updateEditorControls",
+            "addEditorRefs",
+            "removeEditorRef",
+            "generateEditor",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 if __name__ == "__main__":
     unittest.main()

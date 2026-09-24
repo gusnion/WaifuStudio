@@ -99,7 +99,8 @@ main {
 }
 
 #panel-image.active,
-#panel-video.active {
+#panel-video.active,
+#panel-editor.active {
   display: grid;
   grid-template-columns: 380px 1fr;
 }
@@ -941,6 +942,54 @@ input[type="checkbox"] {
   object-fit: cover;
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+.editor-banner {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid #f5c542;
+  border-radius: 6px;
+  color: #f5c542;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.editor-banner.ok {
+  border-left-color: #86efac;
+  color: #86efac;
+}
+
+.editor-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editor-ref {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.editor-ref img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.editor-placeholder {
+  margin: 0;
+  padding: 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .pager {

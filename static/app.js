@@ -24,6 +24,11 @@ const ZONE_LABELS = {
 const PAGE_SIZE = 6;
 const VIDEO_FPS = 16;
 
+const EDITOR_REF_LIMIT = 10;
+const EDITOR_SIZE_MIN = 512;
+const EDITOR_SIZE_MAX = 2048;
+const EDITOR_SIZE_STEP = 16;
+
 const OC_TRAIT_GROUPS = ["hair", "eyes", "face", "body"];
 
 const TRAIN_PAGE = 24;
@@ -49,6 +54,9 @@ const state = {
   pendingMotion: false,
   videoNegativeTouched: false,
   videoVramHint: "",
+  editorInstalled: false,
+  editorRefs: [],
+  editorBusy: false,
   galleryItems: [],
   videoItems: [],
   imagePager: null,
@@ -1047,6 +1055,137 @@ function applyVideoEngine() {
   $("video-negative-details").style.display = isWan ? "" : "none";
   $("video-prompt-field").style.display = isWan ? "none" : "";
   $("video-last-field").style.display = showLast ? "" : "none";
+}
+
+function setEditorStatus(text, isError = false) {
+  const el = $("editor-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function setEditorBanner(installed) {
+  const el = $("editor-banner");
+  el.classList.toggle("ok", Boolean(installed));
+  el.textContent = installed
+    ? "Qwen-Image 2.1 instalado — listo para M10"
+    : "Qwen-Image 2.1 no instalado — llega con las descargas M10";
+}
+
+async function loadEditorStatus() {
+  const data = await api("/api/editor/status");
+  state.editorInstalled = Boolean(data.installed);
+  setEditorBanner(state.editorInstalled);
+  return data;
+}
+
+function updateEditorControls() {
+  $("btn-editor-generate").disabled =
+    state.editorBusy || !$("editor-prompt").value.trim();
+}
+
+function updateEditorRefs() {
+  const box = $("editor-refs-preview");
+  box.textContent = "";
+  state.editorRefs.forEach((ref, index) => {
+    const item = document.createElement("div");
+    item.className = "editor-ref";
+    const img = document.createElement("img");
+    img.src = ref.url;
+    img.alt = ref.name;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Quitar";
+    remove.addEventListener("click", () => removeEditorRef(index));
+    item.append(img, remove);
+    box.appendChild(item);
+  });
+}
+
+function removeEditorRef(index) {
+  const removed = state.editorRefs.splice(index, 1)[0];
+  if (removed && removed.url) {
+    URL.revokeObjectURL(removed.url);
+  }
+  updateEditorRefs();
+  setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
+}
+
+async function addEditorRefs(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) {
+    return;
+  }
+  const room = Math.max(0, EDITOR_REF_LIMIT - state.editorRefs.length);
+  if (files.length > room) {
+    setEditorStatus(
+      `Máximo ${EDITOR_REF_LIMIT} imágenes de referencia`,
+      true
+    );
+  }
+  for (const file of files.slice(0, room)) {
+    const b64 = await readFileBase64(file);
+    state.editorRefs.push({
+      name: file.name,
+      b64,
+      url: URL.createObjectURL(file),
+    });
+  }
+  $("editor-refs").value = "";
+  updateEditorRefs();
+  if (files.length <= room) {
+    setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
+  }
+}
+
+function validEditorSize(value) {
+  return (
+    Number.isInteger(value) &&
+    value >= EDITOR_SIZE_MIN &&
+    value <= EDITOR_SIZE_MAX &&
+    value % EDITOR_SIZE_STEP === 0
+  );
+}
+
+async function generateEditor() {
+  if (state.editorBusy) {
+    return;
+  }
+  const prompt = $("editor-prompt").value.trim();
+  if (!prompt) {
+    setEditorStatus("El prompt no puede estar vacío", true);
+    return;
+  }
+  const width = Math.trunc(Number($("editor-width").value));
+  const height = Math.trunc(Number($("editor-height").value));
+  if (!validEditorSize(width) || !validEditorSize(height)) {
+    setEditorStatus(
+      `Medidas fuera de [${EDITOR_SIZE_MIN}, ${EDITOR_SIZE_MAX}] o no múltiplos de ${EDITOR_SIZE_STEP}`,
+      true
+    );
+    return;
+  }
+  const seedValue = Number($("editor-seed").value);
+  const payload = {
+    prompt,
+    mode: $("editor-mode").value,
+    size: { width, height },
+    seed: Number.isFinite(seedValue) ? Math.trunc(seedValue) : 42,
+  };
+  if (state.editorRefs.length) {
+    payload.ref_images_b64 = state.editorRefs.map((ref) => ref.b64);
+  }
+  state.editorBusy = true;
+  updateEditorControls();
+  setEditorStatus("Enviando...");
+  try {
+    const data = await postJson("/api/editor/generate", payload);
+    setEditorStatus(data && data.job_id ? `Encolado: ${data.job_id}` : "Aceptado");
+  } catch (error) {
+    setEditorStatus(error.message, true);
+  } finally {
+    state.editorBusy = false;
+    updateEditorControls();
+  }
 }
 
 function setOcStatus(text, isError = false) {
@@ -2460,10 +2599,14 @@ function closeOcModal() {
 
 function switchTab(tab) {
   const image = tab === "image";
+  const video = tab === "video";
+  const editor = tab === "editor";
   $("tab-image").classList.toggle("active", image);
-  $("tab-video").classList.toggle("active", !image);
+  $("tab-video").classList.toggle("active", video);
+  $("tab-editor").classList.toggle("active", editor);
   $("panel-image").classList.toggle("active", image);
-  $("panel-video").classList.toggle("active", !image);
+  $("panel-video").classList.toggle("active", video);
+  $("panel-editor").classList.toggle("active", editor);
 }
 
 function bind() {
@@ -2471,6 +2614,7 @@ function bind() {
   state.videoPager = makePager("video-gallery");
   $("tab-image").addEventListener("click", () => switchTab("image"));
   $("tab-video").addEventListener("click", () => switchTab("video"));
+  $("tab-editor").addEventListener("click", () => switchTab("editor"));
   $("btn-enhance").addEventListener("click", enhancePrompt);
   $("btn-enhance-use").addEventListener("click", useEnhanceResult);
   $("btn-enhance-discard").addEventListener("click", discardEnhanceResult);
@@ -2528,6 +2672,13 @@ function bind() {
   $("video-motion-negative").addEventListener("input", () => {
     state.videoNegativeTouched = true;
   });
+  $("editor-prompt").addEventListener("input", updateEditorControls);
+  $("editor-refs").addEventListener("change", (event) => {
+    addEditorRefs(event.target.files).catch((error) =>
+      setEditorStatus(error.message, true)
+    );
+  });
+  $("btn-editor-generate").addEventListener("click", generateEditor);
   $("size").addEventListener("change", applySizeSelection);
   $("preprompt").addEventListener("change", () => {
     refreshNegative().catch((error) => setStatus(error.message, true));
@@ -2637,6 +2788,7 @@ async function init() {
   bind();
   applyVideoEngine();
   updateVideoDurationInfo();
+  updateEditorControls();
   try {
     await loadParams();
     await loadFormats();
@@ -2647,6 +2799,7 @@ async function init() {
     await refreshNegative();
     await loadGallery();
     await refreshPromptZones();
+    await loadEditorStatus();
     setStatus("Listo");
   } catch (error) {
     setStatus(error.message, true);

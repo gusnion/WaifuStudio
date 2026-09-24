@@ -109,6 +109,17 @@ CHARACTER_MEDIA_TYPES = {
 }
 CHARACTER_REFS_DIRNAME = "characters"
 TAGS_UNFILTERED_LIMIT = 200
+EDITOR_MODEL = "qwen-image-2.1"
+EDITOR_MODEL_FILES = (
+    "diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+    "text_encoders/qwen_image_2.1_text_encoder_int8_convrot.safetensors",
+    "vae/qwen_image_vae.safetensors",
+)
+EDITOR_NOTE = "La descarga e integración llegan en M10"
+EDITOR_REF_LIMIT = 10
+EDITOR_SIZE_MIN = 512
+EDITOR_SIZE_MAX = 2048
+EDITOR_SIZE_STEP = 16
 _JOBS: dict[int, dict] = {}
 PROGRESS_KEYS = ("step", "total", "percent", "node", "state")
 
@@ -200,6 +211,16 @@ def _write_input_png(input_dir: Any, raw: bytes) -> str:
     name = f"{uuid.uuid4().hex}.png"
     (input_dir / name).write_bytes(raw)
     return name
+
+
+def editor_installed(comfy_root: Any) -> bool:
+    """True solo si existen TODOS los archivos esperados del editor (M9-G).
+
+    `expected` son rutas relativas a `ComfyUI/models`; no se comprueba tamaño ni
+    hash y no se inventa que existan: con temp root el resultado es `False`.
+    """
+    models_root = Path(comfy_root) / "models"
+    return all((models_root / relative).is_file() for relative in EDITOR_MODEL_FILES)
 
 
 def run_generation(
@@ -1062,6 +1083,100 @@ def create_app(
         job_id = queue.submit(job)
         app.state.jobs[job_id] = job
         return {"job_id": job_id, "frames": frames, "vram_hint": hint}
+
+    @app.get("/api/editor/status")
+    async def api_editor_status() -> dict:
+        """Estado del editor Qwen-Image 2.1 (M9-G): guarda de modelo no instalado.
+
+        `expected` son las rutas relativas a `ComfyUI/models` del par INT8
+        ConvRot (difusión + text encoder) y el VAE; `installed` exige que
+        existan TODAS. La descarga e integración llegan en M10.
+        """
+        return {
+            "installed": editor_installed(cfg.comfy_root),
+            "model": EDITOR_MODEL,
+            "expected": list(EDITOR_MODEL_FILES),
+            "note": EDITOR_NOTE,
+        }
+
+    @app.post("/api/editor/generate")
+    async def api_editor_generate(payload: dict = Body(...)) -> Any:
+        """Valida la petición del editor y responde 503/501 hasta M10.
+
+        La forma se valida siempre (400): prompt, mode `generate|edit`, máximo
+        10 refs base64 válidas, size en [512, 2048] múltiplos de 16 y seed
+        entera. Después: 503 si falta el modelo y 501 si está instalado pero la
+        integración aún no existe (placeholder honesto).
+        """
+        prompt = payload.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            return JSONResponse(status_code=400, content={"error": "prompt vacio"})
+        mode = payload.get("mode") or "generate"
+        if mode not in ("generate", "edit"):
+            return JSONResponse(
+                status_code=400, content={"error": "mode invalido; usar generate|edit"}
+            )
+        refs = payload.get("ref_images_b64")
+        if refs is not None:
+            if not isinstance(refs, list):
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "ref_images_b64 invalido; usar lista"},
+                )
+            if len(refs) > EDITOR_REF_LIMIT:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": f"maximo {EDITOR_REF_LIMIT} imagenes de referencia"
+                    },
+                )
+            for index, ref in enumerate(refs):
+                _decode_image_b64(ref, f"ref_images_b64[{index}]")
+        size = payload.get("size")
+        if size not in (None, ""):
+            if not isinstance(size, dict):
+                return JSONResponse(status_code=400, content={"error": "size invalido"})
+            for name in ("width", "height"):
+                value = size.get(name)
+                if value is None or isinstance(value, bool):
+                    return JSONResponse(
+                        status_code=400, content={"error": f"size.{name} invalido"}
+                    )
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    return JSONResponse(
+                        status_code=400, content={"error": f"size.{name} invalido"}
+                    )
+                if (
+                    not number.is_integer()
+                    or not EDITOR_SIZE_MIN <= number <= EDITOR_SIZE_MAX
+                    or number % EDITOR_SIZE_STEP
+                ):
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": (
+                                f"size fuera de [{EDITOR_SIZE_MIN}, {EDITOR_SIZE_MAX}]"
+                                f" o no multiplo de {EDITOR_SIZE_STEP}"
+                            )
+                        },
+                    )
+        seed = payload.get("seed")
+        if seed is not None:
+            if isinstance(seed, bool):
+                return JSONResponse(status_code=400, content={"error": "seed invalido"})
+            try:
+                int(seed)
+            except (TypeError, ValueError):
+                return JSONResponse(status_code=400, content={"error": "seed invalido"})
+        if not editor_installed(cfg.comfy_root):
+            return JSONResponse(
+                status_code=503, content={"error": "modelo no instalado (M10)"}
+            )
+        return JSONResponse(
+            status_code=501, content={"error": "integracion pendiente (M10)"}
+        )
 
     @app.get("/api/jobs/{job_id}")
     async def api_job(job_id: str) -> Any:
