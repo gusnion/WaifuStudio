@@ -440,6 +440,15 @@ def create_app(
     app.state.jobs = {}
     app.state.characters = chars
 
+    @app.middleware("http")
+    async def _ui_no_store(request: Request, call_next):
+        """`Cache-Control: no-store` para `/` y `/static/...` (nunca `/api`/`/media`)."""
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

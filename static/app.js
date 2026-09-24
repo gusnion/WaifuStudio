@@ -99,8 +99,27 @@ let zoneOcCharacter = null;
 
 const $ = (id) => document.getElementById(id);
 
+function showUiBanner(message) {
+  let banner = $("ui-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "ui-banner";
+    banner.style.cssText =
+      "position:fixed;top:0;left:0;right:0;z-index:1000;padding:10px 14px;" +
+      "background:#7a1f1f;color:#fff;font-weight:600;text-align:center";
+    document.body.appendChild(banner);
+  }
+  banner.textContent = message;
+}
+
 function setStatus(text, isError = false) {
   const el = $("job-status");
+  if (!el) {
+    if (isError) {
+      showUiBanner(text);
+    }
+    return;
+  }
   el.textContent = text;
   el.classList.toggle("error", Boolean(isError));
 }
@@ -221,7 +240,12 @@ async function loadModels() {
     select.appendChild(option(model.id, model.display_name || model.id));
   }
   if (state.models.length) {
-    await applyModel(state.models[0].id);
+    try {
+      await applyModel(state.models[0].id);
+    } catch (error) {
+      setStatus(`Modelo: ${error.message}`, true);
+      throw error;
+    }
   }
 }
 
@@ -254,7 +278,9 @@ function renderLoras() {
   if (!state.loras.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
-    empty.textContent = "Aún no hay LoRAs de imagen (llegan con las descargas M10)";
+    empty.textContent =
+      "No hay LoRAs de imagen registradas. Añádelas en registry/loras.json " +
+      "con familia anima (o espera las descargas de M10)";
     container.appendChild(empty);
     return;
   }
@@ -2609,7 +2635,88 @@ function switchTab(tab) {
   $("panel-editor").classList.toggle("active", editor);
 }
 
+const REQUIRED_IDS = [
+  "job-status",
+  "video-status",
+  "tab-image",
+  "tab-video",
+  "tab-editor",
+  "btn-enhance",
+  "btn-enhance-use",
+  "btn-enhance-discard",
+  "btn-generate",
+  "btn-cancel",
+  "btn-negative-restore",
+  "btn-ref-clear",
+  "btn-lightbox-close",
+  "lightbox",
+  "gallery-prev",
+  "gallery-next",
+  "video-gallery-prev",
+  "video-gallery-next",
+  "btn-reload",
+  "btn-video-reload",
+  "btn-motion",
+  "btn-video-generate",
+  "btn-video-cancel",
+  "video-engine",
+  "video-mode",
+  "video-seconds",
+  "video-motion-negative",
+  "editor-prompt",
+  "editor-refs",
+  "btn-editor-generate",
+  "size",
+  "preprompt",
+  "btn-preprompt-manage",
+  "btn-preprompt-close",
+  "preprompt-form",
+  "preprompt-modal",
+  "negative",
+  "prompt",
+  "zone-insert-form",
+  "zone-insert-cancel",
+  "zone-popover-close",
+  "zone-popover-search",
+  "zone-popover-insert",
+  "zone-popover-clear",
+  "zone-ocs-extras",
+  "zone-ocs-traits",
+  "ref-image",
+  "model",
+  "strength",
+  "strength-value",
+  "btn-oc",
+  "btn-oc-close",
+  "btn-oc-add",
+  "oc-modal",
+  "oc-catalog-group",
+  "oc-catalog-search",
+  "oc-form",
+  "btn-oc-new",
+  "btn-oc-cancel-edit",
+  "btn-oc-sheet",
+  "btn-oc-extras-move",
+  "btn-oc-save-close",
+  "btn-oc-save-confirm",
+  "oc-save-modal",
+  "btn-oc-train-close",
+  "oc-train-modal",
+  "btn-train-more",
+  "btn-train-start",
+  "train-rank",
+  "train-epochs",
+  "train-trigger",
+];
+
 function bind() {
+  const missing = REQUIRED_IDS.filter((id) => !$(id));
+  if (missing.length) {
+    showUiBanner("UI desactualizada: recarga con Ctrl+F5");
+    setStatus("UI desactualizada: recarga con Ctrl+F5", true);
+    console.error("bind: faltan elementos de la UI", missing);
+    return false;
+  }
   state.imagePager = makePager("gallery");
   state.videoPager = makePager("video-gallery");
   $("tab-image").addEventListener("click", () => switchTab("image"));
@@ -2782,27 +2889,49 @@ function bind() {
   $("train-rank").addEventListener("change", updateTrainControls);
   $("train-epochs").addEventListener("input", updateTrainControls);
   $("train-trigger").addEventListener("input", updateTrainControls);
+  return true;
 }
 
 async function init() {
-  bind();
-  applyVideoEngine();
-  updateVideoDurationInfo();
-  updateEditorControls();
+  const failures = [];
+  const settle = async (label, fn) => {
+    try {
+      return await fn();
+    } catch (error) {
+      failures.push(label);
+      console.error(`init: fallo en ${label}`, error);
+      return undefined;
+    }
+  };
   try {
-    await loadParams();
-    await loadFormats();
-    await loadModels();
-    await loadOcCatalog();
-    await loadOcPreprompts();
-    await loadCharacters();
-    await refreshNegative();
-    await loadGallery();
-    await refreshPromptZones();
-    await loadEditorStatus();
-    setStatus("Listo");
+    const bound = await settle("bind", bind);
+    if (bound === false) {
+      failures.push("bind");
+    }
+    await settle("video", () => {
+      applyVideoEngine();
+      updateVideoDurationInfo();
+    });
+    await settle("editor", updateEditorControls);
+    await settle("parámetros", loadParams);
+    await settle("formatos", loadFormats);
+    await settle("modelos", loadModels);
+    await settle("catálogo OC", loadOcCatalog);
+    await settle("preprompts OC", loadOcPreprompts);
+    await settle("OCs", loadCharacters);
+    await settle("negativo", refreshNegative);
+    await settle("galería", loadGallery);
+    await settle("zonas", refreshPromptZones);
+    await settle("estado del editor", loadEditorStatus);
   } catch (error) {
-    setStatus(error.message, true);
+    console.error("init", error);
+    setStatus(`Error al iniciar: ${error.message}`, true);
+    return;
+  }
+  if (failures.length) {
+    setStatus(`Fallaron: ${failures.join(", ")}`, true);
+  } else {
+    setStatus("Listo");
   }
 }
 

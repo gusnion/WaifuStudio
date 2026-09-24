@@ -852,7 +852,7 @@ class GenerateEngineParamsValidationTests(ServerTestCase):
 
 
 class GenerateLorasTests(ServerTestCase):
-    REIKA_FILE = "Reika Kurashiki_1.safetensors"
+    REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_1.safetensors"
 
     def payload(self, **overrides) -> dict:
         data = {
@@ -1378,7 +1378,7 @@ class RunGenerationTests(ServerTestCase):
             graph["lora_1"]["inputs"],
             {
                 "model": ["1", 0],
-                "lora_name": "Reika Kurashiki_1.safetensors",
+                "lora_name": "Reika Kurashiki\\Reika Kurashiki_1.safetensors",
                 "strength_model": 0.8,
             },
         )
@@ -2326,6 +2326,34 @@ class IndexTests(ServerTestCase):
             "Usar como referencia",
             "IPAdapter (M10)",
             "no se adjunta como referencia I2I",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
+class CacheHeaderTests(ServerTestCase):
+    def test_ui_sin_cache_y_api_intacta(self):
+        client = self.make_client()
+        index = client.get("/")
+        self.assertEqual(index.status_code, 200)
+        self.assertEqual(index.headers.get("cache-control"), "no-store")
+        script = client.get("/static/app.js")
+        self.assertEqual(script.status_code, 200)
+        self.assertEqual(script.headers.get("cache-control"), "no-store")
+        models = client.get("/api/models")
+        self.assertEqual(models.status_code, 200)
+        self.assertNotIn("cache-control", models.headers)
+
+
+class StartupHardeningUiStaticTests(ServerTestCase):
+    def test_app_js_blindado_por_secciones(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "REQUIRED_IDS",
+            "UI desactualizada: recarga con Ctrl+F5",
+            "const settle = async",
+            'setStatus(`Fallaron: ${failures.join(", ")}`, true)',
+            "No hay LoRAs de imagen registradas",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

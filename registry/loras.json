@@ -27,7 +27,7 @@
     {
       "id": "reika-kurashiki",
       "family": "animagine",
-      "file": "Reika Kurashiki_1.safetensors",
+      "file": "Reika Kurashiki\\Reika Kurashiki_1.safetensors",
       "display_name": "Reika Kurashiki (animagine)",
       "trigger": "",
       "default_weight": 1.0,

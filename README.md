@@ -218,6 +218,14 @@ si no `Manual` con esos valores), LoRAs con sus pesos y la referencia (`params.r
 blanco sin romper. La pestaña **Video**
 (F4, ver abajo) es independiente, y el panel modal **OC Maker** (8 grupos + «Añadir al prompt»).
 
+Desde **M9-B-fix4**, un middleware de `create_app` añade `Cache-Control: no-store` a `/` y
+`/static/...` (no a `/api`, `/media` ni `/api/refs`), para que el navegador no mezcle un
+`index.html` cacheado con un `app.js` nuevo. Además, `app.js` blinda el arranque: `bind()`
+comprueba los elementos imprescindibles y, si falta alguno, muestra el banner
+«UI desactualizada: recarga con Ctrl+F5» sin lanzar; `init()` carga cada sección con un helper
+`settle` que acumula fallos y termina con `Fallaron: <secciones>` (y `console.error` por cada
+uno) en vez de morir en silencio dejando los desplegables vacíos.
+
 ### Requisitos y arranque
 
 Las 3 dependencias están instaladas en el venv del propio repo y fijadas en `requirements.txt`
@@ -481,7 +489,7 @@ falsos: no tocan GPU ni red.
 
 `app\loras.py` (CPU, sin red) carga y valida la biblioteca versionada
 `registry\loras.json` (`{"version": 1, "loras": [...]}`). Cada entrada declara
-`id`, `family`, `file` (relativo a `ComfyUI\models\loras`), `display_name`,
+`id`, `family`, `file` (relativo a `ComfyUI\models\loras`, admite subcarpetas), `display_name`,
 `trigger`, `default_weight` (0..2), `source`, `license` y `notes`; el `_comment`
 del registro recuerda que **los LoRAs de Anima llegan en M10 (descargas
 diferidas)** y solo se registran ficheros presentes en disco:
@@ -490,7 +498,7 @@ diferidas)** y solo se registran ficheros presentes en disco:
 |----|---------|---------|
 | `lightx2v-wan-high` | `wan` | `lightx2v\wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
 | `lightx2v-wan-low` | `wan` | `lightx2v\wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
-| `reika-kurashiki` | `animagine` | `Reika Kurashiki_1.safetensors` (legacy, no se usa en Anima) |
+| `reika-kurashiki` | `animagine` | `Reika Kurashiki\Reika Kurashiki_1.safetensors` (legacy, no se usa en Anima) |
 | `minimax-h3-fl2v-turbo-4step` | `h3` | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors` (turbo de la plantilla H3) |
 
 API del módulo: `list_loras(family=None)` (orden del JSON), `get(id)`,
@@ -517,8 +525,13 @@ en **M9-F**; hasta entonces la biblioteca queda como registro y validación.
 El panel **Imagen** trae una sección **LoRAs de imagen** poblada desde
 `GET /api/loras?family=<familia del modelo>`: por cada LoRA, checkbox + slider
 de peso (0..2, paso 0.05, default el `default_weight` del registro). Si la
-familia no tiene entradas, muestra «Aún no hay LoRAs de imagen (llegan con las
-descargas M10)». `POST /api/generate` recibe `loras: [{"id", "weight"}]` con
+familia no tiene entradas, muestra «No hay LoRAs de imagen registradas. Añádelas en
+`registry\loras.json` con familia `anima` (o espera las descargas de M10)». Para registrar una a
+mano: deja el `.safetensors` bajo `ComfyUI\models\loras` (con su subcarpeta si la tiene) y añade
+la entrada a `registry\loras.json` con `family: "anima"` y `file` relativo a esa carpeta: `file`
+admite subcarpetas (en JSON, `Carpeta\\archivo.safetensors`) y el valor debe coincidir con la
+ruta relativa real en disco.
+`POST /api/generate` recibe `loras: [{"id", "weight"}]` con
 los marcados, y el resumen de cada tarjeta de la galería lista los LoRAs usados
 (`lora <id> @ <peso>`); «Reusar» vuelve a marcarlos y ajustar sus pesos desde
 `params.loras` del store (además de modelo, preprompt, rating, negativo,

@@ -19,7 +19,7 @@ REAL_IDS = [
     "reika-kurashiki",
     "minimax-h3-fl2v-turbo-4step",
 ]
-REIKA_FILE = "Reika Kurashiki_1.safetensors"
+REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_1.safetensors"
 
 
 def entry(**overrides) -> dict:
