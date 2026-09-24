@@ -217,14 +217,23 @@ Las 3 dependencias están instaladas en el venv del propio repo y fijadas en `re
 ```powershell
 # launchers en la raíz del repo
 .\VERIFICAR_WAIFU.bat      # python -m app.health
-.\INICIAR_WAIFU.bat        # python -m app.server
+.\INICIAR_WAIFU.bat        # scripts\start_app.ps1 (primer plano)
+.\DETENER_WAIFU.bat        # scripts\stop_app.ps1
 
 # o directo con el venv del repo
 & 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m pip install -r requirements.txt
 & 'E:\IA\WAIFU\.venv\Scripts\python.exe' -m app.server
 ```
 
-Por defecto escucha en `127.0.0.1:8765`; el puerto se cambia con `WAIFU_APP_PORT`.
+Por defecto escucha en `127.0.0.1:8765` (default de `app.server`); el puerto se cambia con
+`WAIFU_APP_PORT`, que `start_app.ps1` y `stop_app.ps1` respetan.
+`INICIAR_WAIFU.bat` llama a `scripts\start_app.ps1`: si el 8765 ya lo escucha la app de WAIFU
+(python del venv y `app.server` en su línea de comandos), imprime
+`La app ya esta corriendo: http://127.0.0.1:8765` y sale con código 0 sin arrancar una segunda
+instancia; si el puerto lo ocupa otra aplicación, falla sin arrancar nada.
+`DETENER_WAIFU.bat` llama a `scripts\stop_app.ps1`: valida el dueño del puerto antes de matar,
+por lo que nunca detiene una aplicación ajena (throw); si no hay listener informa
+`La app ya esta detenida.` y sale con código 0.
 La generación real requiere ComfyUI arriba (`WAIFU_COMFY_URL`) y GPU libre; los tests corren
 offline con un transporte falso y `start_worker=False` (sin GPU ni LLM reales).
 
