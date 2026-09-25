@@ -17,6 +17,10 @@ from app.motion import MOTION_NEGATIVE
 from app.store import Store
 from app.video import (
     H3_TEMPLATE_PATH,
+    WAN_DEFAULT_SAMPLER,
+    WAN_DEFAULT_SCHEDULER,
+    WAN_DEFAULT_SHIFT,
+    WAN_DEFAULT_STEPS,
     WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
     build_video_graph,
@@ -24,6 +28,7 @@ from app.video import (
     prepare_h3_graph,
     prepare_wan_flf_graph,
     prepare_wan_graph,
+    resolve_wan_profile,
     run_video_generation,
     vram_hint,
 )
@@ -356,6 +361,287 @@ class PrepareWanFlfTests(unittest.TestCase):
                     prepare_wan_flf_graph(self.graph, **(base | override))
 
 
+class WanOverrideTests(unittest.TestCase):
+    def setUp(self):
+        self.graph = load_graph(WAN_TEMPLATE_PATH)
+
+    def prepare(self, **overrides) -> dict:
+        base = {
+            "image_name": "f.png",
+            "motion_positive": "m",
+            "motion_negative": "n",
+            "seed": 3,
+        }
+        return prepare_wan_graph(self.graph, **(base | overrides))
+
+    def test_sampler_y_scheduler_en_ambos_samplers(self):
+        patched = self.prepare(sampler_name="er_sde", scheduler="karras")
+        for node_id in ("12", "13"):
+            with self.subTest(node_id=node_id):
+                self.assertEqual(patched[node_id]["inputs"]["sampler_name"], "er_sde")
+                self.assertEqual(patched[node_id]["inputs"]["scheduler"], "karras")
+
+    def test_steps_30_reparte_15_15(self):
+        patched = self.prepare(steps=30)
+        for node_id in ("12", "13"):
+            self.assertEqual(patched[node_id]["inputs"]["steps"], 30)
+        self.assertEqual(patched["12"]["inputs"]["start_at_step"], 0)
+        self.assertEqual(patched["12"]["inputs"]["end_at_step"], 15)
+        self.assertEqual(patched["13"]["inputs"]["start_at_step"], 15)
+        self.assertEqual(patched["13"]["inputs"]["end_at_step"], 10000)
+        self.assertEqual(patched["12"]["inputs"]["add_noise"], "enable")
+        self.assertEqual(patched["13"]["inputs"]["add_noise"], "disable")
+
+    def test_steps_20_reproduce_lo_certificado(self):
+        patched = self.prepare(
+            sampler_name="euler", scheduler="simple", steps=20, shift=8.0
+        )
+        self.assertEqual(patched, self.prepare())
+
+    def test_shift_en_ambos_model_sampling(self):
+        patched = self.prepare(shift=5.0)
+        self.assertEqual(patched["10"]["inputs"]["shift"], 5.0)
+        self.assertEqual(patched["11"]["inputs"]["shift"], 5.0)
+
+    def test_no_muta_el_original_con_overrides(self):
+        snapshot = copy.deepcopy(self.graph)
+        self.prepare(sampler_name="er_sde", scheduler="karras", steps=30, shift=5.0)
+        self.assertEqual(self.graph, snapshot)
+
+    def test_steps_invalidos(self):
+        for value in (True, 0, 201, 20.5, "20", float("nan"), float("inf")):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    self.prepare(steps=value)
+
+    def test_shift_invalidos(self):
+        for value in (True, 0, -1, "8", float("nan"), float("inf")):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    self.prepare(shift=value)
+
+    def test_sampler_y_scheduler_invalidos(self):
+        with self.assertRaises(EngineError):
+            self.prepare(sampler_name="nope")
+        with self.assertRaises(EngineError):
+            self.prepare(scheduler="nope")
+
+    def test_nodo_ausente_lanza_engine_error(self):
+        broken = copy.deepcopy(self.graph)
+        del broken["12"]
+        with self.assertRaises(EngineError):
+            prepare_wan_graph(
+                broken, image_name="f.png", motion_positive="m", motion_negative="n",
+                seed=1, steps=30,
+            )
+        broken = copy.deepcopy(self.graph)
+        del broken["10"]
+        del broken["11"]
+        with self.assertRaises(EngineError):
+            prepare_wan_graph(
+                broken, image_name="f.png", motion_positive="m", motion_negative="n",
+                seed=1, shift=5.0,
+            )
+
+
+class WanFlfOverrideTests(unittest.TestCase):
+    def setUp(self):
+        self.graph = load_graph(WAN_FLF_TEMPLATE_PATH)
+
+    def prepare(self, **overrides) -> dict:
+        base = {
+            "first_image_name": "a.png",
+            "last_image_name": "b.png",
+            "motion_positive": "m",
+            "motion_negative": "n",
+            "seed": 3,
+        }
+        return prepare_wan_flf_graph(self.graph, **(base | overrides))
+
+    def test_overrides_en_samplers_y_shift(self):
+        patched = self.prepare(sampler_name="er_sde", scheduler="simple", steps=30, shift=5.0)
+        for node_id in ("12", "13"):
+            with self.subTest(node_id=node_id):
+                self.assertEqual(patched[node_id]["inputs"]["sampler_name"], "er_sde")
+                self.assertEqual(patched[node_id]["inputs"]["steps"], 30)
+        self.assertEqual(patched["12"]["inputs"]["end_at_step"], 15)
+        self.assertEqual(patched["13"]["inputs"]["start_at_step"], 15)
+        self.assertEqual(patched["10"]["inputs"]["shift"], 5.0)
+        self.assertEqual(patched["11"]["inputs"]["shift"], 5.0)
+
+    def test_steps_20_reproduce_lo_certificado(self):
+        patched = self.prepare(steps=20)
+        self.assertEqual(patched, self.prepare())
+
+    def test_invalidos(self):
+        for override in (
+            {"sampler_name": "nope"},
+            {"scheduler": "nope"},
+            {"steps": True},
+            {"steps": 0},
+            {"steps": 201},
+            {"shift": 0},
+            {"shift": "8"},
+        ):
+            with self.subTest(override=override):
+                with self.assertRaises(EngineError):
+                    self.prepare(**override)
+
+
+class ResolveWanProfileTests(unittest.TestCase):
+    def test_sin_preset_es_el_perfil_certificado(self):
+        for preset in (None, "", "manual", " manual "):
+            with self.subTest(preset=preset):
+                profile = resolve_wan_profile(preset=preset, aspect="horizontal")
+                self.assertEqual(
+                    profile,
+                    {
+                        "preset": "manual",
+                        "sampler_name": WAN_DEFAULT_SAMPLER,
+                        "scheduler": WAN_DEFAULT_SCHEDULER,
+                        "steps": WAN_DEFAULT_STEPS,
+                        "shift": WAN_DEFAULT_SHIFT,
+                        "width": 768,
+                        "height": 432,
+                    },
+                )
+
+    def test_preset_rapido_es_el_certificado(self):
+        profile = resolve_wan_profile(preset="rapido", aspect="vertical")
+        self.assertEqual(profile["width"], 432)
+        self.assertEqual(profile["height"], 768)
+        self.assertEqual(profile["sampler_name"], "euler")
+        self.assertEqual(profile["scheduler"], "simple")
+        self.assertEqual(profile["steps"], 20)
+        self.assertEqual(profile["shift"], 8.0)
+        self.assertEqual(profile["preset"], "rapido")
+
+    def test_preset_calidad_y_horizontal(self):
+        profile = resolve_wan_profile(preset="calidad", aspect="vertical")
+        self.assertEqual((profile["width"], profile["height"]), (512, 896))
+        self.assertEqual(profile["sampler_name"], "er_sde")
+        self.assertEqual(profile["steps"], 30)
+        self.assertEqual(profile["shift"], 5.0)
+        horizontal = resolve_wan_profile(preset="calidad", aspect="horizontal")
+        self.assertEqual((horizontal["width"], horizontal["height"]), (896, 512))
+
+    def test_overrides_ganan_al_preset(self):
+        profile = resolve_wan_profile(
+            preset="calidad",
+            aspect="vertical",
+            sampler_name="euler",
+            scheduler="karras",
+            steps=20,
+            shift=8.0,
+        )
+        self.assertEqual(profile["preset"], "calidad")
+        self.assertEqual(profile["sampler_name"], "euler")
+        self.assertEqual(profile["scheduler"], "karras")
+        self.assertEqual(profile["steps"], 20)
+        self.assertEqual(profile["shift"], 8.0)
+        self.assertEqual((profile["width"], profile["height"]), (512, 896))
+
+    def test_preset_desconocido_o_aspect_invalido(self):
+        with self.assertRaises(EngineError):
+            resolve_wan_profile(preset="nope")
+        with self.assertRaises(EngineError):
+            resolve_wan_profile(aspect="cuadrado")
+
+    def test_overrides_invalidos(self):
+        for override in (
+            {"sampler_name": "nope"},
+            {"scheduler": "nope"},
+            {"steps": 0},
+            {"steps": True},
+            {"shift": 0},
+            {"shift": True},
+        ):
+            with self.subTest(override=override):
+                with self.assertRaises(EngineError):
+                    resolve_wan_profile(**override)
+
+
+class BuildVideoGraphWanProfileTests(unittest.TestCase):
+    def job(self, **overrides) -> dict:
+        base = {
+            "engine": "wan",
+            "template": str(WAN_TEMPLATE_PATH),
+            "image_name": "f.png",
+            "motion_positive": "m",
+            "motion_negative": "n",
+            "seed": 3,
+        }
+        return base | overrides
+
+    def test_sin_overrides_identico_al_actual(self):
+        expected = prepare_wan_graph(
+            load_graph(WAN_TEMPLATE_PATH),
+            image_name="f.png",
+            motion_positive="m",
+            motion_negative="n",
+            seed=3,
+        )
+        self.assertEqual(build_video_graph(self.job()), expected)
+
+    def test_preset_calidad_cambia_tamano_y_perfil(self):
+        graph = build_video_graph(self.job(preset="calidad"))
+        self.assertEqual(graph["9"]["inputs"]["width"], 512)
+        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        for node_id in ("12", "13"):
+            self.assertEqual(graph[node_id]["inputs"]["sampler_name"], "er_sde")
+            self.assertEqual(graph[node_id]["inputs"]["steps"], 30)
+        self.assertEqual(graph["10"]["inputs"]["shift"], 5.0)
+        self.assertEqual(graph["11"]["inputs"]["shift"], 5.0)
+
+    def test_preset_calidad_horizontal(self):
+        graph = build_video_graph(self.job(preset="calidad", aspect="horizontal"))
+        self.assertEqual(graph["9"]["inputs"]["width"], 896)
+        self.assertEqual(graph["9"]["inputs"]["height"], 512)
+
+    def test_overrides_ganan_sobre_preset(self):
+        graph = build_video_graph(self.job(preset="calidad", steps=20, shift=8.0))
+        self.assertEqual(graph["12"]["inputs"]["steps"], 20)
+        self.assertEqual(graph["12"]["inputs"]["end_at_step"], 10)
+        self.assertEqual(graph["13"]["inputs"]["start_at_step"], 10)
+        self.assertEqual(graph["10"]["inputs"]["shift"], 8.0)
+        self.assertEqual(graph["12"]["inputs"]["sampler_name"], "er_sde")
+        self.assertEqual(graph["9"]["inputs"]["width"], 512)
+
+    def test_preset_desconocido_o_manual(self):
+        with self.assertRaises(EngineError):
+            build_video_graph(self.job(preset="nope"))
+        manual = build_video_graph(self.job(preset="manual"))
+        self.assertEqual(manual["9"]["inputs"]["width"], 432)
+        self.assertEqual(manual["10"]["inputs"]["shift"], 8.0)
+
+    def test_flf_con_preset(self):
+        graph = build_video_graph(
+            self.job(
+                template=str(WAN_FLF_TEMPLATE_PATH),
+                last_image_name="b.png",
+                preset="calidad",
+            )
+        )
+        self.assertEqual(graph["9"]["inputs"]["width"], 512)
+        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
+
+    def test_h3_ignora_preset(self):
+        graph = build_video_graph(
+            {
+                "engine": "h3",
+                "template": str(H3_TEMPLATE_PATH),
+                "image_name": "a.png",
+                "last_image_name": "b.png",
+                "prompt": "p",
+                "seed": 3,
+                "preset": "calidad",
+            }
+        )
+        self.assertEqual(graph["131"]["inputs"]["width"], 576)
+        self.assertEqual(graph["131"]["inputs"]["length"], 192)
+
+
 class FramesForSecondsTests(unittest.TestCase):
     def test_tabla_certificada(self):
         for seconds, frames in ((1, 17), (5, 81), (8, 129), (15, 241)):
@@ -686,6 +972,32 @@ class RunVideoTests(VideoTestCase):
         graph = transport.submits[0]["prompt"]
         self.assertEqual(graph["9"]["inputs"]["width"], 768)
         self.assertEqual(graph["9"]["inputs"]["height"], 432)
+
+    def test_preset_del_job_se_aplica_al_grafo(self):
+        transport = FakeVideoTransport(self.config)
+        job = self.make_job(preset="calidad")
+        run_video_generation(
+            job, config=self.config, store=self.store, engine_factory=self.factory(transport)
+        )
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["9"]["inputs"]["width"], 512)
+        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        self.assertEqual(graph["12"]["inputs"]["sampler_name"], "er_sde")
+        self.assertEqual(graph["12"]["inputs"]["steps"], 30)
+        self.assertEqual(graph["12"]["inputs"]["end_at_step"], 15)
+        self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
+        self.assertEqual(graph["10"]["inputs"]["shift"], 5.0)
+        self.assertEqual(graph["11"]["inputs"]["shift"], 5.0)
+
+    def test_overrides_del_job_ganan_al_preset(self):
+        transport = FakeVideoTransport(self.config)
+        job = self.make_job(preset="calidad", steps=20, shift=8.0)
+        run_video_generation(
+            job, config=self.config, store=self.store, engine_factory=self.factory(transport)
+        )
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["12"]["inputs"]["steps"], 20)
+        self.assertEqual(graph["12"]["inputs"]["sampler_name"], "er_sde")
 
     def test_h3_end_to_end(self):
         transport = FakeVideoTransport(self.config, output_name="h3.webm")

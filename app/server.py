@@ -86,9 +86,11 @@ from app.video import (
     WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
     frames_for_seconds,
+    resolve_wan_profile,
     run_video_generation,
     vram_hint,
 )
+from app.video_presets import PRESET_MANUAL, list_video_presets
 
 APP_HOST = "127.0.0.1"
 APP_PORT = 8765
@@ -742,6 +744,21 @@ def create_app(
     async def api_formats() -> dict:
         return {"formats": list_image_formats(), "default": DEFAULT_FORMAT}
 
+    @app.get("/api/video/presets")
+    async def api_video_presets() -> dict:
+        """Presets de video Wan (M10-2a): id/label/note + tamano y perfil."""
+        items = []
+        for preset in list_video_presets():
+            item = dict(preset)
+            item["profile"] = {
+                "sampler": preset["sampler"],
+                "scheduler": preset["scheduler"],
+                "steps": preset["steps"],
+                "shift": preset["shift"],
+            }
+            items.append(item)
+        return {"items": items, "presets": items}
+
     @app.get("/api/negative")
     async def api_negative(
         preprompt: str = DEFAULT_PREPROMPT, family: str = DEFAULT_FAMILY
@@ -1032,11 +1049,16 @@ def create_app(
 
     @app.post("/api/video/generate")
     async def api_video_generate(payload: dict = Body(...)) -> Any:
-        """Encola un video (M9-F1): mode i2v|flf2v, segundos y negativo editable.
+        """Encola un video (M9-F1/M10-2a): mode i2v|flf2v, segundos y negativo editable.
 
         `engine` sigue siendo `wan|h3`; si falta la clave, default `wan` (el
         `mode` de Wan elige plantilla I2V o FLF2V y `seconds` fija los frames
-        4n+1). La respuesta añade `frames` y `vram_hint` (tabla de 12 GB).
+        4n+1). Para Wan, `preset` (id o `"manual"`; desconocido ⇒ 400) y los
+        overrides `sampler_name`/`scheduler`/`steps`/`shift` se resuelven con
+        precedencia overrides > preset > certificado; el tamano efectivo sale
+        del preset segun `aspect` y `vram_hint` lo refleja. La respuesta anade
+        `frames` y `vram_hint` (tabla de 12 GB). En `engine=h3` el preset no
+        aplica (EngineError si llega uno real).
         """
         if "engine" in payload:
             engine_kind = payload.get("engine")
@@ -1052,6 +1074,22 @@ def create_app(
         aspect = payload.get("aspect") or "vertical"
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
+        profile = None
+        if engine_kind == "wan":
+            profile = resolve_wan_profile(
+                preset=payload.get("preset"),
+                aspect=aspect,
+                sampler_name=payload.get("sampler_name"),
+                scheduler=payload.get("scheduler"),
+                steps=payload.get("steps"),
+                shift=payload.get("shift"),
+            )
+        else:
+            raw_preset = payload.get("preset")
+            if isinstance(raw_preset, str):
+                raw_preset = raw_preset.strip()
+            if raw_preset not in (None, "", PRESET_MANUAL):
+                raise EngineError("preset de video solo aplica a engine wan")
         seconds = payload.get("seconds")
         if seconds is None:
             seconds = 5
@@ -1062,7 +1100,10 @@ def create_app(
         except (TypeError, ValueError) as exc:
             raise EngineError("seconds invalido; usar un numero entre 1 y 15") from exc
         frames = frames_for_seconds(seconds)
-        width, height = ASPECTS[aspect]
+        if profile is not None:
+            width, height = profile["width"], profile["height"]
+        else:
+            width, height = ASPECTS[aspect]
         hint = vram_hint(frames, width, height)
         first_raw = _decode_image_b64(payload.get("image_b64"), "image")
         last_raw = None
@@ -1109,20 +1150,31 @@ def create_app(
             template = WAN_FLF_TEMPLATE_PATH
         else:
             template = WAN_TEMPLATE_PATH
+        profile_fields = (
+            {
+                field: profile[field]
+                for field in ("sampler_name", "scheduler", "steps", "shift")
+            }
+            if profile is not None
+            else {}
+        )
+        stored_params = {
+            "engine": engine_kind,
+            "mode": mode,
+            "aspect": aspect,
+            "seconds": seconds,
+            "frames": frames,
+            "seed": seed,
+            "image": image_name,
+            "last_image": last_image_name,
+            "preset": PRESET_MANUAL if profile is None else profile["preset"],
+            **profile_fields,
+        }
         gen_id = st.add(
             engine_kind,
             motion_positive if engine_kind == "wan" else prompt,
             motion_negative,
-            {
-                "engine": engine_kind,
-                "mode": mode,
-                "aspect": aspect,
-                "seconds": seconds,
-                "frames": frames,
-                "seed": seed,
-                "image": image_name,
-                "last_image": last_image_name,
-            },
+            stored_params,
             kind="video",
         )
         job = {
@@ -1140,6 +1192,8 @@ def create_app(
             "seconds": seconds,
             "frames": frames,
             "seed": seed,
+            "preset": stored_params["preset"],
+            **profile_fields,
         }
         _JOBS[gen_id] = {
             "prompt_id": None,

@@ -106,6 +106,7 @@ const state = {
   pendingMotion: false,
   videoNegativeTouched: false,
   videoVramHint: "",
+  videoPresets: [],
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
@@ -1433,6 +1434,13 @@ async function reuseVideoGeneration(item) {
   $("video-engine").value = engine;
   $("video-mode").value = params.mode === "flf2v" ? "flf2v" : "i2v";
   setSelectValue($("video-aspect"), params.aspect);
+  const preset = typeof params.preset === "string" ? params.preset : "manual";
+  const presetSelect = $("video-preset");
+  presetSelect.value = preset;
+  if (presetSelect.value !== preset) {
+    presetSelect.value = "manual";
+  }
+  updateVideoPresetNote();
   const seconds = Number(params.seconds);
   if (Number.isFinite(seconds)) {
     $("video-seconds").value = String(Math.min(15, Math.max(1, seconds)));
@@ -1471,6 +1479,7 @@ function startNewVideo() {
   $("video-engine").value = "wan";
   $("video-mode").value = "i2v";
   $("video-aspect").value = "vertical";
+  $("video-preset").value = "manual";
   $("video-seconds").value = "5";
   $("video-seed").value = $("video-seed").defaultValue || "42";
   $("video-motion").value = "";
@@ -1607,6 +1616,7 @@ async function generateVideo() {
       payload.mode = mode;
       payload.seconds = readVideoSeconds();
       payload.motion_positive = positive;
+      payload.preset = $("video-preset").value;
       const negative = $("video-motion-negative").value.trim();
       if (negative) {
         payload.motion_negative = negative;
@@ -1662,17 +1672,73 @@ async function generateVideo() {
   }
 }
 
+const DEFAULT_VIDEO_SIZES = {
+  vertical: { width: 432, height: 768 },
+  horizontal: { width: 768, height: 432 },
+};
+
+async function loadVideoPresets() {
+  const data = await api("/api/video/presets");
+  state.videoPresets = data.items || [];
+  const select = $("video-preset");
+  const previous = select.value || "manual";
+  select.replaceChildren(option("manual", "Manual"));
+  for (const preset of state.videoPresets) {
+    select.appendChild(option(preset.id, preset.label || preset.id));
+  }
+  setSelectValue(select, previous);
+  updateVideoPresetNote();
+}
+
+function selectedVideoPreset() {
+  return (
+    state.videoPresets.find(
+      (preset) => preset.id === $("video-preset").value
+    ) || null
+  );
+}
+
+function updateVideoAspectLabels() {
+  const preset = selectedVideoPreset();
+  for (const opt of $("video-aspect").options) {
+    const size = (preset && preset[opt.value]) || DEFAULT_VIDEO_SIZES[opt.value];
+    if (!size) {
+      continue;
+    }
+    const label = opt.value === "vertical" ? "Vertical" : "Horizontal";
+    opt.textContent = `${label} ${size.width}×${size.height}`;
+  }
+}
+
+function updateVideoPresetNote() {
+  const note = $("video-preset-note");
+  if ($("video-engine").value !== "wan") {
+    note.textContent = "no aplica a H3 (solo Wan)";
+    updateVideoAspectLabels();
+    return;
+  }
+  const preset = selectedVideoPreset();
+  note.textContent = preset
+    ? `Perfil: ${preset.sampler} · ${preset.scheduler} · ${preset.steps} pasos · ` +
+      `shift ${preset.shift}${preset.note ? ` · ${preset.note}` : ""}`
+    : "Sin preset: perfil certificado (euler · simple · 20 pasos · shift 8)";
+  updateVideoAspectLabels();
+}
+
 function applyVideoEngine() {
   const isWan = $("video-engine").value === "wan";
   const showLast = !isWan || $("video-mode").value === "flf2v";
   $("video-mode-field").style.display = isWan ? "" : "none";
   $("video-aspect-field").style.display = isWan ? "" : "none";
+  $("video-preset-field").style.display = isWan ? "" : "none";
+  $("video-preset").disabled = !isWan;
   $("video-seconds-field").style.display = isWan ? "" : "none";
   $("video-motion-field").style.display = isWan ? "" : "none";
   $("video-motion-actions").style.display = isWan ? "" : "none";
   $("video-negative-details").style.display = isWan ? "" : "none";
   $("video-prompt-field").style.display = isWan ? "none" : "";
   $("video-last-field").style.display = showLast ? "" : "none";
+  updateVideoPresetNote();
 }
 
 function setEditorStatus(text, isError = false) {
@@ -3654,6 +3720,8 @@ const REQUIRED_IDS = [
   "btn-video-cancel",
   "video-engine",
   "video-mode",
+  "video-preset",
+  "video-preset-note",
   "video-seconds",
   "video-motion-negative",
   "video-preview",
@@ -3800,8 +3868,14 @@ function bind() {
   on("btn-motion", "click", improveMotion);
   on("btn-video-generate", "click", generateVideo);
   on("btn-video-cancel", "click", cancelJob);
-  on("video-engine", "change", applyVideoEngine);
+  on("video-engine", "change", () => {
+    applyVideoEngine();
+    if ($("video-engine").value !== "wan") {
+      setVideoStatus("H3: el preset de vídeo no aplica (solo Wan)");
+    }
+  });
   on("video-mode", "change", applyVideoEngine);
+  on("video-preset", "change", updateVideoPresetNote);
   on("video-seconds", "input", updateVideoDurationInfo);
   on("video-motion-negative", "input", () => {
     state.videoNegativeTouched = true;
@@ -3947,6 +4021,7 @@ async function init() {
     }
     await settle("secciones", initPanelSections);
     await settle("seed aleatoria", initSeedRandom);
+    await settle("presets de video", loadVideoPresets);
     await settle("video", () => {
       applyVideoEngine();
       updateVideoDurationInfo();

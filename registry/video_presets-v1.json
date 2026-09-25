@@ -1,0 +1,28 @@
+{
+  "schema_version": "video_presets/v1",
+  "descripcion": "Presets de video Wan 2.2 (I2V/FLF2V): etiqueta/nota, tamano por aspecto (vertical/horizontal) y perfil de muestreo (sampler/scheduler/steps/shift). 'rapido' reproduce el perfil certificado actual; 'calidad' es provisional hasta el A/B de M10-2a.",
+  "presets": [
+    {
+      "id": "rapido",
+      "label": "Rápido",
+      "note": "provisional hasta el A/B de M10-2a",
+      "vertical": {"width": 432, "height": 768},
+      "horizontal": {"width": 768, "height": 432},
+      "sampler": "euler",
+      "scheduler": "simple",
+      "steps": 20,
+      "shift": 8.0
+    },
+    {
+      "id": "calidad",
+      "label": "Calidad",
+      "note": "provisional hasta el A/B de M10-2a",
+      "vertical": {"width": 512, "height": 896},
+      "horizontal": {"width": 896, "height": 512},
+      "sampler": "er_sde",
+      "scheduler": "simple",
+      "steps": 30,
+      "shift": 5.0
+    }
+  ]
+}

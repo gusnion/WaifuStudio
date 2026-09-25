@@ -289,6 +289,80 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
     def test_motion_negative_no_str_400(self):
         self.assert_400(self.payload(motion_negative=123))
 
+    def test_preset_desconocido_o_no_str_400(self):
+        for value in ("nope", "RAPIDO", 5, True):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(preset=value))
+
+    def test_h3_con_preset_400(self):
+        self.assert_400(
+            self.payload(
+                engine="h3", preset="rapido", last_image_b64=PNG_B64, prompt="p"
+            )
+        )
+        self.assert_400(self.payload(engine="h3", preset="calidad"))
+
+    def test_overrides_de_muestreo_invalidos_400(self):
+        cases = (
+            {"sampler_name": "nope"},
+            {"scheduler": "nope"},
+            {"steps": 0},
+            {"steps": 201},
+            {"steps": True},
+            {"steps": 20.5},
+            {"shift": 0},
+            {"shift": -1},
+            {"shift": True},
+            {"shift": "8"},
+        )
+        for override in cases:
+            with self.subTest(override=override):
+                self.assert_400(self.payload(**override))
+
+    def test_preset_y_overrides_validos_no_escriben_si_falla_otra_cosa(self):
+        self.assert_400(self.payload(preset="calidad", image_b64="%%%mal%%%"))
+        self.assertEqual(self.input_files(), [])
+        self.assertEqual(self.store.count(), 0)
+
+
+class VideoPresetsApiTests(ServerVideoTestCase):
+    def test_lista_de_presets(self):
+        response = self.make_client().get("/api/video/presets")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        items = data["items"]
+        self.assertEqual(data["presets"], items)
+        self.assertEqual([item["id"] for item in items], ["rapido", "calidad"])
+        for item in items:
+            with self.subTest(preset=item["id"]):
+                for field in (
+                    "id",
+                    "label",
+                    "note",
+                    "sampler",
+                    "scheduler",
+                    "steps",
+                    "shift",
+                    "profile",
+                    "vertical",
+                    "horizontal",
+                ):
+                    self.assertIn(field, item)
+                self.assertIn("provisional hasta el A/B de M10-2a", item["note"])
+                self.assertEqual(
+                    item["profile"],
+                    {
+                        "sampler": item["sampler"],
+                        "scheduler": item["scheduler"],
+                        "steps": item["steps"],
+                        "shift": item["shift"],
+                    },
+                )
+        self.assertEqual(items[0]["label"], "Rápido")
+        self.assertEqual(items[0]["profile"]["steps"], 20)
+        self.assertEqual(items[1]["label"], "Calidad")
+        self.assertEqual(items[1]["profile"]["sampler"], "er_sde")
+
 
 class VideoGenerateEnqueueTests(ServerVideoTestCase):
     def test_wan_encola_job_y_registra_kind_video(self):
@@ -399,6 +473,137 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         row = self.store.list()[0]
         self.assertEqual(row["params"]["mode"], "flf2v")
         self.assertEqual(row["params"]["seconds"], 5.0)
+
+    def test_sin_preset_guarda_manual_y_perfil_certificado(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("81 frames a 432x768", response.json()["vram_hint"])
+        job = queue.jobs[0]
+        self.assertEqual(job["preset"], "manual")
+        self.assertEqual(job["sampler_name"], "euler")
+        self.assertEqual(job["scheduler"], "simple")
+        self.assertEqual(job["steps"], 20)
+        self.assertEqual(job["shift"], 8.0)
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["preset"], "manual")
+        self.assertEqual(params["sampler_name"], "euler")
+        self.assertEqual(params["scheduler"], "simple")
+        self.assertEqual(params["steps"], 20)
+        self.assertEqual(params["shift"], 8.0)
+
+    def test_preset_calidad_usa_tamano_y_perfil_efectivos(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "aspect": "horizontal",
+                "preset": "calidad",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("81 frames a 896x512", response.json()["vram_hint"])
+        job = queue.jobs[0]
+        self.assertEqual(job["template"], str(WAN_TEMPLATE_PATH))
+        self.assertEqual(job["preset"], "calidad")
+        self.assertEqual(job["sampler_name"], "er_sde")
+        self.assertEqual(job["scheduler"], "simple")
+        self.assertEqual(job["steps"], 30)
+        self.assertEqual(job["shift"], 5.0)
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["preset"], "calidad")
+        self.assertEqual(params["aspect"], "horizontal")
+        self.assertEqual(params["sampler_name"], "er_sde")
+        self.assertEqual(params["steps"], 30)
+        self.assertEqual(params["shift"], 5.0)
+
+    def test_preset_rapido_es_el_certificado(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "preset": "rapido",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("81 frames a 432x768", response.json()["vram_hint"])
+        job = queue.jobs[0]
+        self.assertEqual(job["preset"], "rapido")
+        self.assertEqual(job["sampler_name"], "euler")
+        self.assertEqual(job["steps"], 20)
+        self.assertEqual(job["shift"], 8.0)
+
+    def test_overrides_explicitos_ganan_al_preset(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "preset": "calidad",
+                "sampler_name": "euler",
+                "scheduler": "karras",
+                "steps": 20,
+                "shift": 8.0,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("81 frames a 512x896", response.json()["vram_hint"])
+        job = queue.jobs[0]
+        self.assertEqual(job["preset"], "calidad")
+        self.assertEqual(job["sampler_name"], "euler")
+        self.assertEqual(job["scheduler"], "karras")
+        self.assertEqual(job["steps"], 20)
+        self.assertEqual(job["shift"], 8.0)
+
+    def test_preset_manual_equivale_a_sin_preset(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "preset": "manual",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["preset"], "manual")
+        self.assertEqual(queue.jobs[0]["steps"], 20)
+
+    def test_h3_acepta_preset_manual_y_no_guarda_perfil(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "integrated_multimodal_description: test",
+                "preset": "manual",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["preset"], "manual")
+        self.assertNotIn("sampler_name", job)
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["preset"], "manual")
+        self.assertNotIn("sampler_name", params)
 
     def test_negativo_editable_se_usa_y_se_guarda(self):
         queue = RecordingQueue()
@@ -554,6 +759,56 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
             self.assertEqual(gallery["count"], 1)
             self.assertEqual(gallery["items"][0]["kind"], "video")
             self.assertEqual(gallery["items"][0]["urls"], [status["outputs"][0]["url"]])
+
+
+    def test_preset_fin_a_fin_en_el_grafo_construido(self):
+        transport = FakeVideoTransport(self.config)
+        factory = lambda: ComfyEngine(  # noqa: E731
+            self.config, transport=transport, poll_s=0.01, history_timeout_s=5.0
+        )
+
+        def run_job(job):
+            run_video_generation(
+                job, config=self.config, store=self.store, engine_factory=factory
+            )
+
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(run_job),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/video/generate",
+                json={
+                    "engine": "wan",
+                    "image_b64": PNG_B64,
+                    "motion_positive": "She walks slowly.",
+                    "preset": "calidad",
+                    "aspect": "vertical",
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("81 frames a 512x896", response.json()["vram_hint"])
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 5)
+            self.assertEqual(client.get(f"/api/jobs/{job_id}").json()["status"], "done")
+        self.assertEqual(len(transport.submits), 1)
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["9"]["inputs"]["width"], 512)
+        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        for node_id in ("12", "13"):
+            with self.subTest(node_id=node_id):
+                self.assertEqual(graph[node_id]["inputs"]["sampler_name"], "er_sde")
+                self.assertEqual(graph[node_id]["inputs"]["steps"], 30)
+        self.assertEqual(graph["12"]["inputs"]["end_at_step"], 15)
+        self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
+        self.assertEqual(graph["10"]["inputs"]["shift"], 5.0)
+        self.assertEqual(graph["11"]["inputs"]["shift"], 5.0)
+        row = self.store.get(1)
+        self.assertEqual(row["params"]["preset"], "calidad")
 
 
 class VideoMediaTests(ServerVideoTestCase):
