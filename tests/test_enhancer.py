@@ -307,6 +307,65 @@ class EnhanceTests(unittest.TestCase):
         self.assertNotIn("uncensored", user)
 
 
+class ZoneHintTests(unittest.TestCase):
+    """`zone_hint` añade una línea interna y no toca la salida (M9-C3a)."""
+
+    LINE = (
+        "Zona objetivo: quality. Coloca sólo etiquetas de esa zona; "
+        "si algo no pertenece, omítelo."
+    )
+
+    def test_zone_hint_aparece_en_el_mensaje_de_usuario(self):
+        llm = FakeLLM()
+        enhance("1girl, smile", llm=llm, k=0, zone_hint="quality")
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT)
+        self.assertIn(self.LINE, user)
+
+    def test_sin_zone_hint_no_aparece_la_linea(self):
+        llm = FakeLLM()
+        enhance("1girl, smile", llm=llm, k=0)
+        self.assertNotIn("Zona objetivo:", llm.calls[0][1])
+
+    def test_zone_hint_vacio_o_en_blanco_no_aparece(self):
+        for hint in ("", "   "):
+            with self.subTest(hint=hint):
+                llm = FakeLLM()
+                enhance("1girl, smile", llm=llm, k=0, zone_hint=hint)
+                self.assertNotIn("Zona objetivo:", llm.calls[0][1])
+
+    def test_zone_hint_convive_con_rating_e_instruccion(self):
+        llm = CapturingLLM()
+        enhance(
+            "1girl",
+            rating="sfw",
+            strength="fiel",
+            llm=llm,
+            k=0,
+            zone_hint="safety",
+        )
+        user = llm.calls[0]["user"]
+        self.assertIn("rating tag: sfw", user)
+        self.assertIn("instruccion:", user)
+        self.assertIn("Zona objetivo: safety.", user)
+
+    def test_zone_hint_no_altera_la_salida(self):
+        base = enhance("1girl, smile", llm=FakeLLM("1girl, smile"), k=0)
+        hinted = enhance(
+            "1girl, smile", llm=FakeLLM("1girl, smile"), k=0, zone_hint="general"
+        )
+        self.assertEqual(base, hinted)
+
+    def test_hint_vacio_salida_identica_al_comportamiento_previo(self):
+        base = enhance("1girl, smile", llm=FakeLLM("1girl, smile"), k=0)
+        for hint in (None, "", "  "):
+            with self.subTest(hint=hint):
+                result = enhance(
+                    "1girl, smile", llm=FakeLLM("1girl, smile"), k=0, zone_hint=hint
+                )
+                self.assertEqual(result, base)
+
+
 class RatingEnforcementTests(unittest.TestCase):
     def test_nsfw_garantiza_nsfw_y_uncensored_y_elimina_sfw(self):
         llm = FakeLLM("1girl, sfw, smile, uncensored")

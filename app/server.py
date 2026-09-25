@@ -66,6 +66,7 @@ from app.preprompts import (
     save_custom,
 )
 from app.prompt_zones import (
+    ZONE_ORDER,
     compose_zones,
     insert_tag,
     prompt_options,
@@ -809,6 +810,64 @@ def create_app(
             llm=llm,
         )
         return {"positive": result["positive"], "negative": result["negative"]}
+
+    @app.post("/api/prompt/enhance_zones")
+    async def api_prompt_enhance_zones(payload: dict = Body(...)) -> Any:
+        """«Mejorar prompt» por zonas (M9-C3a): positivo clasificado para el editor.
+
+        Valida `text` no vacío, `zone` (si viene) de `ZONE_ORDER`, `strength`
+        de `STRENGTH_PRESETS` y `rating` `sfw|nsfw` (ausente -> `sfw`): 400 con
+        `{"error"}`. Sin LLM -> 503 con el mismo mensaje que `/api/enhance`.
+        `zone` viaja como `zone_hint` al enhancer y el positivo resultante se
+        reparte con `split_zones`/`zones_payload`; la respuesta es
+        `{raw, positive, negative, composed, zones}` con `composed` canónico y
+        `zones` el payload del editor (con `subcats` en general).
+        """
+        text = payload.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return JSONResponse(status_code=400, content={"error": "text vacio"})
+        zone = payload.get("zone")
+        if zone is not None and (not isinstance(zone, str) or zone not in ZONE_ORDER):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": (
+                        "zone invalido; usar quality|safety|subject|character|general"
+                    )
+                },
+            )
+        strength = payload.get("strength")
+        if strength is None:
+            strength = DEFAULT_STRENGTH_PRESET
+        if not isinstance(strength, str) or strength not in STRENGTH_PRESETS:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "strength invalido; usar fiel|balanceado|creativo"},
+            )
+        rating = payload.get("rating")
+        if rating is None:
+            rating = "sfw"
+        if rating not in ("sfw", "nsfw"):
+            return JSONResponse(
+                status_code=400, content={"error": "rating invalido; usar sfw|nsfw"}
+            )
+        if llm is None:
+            return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
+        result = enhance_prompt(
+            text,
+            strength=strength,
+            rating=rating,
+            llm=llm,
+            zone_hint=zone,
+        )
+        zones = split_zones(result["positive"])
+        return {
+            "raw": result["raw"],
+            "positive": result["positive"],
+            "negative": result["negative"],
+            "composed": compose_zones(zones),
+            "zones": zones_payload(result["positive"]),
+        }
 
     @app.post("/api/motion")
     async def api_motion(payload: dict = Body(...)) -> Any:

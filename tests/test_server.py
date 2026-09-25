@@ -27,7 +27,7 @@ from app.params import (
     SAMPLER_NAMES,
     SCHEDULER_NAMES,
 )
-from app.prompt_zones import CAMERA_TAGS
+from app.prompt_zones import CAMERA_TAGS, canonical_order
 from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
@@ -662,6 +662,105 @@ class EnhanceStrengthRouteTests(ServerTestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
                 self.assertEqual(llm.calls, [])
+
+
+class EnhanceZonesRouteTests(ServerTestCase):
+    """`POST /api/prompt/enhance_zones` (M9-C3a): backend del editor por zonas."""
+
+    @staticmethod
+    def zones_llm(system, user):
+        return "masterpiece, 1girl, long hair, school uniform, blue sky"
+
+    def test_400_texto_vacio(self):
+        for payload in ({"text": None}, {"text": ""}, {"text": "   "}, {}):
+            with self.subTest(payload=payload):
+                response = self.make_client(llm=self.zones_llm).post(
+                    "/api/prompt/enhance_zones", json=payload
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_400_zone_invalida(self):
+        for zone in ("cabeza", "", 5, ["general"]):
+            with self.subTest(zone=zone):
+                response = self.make_client(llm=self.zones_llm).post(
+                    "/api/prompt/enhance_zones", json={"text": "1girl", "zone": zone}
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_400_strength_invalido(self):
+        for strength in ("loco", "", 5, ["fiel"]):
+            with self.subTest(strength=strength):
+                response = self.make_client(llm=self.zones_llm).post(
+                    "/api/prompt/enhance_zones",
+                    json={"text": "1girl", "strength": strength},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_400_rating_invalido(self):
+        for rating in ("explicit", "", 5):
+            with self.subTest(rating=rating):
+                response = self.make_client(llm=self.zones_llm).post(
+                    "/api/prompt/enhance_zones",
+                    json={"text": "1girl", "rating": rating},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_sin_llm_503_mismo_mensaje_que_enhance(self):
+        response = self.make_client().post(
+            "/api/prompt/enhance_zones", json={"text": "1girl"}
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "LLM no disponible"})
+
+    def test_con_llm_zones_composed_y_negative(self):
+        client = self.make_client(llm=self.zones_llm)
+        response = client.post(
+            "/api/prompt/enhance_zones", json={"text": "1girl", "rating": "sfw"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(
+            set(data), {"raw", "positive", "negative", "composed", "zones"}
+        )
+        self.assertEqual(data["raw"], "masterpiece, 1girl, long hair, school uniform, blue sky, sfw")
+        zones = {item["id"]: item["tags"] for item in data["zones"]}
+        self.assertIn("masterpiece", zones["quality"])
+        self.assertEqual(zones["safety"], ["sfw"])
+        self.assertEqual(zones["subject"], ["1girl"])
+        self.assertEqual(zones["general"], ["long hair", "school uniform", "blue sky"])
+        general = next(item for item in data["zones"] if item["id"] == "general")
+        subcats = {item["id"]: item["tags"] for item in general["subcats"]}
+        self.assertEqual(subcats["rasgos"], ["long hair"])
+        self.assertEqual(subcats["ropa"], ["school uniform"])
+        self.assertEqual(subcats["fondo"], ["blue sky"])
+        self.assertEqual(data["composed"], canonical_order(data["positive"]))
+        self.assertEqual(data["composed"], data["positive"])
+        tags = [tag.strip().lower() for tag in data["negative"].split(",")]
+        self.assertEqual(len(tags), len(set(tags)))
+        self.assertTrue(data["negative"].startswith(BASE_NEGATIVE))
+
+    def test_zone_general_el_fake_recibe_la_linea(self):
+        llm = CapturingLLM(self.zones_llm("", ""))
+        response = self.make_client(llm=llm).post(
+            "/api/prompt/enhance_zones",
+            json={"text": "1girl", "zone": "general", "strength": "fiel"},
+        )
+        self.assertEqual(response.status_code, 200)
+        user = llm.calls[0]["user"]
+        self.assertIn("Zona objetivo: general.", user)
+        self.assertIn("si algo no pertenece, omítelo.", user)
+
+    def test_sin_zone_no_aparece_la_linea(self):
+        llm = CapturingLLM(self.zones_llm("", ""))
+        response = self.make_client(llm=llm).post(
+            "/api/prompt/enhance_zones", json={"text": "1girl"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Zona objetivo:", llm.calls[0]["user"])
 
 
 class GenerateValidationTests(ServerTestCase):

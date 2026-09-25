@@ -398,6 +398,24 @@ checkboxes con etiquetas visibles, input manual + «Añadir» e «Insertar»
 la subcategoría Rasgos bloqueada con la nota «Fijado por el OC» cuando hay un
 OC activo.
 
+## Mejora con zona objetivo (M9-C3a)
+
+`POST /api/prompt/enhance_zones` `{text, zone?, strength?, rating?}`: mejora el
+prompt y lo devuelve ya repartido para el editor por zonas.
+
+- Valida `text` no vacío, `zone` (si viene) de
+  `quality|safety|subject|character|general`, `strength` de
+  `fiel|balanceado|creativo` (default `balanceado`) y `rating` `sfw|nsfw`
+  (ausente → `sfw`): 400 con `{"error"}`; sin LLM → 503
+  `{"error":"LLM no disponible"}` (mismo mensaje que `/api/enhance`).
+- `enhancer.enhance` acepta `zone_hint` (opcional): añade al mensaje de usuario
+  la línea interna `Zona objetivo: <zone>. Coloca sólo etiquetas de esa zona; si
+  algo no pertenece, omítelo.` sin alterar rating, normalización, orden canónico
+  ni preprompt; `None` o vacío dejan el comportamiento previo intacto.
+- Respuesta: `{raw, positive, negative, composed, zones}`; `zones` es
+  `zones_payload(positive)` (con `subcats` en general) y `composed` el
+  `compose_zones` canónico del positivo.
+
 ## OCs en Personaje y rasgos/extras (M9-B3)
 
 `app\characters.py` separa los rasgos del personaje de los extras de escena con el

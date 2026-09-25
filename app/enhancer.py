@@ -278,6 +278,7 @@ def enhance(
     llm: LlmFn | None = None,
     k: int | None = None,
     strength: str = DEFAULT_STRENGTH_PRESET,
+    zone_hint: str | None = None,
 ) -> dict[str, str]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
 
@@ -290,7 +291,11 @@ def enhance(
     el rating pedido: `nsfw` garantiza `nsfw` y `uncensored` y elimina `sfw`;
     `sfw` garantiza `sfw` y elimina `nsfw`/`uncensored`; `rating=None` no toca
     el rating. El forzado es case-insensitive, deduplica tags repetidos y no
-    anade duplicados. El positivo devuelto pasa por
+    anade duplicados. `zone_hint` (opcional, p. ej. `quality|safety|subject|
+    character|general`) anade al mensaje de usuario la linea interna
+    ``Zona objetivo: <zone>. Coloca sólo etiquetas de esa zona; si algo no
+    pertenece, omítelo.``; `None` o cadena vacia no anaden nada y dejan la
+    salida identica al comportamiento previo. El positivo devuelto pasa por
     `app.prompt_zones.canonical_order` DESPUES de componer el preprompt
     (calidad/meta primero y general por subcategorias); el negativo devuelto es
     el compuesto de `apply_preprompt` (`BASE_NEGATIVE` + preprompt, dedup
@@ -308,6 +313,11 @@ def enhance(
     lines = [text]
     if rating:
         lines.append(f"rating tag: {rating}")
+    if isinstance(zone_hint, str) and zone_hint.strip():
+        lines.append(
+            f"Zona objetivo: {zone_hint.strip()}. Coloca sólo etiquetas de esa zona; "
+            "si algo no pertenece, omítelo."
+        )
     if preset["instruction"]:
         lines.append(f"instruccion: {preset['instruction']}")
     notes = retrieve(text, k=preset["k"] if k is None else k)
