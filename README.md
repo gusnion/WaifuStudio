@@ -813,6 +813,70 @@ README; sin GPU, red, dependencias, endpoints ni cambios en el payload de `/api/
 Verificado con `node --check static\app.js`, la suite CPU (732 tests OK, sin GPU/red) y
 `git status --short` limitado a los 4 archivos.
 
+## Ajustes de UI: negativo, alturas y dado de seed (M9-D1)
+
+Tres ajustes de UI (solo `templates\index.html`, `static\app.css`, `static\app.js` y este
+README; sin GPU, red, dependencias, endpoints ni cambios en el payload de `/api/generate`):
+
+- **Negativo sin etiqueta duplicada**: en `#section-negative` se elimina el `<label>` interno que
+  repetía «Negativo»; quedan la cabecera plegable «Negativo (avanzado)», el `#negative` (textarea)
+  y «Restaurar» (`#btn-negative-restore`).
+- **Altura reactiva y menos scroll general**: `#zone-editor` mide su contenido con tope
+  `max-height: min(60vh, 640px)` y `overflow-y: auto` (sin `min-height`/`height` fijos); ya no
+  reserva un hueco vacío cuando hay pocas zonas. `.zones-panel` (`#section-zones`) y su
+  `.section-body` dejan de crecer (`flex: 0 0 auto`), y `.controls-column-zones` pasa a
+  `overflow-y: auto` con `min-height: 0`. `aside.controls.image-controls` mantiene
+  `overflow: hidden` y cada columna (`.controls-column-primary` / `.controls-column-zones`)
+  scrollea solo si desborda; `#panel-image.active` fija `grid-template-rows: minmax(0, 1fr)` y
+  `.gallery-panel`/`.gallery` llevan `min-height: 0` para que la galería scrollee dentro de su
+  panel y el padre no scrollee como un todo.
+- **Dado de seed aleatoria**: botón toggle `#btn-seed-random` (glifo 🎲, `title="Seed aleatoria"`,
+  `aria-pressed` y clase `.active` visible) junto a «Generar». Estado persistido en
+  `localStorage` (`waifu.seed.random` = `1`/`0`, por defecto OFF). Con el dado ON, `generate()`
+  escribe una seed aleatoria nueva en `#seed` antes de construir el payload (se envía esa seed y
+  «Cargar»/el registro muestran la usada); con OFF se usa el valor de `#seed` como hasta ahora.
+  Si `localStorage` está bloqueado, el toggle sigue funcionando sin persistir.
+
+Verificado con `node --check static\app.js`, la suite CPU (732 tests OK, sin GPU/red) y
+`git status --short` limitado a los 4 archivos.
+
+## Visor de imagen en la galería (M9-D2a)
+
+La pestaña Imagen pasa de grid de tarjetas a **visor** (solo `templates\index.html`,
+`static\app.css`, `static\app.js` y este README; sin GPU, red, dependencias, endpoints ni
+cambios en el payload de `/api/generate`; la pestaña Video queda intacta):
+
+- **Preview grande** `#image-preview` (con `#image-preview-img` y el placeholder
+  `#image-preview-empty` «Sin generaciones»): al abrir muestra la generación **más reciente**;
+  clic en la preview abre el lightbox existente.
+- **Barra del visor** sobre las miniaturas: «Generar nuevo» `#btn-new-generation`, info de la
+  seleccionada `#image-preview-info` (`#id · modelo · fecha`) y paginación
+  `#image-prev-page` / `#image-page-info` / `#image-next-page` (`‹ página X de Y ›`).
+- **Miniaturas** `#image-thumbs`: **5 por página** (`IMAGE_PAGE_SIZE = 5`) servidas por
+  `/api/gallery?limit=5&offset=…` con `count`; la seleccionada lleva la clase `selected`
+  (borde/aro de acento) y `aria-current="true"`. Clic en una miniatura la muestra en grande y
+  carga sus condiciones con el flujo «Reusar» (`reuseGeneration`: modelo, prompt repartido en
+  zonas, preprompt, rating, seed/pasos/cfg/sampler/scheduler, tamaño, LoRAs y referencia) con
+  estado «Cargado #id»; ya no hay botones «Reusar» en tarjetas de imagen.
+- **Generar nuevo** `#btn-new-generation`: resetea zonas y huecos, prompt final, modelo y params
+  (`applyModel` con el modelo por defecto), preprompt, rating a `sfw`, LoRAs, referencia y
+  negativo restaurado. Con el dado de seed OFF vuelve a la seed por defecto
+  (`#seed.defaultValue`, 42); con el dado ON conserva la seed aleatoria ya aplicada por
+  `generate()`. El visor no se vacía; estado «Nuevo: opciones por defecto».
+- **Guardar en OC** `#btn-save-to-oc` en la barra del visor: guarda la **imagen seleccionada**
+  como referencia del OC (`openOcSaveModal` → `POST /api/characters/{id}/refs {gen_id}`); sin
+  selección queda deshabilitado.
+- **Al terminar una generación** (`pollJob` → `reloadImageViewerFirstPage`): el visor recarga la
+  **página 1**, selecciona la nueva y la muestra en grande.
+- La galería de **Video** conserva sus tarjetas, su pager propio (`PAGE_SIZE = 6`, ids
+  `video-gallery-*`) y el comportamiento de `loadGallery`/`renderVideoGallery`. El pager
+  heredado `#gallery-prev`/`#gallery-page`/`#gallery-next` se mantiene oculto (los ids siguen en
+  el DOM por compatibilidad con el chequeo DOM↔JS).
+
+Verificado con `node --check static\app.js`, la suite CPU (732 tests OK, sin GPU/red),
+`git status --short` limitado a los 4 archivos y un arnés DOM (Node, fuera del repo) que
+ejercita paginación, selección, «Cargado #id», resets y «done → página 1».
+
 ## Smoke
 
 ```

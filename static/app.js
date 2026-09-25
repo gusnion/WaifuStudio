@@ -46,12 +46,16 @@ const GENERAL_SUBCAT_LABELS = {
 };
 
 const PAGE_SIZE = 6;
+const IMAGE_PAGE_SIZE = 5;
 const VIDEO_FPS = 16;
 
 const EDITOR_REF_LIMIT = 10;
 const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
 const EDITOR_SIZE_STEP = 16;
+
+const SEED_RANDOM_KEY = "waifu.seed.random";
+const SEED_RANDOM_MAX = 2147483647;
 
 const OC_TRAIT_GROUPS = ["hair", "eyes", "face", "body"];
 
@@ -104,12 +108,17 @@ const state = {
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
-  galleryItems: [],
   videoItems: [],
-  imagePager: null,
+  imageViewer: {
+    page: 1,
+    total: 1,
+    items: [],
+    selectedId: null,
+  },
   videoPager: null,
   activeJobId: null,
   busy: false,
+  seedRandom: false,
   characters: [],
   activeCharacterId: null,
   ocSelectedTags: [],
@@ -778,6 +787,73 @@ async function enhancePrompt() {
   }
 }
 
+function readStoredSeedRandom() {
+  try {
+    return window.localStorage.getItem(SEED_RANDOM_KEY) === "1";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function storeSeedRandom(enabled) {
+  try {
+    window.localStorage.setItem(SEED_RANDOM_KEY, enabled ? "1" : "0");
+  } catch (_error) {
+    return;
+  }
+}
+
+function randomSeed() {
+  return Math.floor(Math.random() * SEED_RANDOM_MAX);
+}
+
+function updateSeedRandomButton() {
+  const button = $("btn-seed-random");
+  if (!button) {
+    return;
+  }
+  button.classList.toggle("active", state.seedRandom);
+  button.setAttribute("aria-pressed", state.seedRandom ? "true" : "false");
+}
+
+function initSeedRandom() {
+  state.seedRandom = readStoredSeedRandom();
+  updateSeedRandomButton();
+}
+
+function toggleSeedRandom() {
+  state.seedRandom = !state.seedRandom;
+  storeSeedRandom(state.seedRandom);
+  updateSeedRandomButton();
+  setStatus(state.seedRandom ? "Seed aleatoria activada" : "Seed aleatoria desactivada");
+}
+
+function applyRandomSeed() {
+  if (!state.seedRandom) {
+    return;
+  }
+  $("seed").value = randomSeed();
+}
+
+async function startNewGeneration() {
+  resetPromptZones();
+  for (const zone of Object.keys(state.zoneDrafts)) {
+    state.zoneDrafts[zone] = "";
+  }
+  state.negativeTouched = false;
+  clearReference();
+  $("rating").value = "sfw";
+  const defaultModel = state.models.length ? state.models[0].id : $("model").value;
+  $("model").value = defaultModel;
+  await applyModel(defaultModel);
+  await restoreNegative();
+  if (!state.seedRandom) {
+    $("seed").value = $("seed").defaultValue || "42";
+  }
+  renderZoneEditor();
+  setStatus("Nuevo: opciones por defecto");
+}
+
 async function generate() {
   if (state.busy) {
     return;
@@ -796,6 +872,7 @@ async function generate() {
     setStatus("Medidas fuera de [64, 4096] o no múltiplos de 8", true);
     return;
   }
+  applyRandomSeed();
   const payload = {
     model_id: $("model").value,
     prompt,
@@ -816,7 +893,7 @@ async function generate() {
   setStatus("Encolando...");
   try {
     const data = await postJson("/api/generate", payload);
-    await pollJob(data.job_id);
+    await pollJob(data.job_id, setStatus, reloadImageViewerFirstPage);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -1008,9 +1085,9 @@ async function reuseGeneration(item) {
     warning = error.message;
   }
   if (warning) {
-    setStatus(`Reusado #${item.id} · ${warning}`, true);
+    setStatus(`Cargado #${item.id} · ${warning}`, true);
   } else {
-    setStatus(`Reusado #${item.id}`);
+    setStatus(`Cargado #${item.id}`);
   }
 }
 
@@ -1067,26 +1144,6 @@ function galleryCard(item) {
   meta.className = "meta";
   meta.textContent = bits.join(" · ");
   caption.append(title, prompt, meta);
-  if (item.kind !== "video") {
-    const actions = document.createElement("div");
-    actions.className = "card-actions";
-    const reuse = document.createElement("button");
-    reuse.type = "button";
-    reuse.className = "card-action";
-    reuse.textContent = "Reusar";
-    reuse.addEventListener("click", () => {
-      reuseGeneration(item).catch((error) => setStatus(error.message, true));
-    });
-    const saveOc = document.createElement("button");
-    saveOc.type = "button";
-    saveOc.className = "card-action";
-    saveOc.textContent = "Guardar en OC";
-    saveOc.addEventListener("click", () => {
-      openOcSaveModal(item).catch((error) => setStatus(error.message, true));
-    });
-    actions.append(reuse, saveOc);
-    caption.appendChild(actions);
-  }
   card.appendChild(caption);
   return card;
 }
@@ -1111,13 +1168,7 @@ function renderGallery(container, items, emptyText, pager) {
   pager.next.disabled = pager.page >= total;
 }
 
-function renderGalleries() {
-  renderGallery(
-    $("gallery"),
-    state.galleryItems,
-    "Sin generaciones todavía.",
-    state.imagePager
-  );
+function renderVideoGallery() {
   renderGallery(
     $("video-gallery"),
     state.videoItems,
@@ -1130,22 +1181,157 @@ async function loadGallery() {
   try {
     const data = await api("/api/gallery?limit=24");
     const items = data.items || [];
-    state.galleryItems = items.filter((item) => item.kind !== "video");
     state.videoItems = items.filter((item) => item.kind === "video");
-    renderGalleries();
+    renderVideoGallery();
   } catch (error) {
     setStatus(error.message, true);
   }
 }
 
-async function reloadGalleryFirstPage() {
-  if (state.imagePager) {
-    state.imagePager.page = 1;
+function formatGalleryDate(value) {
+  const text = String(value || "").replace("T", " ");
+  return text ? text.slice(0, 16) : "sin fecha";
+}
+
+function selectedImageView() {
+  return (
+    state.imageViewer.items.find(
+      (item) => item.id === state.imageViewer.selectedId
+    ) || null
+  );
+}
+
+function imageViewUrl(item) {
+  const urls = (item && item.urls) || [];
+  return urls.length && !isVideoUrl(urls[0]) ? urls[0] : null;
+}
+
+function updateImagePreview() {
+  const item = selectedImageView();
+  const url = imageViewUrl(item);
+  const img = $("image-preview-img");
+  const empty = $("image-preview-empty");
+  if (url) {
+    img.src = url;
+    img.alt = item.prompt ? `#${item.id} ${item.prompt}` : `Generación #${item.id}`;
+    img.classList.remove("hidden");
+    empty.classList.add("hidden");
+  } else {
+    img.removeAttribute("src");
+    img.alt = "";
+    img.classList.add("hidden");
+    empty.classList.remove("hidden");
+    if (!item) {
+      empty.textContent = "Sin generaciones";
+    } else {
+      empty.textContent = item.status === "error" ? "Sin resultado (error)" : "Sin resultado";
+    }
   }
+  $("image-preview").classList.toggle("has-image", Boolean(url));
+  $("btn-save-to-oc").disabled = !item;
+  const info = $("image-preview-info");
+  info.textContent = item
+    ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
+    : "Sin generaciones";
+}
+
+function renderImageThumbs() {
+  const container = $("image-thumbs");
+  container.replaceChildren();
+  const items = state.imageViewer.items;
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin generaciones.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const item of items) {
+    const selected = item.id === state.imageViewer.selectedId;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "image-thumb";
+    button.classList.toggle("selected", selected);
+    if (selected) {
+      button.setAttribute("aria-current", "true");
+    }
+    button.title = `Reusar generación #${item.id}`;
+    button.setAttribute("aria-label", `Reusar generación #${item.id}`);
+    const url = imageViewUrl(item);
+    if (url) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = item.prompt || `Generación #${item.id}`;
+      img.loading = "lazy";
+      button.appendChild(img);
+    } else {
+      const missing = document.createElement("span");
+      missing.className = "thumb-missing";
+      missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
+      button.appendChild(missing);
+    }
+    button.addEventListener("click", () => {
+      selectImageGeneration(item).catch((error) => setStatus(error.message, true));
+    });
+    container.appendChild(button);
+  }
+}
+
+function renderImageViewer() {
+  const viewer = state.imageViewer;
+  updateImagePreview();
+  renderImageThumbs();
+  $("image-page-info").textContent = `página ${viewer.page} de ${viewer.total}`;
+  $("image-prev-page").disabled = viewer.page <= 1;
+  $("image-next-page").disabled = viewer.page >= viewer.total;
+}
+
+async function loadImageViewer({ selectNewest = false } = {}) {
+  const viewer = state.imageViewer;
+  viewer.page = Math.max(1, viewer.page);
+  const offset = (viewer.page - 1) * IMAGE_PAGE_SIZE;
+  try {
+    const data = await api(
+      `/api/gallery?limit=${IMAGE_PAGE_SIZE}&offset=${offset}`
+    );
+    const raw = data.items || [];
+    const count = Number(data.count);
+    const total = Number.isFinite(count) && count > 0 ? count : raw.length;
+    viewer.total = Math.max(1, Math.ceil(total / IMAGE_PAGE_SIZE));
+    if (viewer.page > viewer.total) {
+      viewer.page = viewer.total;
+      return await loadImageViewer({ selectNewest });
+    }
+    viewer.items = raw.filter((item) => item.kind !== "video");
+    const onPage = viewer.items.some((item) => item.id === viewer.selectedId);
+    if (selectNewest && viewer.items.length) {
+      viewer.selectedId = viewer.items[0].id;
+    } else if (!onPage) {
+      viewer.selectedId = viewer.items.length ? viewer.items[0].id : null;
+    }
+    renderImageViewer();
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function selectImageGeneration(item) {
+  state.imageViewer.selectedId = item.id;
+  renderImageViewer();
+  await reuseGeneration(item);
+}
+
+async function reloadGalleryFirstPage() {
   if (state.videoPager) {
     state.videoPager.page = 1;
   }
   await loadGallery();
+  await loadImageViewer();
+}
+
+async function reloadImageViewerFirstPage() {
+  state.imageViewer.page = 1;
+  await loadImageViewer({ selectNewest: true });
 }
 
 function makePager(prefix) {
@@ -3300,10 +3486,21 @@ const REQUIRED_IDS = [
   "btn-enhance-discard",
   "btn-generate",
   "btn-cancel",
+  "btn-seed-random",
   "btn-negative-restore",
   "btn-ref-clear",
   "btn-lightbox-close",
   "lightbox",
+  "btn-new-generation",
+  "btn-save-to-oc",
+  "image-preview",
+  "image-preview-img",
+  "image-preview-empty",
+  "image-preview-info",
+  "image-prev-page",
+  "image-next-page",
+  "image-page-info",
+  "image-thumbs",
   "gallery-prev",
   "gallery-next",
   "video-gallery-prev",
@@ -3378,7 +3575,6 @@ function bind() {
     setStatus("UI desactualizada: recarga con Ctrl+F5", true);
     console.error("bind: faltan elementos de la UI", missing);
   }
-  state.imagePager = makePager("gallery");
   state.videoPager = makePager("video-gallery");
   on("tab-image", "click", () => switchTab("image"));
   on("tab-video", "click", () => switchTab("video"));
@@ -3388,9 +3584,27 @@ function bind() {
   on("btn-enhance-discard", "click", discardEnhanceResult);
   on("btn-generate", "click", generate);
   on("btn-cancel", "click", cancelJob);
+  on("btn-seed-random", "click", toggleSeedRandom);
+  on("btn-new-generation", "click", () => {
+    startNewGeneration().catch((error) => setStatus(error.message, true));
+  });
+  on("btn-save-to-oc", "click", () => {
+    const item = selectedImageView();
+    if (!item) {
+      return;
+    }
+    openOcSaveModal(item).catch((error) => setStatus(error.message, true));
+  });
   on("btn-negative-restore", "click", restoreNegative);
   on("btn-ref-clear", "click", clearReference);
   on("btn-lightbox-close", "click", closeLightbox);
+  on("image-preview", "click", () => {
+    const item = selectedImageView();
+    const url = imageViewUrl(item);
+    if (url) {
+      openLightbox(url, `Generación #${item.id}`);
+    }
+  });
   on("lightbox", "click", (event) => {
     if (event.target === $("lightbox")) {
       closeLightbox();
@@ -3409,25 +3623,25 @@ function bind() {
       closeOcModal();
     }
   });
-  on("gallery-prev", "click", () => {
-    state.imagePager.page -= 1;
-    renderGalleries();
+  on("image-prev-page", "click", () => {
+    state.imageViewer.page -= 1;
+    loadImageViewer();
   });
-  on("gallery-next", "click", () => {
-    state.imagePager.page += 1;
-    renderGalleries();
+  on("image-next-page", "click", () => {
+    state.imageViewer.page += 1;
+    loadImageViewer();
   });
   on("video-gallery-prev", "click", () => {
     state.videoPager.page -= 1;
-    renderGalleries();
+    renderVideoGallery();
   });
   on("video-gallery-next", "click", () => {
     state.videoPager.page += 1;
-    renderGalleries();
+    renderVideoGallery();
   });
   on("btn-reload", "click", () => {
-    state.imagePager.page = 1;
-    loadGallery();
+    state.imageViewer.page = 1;
+    loadImageViewer();
   });
   on("btn-video-reload", "click", () => {
     state.videoPager.page = 1;
@@ -3582,6 +3796,7 @@ async function init() {
       failures.push("bind");
     }
     await settle("secciones", initPanelSections);
+    await settle("seed aleatoria", initSeedRandom);
     await settle("video", () => {
       applyVideoEngine();
       updateVideoDurationInfo();
@@ -3594,7 +3809,8 @@ async function init() {
     await settle("preprompts OC", loadOcPreprompts);
     await settle("OCs", loadCharacters);
     await settle("negativo", refreshNegative);
-    await settle("galería", loadGallery);
+    await settle("galería de video", loadGallery);
+    await settle("visor de imagen", () => loadImageViewer());
     await settle("zonas", renderZoneEditor);
     await settle("estado del editor", loadEditorStatus);
   } catch (error) {

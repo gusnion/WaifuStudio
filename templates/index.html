@@ -25,6 +25,7 @@
             <div class="generate-row">
               <button id="btn-generate" class="primary" type="button">Generar</button>
               <button id="btn-cancel" class="hidden" type="button">Cancelar</button>
+              <button id="btn-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
             </div>
             <p id="job-status" class="status">Listo</p>
             <div id="job-progress" class="progress hidden">
@@ -105,10 +106,7 @@
               <details id="section-negative" class="advanced panel-section" data-section="negative">
                 <summary>Negativo (avanzado)</summary>
                 <div class="section-body">
-                  <label class="field">
-                    <span>Negativo</span>
-                    <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
-                  </label>
+                  <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
                   <button id="btn-negative-restore" type="button">Restaurar</button>
                 </div>
               </details>
@@ -209,8 +207,22 @@
           <h2>Galería</h2>
           <button id="btn-reload" type="button">Recargar</button>
         </div>
-        <div id="gallery" class="gallery"></div>
-        <div class="pager">
+        <button id="image-preview" class="image-preview" type="button" title="Ampliar imagen">
+          <img id="image-preview-img" class="hidden" alt="Generación seleccionada">
+          <span id="image-preview-empty" class="empty">Sin generaciones</span>
+        </button>
+        <div class="viewer-toolbar">
+          <button id="btn-new-generation" type="button">Generar nuevo</button>
+          <button id="btn-save-to-oc" type="button" disabled>Guardar en OC</button>
+          <span id="image-preview-info" class="viewer-info">Sin generaciones</span>
+          <div class="viewer-pager">
+            <button id="image-prev-page" type="button" aria-label="Página anterior">‹</button>
+            <span id="image-page-info">página 1 de 1</span>
+            <button id="image-next-page" type="button" aria-label="Página siguiente">›</button>
+          </div>
+        </div>
+        <div id="image-thumbs" class="image-thumbs"></div>
+        <div class="pager hidden" hidden>
           <button id="gallery-prev" type="button">‹ Anterior</button>
           <span id="gallery-page">página 1 de 1</span>
           <button id="gallery-next" type="button">Siguiente ›</button>
