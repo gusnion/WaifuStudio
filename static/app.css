@@ -1346,6 +1346,133 @@ input[type="checkbox"] {
   border: none;
 }
 
+.zone-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.zone-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.zone-block-quality {
+  border-left: 3px solid #f5c542;
+}
+
+.zone-block-safety {
+  border-left: 3px solid #ff7a7a;
+}
+
+.zone-block-subject {
+  border-left: 3px solid #7dd3fc;
+}
+
+.zone-block-character {
+  border-left: 3px solid #c084fc;
+}
+
+.zone-block-general {
+  border-left: 3px solid #86efac;
+}
+
+.zone-block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.zone-block-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.zone-block-count {
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.zone-add {
+  margin-left: auto;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.zone-editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.zone-natural-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.zone-natural-row .zone-natural {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.78rem;
+}
+
+.zone-enhance {
+  flex: none;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.zone-chip-text {
+  word-break: break-word;
+}
+
+.zone-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 0.3rem;
+}
+
+.zone-subblock-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.zone-subblock-head .zone-add {
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+}
+
+#prompt-final {
+  min-height: 64px;
+  font-size: 0.8rem;
+}
+
+#btn-copy-prompt {
+  align-self: flex-start;
+}
+
 #btn-lora-modal {
   width: 100%;
 }

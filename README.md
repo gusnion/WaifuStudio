@@ -203,9 +203,9 @@ El runner `run_generation(job, config, store, registry, engine_factory)` carga
 `ref_image`+`strength`), encola en la `JobQueue` (`submit`→`wait`→`outputs`) y copia los PNG a
 `data_dir/gallery/<gen_id>/` actualizando el store; un fallo queda en store y job sin matar al
 worker. La UI (`templates/index.html` + `static/app.css` + `static/app.js`, sin CDN) trae la
-pestaña **Imagen**: prompt con «Mejorar prompt» y select de fuerza (Fiel/Balanceado/Creativo,
-default Balanceado) con estados del botón y panel de propuesta (positivo/negativo + «Usar»/
-«Descartar») justo debajo del prompt; preprompt/modelo; sampler y scheduler como `<select>`
+pestaña **Imagen**: editor por zonas como único editor del positivo, con un hueco de texto
+natural por zona y «Mejorar prompt» global, y select de fuerza (Fiel/Balanceado/Creativo,
+default Balanceado) con estados del botón; preprompt/modelo; sampler y scheduler como `<select>`
 poblados desde `/api/params`; tamaño como `<select>` con los 11 presets + `Manual` (Ancho/Alto
 solo en manual); negativo pre-cargado desde `/api/negative` (se refresca al cambiar preprompt
 si el usuario no lo ha editado) con botón «Restaurar»; imagen de referencia con miniatura y
@@ -358,12 +358,13 @@ Rutas nuevas en `app\server.py`: `POST /api/prompt/zones` `{text}` →
 `POST /api/prompt/insert` `{text, tag, zone?}` → `{text}` (400 con forma
 inválida, tag vacío o zona desconocida).
 
-La UI (sin CDN) añade debajo del prompt una **previsualización coloreada** por
-zona con leyenda, actualizada al escribir (debounce 300 ms vía
-`/api/prompt/zones`), y una fila de **chips por zona** que abren un input y
-añaden el tag con `/api/prompt/insert` (el textarea sigue siendo la fuente de
-verdad); el chip destacado **«+ Personaje»** inserta en la zona `character`
-(el caso del nombre del OC).
+La UI (sin CDN) usa el **editor por zonas como único editor** del positivo
+(`#zone-editor`, sin textarea de prompt): cada zona muestra sus tags como chips
+(con «×» para quitar) y, dentro de cada bloque, un **hueco de texto natural** +
+«Mejorar» (M9-C3b-2). El **prompt final** (`#prompt-final`, `<textarea>`
+readonly con «Copiar») se recompone con `composePrompt()` tras cada cambio; el
+chip destacado **«Personaje»** abre el popover con «Mis OCs» y tags manuales
+(el caso del nombre del OC) y el resto de zonas abren su popover de opciones.
 
 ## Opciones por zona y orden canónico (M9-C2)
 
@@ -415,6 +416,25 @@ prompt y lo devuelve ya repartido para el editor por zonas.
 - Respuesta: `{raw, positive, negative, composed, zones}`; `zones` es
   `zones_payload(positive)` (con `subcats` en general) y `composed` el
   `compose_zones` canónico del positivo.
+
+## Huecos naturales por zona (M9-C3b-2)
+
+Cada bloque del editor por zonas (`renderZoneEditor()`) añade un hueco de texto
+natural (`input.zone-natural` con `data-zone` y placeholder «Describe en
+lenguaje natural…») + botón «Mejorar» (`button.zone-enhance` con `data-zone`):
+
+- Al escribir solo se actualiza `state.zoneDrafts[zona]` (sin re-render, para no
+  perder el foco); `state.zoneDrafts` arranca con las cinco zonas vacías.
+- «Mejorar» por zona toma el hueco; si está vacío avisa «Escribe algo para
+  mejorar». Si no, llama a `POST /api/prompt/enhance_zones {text, zone,
+  strength, rating}` con el botón en «Mejorando…», fusiona la respuesta con
+  `applyZonesPayload(data.zones)` (dedup global, sin borrar lo ya presente),
+  limpia ese hueco, repinta el editor y deja «Mejorado ✓» (o el error del
+  servidor, p. ej. 503 `LLM no disponible`).
+- El botón global «Mejorar prompt» (`#btn-enhance`) reúne los huecos con texto
+  (`Object.entries(state.zoneDrafts)`, unidos por «, »; si no hay ninguno usa
+  `composePrompt()`), llama a `enhance_zones` **sin `zone`**, fusiona las zonas,
+  limpia los huecos usados, repinta y deja «Mejorado ✓»/error.
 
 ## OCs en Personaje y rasgos/extras (M9-B3)
 
@@ -737,10 +757,11 @@ Reorden del panel lateral de la pestaña Imagen según el flujo real de uso (sol
 el payload de `/api/generate`):
 
 1. **Modelo** (fijo): selector `#model` arriba del todo.
-2. **Prompting** (fijo, no colapsable, envuelto en `.prompt-block`): `#prompt` + «Mejorar prompt» con
-   fuerza (`#enhance-strength`), `#enhance-result`, `#preprompt` + «Gestionar» y `#rating`; dentro, la
-   sección plegable «Prompt por zonas» (`#section-zones`, abierta por defecto) con preview coloreada y
-   chips.
+2. **Prompting** (fijo, no colapsable, envuelto en `.prompt-block`): `#zone-editor` (editor por
+   zonas, único editor del positivo, con huecos naturales por zona) + «Mejorar prompt» global con
+   fuerza (`#enhance-strength`), `#preprompt` + «Gestionar» y `#rating`; después, las secciones
+   plegables «Prompt por zonas» (`#section-zones`, abierta por defecto, con chips/popovers) y
+   «Prompt final (solo lectura)» (`#section-final-prompt`).
 3. **Generar** (fijo): `#btn-generate` + `#btn-cancel`, `#job-status` y `#job-progress` justo después
    del prompting (ya no al final del panel).
 4. **LoRAs (N)** (`#section-loras`, plegable, cerrada por defecto): «Elegir LoRAs (N)» + chips.

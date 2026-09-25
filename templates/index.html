@@ -26,10 +26,10 @@
         </label>
 
         <div class="prompt-block">
-          <label class="field">
-            <span>Prompt</span>
-            <textarea id="prompt" rows="5" placeholder="1girl, smile, ..."></textarea>
-          </label>
+          <div class="field">
+            <span>Prompt por zonas</span>
+            <div id="zone-editor" class="zone-editor"></div>
+          </div>
           <div class="enhance-row">
             <button id="btn-enhance" type="button">Mejorar prompt</button>
             <label class="inline-field">
@@ -75,8 +75,6 @@
             <summary>Prompt por zonas</summary>
             <div class="section-body">
               <div id="prompt-zones" class="prompt-zones">
-                <div id="prompt-zones-preview" class="zone-preview"></div>
-                <div id="prompt-zones-legend" class="zone-legend"></div>
                 <div id="prompt-zones-chips" class="zone-chips">
                   <button class="zone-chip" type="button" data-zone="quality">Calidad/meta</button>
                   <button class="zone-chip" type="button" data-zone="safety">Safety</button>
@@ -118,6 +116,13 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </details>
+          <details id="section-final-prompt" class="advanced panel-section">
+            <summary>Prompt final (solo lectura)</summary>
+            <div class="section-body">
+              <textarea id="prompt-final" rows="3" readonly></textarea>
+              <button id="btn-copy-prompt" type="button">Copiar</button>
             </div>
           </details>
         </div>

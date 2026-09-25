@@ -21,6 +21,30 @@ const ZONE_LABELS = {
   general: "General",
 };
 
+const ZONE_ORDER = ["quality", "safety", "subject", "character", "general"];
+
+const GENERAL_SUBCATS = [
+  "rasgos",
+  "ropa",
+  "accesorios",
+  "accion",
+  "expresion",
+  "camara",
+  "fondo",
+  "otros",
+];
+
+const GENERAL_SUBCAT_LABELS = {
+  rasgos: "Rasgos",
+  ropa: "Ropa",
+  accesorios: "Accesorios",
+  accion: "Acción/Pose",
+  expresion: "Expresión",
+  camara: "Cámara",
+  fondo: "Fondo/Escena",
+  otros: "Otros",
+};
+
 const PAGE_SIZE = 6;
 const VIDEO_FPS = 16;
 
@@ -49,6 +73,29 @@ const state = {
   formatsById: {},
   negativeBase: "",
   negativeTouched: false,
+  promptZones: {
+    quality: [],
+    safety: [],
+    subject: [],
+    character: [],
+    general: {
+      rasgos: [],
+      ropa: [],
+      accesorios: [],
+      accion: [],
+      expresion: [],
+      camara: [],
+      fondo: [],
+      otros: [],
+    },
+  },
+  zoneDrafts: {
+    quality: "",
+    safety: "",
+    subject: "",
+    character: "",
+    general: "",
+  },
   enhanceResult: null,
   pendingEnhance: false,
   pendingMotion: false,
@@ -88,8 +135,6 @@ let enhanceResetTimer = null;
 let motionResetTimer = null;
 let refObjectUrl = null;
 let ocSearchTimer = null;
-let promptZonesTimer = null;
-let promptZonesSeq = 0;
 let zoneInsertTarget = null;
 let zonePopoverOptions = null;
 let zonePopoverSubcat = null;
@@ -644,16 +689,24 @@ function hideEnhanceResult() {
   $("enhance-result").classList.add("hidden");
 }
 
-function useEnhanceResult() {
+async function useEnhanceResult() {
   if (!state.enhanceResult) {
     return;
   }
-  $("prompt").value = state.enhanceResult.positive || "";
+  try {
+    const positive = state.enhanceResult.positive || "";
+    const data = positive
+      ? await postJson("/api/prompt/zones", { text: positive })
+      : { zones: [] };
+    applyZonesPayload(data.zones || [], { replace: true });
+  } catch (error) {
+    setStatus(error.message, true);
+    return;
+  }
   $("negative").value = state.enhanceResult.negative || "";
   state.negativeTouched = true;
   state.enhanceResult = null;
   hideEnhanceResult();
-  refreshPromptZones();
   setStatus("Propuesta aplicada");
 }
 
@@ -662,11 +715,31 @@ function discardEnhanceResult() {
   hideEnhanceResult();
 }
 
+function zoneDraftEntries() {
+  const entries = [];
+  for (const [zone, draft] of Object.entries(state.zoneDrafts)) {
+    const text = String(draft || "").trim();
+    if (text) {
+      entries.push([zone, text]);
+    }
+  }
+  return entries;
+}
+
+function clearZoneDrafts(entries) {
+  for (const [zone] of entries) {
+    state.zoneDrafts[zone] = "";
+  }
+}
+
 async function enhancePrompt() {
   if (state.pendingEnhance) {
     return;
   }
-  const text = $("prompt").value.trim();
+  const drafts = zoneDraftEntries();
+  const text = drafts.length
+    ? drafts.map(([, draft]) => draft).join(", ")
+    : composePrompt().trim();
   if (!text) {
     setStatus("Escribe un prompt para mejorarlo", true);
     return;
@@ -677,16 +750,16 @@ async function enhancePrompt() {
   button.textContent = "Mejorando…";
   setStatus("Mejorando prompt...");
   try {
-    const data = await postJson("/api/enhance", {
+    const data = await postJson("/api/prompt/enhance_zones", {
       text,
-      preprompt: $("preprompt").value,
-      rating: $("rating").value,
       strength: $("enhance-strength").value,
+      rating: $("rating").value,
     });
-    state.enhanceResult = data;
-    showEnhanceResult(data);
-    button.textContent = "Listo ✓";
-    setStatus("Prompt mejorado");
+    clearZoneDrafts(drafts);
+    applyZonesPayload(data.zones || []);
+    renderZoneEditor();
+    button.textContent = "Mejorado ✓";
+    setStatus("Mejorado ✓");
   } catch (error) {
     button.textContent = "Error";
     setStatus(error.message, true);
@@ -708,8 +781,9 @@ async function generate() {
   if (state.busy) {
     return;
   }
-  const prompt = $("prompt").value.trim();
+  const prompt = composePrompt();
   if (!prompt) {
+    updateGenerateState();
     setStatus("El prompt no puede estar vacío", true);
     return;
   }
@@ -737,7 +811,7 @@ async function generate() {
     payload.strength = Number($("strength").value);
   }
   state.busy = true;
-  $("btn-generate").disabled = true;
+  updateGenerateState();
   setStatus("Encolando...");
   try {
     const data = await postJson("/api/generate", payload);
@@ -746,7 +820,7 @@ async function generate() {
     setStatus(error.message, true);
   } finally {
     state.busy = false;
-    $("btn-generate").disabled = false;
+    updateGenerateState();
   }
 }
 
@@ -888,7 +962,14 @@ async function applySavedReference(params) {
 
 async function reuseGeneration(item) {
   const params = item.params || {};
-  $("prompt").value = item.prompt || "";
+  const savedPrompt = String(item.prompt || "");
+  if (savedPrompt) {
+    const data = await postJson("/api/prompt/zones", { text: savedPrompt });
+    applyZonesPayload(data.zones || [], { replace: true });
+  } else {
+    resetPromptZones();
+    renderZoneEditor();
+  }
   if (typeof item.negative === "string") {
     $("negative").value = item.negative;
     state.negativeTouched = true;
@@ -925,7 +1006,6 @@ async function reuseGeneration(item) {
   } catch (error) {
     warning = error.message;
   }
-  refreshPromptZones();
   if (warning) {
     setStatus(`Reusado #${item.id} · ${warning}`, true);
   } else {
@@ -1431,13 +1511,6 @@ function promptFromTags(tags) {
   return normalizeTags(tags).join(", ");
 }
 
-function mergeIntoPrompt(text, addition) {
-  return promptFromTags([
-    ...String(text || "").split(","),
-    ...String(addition || "").split(","),
-  ]);
-}
-
 function promptTagsFromText(text) {
   return String(text || "")
     .split(",")
@@ -1445,35 +1518,352 @@ function promptTagsFromText(text) {
     .filter(Boolean);
 }
 
-function removePromptTags(tags) {
-  const folded = new Set(normalizeTags(tags).map((tag) => tag.toLowerCase()));
+function generalBucket(subcat) {
+  const key = GENERAL_SUBCATS.includes(subcat) ? subcat : "otros";
+  if (!Array.isArray(state.promptZones.general[key])) {
+    state.promptZones.general[key] = [];
+  }
+  return state.promptZones.general[key];
+}
+
+function allPromptTagKeys() {
+  const seen = new Set();
+  for (const zone of ZONE_ORDER) {
+    if (zone === "general") {
+      for (const subcat of GENERAL_SUBCATS) {
+        for (const tag of state.promptZones.general[subcat] || []) {
+          seen.add(String(tag).toLowerCase());
+        }
+      }
+      continue;
+    }
+    for (const tag of state.promptZones[zone] || []) {
+      seen.add(String(tag).toLowerCase());
+    }
+  }
+  return seen;
+}
+
+function composePrompt() {
+  const merged = [];
+  const seen = new Set();
+  const push = (tags) => {
+    for (const raw of tags || []) {
+      const tag = String(raw == null ? "" : raw).trim();
+      if (!tag) {
+        continue;
+      }
+      const folded = tag.toLowerCase();
+      if (seen.has(folded)) {
+        continue;
+      }
+      seen.add(folded);
+      merged.push(tag);
+    }
+  };
+  for (const zone of ZONE_ORDER) {
+    if (zone === "general") {
+      for (const subcat of GENERAL_SUBCATS) {
+        push(state.promptZones.general[subcat]);
+      }
+      continue;
+    }
+    push(state.promptZones[zone]);
+  }
+  return merged.join(", ");
+}
+
+function resetPromptZones() {
+  state.promptZones.quality = [];
+  state.promptZones.safety = [];
+  state.promptZones.subject = [];
+  state.promptZones.character = [];
+  state.promptZones.general = {};
+  for (const subcat of GENERAL_SUBCATS) {
+    state.promptZones.general[subcat] = [];
+  }
+}
+
+function pushTagsToZone(zone, tags, subcat, seen) {
+  const added = [];
+  let target = null;
+  if (zone === "general") {
+    target = generalBucket(subcat);
+  } else if (ZONE_ORDER.includes(zone)) {
+    target = state.promptZones[zone];
+  }
+  if (!target) {
+    return added;
+  }
+  for (const raw of tags || []) {
+    const tag = String(raw == null ? "" : raw).trim();
+    if (!tag) {
+      continue;
+    }
+    const folded = tag.toLowerCase();
+    if (seen.has(folded)) {
+      continue;
+    }
+    seen.add(folded);
+    target.push(tag);
+    added.push(tag);
+  }
+  return added;
+}
+
+function addTagsToZone(zone, tags, subcat) {
+  const added = pushTagsToZone(zone, tags, subcat, allPromptTagKeys());
+  renderZoneEditor();
+  return added;
+}
+
+function removeTagsFromZones(tags) {
+  const folded = new Set(
+    (tags || [])
+      .map((tag) => String(tag == null ? "" : tag).trim().toLowerCase())
+      .filter(Boolean)
+  );
   if (!folded.size) {
     return;
   }
-  const kept = String($("prompt").value || "")
-    .split(",")
-    .filter((part) => {
-      const tag = part.trim();
-      return tag && !folded.has(tag.toLowerCase());
-    });
-  $("prompt").value = kept.join(", ");
+  for (const zone of ZONE_ORDER) {
+    if (zone === "general") {
+      for (const subcat of GENERAL_SUBCATS) {
+        state.promptZones.general[subcat] = (
+          state.promptZones.general[subcat] || []
+        ).filter((tag) => !folded.has(String(tag).toLowerCase()));
+      }
+      continue;
+    }
+    state.promptZones[zone] = (state.promptZones[zone] || []).filter(
+      (tag) => !folded.has(String(tag).toLowerCase())
+    );
+  }
+  renderZoneEditor();
 }
 
-async function insertPromptTags(tags, zone) {
-  const added = [];
-  let text = $("prompt").value;
-  for (const tag of tags) {
-    const present = String(text || "")
-      .split(",")
-      .some((part) => part.trim().toLowerCase() === tag.toLowerCase());
-    const data = await postJson("/api/prompt/insert", { text, tag, zone });
-    text = data.text || text;
-    if (!present) {
-      added.push(tag);
-    }
+function applyZonesPayload(zonesPayload, { replace = false } = {}) {
+  if (replace) {
+    resetPromptZones();
   }
-  $("prompt").value = text;
+  const seen = allPromptTagKeys();
+  const added = [];
+  for (const item of zonesPayload || []) {
+    const zone = item && item.id;
+    if (!ZONE_ORDER.includes(zone)) {
+      continue;
+    }
+    if (zone === "general") {
+      const subcats =
+        Array.isArray(item.subcats) && item.subcats.length
+          ? item.subcats
+          : [{ id: "otros", tags: item.tags || [] }];
+      for (const block of subcats) {
+        added.push(
+          ...pushTagsToZone("general", block.tags || [], block.id, seen)
+        );
+      }
+      continue;
+    }
+    added.push(...pushTagsToZone(zone, item.tags || [], null, seen));
+  }
+  renderZoneEditor();
   return added;
+}
+
+async function mergeZonesText(text) {
+  const data = await postJson("/api/prompt/zones", { text });
+  return applyZonesPayload(data.zones || []);
+}
+
+function countZoneTags(zone) {
+  if (zone === "general") {
+    return GENERAL_SUBCATS.reduce(
+      (total, subcat) => total + (state.promptZones.general[subcat] || []).length,
+      0
+    );
+  }
+  return (state.promptZones[zone] || []).length;
+}
+
+function updateGenerateState() {
+  const button = $("btn-generate");
+  if (!button) {
+    return;
+  }
+  button.disabled = state.busy || !composePrompt();
+}
+
+function removeTagFromZone(zone, tag, subcat) {
+  const folded = String(tag).toLowerCase();
+  if (zone === "general") {
+    const key = GENERAL_SUBCATS.includes(subcat) ? subcat : "otros";
+    state.promptZones.general[key] = (
+      state.promptZones.general[key] || []
+    ).filter((item) => String(item).toLowerCase() !== folded);
+  } else if (ZONE_ORDER.includes(zone)) {
+    state.promptZones[zone] = (state.promptZones[zone] || []).filter(
+      (item) => String(item).toLowerCase() !== folded
+    );
+  }
+  renderZoneEditor();
+}
+
+function zoneTagsRow(zone, tags, subcat) {
+  const row = document.createElement("div");
+  row.className = "zone-editor-chips";
+  for (const tag of tags || []) {
+    const chip = document.createElement("span");
+    chip.className = `zone-selected-chip zone-tag zone-${zone}`;
+    const text = document.createElement("span");
+    text.className = "zone-chip-text";
+    text.textContent = tag;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "zone-selected-remove";
+    remove.textContent = "×";
+    remove.title = "Quitar";
+    remove.addEventListener("click", () => removeTagFromZone(zone, tag, subcat));
+    chip.append(text, remove);
+    row.appendChild(chip);
+  }
+  return row;
+}
+
+function zoneAddButton(zone, subcat, label) {
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "zone-add";
+  add.textContent = "＋";
+  add.title = `Añadir a ${label}`;
+  add.addEventListener("click", () => {
+    openZoneInsert(zone, subcat).catch((error) => setStatus(error.message, true));
+  });
+  return add;
+}
+
+async function enhanceZoneDraft(zone, button) {
+  const text = String(state.zoneDrafts[zone] || "").trim();
+  if (!text) {
+    setStatus("Escribe algo para mejorar", true);
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Mejorando…";
+  }
+  setStatus("Mejorando…");
+  try {
+    const data = await postJson("/api/prompt/enhance_zones", {
+      text,
+      zone,
+      strength: $("enhance-strength").value,
+      rating: $("rating").value,
+    });
+    state.zoneDrafts[zone] = "";
+    applyZonesPayload(data.zones || []);
+    renderZoneEditor();
+    setStatus("Mejorado ✓");
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Mejorar";
+    }
+    setStatus(error.message, true);
+  }
+}
+
+function zoneNaturalRow(zone) {
+  const row = document.createElement("div");
+  row.className = "zone-natural-row";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "zone-natural";
+  input.dataset.zone = zone;
+  input.placeholder = "Describe en lenguaje natural…";
+  input.value = state.zoneDrafts[zone] || "";
+  input.addEventListener("input", () => {
+    state.zoneDrafts[zone] = input.value;
+  });
+  const enhance = document.createElement("button");
+  enhance.type = "button";
+  enhance.className = "zone-enhance";
+  enhance.dataset.zone = zone;
+  enhance.textContent = "Mejorar";
+  enhance.addEventListener("click", () => {
+    enhanceZoneDraft(zone, enhance).catch((error) =>
+      setStatus(error.message, true)
+    );
+  });
+  row.append(input, enhance);
+  return row;
+}
+
+function renderZoneEditor() {
+  const container = $("zone-editor");
+  if (!container) {
+    return;
+  }
+  container.replaceChildren();
+  for (const zone of ZONE_ORDER) {
+    const label = ZONE_LABELS[zone] || zone;
+    const block = document.createElement("section");
+    block.className = `zone-block zone-block-${zone}`;
+    const head = document.createElement("div");
+    head.className = "zone-block-head";
+    const title = document.createElement("strong");
+    title.className = "zone-block-title";
+    title.textContent = label;
+    const count = document.createElement("span");
+    count.className = "zone-block-count";
+    count.textContent = String(countZoneTags(zone));
+    head.append(title, count, zoneAddButton(zone, null, label));
+    block.appendChild(head);
+    if (zone === "general") {
+      for (const subcat of GENERAL_SUBCATS) {
+        const tags = state.promptZones.general[subcat] || [];
+        if (!tags.length) {
+          continue;
+        }
+        const subLabel = GENERAL_SUBCAT_LABELS[subcat] || subcat;
+        const subBlock = document.createElement("div");
+        subBlock.className = "zone-subblock";
+        const subHead = document.createElement("div");
+        subHead.className = "zone-subblock-head";
+        const subTitle = document.createElement("span");
+        subTitle.textContent = subLabel;
+        subHead.append(subTitle, zoneAddButton("general", subcat, subLabel));
+        subBlock.append(subHead, zoneTagsRow("general", tags, subcat));
+        block.appendChild(subBlock);
+      }
+    } else {
+      block.appendChild(zoneTagsRow(zone, state.promptZones[zone] || [], null));
+    }
+    block.appendChild(zoneNaturalRow(zone));
+    container.appendChild(block);
+  }
+  const finalArea = $("prompt-final");
+  if (finalArea) {
+    finalArea.value = composePrompt();
+  }
+  updateGenerateState();
+}
+
+async function copyFinalPrompt() {
+  const text = composePrompt();
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const area = $("prompt-final");
+      area.focus();
+      area.select();
+      document.execCommand("copy");
+    }
+    setStatus("Prompt copiado");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
 }
 
 function selectLora(loraId, weight) {
@@ -1483,67 +1873,6 @@ function selectLora(loraId, weight) {
 async function fetchCharacterProfile(character, mode) {
   const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
   return api(`/api/characters/${character.id}/profile${query}`);
-}
-
-function renderPromptZones(zones) {
-  const preview = $("prompt-zones-preview");
-  const legend = $("prompt-zones-legend");
-  preview.replaceChildren();
-  legend.replaceChildren();
-  let any = false;
-  for (const zone of zones) {
-    const tags = zone.tags || [];
-    for (const tag of tags) {
-      if (any) {
-        preview.appendChild(document.createTextNode(", "));
-      }
-      const span = document.createElement("span");
-      span.className = `zone-tag zone-${zone.id}`;
-      span.textContent = tag;
-      preview.appendChild(span);
-      any = true;
-    }
-    const item = document.createElement("span");
-    item.className = "zone-legend-item";
-    const swatch = document.createElement("span");
-    swatch.className = `zone-swatch zone-${zone.id}`;
-    const label = document.createElement("span");
-    label.textContent = zone.label;
-    item.append(swatch, label);
-    legend.appendChild(item);
-  }
-  if (!any) {
-    const empty = document.createElement("span");
-    empty.className = "empty";
-    empty.textContent = "Sin tags todavía.";
-    preview.appendChild(empty);
-  }
-}
-
-async function refreshPromptZones() {
-  const text = $("prompt").value;
-  const seq = ++promptZonesSeq;
-  try {
-    const data = await postJson("/api/prompt/zones", { text });
-    if (seq !== promptZonesSeq) {
-      return;
-    }
-    renderPromptZones(data.zones || []);
-  } catch (error) {
-    if (seq === promptZonesSeq) {
-      renderPromptZones([]);
-    }
-  }
-}
-
-function schedulePromptZones() {
-  if (promptZonesTimer) {
-    clearTimeout(promptZonesTimer);
-  }
-  promptZonesTimer = setTimeout(() => {
-    promptZonesTimer = null;
-    refreshPromptZones();
-  }, 300);
 }
 
 function zoneSubcatLocked(subcat) {
@@ -1723,10 +2052,10 @@ function renderZoneOcList() {
 async function applyOcFromPicker(character) {
   const mode = $("zone-ocs-traits").checked ? "traits" : "auto";
   const profile = await fetchCharacterProfile(character, mode);
-  removePromptTags(zoneOcApplied);
-  zoneOcApplied = await insertPromptTags(
-    promptTagsFromText(profile.text),
-    "character"
+  removeTagsFromZones(zoneOcApplied);
+  zoneOcApplied = addTagsToZone(
+    "character",
+    promptTagsFromText(profile.text)
   );
   zoneOcCharacter = character;
   const notes = [`modo ${profile.mode}`];
@@ -1743,16 +2072,15 @@ async function applyOcFromPicker(character) {
     $("zone-ocs-traits").checked = false;
   }
   if ($("zone-ocs-extras").checked && (profile.extras || []).length) {
-    const extraAdded = await insertPromptTags(profile.extras, "general");
+    const extraAdded = await mergeZonesText(profile.extras.join(", "));
     zoneOcApplied = zoneOcApplied.concat(extraAdded);
     notes.push(`extras a General: ${profile.extras.join(", ")}`);
   }
-  await refreshPromptZones();
   setZoneOcStatus(`OC «${character.name}» aplicado · ${notes.join(" · ")}`);
   setStatus(`OC «${character.name}» aplicado a la zona Personaje`);
 }
 
-async function openZoneInsert(zone) {
+async function openZoneInsert(zone, subcat) {
   if (!ZONE_LABELS[zone]) {
     return;
   }
@@ -1792,7 +2120,12 @@ async function openZoneInsert(zone) {
     }
     zonePopoverOptions = data.subgroups || [];
     if (zone === "general") {
-      zonePopoverSubcat = defaultGeneralSubcat();
+      const wanted = zoneSubcatLocked(subcat) ? null : subcat;
+      zonePopoverSubcat = zonePopoverOptions.some(
+        (group) => group.id === wanted
+      )
+        ? wanted
+        : defaultGeneralSubcat();
     }
     renderZonePopoverTabs();
     renderZonePopoverGroups();
@@ -1855,14 +2188,9 @@ async function insertZoneSelection() {
     setStatus("Selecciona o añade algún tag antes de insertar", true);
     return;
   }
-  let text = $("prompt").value;
-  for (const tag of tags) {
-    const data = await postJson("/api/prompt/insert", { text, tag, zone });
-    text = data.text || text;
-  }
-  $("prompt").value = text;
+  const subcat = zone === "general" ? zonePopoverSubcat || "otros" : null;
+  addTagsToZone(zone, tags, subcat);
   closeZoneInsert();
-  await refreshPromptZones();
   setStatus(`Insertados ${tags.length} tag(s)`);
 }
 
@@ -1984,8 +2312,7 @@ async function moveOcExtrasToGeneral() {
   if (!extras.length) {
     return;
   }
-  const added = await insertPromptTags(extras, "general");
-  await refreshPromptZones();
+  const added = await mergeZonesText(extras.join(", "));
   let removed = false;
   if (
     state.ocEditingId != null &&
@@ -2311,7 +2638,7 @@ async function cancelOcEdit() {
 
 async function useCharacter(character) {
   const profile = await fetchCharacterProfile(character, "auto");
-  await insertPromptTags(promptTagsFromText(profile.text), "character");
+  addTagsToZone("character", promptTagsFromText(profile.text));
   let loraNote = "";
   if (profile.lora) {
     const selected = selectLora(profile.lora.id, profile.lora.default_weight);
@@ -2321,10 +2648,9 @@ async function useCharacter(character) {
   }
   let extrasNote = "";
   if ((profile.extras || []).length) {
-    await insertPromptTags(profile.extras, "general");
+    await mergeZonesText(profile.extras.join(", "));
     extrasNote = ` · extras a General: ${profile.extras.join(", ")}`;
   }
-  await refreshPromptZones();
   $("preprompt").value = character.preprompt;
   $("rating").value = character.rating;
   state.activeCharacterId = character.id;
@@ -2512,12 +2838,13 @@ function addOcTagsToPrompt() {
     setOcStatus("Selecciona al menos un tag del catálogo", true);
     return;
   }
-  const addition = promptFromTags(state.ocSelectedTags);
-  const current = $("prompt").value.trim();
-  $("prompt").value = current ? mergeIntoPrompt(current, addition) : addition;
-  refreshPromptZones();
-  closeOcModal();
-  setStatus("Tags añadidos al prompt");
+  const text = promptFromTags(state.ocSelectedTags);
+  mergeZonesText(text)
+    .then(() => {
+      closeOcModal();
+      setStatus("Tags añadidos al prompt");
+    })
+    .catch((error) => setOcStatus(error.message, true));
 }
 
 async function openOcSaveModal(item) {
@@ -2898,7 +3225,9 @@ const REQUIRED_IDS = [
   "preprompt-form",
   "preprompt-modal",
   "negative",
-  "prompt",
+  "zone-editor",
+  "prompt-final",
+  "btn-copy-prompt",
   "zone-insert-form",
   "zone-insert-cancel",
   "zone-popover-close",
@@ -3033,7 +3362,7 @@ function bind() {
   on("negative", "input", () => {
     state.negativeTouched = true;
   });
-  on("prompt", "input", schedulePromptZones);
+  on("btn-copy-prompt", "click", copyFinalPrompt);
   for (const chip of document.querySelectorAll(".zone-chip")) {
     chip.addEventListener("click", () => {
       openZoneInsert(chip.dataset.zone).catch((error) =>
@@ -3164,7 +3493,7 @@ async function init() {
     await settle("OCs", loadCharacters);
     await settle("negativo", refreshNegative);
     await settle("galería", loadGallery);
-    await settle("zonas", refreshPromptZones);
+    await settle("zonas", renderZoneEditor);
     await settle("estado del editor", loadEditorStatus);
   } catch (error) {
     console.error("init", error);
