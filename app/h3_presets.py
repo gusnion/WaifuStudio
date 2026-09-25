@@ -2,11 +2,12 @@
 
 Espejo de `app.video_presets`: solo stdlib, sin red ni dependencias. Carga
 perezosa y estricta (EngineError claro si el JSON falta, no tiene la forma
-esperada o un perfil es invalido). Cada perfil trae id/label/note, plantilla,
-modelo DiT, VAEs de video/audio, encoder con proyeccion ClipProj (o null) y
-LoRA. El catalogo fija los segundos permitidos (5/8/10/12/15) y las
-resoluciones vertical/horizontal. H3 exige ``length = 5+17n`` a 24 fps y
-medidas multiplo de 32 con area <= 768x1344.
+esperada o un perfil/variante es invalido). Cada perfil trae id/label/note,
+plantilla, modelo DiT, VAEs de video/audio, encoder con proyeccion ClipProj (o
+null) y LoRA. El catalogo fija las variantes (M10-2c-3: LoRA + pasos, default
+``turbo4``), los segundos permitidos (5/8/10/12/15) y las resoluciones
+vertical/horizontal. H3 exige ``length = 5+17n`` a 24 fps y medidas multiplo de
+32 con area <= 768x1344.
 """
 
 from __future__ import annotations
@@ -22,8 +23,10 @@ from app.engine import EngineError
 
 PROFILES_PATH = APP_ROOT / "registry" / "h3_presets-v1.json"
 DEFAULT_PROFILE = "referencia"
+DEFAULT_VARIANT = "turbo4"
 H3_ASPECTS: tuple[str, ...] = ("vertical", "horizontal")
 H3_SECONDS: tuple[int, ...] = (5, 8, 10, 12, 15)
+H3_VARIANT_STEPS_MAX = 200
 H3_FPS = 24
 H3_FRAME_BASE = 5
 H3_FRAME_STEP = 17
@@ -106,6 +109,53 @@ def _parse_resolutions(value: Any) -> dict[str, list[dict[str, int]]]:
             _parse_resolution(entry, aspect) for entry in entries
         ]
     return resolutions
+
+
+def _parse_variant(entry: Any, index: int) -> dict[str, Any]:
+    if not isinstance(entry, dict):
+        raise EngineError(f"variante H3 #{index} invalida: se esperaba objeto")
+    variant_id = entry.get("id")
+    if not isinstance(variant_id, str) or not variant_id.strip():
+        raise EngineError(f"variante H3 #{index} sin id valido: {variant_id!r}")
+    variant_id = variant_id.strip()
+    label = entry.get("label")
+    if not isinstance(label, str) or not label.strip():
+        raise EngineError(f"variante H3 {variant_id!r}: label invalido: {label!r}")
+    lora = _require_text(entry.get("lora"), f"variante H3 {variant_id!r}: lora")
+    steps = entry.get("steps")
+    if (
+        isinstance(steps, bool)
+        or not isinstance(steps, int)
+        or not 1 <= steps <= H3_VARIANT_STEPS_MAX
+    ):
+        raise EngineError(
+            f"variante H3 {variant_id!r}: steps invalido {steps!r}; "
+            f"usar entero 1..{H3_VARIANT_STEPS_MAX}"
+        )
+    return {
+        "id": variant_id,
+        "label": label.strip(),
+        "lora": lora,
+        "steps": steps,
+    }
+
+
+def _parse_variants(value: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise EngineError(f"catalogo H3: variants invalidas: {value!r}")
+    variants: dict[str, dict[str, Any]] = {}
+    for index, entry in enumerate(value):
+        variant = _parse_variant(entry, index)
+        if variant["id"] in variants:
+            raise EngineError(
+                f"catalogo H3: variante duplicada: {variant['id']!r}"
+            )
+        variants[variant["id"]] = variant
+    if DEFAULT_VARIANT not in variants:
+        raise EngineError(
+            f"catalogo H3: falta la variante por defecto {DEFAULT_VARIANT!r}"
+        )
+    return variants
 
 
 def _parse_profile(
@@ -196,6 +246,7 @@ def _parse_catalog(data: Any, path: Any) -> dict[str, Any]:
         raise EngineError(f"catalogo de perfiles H3 invalido: {path}")
     seconds = _parse_seconds_catalog(data.get("seconds"))
     resolutions = _parse_resolutions(data.get("resoluciones"))
+    variants = _parse_variants(data.get("variants"))
     profiles: dict[str, dict[str, Any]] = {}
     for index, entry in enumerate(data["perfiles"]):
         profile = _parse_profile(entry, index, seconds)
@@ -206,7 +257,12 @@ def _parse_catalog(data: Any, path: Any) -> dict[str, Any]:
         profiles[profile["id"]] = profile
     if not profiles:
         raise EngineError(f"catalogo de perfiles H3 sin perfiles: {path}")
-    return {"seconds": seconds, "resolutions": resolutions, "profiles": profiles}
+    return {
+        "seconds": seconds,
+        "resolutions": resolutions,
+        "variants": variants,
+        "profiles": profiles,
+    }
 
 
 def load_h3_presets(path: str | Path = PROFILES_PATH) -> dict[str, Any]:
@@ -229,11 +285,12 @@ def _catalog() -> dict[str, Any]:
 
 
 def h3_catalog() -> dict[str, Any]:
-    """Copia serializable del catalogo completo (segundos, resoluciones y perfiles)."""
+    """Copia serializable del catalogo completo (segundos, resoluciones, variantes y perfiles)."""
     catalog = _catalog()
     return {
         "seconds": list(catalog["seconds"]),
         "resolutions": copy.deepcopy(catalog["resolutions"]),
+        "variants": [copy.deepcopy(v) for v in catalog["variants"].values()],
         "profiles": [copy.deepcopy(p) for p in catalog["profiles"].values()],
     }
 
@@ -241,6 +298,11 @@ def h3_catalog() -> dict[str, Any]:
 def list_h3_profiles() -> list[dict[str, Any]]:
     """Copia serializable de los perfiles, en orden del catalogo."""
     return [copy.deepcopy(profile) for profile in _catalog()["profiles"].values()]
+
+
+def list_h3_variants() -> list[dict[str, Any]]:
+    """Copia serializable de las variantes (turbo4, turbo8), en orden del catalogo."""
+    return [copy.deepcopy(variant) for variant in _catalog()["variants"].values()]
 
 
 def h3_seconds() -> list[int]:
@@ -278,6 +340,33 @@ def resolve_h3_profile(profile: object = None) -> dict[str, Any]:
     if not value:
         return get_h3_profile(DEFAULT_PROFILE)
     return get_h3_profile(value)
+
+
+def get_h3_variant(variant_id: object) -> dict[str, Any]:
+    """Variante por id estricto; EngineError si no existe."""
+    entry = (
+        _catalog()["variants"].get(variant_id.strip())
+        if isinstance(variant_id, str)
+        else None
+    )
+    if entry is None:
+        raise EngineError(f"variante H3 desconocida: {variant_id!r}")
+    return entry
+
+
+def resolve_h3_variant(variant: object = None) -> dict[str, Any]:
+    """Variante por id; ausente/``""`` = ``turbo4`` (reproduce jobs viejos).
+
+    EngineError si ``variant`` no es texto o si el id no existe en el catalogo.
+    """
+    if variant is None:
+        return get_h3_variant(DEFAULT_VARIANT)
+    if not isinstance(variant, str):
+        raise EngineError(f"variante H3 desconocida: {variant!r}")
+    value = variant.strip()
+    if not value:
+        return get_h3_variant(DEFAULT_VARIANT)
+    return get_h3_variant(value)
 
 
 def h3_template_path(profile: dict[str, Any]) -> Path:
@@ -389,6 +478,7 @@ def h3_default_size(aspect: object = "vertical") -> tuple[int, int]:
 
 __all__ = [
     "DEFAULT_PROFILE",
+    "DEFAULT_VARIANT",
     "H3_ASPECTS",
     "H3_FPS",
     "H3_FRAME_BASE",
@@ -398,8 +488,10 @@ __all__ = [
     "H3_MIN_FRAMES",
     "H3_SECONDS",
     "H3_SIZE_STEP",
+    "H3_VARIANT_STEPS_MAX",
     "PROFILES_PATH",
     "get_h3_profile",
+    "get_h3_variant",
     "h3_aspect",
     "h3_catalog",
     "h3_default_size",
@@ -408,9 +500,11 @@ __all__ = [
     "h3_seconds",
     "h3_template_path",
     "list_h3_profiles",
+    "list_h3_variants",
     "load_h3_presets",
     "require_h3_frames",
     "require_h3_seconds",
     "resolve_h3_profile",
+    "resolve_h3_variant",
     "validate_h3_size",
 ]

@@ -131,6 +131,7 @@ const state = {
   videoVramHint: "",
   videoPresets: [],
   videoH3Profiles: [],
+  videoH3Variants: [],
   videoH3Seconds: [],
   videoH3Resolutions: {},
   editorInstalled: false,
@@ -1486,6 +1487,12 @@ async function reuseVideoGeneration(item) {
         ? params.profile
         : "referencia";
     setSelectValue($("video-h3-profile"), storedProfile);
+    const storedVariant =
+      typeof params.variant === "string" && params.variant
+        ? params.variant
+        : "turbo4";
+    setSelectValue($("video-h3-variant"), storedVariant);
+    $("video-h3-sage").checked = params.sage === true;
     const h3Seconds = Number(params.seconds);
     if (state.videoH3Seconds.includes(h3Seconds)) {
       $("video-h3-seconds").value = String(h3Seconds);
@@ -1539,6 +1546,8 @@ function startNewVideo() {
   $("video-image").value = "";
   $("video-last-image").value = "";
   setSelectValue($("video-h3-profile"), "calidad");
+  setSelectValue($("video-h3-variant"), "turbo4");
+  $("video-h3-sage").checked = false;
   setSelectValue($("video-h3-seconds"), String(defaultH3Seconds()));
   state.videoNegativeTouched = false;
   state.videoVramHint = "";
@@ -1701,6 +1710,8 @@ async function generateVideo() {
       payload.last_image_b64 = await readFileBase64(last);
       payload.prompt = prompt;
       payload.profile = $("video-h3-profile").value;
+      payload.variant = $("video-h3-variant").value;
+      payload.sage = $("video-h3-sage").checked;
       payload.seconds = Number($("video-h3-seconds").value);
       payload.width = size.width;
       payload.height = size.height;
@@ -1864,12 +1875,20 @@ function updateH3Notes() {
 async function loadH3Profiles() {
   const data = await api("/api/video/h3_profiles");
   state.videoH3Profiles = data.items || data.profiles || [];
+  state.videoH3Variants = data.variants || [];
   state.videoH3Seconds = data.seconds || [];
   state.videoH3Resolutions = data.resolutions || {};
   const profileSelect = $("video-h3-profile");
   profileSelect.replaceChildren();
   for (const profile of state.videoH3Profiles) {
     profileSelect.appendChild(option(profile.id, profile.label || profile.id));
+  }
+  const variantSelect = $("video-h3-variant");
+  variantSelect.replaceChildren();
+  for (const variant of state.videoH3Variants) {
+    variantSelect.appendChild(
+      option(variant.id, `Pasos: ${variant.steps} (${variant.label})`)
+    );
   }
   const secondsSelect = $("video-h3-seconds");
   secondsSelect.replaceChildren();
@@ -1878,6 +1897,7 @@ async function loadH3Profiles() {
   }
   fillH3Sizes();
   setSelectValue(profileSelect, "calidad");
+  setSelectValue(variantSelect, "turbo4");
   setSelectValue(secondsSelect, String(defaultH3Seconds()));
   updateH3Notes();
 }
@@ -1896,10 +1916,10 @@ function applyVideoEngine() {
   $("video-prompt-field").style.display = isWan ? "none" : "";
   $("video-h3-guide").style.display = isWan ? "none" : "";
   $("video-last-field").style.display = showLast ? "" : "none";
-  for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field"]) {
+  for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field", "video-h3-variant-field", "video-h3-sage-field"]) {
     $(id).style.display = isWan ? "none" : "";
   }
-  for (const id of ["video-h3-profile", "video-h3-seconds", "video-h3-size"]) {
+  for (const id of ["video-h3-profile", "video-h3-seconds", "video-h3-size", "video-h3-variant", "video-h3-sage"]) {
     $(id).disabled = isWan;
   }
   updateVideoPresetNote();
@@ -4201,6 +4221,8 @@ const REQUIRED_IDS = [
   "video-h3-seconds-info",
   "video-h3-size",
   "video-h3-size-info",
+  "video-h3-variant",
+  "video-h3-sage",
   "video-h3-guide",
   "btn-h3-insert-template",
   "btn-h3-copy-guide",

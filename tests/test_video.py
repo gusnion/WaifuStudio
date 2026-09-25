@@ -17,6 +17,8 @@ from app.h3_presets import h3_frames_for_seconds, h3_template_path, resolve_h3_p
 from app.motion import MOTION_NEGATIVE
 from app.store import Store
 from app.video import (
+    H3_SAGE_MODE,
+    H3_SAGE_NODE_CLASS,
     H3_TEMPLATE_PATH,
     WAN_DEFAULT_SAMPLER,
     WAN_DEFAULT_SCHEDULER,
@@ -35,6 +37,9 @@ from app.video import (
 )
 
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
+
+H3_LORA_4STEP = "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"
+H3_LORA_8STEP = "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
 
 _OLD_SCHEMA = """
 CREATE TABLE IF NOT EXISTS generations (
@@ -730,6 +735,125 @@ class PrepareH3Tests(unittest.TestCase):
         )
         self.assertEqual(patched["129"]["inputs"]["noise_seed"], 9)
 
+    def test_variante_default_turbo4(self):
+        patched = prepare_h3_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            prompt="p",
+            seed=1,
+        )
+        self.assertEqual(patched["134"]["inputs"]["lora_name"], H3_LORA_4STEP)
+        self.assertEqual(patched["124"]["inputs"]["steps"], 4)
+        self.assertNotIn(
+            H3_SAGE_NODE_CLASS,
+            [node.get("class_type") for node in patched.values()],
+        )
+
+    def test_variante_turbo8_parchea_lora_y_pasos(self):
+        patched = prepare_h3_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            prompt="p",
+            seed=1,
+            variant="turbo8",
+        )
+        self.assertEqual(patched["134"]["inputs"]["lora_name"], H3_LORA_8STEP)
+        self.assertEqual(patched["124"]["inputs"]["steps"], 8)
+        self.assertEqual(patched["134"]["inputs"]["model"], ["127", 0])
+
+    def test_variante_invalida(self):
+        for value in ("nope", "TURBO8", 5, True, ["turbo8"]):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    prepare_h3_graph(
+                        self.graph,
+                        first_image_name="a.png",
+                        last_image_name="b.png",
+                        prompt="p",
+                        seed=1,
+                        variant=value,
+                    )
+
+    def test_sage_inserta_patch_entre_lora_y_consumidores(self):
+        patched = prepare_h3_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            prompt="p",
+            seed=1,
+            sage=True,
+        )
+        sage_nodes = [
+            (node_id, node)
+            for node_id, node in patched.items()
+            if node.get("class_type") == H3_SAGE_NODE_CLASS
+        ]
+        self.assertEqual(len(sage_nodes), 1)
+        sage_id, sage = sage_nodes[0]
+        self.assertEqual(
+            sage["inputs"], {"model": ["134", 0], "sage_attention": H3_SAGE_MODE}
+        )
+        self.assertEqual(patched["134"]["inputs"]["model"], ["127", 0])
+        for consumer in ("126", "124"):
+            with self.subTest(consumer=consumer):
+                self.assertEqual(patched[consumer]["inputs"]["model"], [sage_id, 0])
+
+    def test_sage_con_variante_turbo8(self):
+        patched = prepare_h3_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            prompt="p",
+            seed=1,
+            variant="turbo8",
+            sage=True,
+        )
+        self.assertEqual(patched["134"]["inputs"]["lora_name"], H3_LORA_8STEP)
+        self.assertEqual(patched["124"]["inputs"]["steps"], 8)
+        sage = next(
+            node
+            for node in patched.values()
+            if node.get("class_type") == H3_SAGE_NODE_CLASS
+        )
+        self.assertEqual(sage["inputs"]["model"], ["134", 0])
+
+    def test_sage_sin_consumidores_del_lora(self):
+        broken = copy.deepcopy(self.graph)
+        broken["124"]["inputs"]["model"] = ["127", 0]
+        broken["126"]["inputs"]["model"] = ["127", 0]
+        prepare_h3_graph(
+            broken,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            prompt="p",
+            seed=1,
+            sage=False,
+        )
+        with self.assertRaises(EngineError):
+            prepare_h3_graph(
+                broken,
+                first_image_name="a.png",
+                last_image_name="b.png",
+                prompt="p",
+                seed=1,
+                sage=True,
+            )
+
+    def test_sage_invalido(self):
+        for value in (1, "si", None):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    prepare_h3_graph(
+                        self.graph,
+                        first_image_name="a.png",
+                        last_image_name="b.png",
+                        prompt="p",
+                        seed=1,
+                        sage=value,
+                    )
+
     def test_no_muta_el_original(self):
         prepare_h3_graph(
             self.graph,
@@ -737,6 +861,8 @@ class PrepareH3Tests(unittest.TestCase):
             last_image_name="b.png",
             prompt="p",
             seed=3,
+            variant="turbo8",
+            sage=True,
         )
         self.assertEqual(self.graph, self.snapshot)
 
@@ -958,10 +1084,53 @@ class BuildVideoGraphH3Tests(unittest.TestCase):
                 graph = build_video_graph(job)
                 self.assert_grafo_valido(graph)
 
+    def test_variante_default_turbo4_sin_campo(self):
+        graph = build_video_graph(self.job())
+        self.assertEqual(graph["134"]["inputs"]["lora_name"], H3_LORA_4STEP)
+        self.assertEqual(graph["124"]["inputs"]["steps"], 4)
+
+    def test_variante_turbo8_en_cada_perfil(self):
+        for profile in ("referencia", "calidad", "ligero"):
+            with self.subTest(profile=profile):
+                graph = build_video_graph(self.job(profile=profile, variant="turbo8"))
+                self.assertEqual(graph["134"]["inputs"]["lora_name"], H3_LORA_8STEP)
+                self.assertEqual(graph["124"]["inputs"]["steps"], 8)
+
+    def test_sage_rewira_guider_y_scheduler(self):
+        graph = build_video_graph(self.job(sage=True))
+        sage_id = next(
+            node_id
+            for node_id, node in graph.items()
+            if node.get("class_type") == H3_SAGE_NODE_CLASS
+        )
+        self.assertEqual(
+            graph[sage_id]["inputs"],
+            {"model": ["134", 0], "sage_attention": H3_SAGE_MODE},
+        )
+        self.assertEqual(graph["126"]["inputs"]["model"], [sage_id, 0])
+        self.assertEqual(graph["124"]["inputs"]["model"], [sage_id, 0])
+        self.assertEqual(graph["131"]["inputs"]["clip"], ["128", 0])
+
+    def test_sin_sage_no_inserta_nodo(self):
+        graph = build_video_graph(self.job(sage=False))
+        self.assertNotIn(
+            H3_SAGE_NODE_CLASS,
+            [node.get("class_type") for node in graph.values()],
+        )
+        self.assertEqual(graph["126"]["inputs"]["model"], ["134", 0])
+        self.assertEqual(graph["124"]["inputs"]["model"], ["134", 0])
+
     def test_invalidos(self):
         cases = (
             {"profile": "nope"},
             {"profile": 5},
+            {"variant": "nope"},
+            {"variant": "TURBO8"},
+            {"variant": 5},
+            {"variant": True},
+            {"sage": 1},
+            {"sage": "si"},
+            {"sage": None},
             {"seconds": 6},
             {"seconds": 0},
             {"seconds": "8"},

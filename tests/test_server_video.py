@@ -309,6 +309,18 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
             with self.subTest(value=value):
                 self.assert_400(self.payload(**base, profile=value))
 
+    def test_h3_variant_invalido_400(self):
+        base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
+        for value in ("nope", "TURBO8", 5, True, ["turbo8"]):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(**base, variant=value))
+
+    def test_h3_sage_invalido_400(self):
+        base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
+        for value in (1, "si", "true", []):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(**base, sage=value))
+
     def test_h3_seconds_no_permitidos_400(self):
         base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
         for value in (0, 6, 7, 15.5, 16, -1, "8", True, "abc"):
@@ -338,6 +350,8 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
             "/api/video/generate",
             json=self.payload(**base, width=2048, height=576),
         )
+        client.post("/api/video/generate", json=self.payload(**base, variant="nope"))
+        client.post("/api/video/generate", json=self.payload(**base, sage="si"))
         self.assertEqual(self.input_files(), [])
         self.assertEqual(self.store.count(), 0)
 
@@ -444,6 +458,18 @@ class H3ProfilesApiTests(ServerVideoTestCase):
             data["items"][1]["projection"], "mmh3-4b-ClipProj-v3.1.safetensors"
         )
         self.assertEqual(data["items"][2]["seconds_recomendados"], [8, 10, 12, 15])
+
+    def test_variantes_expuestas(self):
+        data = self.make_client().get("/api/video/h3_profiles").json()
+        self.assertEqual(
+            [item["id"] for item in data["variants"]], ["turbo4", "turbo8"]
+        )
+        self.assertEqual(data["variants"][0]["steps"], 4)
+        self.assertEqual(data["variants"][1]["steps"], 8)
+        for item in data["variants"]:
+            with self.subTest(variant=item["id"]):
+                for field in ("id", "label", "lora", "steps"):
+                    self.assertIn(field, item)
 
 
 class VideoGenerateEnqueueTests(ServerVideoTestCase):
@@ -808,6 +834,46 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(job["profile"], "ligero")
         self.assertEqual((job["width"], job["height"]), (1344, 768))
 
+    def test_h3_sin_variant_usa_turbo4_y_sage_false(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["variant"], "turbo4")
+        self.assertIs(job["sage"], False)
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["variant"], "turbo4")
+        self.assertIs(params["sage"], False)
+
+    def test_h3_variant_turbo8_y_sage_true(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "variant": "turbo8",
+                "sage": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["variant"], "turbo8")
+        self.assertIs(job["sage"], True)
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["variant"], "turbo8")
+        self.assertIs(params["sage"], True)
+
 
 class VideoCancelTests(ServerVideoTestCase):
     def payload(self) -> dict:
@@ -969,6 +1035,59 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
         self.assertEqual(graph["11"]["inputs"]["shift"], 5.0)
         row = self.store.get(1)
         self.assertEqual(row["params"]["preset"], "calidad")
+
+    def test_h3_variant_y_sage_fin_a_fin_en_el_grafo(self):
+        transport = FakeVideoTransport(self.config)
+        factory = lambda: ComfyEngine(  # noqa: E731
+            self.config, transport=transport, poll_s=0.01, history_timeout_s=5.0
+        )
+
+        def run_job(job):
+            run_video_generation(
+                job, config=self.config, store=self.store, engine_factory=factory
+            )
+
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(run_job),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/video/generate",
+                json={
+                    "engine": "h3",
+                    "image_b64": PNG_B64,
+                    "last_image_b64": PNG_B64,
+                    "prompt": "integrated_multimodal_description: test",
+                    "variant": "turbo8",
+                    "sage": True,
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 5)
+            self.assertEqual(client.get(f"/api/jobs/{job_id}").json()["status"], "done")
+        self.assertEqual(len(transport.submits), 1)
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(
+            graph["134"]["inputs"]["lora_name"],
+            "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        )
+        self.assertEqual(graph["124"]["inputs"]["steps"], 8)
+        sage_id = next(
+            node_id
+            for node_id, node in graph.items()
+            if node.get("class_type") == "PathchSageAttentionKJ"
+        )
+        self.assertEqual(
+            graph[sage_id]["inputs"],
+            {"model": ["134", 0], "sage_attention": "auto"},
+        )
+        self.assertEqual(graph["126"]["inputs"]["model"], [sage_id, 0])
+        self.assertEqual(graph["124"]["inputs"]["model"], [sage_id, 0])
 
 
 class VideoMediaTests(ServerVideoTestCase):

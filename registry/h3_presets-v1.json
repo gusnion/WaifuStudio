@@ -1,7 +1,21 @@
 {
   "schema_version": "h3_presets/v1",
-  "descripcion": "Perfiles de video MiniMax H3 FL2VA (24 fps, length 5+17n): plantilla, modelo DiT, VAEs de video/audio, encoder con proyeccion (o null) y LoRA. 'referencia' reproduce el certificado actual (Qwen3-VL-32B, sin proyeccion); 'calidad' y 'ligero' usan el encoder 4B con ClipProj. Los segundos permitidos y las resoluciones (vertical y su espejo horizontal) son comunes al catalogo.",
+  "descripcion": "Perfiles de video MiniMax H3 FL2VA (24 fps, length 5+17n): plantilla, modelo DiT, VAEs de video/audio, encoder con proyeccion (o null) y LoRA. 'referencia' reproduce el certificado actual (Qwen3-VL-32B, sin proyeccion); 'calidad' y 'ligero' usan el encoder 4B con ClipProj. Las variantes (LoRA + pasos; default turbo4) y los segundos permitidos, junto con las resoluciones (vertical y su espejo horizontal), son comunes al catalogo.",
   "seconds": [5, 8, 10, 12, 15],
+  "variants": [
+    {
+      "id": "turbo4",
+      "label": "turbo",
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "steps": 4
+    },
+    {
+      "id": "turbo8",
+      "label": "mejor calidad, ~2×",
+      "lora": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "steps": 8
+    }
+  ],
   "resoluciones": {
     "vertical": [
       {"width": 576, "height": 1024},

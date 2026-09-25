@@ -29,6 +29,7 @@ from app.h3_presets import (
     require_h3_frames,
     require_h3_seconds,
     resolve_h3_profile,
+    resolve_h3_variant,
     validate_h3_size,
 )
 from app.motion import MOTION_NEGATIVE
@@ -39,6 +40,10 @@ from app.video_presets import PRESET_MANUAL, resolve_video_preset
 WAN_TEMPLATE_PATH = APP_ROOT / "workflows" / "wan22_i2v_432x768.api.json"
 WAN_FLF_TEMPLATE_PATH = APP_ROOT / "workflows" / "wan22_flf2v_432x768.api.json"
 H3_TEMPLATE_PATH = APP_ROOT / "workflows" / "h3_fl2va_vertical.api.json"
+
+# H3 variante Sage (M10-2c-3): patch de KJNodes "Patch Sage Attention KJ".
+H3_SAGE_NODE_CLASS = "PathchSageAttentionKJ"
+H3_SAGE_MODE = "auto"
 
 # El video puede tardar mucho mas que una imagen (H3 8 s en 4 pasos + decodificacion).
 VIDEO_HISTORY_TIMEOUT_S = 3600.0
@@ -538,6 +543,47 @@ def prepare_wan_flf_graph(
     return prepared
 
 
+def _patch_h3_variant(graph: dict, variant: dict[str, Any]) -> str:
+    """Aplica la variante H3 (``lora_name`` y ``steps``) y devuelve el id del LoRA."""
+    lora_id, lora = _find_node(graph, "LoraLoaderModelOnly")
+    _require_field(lora, "lora_name", lora_id)
+    lora["lora_name"] = variant["lora"]
+    scheduler_id, scheduler = _find_node(graph, "BasicScheduler")
+    _require_field(scheduler, "steps", scheduler_id)
+    scheduler["steps"] = variant["steps"]
+    return lora_id
+
+
+def _patch_h3_sage(graph: dict, lora_id: str) -> str:
+    """Inserta el patch Sage de KJNodes entre el LoRA y sus consumidores.
+
+    El nodo nuevo toma el modelo del ``LoraLoaderModelOnly`` y todos los nodos
+    que consumian esa salida (guider/scheduler) pasan a consumir el patch.
+    EngineError si no hay ningun consumidor que rewirear.
+    """
+    reference = [lora_id, 0]
+    consumers = [
+        node_id
+        for node_id, node in graph.items()
+        if isinstance(node, dict)
+        and isinstance(node.get("inputs"), dict)
+        and node["inputs"].get("model") == reference
+    ]
+    if not consumers:
+        raise EngineError(
+            "h3: sage requiere consumidores del modelo (guider/scheduler) tras el LoRA"
+        )
+    ids = [int(node_id) for node_id in graph if str(node_id).isdigit()]
+    sage_id = str(max(ids, default=0) + 1)
+    graph[sage_id] = {
+        "class_type": H3_SAGE_NODE_CLASS,
+        "inputs": {"model": list(reference), "sage_attention": H3_SAGE_MODE},
+    }
+    for node_id in consumers:
+        graph[node_id]["inputs"]["model"] = [sage_id, 0]
+    return sage_id
+
+
 def prepare_h3_graph(
     graph: dict,
     *,
@@ -548,6 +594,8 @@ def prepare_h3_graph(
     width: int = 576,
     height: int = 1024,
     frames: int | None = None,
+    variant: object = None,
+    sage: bool = False,
 ) -> dict:
     """Copia el grafo H3 FL2VA y fija primer/último frame, prompt, seed y tamaño.
 
@@ -556,14 +604,23 @@ def prepare_h3_graph(
     ``RandomNoise`` ``129``. El tamaño valida múltiplo de 32, área máxima
     (768x1344) y aspecto vertical/horizontal; `frames` opcional parchea
     `length` exigiendo el grid 5+17n del modelo (124..362).
+
+    M10-2c-3: `variant` (id del catálogo; ausente → ``turbo4``) parchea
+    `lora_name` del ``LoraLoaderModelOnly`` y `steps` del ``BasicScheduler``.
+    Con `sage=True` se inserta ``PathchSageAttentionKJ`` (KJNodes) entre el
+    LoRA y sus consumidores de modelo (guider/scheduler); EngineError si no
+    hay ninguno que rewirear. La plantilla original nunca se muta.
     """
     first_image_name = _require_text(first_image_name, "h3: first_image_name")
     last_image_name = _require_text(last_image_name, "h3: last_image_name")
     prompt = _require_text(prompt, "h3: prompt")
     seed = _require_seed(seed)
+    if not isinstance(sage, bool):
+        raise EngineError(f"h3: sage invalido {sage!r}; usar booleano")
     width, height = validate_h3_size(width, height)
     if frames is not None:
         frames = require_h3_frames(frames)
+    variant_entry = resolve_h3_variant(variant)
 
     prepared = copy.deepcopy(graph)
     first = _node_inputs(prepared, "140", "LoadImage")
@@ -584,6 +641,9 @@ def prepare_h3_graph(
     noise = _node_inputs(prepared, "129", "RandomNoise")
     _require_field(noise, "noise_seed", "129")
     noise["noise_seed"] = seed
+    lora_id = _patch_h3_variant(prepared, variant_entry)
+    if sage:
+        _patch_h3_sage(prepared, lora_id)
     return prepared
 
 
@@ -597,7 +657,8 @@ def build_video_graph(job: dict) -> dict:
     `shift` resueltos con `resolve_wan_profile` (overrides > preset >
     certificado).
 
-    Para `engine="h3"` el job trae `profile` (ausente → ``referencia``), y
+    Para `engine="h3"` el job trae `profile` (ausente → ``referencia``),
+    `variant` (ausente → ``turbo4``; parchea LoRA y pasos), `sage` (bool) y
     `seconds` (5/8/10/12/15) o `frames` (5+17n) más `width`/`height` (múltiplo
     de 32, área <= 768x1344); la plantilla sale del perfil si falta `template`.
     """
@@ -634,6 +695,8 @@ def build_video_graph(job: dict) -> dict:
             width=width,
             height=height,
             frames=frames,
+            variant=job.get("variant"),
+            sage=job.get("sage", False),
         )
     template = job.get("template")
     if not isinstance(template, str) or not template.strip():
@@ -771,6 +834,8 @@ def run_video_generation(
 
 __all__ = [
     "ASPECTS",
+    "H3_SAGE_MODE",
+    "H3_SAGE_NODE_CLASS",
     "H3_TEMPLATE_PATH",
     "MAX_VIDEO_SECONDS",
     "MAX_VIDEO_STEPS",

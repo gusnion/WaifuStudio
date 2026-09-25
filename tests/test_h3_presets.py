@@ -2,7 +2,8 @@
 
 Verifican ``registry/h3_presets-v1.json`` y su exposicion en ``app.h3_presets``
 (carga estricta, resolucion por id, plantilla por perfil, snap 5+17n de los
-segundos y validacion de resoluciones vertical/horizontal).
+segundos y validacion de resoluciones vertical/horizontal). M10-2c-3 añade las
+variantes (LoRA + pasos, default ``turbo4``).
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from app.config import APP_ROOT
 from app.engine import EngineError, load_graph
 from app.h3_presets import (
     DEFAULT_PROFILE,
+    DEFAULT_VARIANT,
     H3_FPS,
     H3_MAX_FRAMES,
     H3_MAX_PIXELS,
@@ -24,6 +26,7 @@ from app.h3_presets import (
     H3_SECONDS,
     PROFILES_PATH,
     get_h3_profile,
+    get_h3_variant,
     h3_aspect,
     h3_catalog,
     h3_default_size,
@@ -32,15 +35,32 @@ from app.h3_presets import (
     h3_seconds,
     h3_template_path,
     list_h3_profiles,
+    list_h3_variants,
     load_h3_presets,
     require_h3_frames,
     require_h3_seconds,
     resolve_h3_profile,
+    resolve_h3_variant,
     validate_h3_size,
 )
 
 EXPECTED_IDS = ("referencia", "calidad", "ligero")
 EXPECTED_FRAMES = {5: 124, 8: 192, 10: 243, 12: 294, 15: 362}
+EXPECTED_VARIANTS = (
+    {
+        "id": "turbo4",
+        "label": "turbo",
+        "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+        "steps": 4,
+    },
+    {
+        "id": "turbo8",
+        "label": "mejor calidad, ~2×",
+        "lora": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "steps": 8,
+    },
+)
+VARIANT_LORAS_DIR = APP_ROOT / "ComfyUI" / "models" / "loras"
 
 EXPECTED_ASSETS = {
     "referencia": {
@@ -92,10 +112,13 @@ def _valid_profile() -> dict:
     }
 
 
-def _valid_catalog(entries=None) -> dict:
+def _valid_catalog(entries=None, variants=None) -> dict:
     return {
         "schema_version": "h3_presets/v1",
         "seconds": [5, 8, 10, 12, 15],
+        "variants": [dict(variant) for variant in EXPECTED_VARIANTS]
+        if variants is None
+        else variants,
         "resoluciones": {
             "vertical": [{"width": 576, "height": 1024}],
             "horizontal": [{"width": 1024, "height": 576}],
@@ -114,6 +137,18 @@ class RegistryFileTests(unittest.TestCase):
         self.assertEqual(data["schema_version"], "h3_presets/v1")
         self.assertEqual([entry["id"] for entry in data["perfiles"]], list(EXPECTED_IDS))
         self.assertEqual(data["seconds"], list(H3_SECONDS))
+        self.assertEqual(data["variants"], list(EXPECTED_VARIANTS))
+
+    def test_variantes_y_loras_en_disco(self):
+        self.assertEqual(h3_catalog()["variants"], list(EXPECTED_VARIANTS))
+        for variant in list_h3_variants():
+            with self.subTest(variant=variant["id"]):
+                self.assertTrue(variant["label"])
+                self.assertTrue(variant["steps"] >= 1)
+                self.assertTrue(
+                    (VARIANT_LORAS_DIR / variant["lora"]).is_file(),
+                    f"falta en disco: {variant['lora']}",
+                )
 
     def test_segundos_y_resoluciones(self):
         self.assertEqual(h3_seconds(), [5, 8, 10, 12, 15])
@@ -242,6 +277,41 @@ class ListAndResolveTests(unittest.TestCase):
             h3_default_size("cuadrado")
 
 
+class VariantTests(unittest.TestCase):
+    def test_default_es_turbo4(self):
+        self.assertEqual(DEFAULT_VARIANT, "turbo4")
+        for value in (None, "", "  "):
+            with self.subTest(value=value):
+                self.assertEqual(resolve_h3_variant(value)["id"], "turbo4")
+
+    def test_resolve_conocida(self):
+        self.assertEqual(resolve_h3_variant("turbo8")["steps"], 8)
+        self.assertEqual(
+            resolve_h3_variant(" turbo4 ")["lora"], EXPECTED_VARIANTS[0]["lora"]
+        )
+
+    def test_resolve_desconocida_o_no_str(self):
+        for value in ("nope", "TURBO8", 5, ["turbo8"], True):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    resolve_h3_variant(value)
+
+    def test_get_estricto(self):
+        self.assertEqual(get_h3_variant("turbo8")["label"], "mejor calidad, ~2×")
+        for value in ("nope", None, 5):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    get_h3_variant(value)
+
+    def test_list_y_catalog_son_copias(self):
+        listed = list_h3_variants()
+        listed[0]["steps"] = 99
+        self.assertEqual(list_h3_variants()[0]["steps"], 4)
+        catalog = h3_catalog()
+        catalog["variants"][1]["lora"] = "x.safetensors"
+        self.assertEqual(list_h3_variants()[1]["lora"], EXPECTED_VARIANTS[1]["lora"])
+
+
 class FramesTests(unittest.TestCase):
     def test_snap_5_mas_17n(self):
         self.assertEqual(H3_FPS, 24)
@@ -328,6 +398,10 @@ class LoadH3PresetsTests(unittest.TestCase):
         loaded = load_h3_presets(self.write(_valid_catalog()))
         self.assertEqual(list(loaded["profiles"]), ["prueba"])
         self.assertEqual(loaded["seconds"], [5, 8, 10, 12, 15])
+        self.assertEqual(
+            [variant["id"] for variant in loaded["variants"].values()],
+            ["turbo4", "turbo8"],
+        )
 
     def test_ilegible_o_json_invalido(self):
         with self.assertRaises(EngineError):
@@ -355,6 +429,38 @@ class LoadH3PresetsTests(unittest.TestCase):
             with self.subTest(value=value):
                 payload = _valid_catalog()
                 payload["seconds"] = value
+                with self.assertRaises(EngineError):
+                    load_h3_presets(self.write(payload))
+
+    def test_variants_invalidas(self):
+        payload = _valid_catalog()
+        del payload["variants"]
+        with self.assertRaises(EngineError):
+            load_h3_presets(self.write(payload))
+        cases = (
+            None,
+            [],
+            {},
+            "turbo4",
+            ["x"],
+            [{"label": "x", "lora": "a.safetensors", "steps": 4}],
+            [{"id": "turbo4", "label": "", "lora": "a.safetensors", "steps": 4}],
+            [{"id": "turbo4", "label": "x", "lora": None, "steps": 4}],
+            [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": 0}],
+            [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": 201}],
+            [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": True}],
+            [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": 4.0}],
+            [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": "4"}],
+            [
+                {"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": 4},
+                {"id": "turbo4", "label": "y", "lora": "b.safetensors", "steps": 8},
+            ],
+            [{"id": "turbo8", "label": "x", "lora": "a.safetensors", "steps": 8}],
+        )
+        for value in cases:
+            with self.subTest(value=value):
+                payload = _valid_catalog()
+                payload["variants"] = value
                 with self.assertRaises(EngineError):
                     load_h3_presets(self.write(payload))
 

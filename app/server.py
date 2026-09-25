@@ -51,6 +51,7 @@ from app.h3_presets import (
     h3_template_path,
     require_h3_seconds,
     resolve_h3_profile,
+    resolve_h3_variant,
     validate_h3_size,
 )
 from app.jobs import JobQueue
@@ -816,12 +817,13 @@ def create_app(
 
     @app.get("/api/video/h3_profiles")
     async def api_video_h3_profiles() -> dict:
-        """Perfiles H3 (M10-2c-1): catalogo + segundos y resoluciones permitidas."""
+        """Perfiles H3 (M10-2c-1): catalogo + variantes, segundos y resoluciones."""
         catalog = h3_catalog()
         items = catalog["profiles"]
         return {
             "items": items,
             "profiles": items,
+            "variants": catalog["variants"],
             "seconds": catalog["seconds"],
             "resolutions": catalog["resolutions"],
         }
@@ -1317,11 +1319,13 @@ def create_app(
         4n+1). Para Wan, `preset` (id o `"manual"`; desconocido ⇒ 400) y los
         overrides `sampler_name`/`scheduler`/`steps`/`shift` se resuelven con
         precedencia overrides > preset > certificado; el tamano efectivo sale
-        del preset segun `aspect` y `vram_hint` lo refleja. En `engine=h3` el
+        del preset segun `aspect` y `vram_hint` lo refleja.         En `engine=h3` el
         preset Wan no aplica (400 si llega uno real) y `profile` (ausente →
-        `referencia`), `seconds` (5/8/10/12/15), `width`/`height` (múltiplo de
-        32, área <= 768x1344) eligen plantilla y grid 5+17n. La respuesta añade
-        `frames` y `vram_hint` (tabla Wan; null en H3).
+        `referencia`), `variant` (ausente → `turbo4`; `turbo8` usa LoRA de 8
+        pasos), `sage` (bool; inserta el patch de KJNodes), `seconds`
+        (5/8/10/12/15), `width`/`height` (múltiplo de 32, área <= 768x1344)
+        eligen plantilla y grid 5+17n. La respuesta añade `frames` y
+        `vram_hint` (tabla Wan; null en H3).
         """
         if "engine" in payload:
             engine_kind = payload.get("engine")
@@ -1339,6 +1343,8 @@ def create_app(
             raise EngineError("aspect invalido; usar vertical|horizontal")
         profile = None
         h3_profile = None
+        h3_variant = None
+        sage = False
         if engine_kind == "wan":
             profile = resolve_wan_profile(
                 preset=payload.get("preset"),
@@ -1369,6 +1375,12 @@ def create_app(
             if raw_preset not in (None, "", PRESET_MANUAL):
                 raise EngineError("preset de video solo aplica a engine wan")
             h3_profile = resolve_h3_profile(payload.get("profile"))
+            h3_variant = resolve_h3_variant(payload.get("variant"))
+            sage = payload.get("sage")
+            if sage is None:
+                sage = False
+            if not isinstance(sage, bool):
+                raise EngineError("sage invalido; usar booleano")
             raw_seconds = payload.get("seconds")
             if raw_seconds is None:
                 raw_seconds = h3_profile["seconds_recomendados"][0]
@@ -1450,6 +1462,8 @@ def create_app(
         }
         if h3_profile is not None:
             stored_params["profile"] = h3_profile["id"]
+            stored_params["variant"] = h3_variant["id"]
+            stored_params["sage"] = sage
             stored_params["width"] = width
             stored_params["height"] = height
         gen_id = st.add(
@@ -1479,6 +1493,8 @@ def create_app(
         }
         if h3_profile is not None:
             job["profile"] = h3_profile["id"]
+            job["variant"] = h3_variant["id"]
+            job["sage"] = sage
             job["width"] = width
             job["height"] = height
         _JOBS[gen_id] = {
