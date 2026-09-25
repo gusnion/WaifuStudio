@@ -66,6 +66,17 @@
       "source": "local (aportado por el usuario 2026-09-25; ai-toolkit / Civitai Spine Controller; ss_output_name training_6602895-20260804081407000)",
       "license": "no verificada (archivo local del usuario)",
       "notes": "Anima LoRA (dim 64 / alpha 32, 30 imagenes, 2500 pasos, base Anima-Base-v1.0). Trigger inferido de modelspec.title; editable desde Gestionar biblioteca."
+    },
+    {
+      "id": "shuuko-komi-s1s2-anima",
+      "family": "anima",
+      "file": "anima\\shuuko-komi-s1s2.safetensors",
+      "display_name": "Shuuko Komi S1S2 (Anima)",
+      "trigger": "shuuko komi",
+      "default_weight": 1.0,
+      "source": "local (aportado por el usuario 2026-09-25; anima lora nochekaiser; ss_output_name shuuko-komi-s1s2-anima-lora-nochekaiser)",
+      "license": "no verificada (archivo local del usuario)",
+      "notes": "Anima LoRA (dim 32 / alpha 32, 408 imagenes, 1000 pasos, base anima_baseV10). Trigger principal 'shuuko komi' (tag_frequency); menciona tambien 'komi shouko'."
     }
   ],
   "_comment": "Los LoRAs de Anima llegan en M10 (descargas diferidas)"

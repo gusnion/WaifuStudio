@@ -21,6 +21,7 @@ REAL_IDS = [
     "minimax-h3-fl2v-turbo-4step",
     "miku-nakano-anima",
     "kurashiki-reika-saimin-anima",
+    "shuuko-komi-s1s2-anima",
 ]
 REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_2.safetensors"
 MIKU_ID = "miku-nakano-anima"
@@ -28,6 +29,9 @@ MIKU_FILE = "anima\\Miku_Nakano_Anima_v0.7.safetensors"
 SAIMIN_ID = "kurashiki-reika-saimin-anima"
 SAIMIN_FILE = "anima\\Kurashiki Reika Saimin Seishidou.safetensors"
 SAIMIN_SIZE = 277207608
+SHUUKO_ID = "shuuko-komi-s1s2-anima"
+SHUUKO_FILE = "anima\\shuuko-komi-s1s2.safetensors"
+SHUUKO_SIZE = 91866600
 
 
 def entry(**overrides) -> dict:
@@ -51,7 +55,7 @@ class RealRegistryTests(unittest.TestCase):
         self.assertEqual(DEFAULT_PATH, ROOT / "registry" / "loras.json")
         self.assertTrue(DEFAULT_PATH.is_file())
 
-    def test_seis_entradas_en_orden_del_json(self):
+    def test_siete_entradas_en_orden_del_json(self):
         self.assertEqual([item["id"] for item in list_loras()], REAL_IDS)
 
     def test_familias_en_orden_de_aparicion(self):
@@ -162,9 +166,40 @@ class RealRegistryTests(unittest.TestCase):
         normalized = validate_selection([{"id": SAIMIN_ID, "weight": 0.6}])
         self.assertEqual(normalized[0]["weight"], 0.6)
 
-    def test_filtro_anima_miku_y_saimin(self):
+    def test_shuuko_komi_s1s2_anima_registrada_y_en_disco(self):
+        shuuko = get(SHUUKO_ID)
+        self.assertEqual(shuuko["family"], "anima")
+        self.assertEqual(shuuko["file"], SHUUKO_FILE)
+        self.assertEqual(shuuko["display_name"], "Shuuko Komi S1S2 (Anima)")
+        self.assertEqual(shuuko["trigger"], "shuuko komi")
+        self.assertEqual(shuuko["default_weight"], 1.0)
+        self.assertIn("2026-09-25", shuuko["source"])
+        self.assertIn("nochekaiser", shuuko["source"])
+        self.assertIn(
+            "shuuko-komi-s1s2-anima-lora-nochekaiser", shuuko["source"]
+        )
+        self.assertIn("no verificada", shuuko["license"])
+        self.assertIn("dim 32", shuuko["notes"])
+        self.assertIn("alpha 32", shuuko["notes"])
+        self.assertIn("408", shuuko["notes"])
+        self.assertIn("1000", shuuko["notes"])
+        self.assertIn("anima_baseV10", shuuko["notes"])
+        self.assertIn("shuuko komi", shuuko["notes"])
+        self.assertIn("komi shouko", shuuko["notes"])
+        path = LORAS_DIR / shuuko["file"]
+        self.assertTrue(path.is_file(), f"falta en disco: {path}")
+        self.assertEqual(path.stat().st_size, SHUUKO_SIZE)
         self.assertEqual(
-            [item["id"] for item in list_loras("anima")], [MIKU_ID, SAIMIN_ID]
+            validate_selection([{"id": SHUUKO_ID}]),
+            [{"id": SHUUKO_ID, "file": SHUUKO_FILE, "weight": 1.0}],
+        )
+        normalized = validate_selection([{"id": SHUUKO_ID, "weight": 0.6}])
+        self.assertEqual(normalized[0]["weight"], 0.6)
+
+    def test_filtro_anima_miku_saimin_y_shuuko(self):
+        self.assertEqual(
+            [item["id"] for item in list_loras("anima")],
+            [MIKU_ID, SAIMIN_ID, SHUUKO_ID],
         )
 
     def test_comment_m10(self):
@@ -186,8 +221,10 @@ class RealRegistryTests(unittest.TestCase):
             ["minimax-h3-fl2v-turbo-4step"],
         )
         anima = list_loras("anima")
-        self.assertEqual([item["id"] for item in anima], [MIKU_ID, SAIMIN_ID])
-        self.assertEqual([item["default_weight"] for item in anima], [1.0, 1.0])
+        self.assertEqual(
+            [item["id"] for item in anima], [MIKU_ID, SAIMIN_ID, SHUUKO_ID]
+        )
+        self.assertEqual([item["default_weight"] for item in anima], [1.0, 1.0, 1.0])
         self.assertEqual(list_loras("no-existe"), [])
 
     def test_get_devuelve_copia_e_inexistente_lanza(self):

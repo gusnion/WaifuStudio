@@ -541,14 +541,18 @@ diferidas)** y solo se registran ficheros presentes en disco:
 | `minimax-h3-fl2v-turbo-4step` | `h3` | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors` (turbo de la plantilla H3) |
 | `miku-nakano-anima` | `anima` | `anima\Miku_Nakano_Anima_v0.7.safetensors` (Anima base 28 bloques: nativo con `anima-official-aesthetic-v11`; en los 2.9B, patch 28→40 de M10 y peso 0.5-0.7) |
 | `kurashiki-reika-saimin-anima` | `anima` | `anima\Kurashiki Reika Saimin Seishidou.safetensors` (Anima nativo; trigger `kur4sh1k1r31k4`) |
+| `shuuko-komi-s1s2-anima` | `anima` | `anima\shuuko-komi-s1s2.safetensors` (Anima nativo; trigger `shuuko komi`) |
 
 Uso para Miku: modelo `anima-official-aesthetic-v11`, LoRA `miku-nakano-anima`,
 peso 1.0 y trigger `M1kuNakan0_anima` + tags de apariencia.
 
 Uso para Reika Saimin: modelo Anima (p.ej. `one-obsession-anima-v40`), LoRA
 `kurashiki-reika-saimin-anima`, peso 1.0 (ajustable 0.6-1.0) y trigger
-`kur4sh1k1r31k4`. Los LoRAs se registran en el JSON o desde la UI
-(«Gestionar biblioteca», M10-5b); la app no escanea la carpeta.
+`kur4sh1k1r31k4`.
+
+Uso para Shuuko Komi S1S2: modelo Anima, LoRA `shuuko-komi-s1s2-anima`,
+peso 1.0 y trigger `shuuko komi`. Los LoRAs se registran en el JSON o desde la
+UI («Gestionar biblioteca», M10-5b); la app no escanea la carpeta.
 
 API del módulo: `list_loras(family=None)` (orden del JSON), `get(id)`,
 `families()` y `validate_selection([{"id", "weight"?}])`, que normaliza a
