@@ -1157,39 +1157,6 @@ input[type="checkbox"] {
   letter-spacing: 0.06em;
 }
 
-.enhance-result {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.6rem;
-  background: var(--panel);
-  border: 1px solid var(--accent-2);
-  border-radius: 8px;
-}
-
-.enhance-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.enhance-label {
-  color: var(--muted);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.enhance-result p {
-  margin: 0;
-  word-break: break-word;
-}
-
-.enhance-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
 .ref-preview {
   display: flex;
   align-items: center;

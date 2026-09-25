@@ -124,7 +124,6 @@ const state = {
     character: "",
     general: "",
   },
-  enhanceResult: null,
   pendingEnhance: false,
   pendingMotion: false,
   videoNegativeTouched: false,
@@ -723,42 +722,6 @@ async function restoreNegative() {
   } catch (error) {
     setStatus(error.message, true);
   }
-}
-
-function showEnhanceResult(data) {
-  $("enhance-positive").textContent = data.positive || "";
-  $("enhance-negative").textContent = data.negative || "";
-  $("enhance-result").classList.remove("hidden");
-}
-
-function hideEnhanceResult() {
-  $("enhance-result").classList.add("hidden");
-}
-
-async function useEnhanceResult() {
-  if (!state.enhanceResult) {
-    return;
-  }
-  try {
-    const positive = state.enhanceResult.positive || "";
-    const data = positive
-      ? await postJson("/api/prompt/zones", { text: positive })
-      : { zones: [] };
-    applyZonesPayload(data.zones || [], { replace: true });
-  } catch (error) {
-    setStatus(error.message, true);
-    return;
-  }
-  $("negative").value = state.enhanceResult.negative || "";
-  state.negativeTouched = true;
-  state.enhanceResult = null;
-  hideEnhanceResult();
-  setStatus("Propuesta aplicada");
-}
-
-function discardEnhanceResult() {
-  state.enhanceResult = null;
-  hideEnhanceResult();
 }
 
 function zoneDraftEntries() {
@@ -4182,8 +4145,6 @@ const REQUIRED_IDS = [
   "tab-editor",
   "tab-upscaler",
   "btn-enhance",
-  "btn-enhance-use",
-  "btn-enhance-discard",
   "btn-generate",
   "btn-cancel",
   "btn-seed-random",
@@ -4325,8 +4286,6 @@ function bind() {
   on("tab-editor", "click", () => switchTab("editor"));
   on("tab-upscaler", "click", () => switchTab("upscaler"));
   on("btn-enhance", "click", enhancePrompt);
-  on("btn-enhance-use", "click", useEnhanceResult);
-  on("btn-enhance-discard", "click", discardEnhanceResult);
   on("btn-generate", "click", generate);
   on("btn-cancel", "click", cancelJob);
   on("btn-seed-random", "click", toggleSeedRandom);
