@@ -89,7 +89,17 @@ from app.registry import ModelRegistry
 from app.sheet import make_sheet
 from app.store import Store
 from app.tags import by_group, list_groups, search
-from app.upscale import get_upscaler, list_upscalers, run_upscale, run_video_upscale
+from app.upscale import (
+    fps_ckpt,
+    fps_multiplier,
+    frame_interpolation,
+    get_upscaler,
+    list_upscalers,
+    parse_fps,
+    run_fps,
+    run_upscale,
+    run_video_upscale,
+)
 from app.video import (
     ASPECTS,
     VIDEO_HISTORY_TIMEOUT_S,
@@ -438,6 +448,14 @@ def create_app(
             )
             if job.get("task") == "upscale_video":
                 run_video_upscale(
+                    job,
+                    config=cfg,
+                    store=st,
+                    engine_factory=video_factory,
+                    record=record,
+                )
+            elif job.get("task") == "rife":
+                run_fps(
                     job,
                     config=cfg,
                     store=st,
@@ -810,22 +828,31 @@ def create_app(
 
     @app.get("/api/upscale/models")
     async def api_upscale_models() -> dict:
-        """Catalogo de upscalers (M10-2d U1/U2): id/label/file/scale/note + kinds."""
+        """Catalogo de upscalers (M10-2d U1/U2/U3): id/label/file/scale/note,
+        kinds y la seccion ``frame_interpolation`` (ckpts RIFE + multipliers)."""
         items = list_upscalers()
-        return {"items": items, "models": items, "kinds": ["image", "video"]}
+        return {
+            "items": items,
+            "models": items,
+            "kinds": ["image", "video", "fps"],
+            "frame_interpolation": frame_interpolation(),
+        }
 
     @app.post("/api/upscale")
     async def api_upscale(payload: dict = Body(...)) -> Any:
-        """Encola el escalado de una generacion de imagen (U1) o de video (U2).
+        """Encola el escalado de una generacion de imagen (U1), de video (U2)
+        o la interpolacion de fotogramas de un video (U3).
 
         Body: ``{source_gen, model, file?, kind?}`` con ``kind`` ``"image"``
-        (default) o ``"video"``. Valida que la generacion exista con ese kind,
-        que ``file`` (o la primera salida) quede dentro de su carpeta de
-        galeria y que el modelo este en el catalogo; copia el origen a
-        ``ComfyUI/input`` y encola un job ``kind="upscale"`` que produce una
-        generacion nueva: imagen (``kind="image"``, ``params.task="upscale"``)
-        o video con audio del origen (``kind="video"``,
-        ``params.task="upscale_video"``).
+        (default) o ``"video"``. Para ``kind="fps"`` el body es
+        ``{source_gen, ckpt?, multiplier, file?, fps_in?}``: valida que el
+        origen sea un video, que ``ckpt`` este en la seccion
+        ``frame_interpolation`` del catalogo y que ``multiplier`` sea 2|4.
+        Copia el origen a ``ComfyUI/input`` y encola un job ``kind="upscale"``
+        que produce una generacion nueva: imagen (``kind="image"``,
+        ``params.task="upscale"``), video con audio del origen
+        (``kind="video"``, ``params.task="upscale_video"``) o video
+        interpolado (``kind="video"``, ``params.task="rife"``).
         """
         source_kind = payload.get("kind")
         if source_kind is None:
@@ -833,11 +860,11 @@ def create_app(
         if source_kind == "image":
             label = "imagen"
             extensions = (".png", ".jpg", ".jpeg", ".webp")
-        elif source_kind == "video":
+        elif source_kind in ("video", "fps"):
             label = "video"
             extensions = (".mp4", ".webm")
         else:
-            raise EngineError("kind invalido; usar image|video")
+            raise EngineError("kind invalido; usar image|video|fps")
         source_gen = payload.get("source_gen")
         if isinstance(source_gen, bool) or not isinstance(source_gen, int):
             raise EngineError("source_gen requerido (entero)")
@@ -846,7 +873,8 @@ def create_app(
             return JSONResponse(
                 status_code=404, content={"error": "generacion origen desconocida"}
             )
-        if row.get("kind") != source_kind:
+        source_expected = "video" if source_kind == "fps" else source_kind
+        if row.get("kind") != source_expected:
             raise EngineError(
                 f"origen invalido; se requiere una generacion de {label}"
             )
@@ -879,12 +907,54 @@ def create_app(
             return JSONResponse(
                 status_code=404, content={"error": "archivo de origen no encontrado"}
             )
-        entry = get_upscaler(payload.get("model"))
+        entry = None
+        ckpt = None
+        multiplier = None
+        fps_in = None
+        fps_out = None
+        if source_kind == "fps":
+            ckpt = fps_ckpt(payload.get("ckpt"))
+            multiplier = fps_multiplier(payload.get("multiplier"))
+            fps_in = parse_fps(payload.get("fps_in"), "fps_in")
+            fps_out = None if fps_in is None else fps_in * multiplier
+        else:
+            entry = get_upscaler(payload.get("model"))
         input_dir = cfg.comfy_root / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
         media_name = f"{uuid.uuid4().hex}{source.suffix.lower()}"
         (input_dir / media_name).write_bytes(source.read_bytes())
-        if source_kind == "video":
+        if source_kind == "fps":
+            params = {
+                "task": "rife",
+                "source_gen": source_gen,
+                "source_file": file_name,
+                "ckpt": ckpt,
+                "multiplier": multiplier,
+                "fps_in": fps_in,
+                "fps_out": fps_out,
+            }
+            gen_id = st.add(
+                "upscale",
+                f"fps #{source_gen}/{file_name}",
+                "",
+                params,
+                kind="video",
+            )
+            job = {
+                "kind": "upscale",
+                "task": "rife",
+                "gen_id": gen_id,
+                "source_gen": source_gen,
+                "source_file": file_name,
+                "video_name": media_name,
+                "ckpt": ckpt,
+                "ckpt_name": ckpt,
+                "multiplier": multiplier,
+                "fps_in": fps_in,
+                "fps_out": fps_out,
+                "params": dict(params),
+            }
+        elif source_kind == "video":
             params = {
                 "task": "upscale_video",
                 "source_gen": source_gen,

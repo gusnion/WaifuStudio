@@ -2817,7 +2817,7 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["models"], data["items"])
-        self.assertEqual(data["kinds"], ["image", "video"])
+        self.assertEqual(data["kinds"], ["image", "video", "fps"])
         self.assertEqual([item["id"] for item in data["items"]], [self.MODEL])
         entry = data["items"][0]
         for field in ("id", "label", "file", "scale", "note"):
@@ -2825,6 +2825,11 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(entry["file"], "RealESRGAN_x2.pth")
         self.assertEqual(entry["scale"], 2)
         self.assertEqual(entry["note"], "×2")
+        section = data["frame_interpolation"]
+        self.assertEqual(section["ckpts"], ["rife417.pth", "rife426.pth", "rife47.pth", "rife49.pth"])
+        self.assertEqual(section["default"], "rife49.pth")
+        self.assertEqual(section["multipliers"], [2, 4])
+        self.assertTrue(section["label"])
 
     def test_encola_job_y_crea_imagen(self):
         queue = RecordingQueue()
@@ -3066,6 +3071,244 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("error", response.json())
 
+    def test_fps_encola_job_y_crea_video(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        response = self.make_client(queue=queue).post(
+            "/api/upscale",
+            json={
+                "kind": "fps",
+                "source_gen": gen_id,
+                "ckpt": "rife47.pth",
+                "multiplier": 4,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        self.assertEqual(len(queue.jobs), 1)
+        job = queue.jobs[0]
+        self.assertEqual(job["kind"], "upscale")
+        self.assertEqual(job["task"], "rife")
+        self.assertEqual(job["source_gen"], gen_id)
+        self.assertEqual(job["source_file"], "clip.mp4")
+        self.assertEqual(job["ckpt"], "rife47.pth")
+        self.assertEqual(job["ckpt_name"], "rife47.pth")
+        self.assertEqual(job["multiplier"], 4)
+        self.assertIsNone(job["fps_in"])
+        self.assertIsNone(job["fps_out"])
+        self.assertEqual(
+            job["params"],
+            {
+                "task": "rife",
+                "source_gen": gen_id,
+                "source_file": "clip.mp4",
+                "ckpt": "rife47.pth",
+                "multiplier": 4,
+                "fps_in": None,
+                "fps_out": None,
+            },
+        )
+        files = sorted((self.config.comfy_root / "input").glob("*.mp4"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_bytes(), PNG_BYTES)
+        self.assertEqual(job["video_name"], files[0].name)
+        new_gen = self.store.list()[0]
+        self.assertEqual(new_gen["kind"], "video")
+        self.assertEqual(new_gen["status"], "queued")
+        self.assertEqual(new_gen["params"], job["params"])
+        self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
+
+    def test_fps_ckpt_por_defecto_y_fps_in(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        response = self.make_client(queue=queue).post(
+            "/api/upscale",
+            json={"kind": "fps", "source_gen": gen_id, "multiplier": 2, "fps_in": 24},
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["ckpt"], "rife49.pth")
+        self.assertEqual(job["fps_in"], 24.0)
+        self.assertEqual(job["fps_out"], 48.0)
+        self.assertEqual(job["params"]["fps_out"], 48.0)
+
+    def test_fps_ckpt_invalido_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client(queue=queue)
+        for ckpt in ("", "  ", "nope.pth", 5, True, "../rife49.pth"):
+            with self.subTest(ckpt=ckpt):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "fps",
+                        "source_gen": gen_id,
+                        "ckpt": ckpt,
+                        "multiplier": 2,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertEqual(self.store.count(), 1)
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_fps_multiplier_invalido_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client(queue=queue)
+        for multiplier in (None, 1, 3, 0, True, "2", 4.0):
+            with self.subTest(multiplier=multiplier):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "fps",
+                        "source_gen": gen_id,
+                        "ckpt": "rife49.pth",
+                        "multiplier": multiplier,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_fps_fps_in_invalido_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client(queue=queue)
+        for fps_in in (0, -1, "24", True):
+            with self.subTest(fps_in=fps_in):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "fps",
+                        "source_gen": gen_id,
+                        "multiplier": 2,
+                        "fps_in": fps_in,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("fps_in", response.json()["error"])
+        self.assertEqual(queue.jobs, [])
+
+    def test_fps_origen_imagen_400(self):
+        gen_id = self.make_source()
+        response = self.make_client().post(
+            "/api/upscale",
+            json={"kind": "fps", "source_gen": gen_id, "multiplier": 2},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("video", response.json()["error"])
+
+    def test_fps_source_gen_inexistente_404(self):
+        response = self.make_client().post(
+            "/api/upscale",
+            json={"kind": "fps", "source_gen": 999, "multiplier": 2},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_fps_file_fuera_de_carpeta_403(self):
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        (self.config.data_dir / "secret.mp4").write_bytes(MP4_BYTES)
+        response = self.make_client().post(
+            "/api/upscale",
+            json={
+                "kind": "fps",
+                "source_gen": gen_id,
+                "file": "../secret.mp4",
+                "multiplier": 2,
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("error", response.json())
+
+    def test_fps_file_inexistente_o_no_video_404(self):
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client()
+        for name in ("missing.mp4", "nota.txt", "otra.png"):
+            with self.subTest(name=name):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "fps",
+                        "source_gen": gen_id,
+                        "file": name,
+                        "multiplier": 2,
+                    },
+                )
+                self.assertEqual(response.status_code, 404)
+
+    def test_fps_source_sin_salidas_404(self):
+        gen_id = self.make_source(kind="video", outputs=())
+        response = self.make_client().post(
+            "/api/upscale",
+            json={"kind": "fps", "source_gen": gen_id, "multiplier": 2},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_fps_flujo_completo_con_worker(self):
+        transport = FakeVideoTransport(self.config, output_name="interp_00001_.mp4")
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/upscale",
+                json={
+                    "kind": "fps",
+                    "source_gen": gen_id,
+                    "ckpt": "rife49.pth",
+                    "multiplier": 2,
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 10)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            self.assertEqual(status["outputs"][0]["name"], "interp_00001_.mp4")
+            media = client.get(status["outputs"][0]["url"])
+            self.assertEqual(media.status_code, 200)
+            self.assertEqual(media.headers["content-type"], "video/mp4")
+            self.assertEqual(media.content, MP4_BYTES)
+            gallery = client.get("/api/gallery?kind=video").json()
+            self.assertEqual(gallery["count"], 2)
+            newest = gallery["items"][0]
+            self.assertEqual(newest["kind"], "video")
+            self.assertEqual(newest["params"]["task"], "rife")
+            self.assertEqual(newest["params"]["source_gen"], gen_id)
+            self.assertEqual(newest["params"]["ckpt"], "rife49.pth")
+            self.assertEqual(newest["params"]["multiplier"], 2)
+        graph = transport.submits[0]["prompt"]
+        video_name = graph["1"]["inputs"]["file"]
+        self.assertTrue(video_name.endswith(".mp4"))
+        self.assertNotEqual(video_name, "clip.mp4")
+        self.assertEqual(graph["1"]["class_type"], "LoadVideo")
+        self.assertEqual(graph["2"]["inputs"]["video"], ["1", 0])
+        self.assertEqual(graph["3"]["class_type"], "ComfyMathExpression")
+        self.assertEqual(graph["3"]["inputs"]["values.a"], ["2", 2])
+        self.assertEqual(graph["3"]["inputs"]["expression"], "a * 2")
+        self.assertEqual(graph["4"]["class_type"], "RIFE VFI")
+        self.assertEqual(graph["4"]["inputs"]["ckpt_name"], "rife49.pth")
+        self.assertEqual(graph["4"]["inputs"]["frames"], ["2", 0])
+        self.assertEqual(graph["4"]["inputs"]["multiplier"], 2)
+        self.assertEqual(graph["5"]["inputs"]["images"], ["4", 0])
+        self.assertEqual(graph["5"]["inputs"]["fps"], ["3", 0])
+        self.assertEqual(graph["5"]["inputs"]["audio"], ["2", 1])
+        self.assertEqual(graph["6"]["inputs"]["format"], "mp4")
+        row = self.store.get(newest["id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(row["kind"], "video")
+        self.assertEqual(row["outputs"], ["interp_00001_.mp4"])
+
     def test_flujo_completo_video_con_worker(self):
         transport = FakeVideoTransport(self.config, output_name="upscaled_00001_.mp4")
         gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
@@ -3160,11 +3403,20 @@ class UpscaleUiStaticTests(ServerTestCase):
             'id="upscale-kind"',
             ">Imagen<",
             ">Vídeo<",
+            ">FPS<",
             'id="upscale-source"',
             'id="upscale-source-label"',
             'id="upscale-source-info"',
+            'id="upscale-model-field"',
             'id="upscale-model"',
             'id="upscale-model-note"',
+            'id="upscale-ckpt-field"',
+            'id="upscale-ckpt"',
+            'id="upscale-ckpt-note"',
+            'id="upscale-multiplier-field"',
+            'id="upscale-multiplier"',
+            ">×2<",
+            ">×4<",
             'id="btn-upscale"',
             "Escalar",
             'id="upscale-status"',
@@ -3188,6 +3440,13 @@ class UpscaleUiStaticTests(ServerTestCase):
             'switchTab("upscaler")',
             "loadUpscaleSources",
             "loadUpscaleModels",
+            "loadUpscaleInterpolation",
+            "frame_interpolation",
+            "upscaleSourceKind",
+            "upscaleCkptNote",
+            "upscale-ckpt",
+            "upscale-multiplier",
+            "Interpolar",
             "generateUpscale",
             "finishUpscale",
             "finishVideoUpscale",
@@ -3195,6 +3454,7 @@ class UpscaleUiStaticTests(ServerTestCase):
             "setUpscaleProgress",
             "btn-upscale-cancel",
             "upscale-kind",
+            '"fps"',
             "upscale-preview-video",
             "reloadVideoViewerFirstPage",
         ):

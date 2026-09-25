@@ -418,6 +418,7 @@
           <select id="upscale-kind">
             <option value="image">Imagen</option>
             <option value="video">Vídeo</option>
+            <option value="fps">FPS</option>
           </select>
         </label>
 
@@ -428,12 +429,26 @@
         </label>
         <p class="field-hint">Origen por defecto: la selección del visor (Imagen o Vídeo); si no hay, lo más reciente de la galería.</p>
 
-        <label class="field">
+        <label class="field" id="upscale-model-field">
           <span>Modelo</span>
           <select id="upscale-model"></select>
           <p id="upscale-model-note" class="field-hint"></p>
         </label>
         <p class="field-hint">RealESRGAN x2 duplica el tamaño; aplica a la imagen o al vídeo (conservando fps y audio del origen).</p>
+
+        <label class="field hidden" id="upscale-ckpt-field">
+          <span>Ckpt RIFE</span>
+          <select id="upscale-ckpt"></select>
+          <p id="upscale-ckpt-note" class="field-hint"></p>
+        </label>
+        <label class="field hidden" id="upscale-multiplier-field">
+          <span>Multiplicador</span>
+          <select id="upscale-multiplier">
+            <option value="2">×2</option>
+            <option value="4">×4</option>
+          </select>
+          <p class="field-hint">Interpola los fotogramas del vídeo de origen a ×2 o ×4 fps, conservando el audio.</p>
+        </label>
 
         <div class="generate-row">
           <button id="btn-upscale" class="primary" type="button">Escalar</button>

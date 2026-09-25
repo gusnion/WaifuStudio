@@ -117,6 +117,7 @@ const state = {
   editorRefs: [],
   editorBusy: false,
   upscalers: [],
+  frameInterpolation: null,
   upscaleSources: [],
   imageViewer: {
     page: 1,
@@ -2026,7 +2027,12 @@ function setUpscaleProgress(progress) {
 }
 
 function upscaleKind() {
-  return $("upscale-kind").value === "video" ? "video" : "image";
+  const kind = $("upscale-kind").value;
+  return kind === "video" || kind === "fps" ? kind : "image";
+}
+
+function upscaleSourceKind() {
+  return upscaleKind() === "image" ? "image" : "video";
 }
 
 function upscaleModelNote() {
@@ -2036,6 +2042,38 @@ function upscaleModelNote() {
   $("upscale-model-note").textContent = model
     ? `Escala ×${model.scale}${model.note ? ` · ${model.note}` : ""}`
     : "Cargando modelos…";
+}
+
+function upscaleCkptNote() {
+  const entry = state.frameInterpolation;
+  const ckpt = $("upscale-ckpt").value;
+  $("upscale-ckpt-note").textContent = entry
+    ? `${ckpt || entry.default}${entry.note ? ` · ${entry.note}` : ""}`
+    : "Cargando ckpts RIFE…";
+}
+
+function loadUpscaleInterpolation(entry) {
+  state.frameInterpolation = entry || null;
+  const select = $("upscale-ckpt");
+  select.replaceChildren();
+  const ckpts = (entry && entry.ckpts) || [];
+  for (const ckpt of ckpts) {
+    select.appendChild(option(ckpt, ckpt));
+  }
+  if (entry && entry.default) {
+    setSelectValue(select, entry.default);
+  }
+  upscaleCkptNote();
+  const multipliers = (entry && entry.multipliers) || [];
+  if (multipliers.length) {
+    const multiplierSelect = $("upscale-multiplier");
+    const previous = multiplierSelect.value;
+    multiplierSelect.replaceChildren();
+    for (const value of multipliers) {
+      multiplierSelect.appendChild(option(String(value), `×${value}`));
+    }
+    setSelectValue(multiplierSelect, previous);
+  }
 }
 
 async function loadUpscaleModels() {
@@ -2051,6 +2089,7 @@ async function loadUpscaleModels() {
   }
   setSelectValue(select, previous);
   upscaleModelNote();
+  loadUpscaleInterpolation(data.frame_interpolation);
 }
 
 function selectedUpscaleSource() {
@@ -2062,13 +2101,13 @@ function selectedUpscaleSource() {
 }
 
 function updateUpscaleSourceView() {
-  const kind = upscaleKind();
+  const isVideo = upscaleSourceKind() === "video";
   const item = selectedUpscaleSource();
-  const url = kind === "video" ? videoViewUrl(item) : imageViewUrl(item);
+  const url = isVideo ? videoViewUrl(item) : imageViewUrl(item);
   const img = $("upscale-preview-img");
   const video = $("upscale-preview-video");
   const empty = $("upscale-preview-empty");
-  if (url && kind === "video") {
+  if (url && isVideo) {
     if (video.getAttribute("src") !== url) {
       video.pause();
       video.setAttribute("src", url);
@@ -2096,29 +2135,29 @@ function updateUpscaleSourceView() {
     video.classList.add("hidden");
     empty.classList.remove("hidden");
     if (!item) {
-      empty.textContent =
-        kind === "video" ? "Sin generaciones de vídeo" : "Sin generaciones de imagen";
+      empty.textContent = isVideo
+        ? "Sin generaciones de vídeo"
+        : "Sin generaciones de imagen";
     } else {
       empty.textContent =
         item.status === "error" ? "Origen sin resultado (error)" : "Origen sin resultado";
     }
   }
-  $("upscale-preview").classList.toggle("has-image", Boolean(url) && kind === "image");
-  $("upscale-preview").title =
-    kind === "video" ? "Origen de vídeo" : "Ampliar imagen";
+  $("upscale-preview").classList.toggle("has-image", Boolean(url) && !isVideo);
+  $("upscale-preview").title = isVideo ? "Origen de vídeo" : "Ampliar imagen";
   $("upscale-source-info").textContent = item
-    ? kind === "video"
+    ? isVideo
       ? `#${item.id} · ${videoEngineLabel(item)} · ${formatGalleryDate(item.created_at)}`
       : `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
-    : kind === "video"
+    : isVideo
     ? "Genera un vídeo en la pestaña Vídeo"
     : "Genera una imagen en la pestaña Imagen";
 }
 
 async function loadUpscaleSources({ selectId = null } = {}) {
-  const kind = upscaleKind();
-  const data = await api(`/api/gallery?kind=${kind}&limit=24&offset=0`);
+  const kind = upscaleSourceKind();
   const viewer = kind === "video" ? state.videoViewer : state.imageViewer;
+  const data = await api(`/api/gallery?kind=${kind}&limit=24&offset=0`);
   const merged = new Map();
   for (const item of [...(data.items || []), ...viewer.items]) {
     merged.set(item.id, item);
@@ -2150,8 +2189,15 @@ async function loadUpscaleSources({ selectId = null } = {}) {
 
 function applyUpscaleKind() {
   const kind = upscaleKind();
-  $("upscale-source-label").textContent =
-    kind === "video" ? "Vídeo de origen" : "Imagen de origen";
+  const isFps = kind === "fps";
+  const isVideo = kind !== "image";
+  $("upscale-source-label").textContent = isVideo
+    ? "Vídeo de origen"
+    : "Imagen de origen";
+  $("upscale-model-field").classList.toggle("hidden", isFps);
+  $("upscale-ckpt-field").classList.toggle("hidden", !isFps);
+  $("upscale-multiplier-field").classList.toggle("hidden", !isFps);
+  $("btn-upscale").textContent = isFps ? "Interpolar" : "Escalar";
   updateUpscaleSourceView();
 }
 
@@ -2174,31 +2220,48 @@ async function generateUpscale() {
   const source = selectedUpscaleSource();
   if (!source) {
     setUpscaleStatus(
-      kind === "video"
+      kind !== "image"
         ? "No hay vídeo de origen; genera uno en Vídeo"
         : "No hay imagen de origen; genera una en Imagen",
       true
     );
     return;
   }
-  const model = $("upscale-model").value;
-  if (!model) {
-    setUpscaleStatus("Elige un modelo de escalado", true);
-    return;
+  const payload = { kind, source_gen: source.id };
+  if (kind === "fps") {
+    const ckpt = $("upscale-ckpt").value;
+    if (!ckpt) {
+      setUpscaleStatus("Elige un ckpt RIFE", true);
+      return;
+    }
+    const multiplier = Number($("upscale-multiplier").value);
+    if (multiplier !== 2 && multiplier !== 4) {
+      setUpscaleStatus("Multiplicador inválido; usa ×2 o ×4", true);
+      return;
+    }
+    payload.ckpt = ckpt;
+    payload.multiplier = multiplier;
+    const fpsIn = Number(source.params && source.params.fps);
+    if (Number.isFinite(fpsIn) && fpsIn > 0) {
+      payload.fps_in = fpsIn;
+    }
+  } else {
+    const model = $("upscale-model").value;
+    if (!model) {
+      setUpscaleStatus("Elige un modelo de escalado", true);
+      return;
+    }
+    payload.model = model;
   }
   state.busy = true;
   $("btn-upscale").disabled = true;
   setUpscaleStatus("Encolando...");
   try {
-    const data = await postJson("/api/upscale", {
-      kind,
-      source_gen: source.id,
-      model,
-    });
+    const data = await postJson("/api/upscale", payload);
     await pollJob(
       data.job_id,
       setUpscaleStatus,
-      kind === "video" ? finishVideoUpscale : finishUpscale,
+      kind === "image" ? finishUpscale : finishVideoUpscale,
       setUpscaleProgress,
       true,
       "btn-upscale-cancel"
@@ -4093,8 +4156,14 @@ const REQUIRED_IDS = [
   "upscale-source",
   "upscale-source-label",
   "upscale-source-info",
+  "upscale-model-field",
   "upscale-model",
   "upscale-model-note",
+  "upscale-ckpt-field",
+  "upscale-ckpt",
+  "upscale-ckpt-note",
+  "upscale-multiplier-field",
+  "upscale-multiplier",
   "btn-upscale",
   "btn-upscale-cancel",
   "upscale-status",
@@ -4267,6 +4336,7 @@ function bind() {
   });
   on("upscale-source", "change", updateUpscaleSourceView);
   on("upscale-model", "change", upscaleModelNote);
+  on("upscale-ckpt", "change", upscaleCkptNote);
   on("btn-upscale", "click", generateUpscale);
   on("btn-upscale-cancel", "click", cancelJob);
   on("upscale-preview", "click", () => {
