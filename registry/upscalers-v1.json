@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "descripcion": "Catalogo local de upscalers de imagen (M10-2d U1): id/label/file/scale/note. El archivo vive en ComfyUI/models/upscale_models y se carga con UpscaleModelLoader. Extensible a futuro (video/RIFE).",
+  "upscalers": [
+    {
+      "id": "real-esrgan-x2",
+      "label": "RealESRGAN x2",
+      "file": "RealESRGAN_x2.pth",
+      "scale": 2,
+      "note": "×2"
+    }
+  ]
+}

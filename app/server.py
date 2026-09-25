@@ -89,6 +89,7 @@ from app.registry import ModelRegistry
 from app.sheet import make_sheet
 from app.store import Store
 from app.tags import by_group, list_groups, search
+from app.upscale import get_upscaler, list_upscalers, run_upscale
 from app.video import (
     ASPECTS,
     VIDEO_HISTORY_TIMEOUT_S,
@@ -422,6 +423,24 @@ def create_app(
                 config=cfg,
                 store=st,
                 engine_factory=video_factory,
+                record=record,
+            )
+        elif job.get("kind") == "upscale":
+            record = _JOBS.setdefault(
+                job["gen_id"],
+                {
+                    "prompt_id": None,
+                    "tracker": None,
+                    "status": "queued",
+                    "engine": None,
+                    "kind": "upscale",
+                },
+            )
+            run_upscale(
+                job,
+                config=cfg,
+                store=st,
+                engine_factory=factory,
                 record=record,
             )
         else:
@@ -779,6 +798,103 @@ def create_app(
             "seconds": catalog["seconds"],
             "resolutions": catalog["resolutions"],
         }
+
+    @app.get("/api/upscale/models")
+    async def api_upscale_models() -> dict:
+        """Catalogo de upscalers (M10-2d U1): id/label/file/scale/note."""
+        items = list_upscalers()
+        return {"items": items, "models": items}
+
+    @app.post("/api/upscale")
+    async def api_upscale(payload: dict = Body(...)) -> Any:
+        """Encola el escalado de una generacion de imagen (M10-2d U1).
+
+        Body: ``{source_gen, file?, model}``. Valida que la generacion exista
+        con ``kind="image"``, que ``file`` (o la primera salida) quede dentro de
+        su carpeta de galeria y que el modelo este en el catalogo; copia el
+        origen a ``ComfyUI/input`` y encola un job ``kind="upscale"`` que
+        produce una imagen nueva en la galeria (``kind="image"``,
+        ``params.task="upscale"``).
+        """
+        source_gen = payload.get("source_gen")
+        if isinstance(source_gen, bool) or not isinstance(source_gen, int):
+            raise EngineError("source_gen requerido (entero)")
+        row = st.get(source_gen)
+        if row is None:
+            return JSONResponse(
+                status_code=404, content={"error": "generacion origen desconocida"}
+            )
+        if row.get("kind") != "image":
+            raise EngineError("origen invalido; se requiere una generacion de imagen")
+        raw_file = payload.get("file")
+        if raw_file is not None and (
+            not isinstance(raw_file, str) or not raw_file.strip()
+        ):
+            raise EngineError("file invalido; usar un nombre de archivo")
+        if isinstance(raw_file, str):
+            file_name = raw_file.strip()
+        else:
+            file_name = ""
+            for output in row.get("outputs") or []:
+                candidate = output.get("name") if isinstance(output, dict) else output
+                if isinstance(candidate, str) and candidate.strip():
+                    file_name = candidate.strip()
+                    break
+            if not file_name:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "la generacion origen no tiene salidas"},
+                )
+        gallery_root = (cfg.data_dir / "gallery" / str(source_gen)).resolve()
+        source = (gallery_root / file_name).resolve()
+        if not source.is_relative_to(gallery_root):
+            return JSONResponse(
+                status_code=403, content={"error": "ruta fuera de la galeria"}
+            )
+        if source.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp") or not source.is_file():
+            return JSONResponse(
+                status_code=404, content={"error": "archivo de origen no encontrado"}
+            )
+        entry = get_upscaler(payload.get("model"))
+        input_dir = cfg.comfy_root / "input"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        image_name = f"{uuid.uuid4().hex}{source.suffix.lower()}"
+        (input_dir / image_name).write_bytes(source.read_bytes())
+        params = {
+            "task": "upscale",
+            "source_gen": source_gen,
+            "source_file": file_name,
+            "model": entry["id"],
+            "scale": entry["scale"],
+        }
+        gen_id = st.add(
+            "upscale",
+            f"upscale #{source_gen}/{file_name}",
+            "",
+            params,
+            kind="image",
+        )
+        job = {
+            "kind": "upscale",
+            "gen_id": gen_id,
+            "source_gen": source_gen,
+            "source_file": file_name,
+            "image_name": image_name,
+            "model": entry["id"],
+            "model_file": entry["file"],
+            "scale": entry["scale"],
+            "params": dict(params),
+        }
+        _JOBS[gen_id] = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "upscale",
+        }
+        job_id = queue.submit(job)
+        app.state.jobs[job_id] = job
+        return {"job_id": job_id}
 
     @app.get("/api/negative")
     async def api_negative(

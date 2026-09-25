@@ -2761,5 +2761,232 @@ class EditorUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class UpscaleRouteTests(ServerTestCase):
+    MODEL = "real-esrgan-x2"
+
+    def make_source(self, *, kind: str = "image", outputs=("ok.png",)) -> int:
+        gen_id = self.store.add(MODEL_ID, "1girl", "", {}, kind=kind)
+        self.store.update(gen_id, status="done", outputs=list(outputs), kind=kind)
+        for name in outputs:
+            self.add_gallery_png(gen_id, name)
+        return gen_id
+
+    def test_modelos_200(self):
+        response = self.make_client().get("/api/upscale/models")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["models"], data["items"])
+        self.assertEqual([item["id"] for item in data["items"]], [self.MODEL])
+        entry = data["items"][0]
+        for field in ("id", "label", "file", "scale", "note"):
+            self.assertIn(field, entry)
+        self.assertEqual(entry["file"], "RealESRGAN_x2.pth")
+        self.assertEqual(entry["scale"], 2)
+        self.assertEqual(entry["note"], "×2")
+
+    def test_encola_job_y_crea_imagen(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source()
+        response = self.make_client(queue=queue).post(
+            "/api/upscale", json={"source_gen": gen_id, "model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        self.assertEqual(len(queue.jobs), 1)
+        job = queue.jobs[0]
+        self.assertEqual(job["kind"], "upscale")
+        self.assertEqual(job["source_gen"], gen_id)
+        self.assertEqual(job["source_file"], "ok.png")
+        self.assertEqual(job["model"], self.MODEL)
+        self.assertEqual(job["model_file"], "RealESRGAN_x2.pth")
+        self.assertEqual(job["scale"], 2)
+        self.assertEqual(job["params"]["task"], "upscale")
+        files = sorted((self.config.comfy_root / "input").glob("*.png"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_bytes(), PNG_BYTES)
+        self.assertEqual(job["image_name"], files[0].name)
+        new_gen = self.store.list()[0]
+        self.assertEqual(new_gen["kind"], "image")
+        self.assertEqual(new_gen["status"], "queued")
+        self.assertEqual(
+            new_gen["params"],
+            {
+                "task": "upscale",
+                "source_gen": gen_id,
+                "source_file": "ok.png",
+                "model": self.MODEL,
+                "scale": 2,
+            },
+        )
+        self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
+
+    def test_file_explicito_se_usa(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(outputs=("a.png", "b.png"))
+        response = self.make_client(queue=queue).post(
+            "/api/upscale",
+            json={"source_gen": gen_id, "file": "b.png", "model": self.MODEL},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["source_file"], "b.png")
+        self.assertEqual(self.store.list()[0]["params"]["source_file"], "b.png")
+
+    def test_modelo_invalido_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source()
+        client = self.make_client(queue=queue)
+        for model in (None, "", "nope", 5, True):
+            with self.subTest(model=model):
+                response = client.post(
+                    "/api/upscale", json={"source_gen": gen_id, "model": model}
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertEqual(self.store.count(), 1)
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_source_gen_invalido_400(self):
+        client = self.make_client()
+        for source in (None, "1", 1.5, True, []):
+            with self.subTest(source=source):
+                response = client.post(
+                    "/api/upscale", json={"source_gen": source, "model": self.MODEL}
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_source_gen_inexistente_404(self):
+        response = self.make_client().post(
+            "/api/upscale", json={"source_gen": 999, "model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_origen_no_imagen_400(self):
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        response = self.make_client().post(
+            "/api/upscale", json={"source_gen": gen_id, "model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_file_fuera_de_carpeta_403(self):
+        gen_id = self.make_source()
+        (self.config.data_dir / "secret.png").write_bytes(PNG_BYTES)
+        response = self.make_client().post(
+            "/api/upscale",
+            json={"source_gen": gen_id, "file": "../secret.png", "model": self.MODEL},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("error", response.json())
+
+    def test_file_inexistente_o_no_imagen_404(self):
+        gen_id = self.make_source()
+        client = self.make_client()
+        for name in ("missing.png", "nota.txt"):
+            with self.subTest(name=name):
+                response = client.post(
+                    "/api/upscale",
+                    json={"source_gen": gen_id, "file": name, "model": self.MODEL},
+                )
+                self.assertEqual(response.status_code, 404)
+
+    def test_source_sin_salidas_404(self):
+        gen_id = self.make_source(outputs=())
+        response = self.make_client().post(
+            "/api/upscale", json={"source_gen": gen_id, "model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_file_no_str_400(self):
+        gen_id = self.make_source()
+        response = self.make_client().post(
+            "/api/upscale", json={"source_gen": gen_id, "file": 5, "model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_flujo_completo_con_worker(self):
+        transport = FakeTransport(self.config, output_name="upscaled_00001_.png")
+        gen_id = self.make_source()
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/upscale", json={"source_gen": gen_id, "model": self.MODEL}
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 10)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            self.assertEqual(status["outputs"][0]["name"], "upscaled_00001_.png")
+            media = client.get(status["outputs"][0]["url"])
+            self.assertEqual(media.status_code, 200)
+            self.assertEqual(media.headers["content-type"], "image/png")
+            self.assertEqual(media.content, PNG_BYTES)
+            gallery = client.get("/api/gallery?kind=image").json()
+            self.assertEqual(gallery["count"], 2)
+            newest = gallery["items"][0]
+            self.assertEqual(newest["kind"], "image")
+            self.assertEqual(newest["params"]["task"], "upscale")
+            self.assertEqual(newest["params"]["source_gen"], gen_id)
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["2"]["inputs"]["model_name"], "RealESRGAN_x2.pth")
+        self.assertEqual(graph["4"]["inputs"]["images"], ["3", 0])
+        row = self.store.get(newest["id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(row["kind"], "image")
+        self.assertEqual(row["outputs"], ["upscaled_00001_.png"])
+
+
+class UpscaleUiStaticTests(ServerTestCase):
+    def test_index_incluye_pestana_y_controles_upscaler(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="tab-upscaler"',
+            ">Upscaler<",
+            'id="panel-upscaler"',
+            'id="upscale-source"',
+            'id="upscale-source-info"',
+            'id="upscale-model"',
+            'id="upscale-model-note"',
+            'id="btn-upscale"',
+            "Escalar",
+            'id="upscale-status"',
+            'id="upscale-progress"',
+            'id="upscale-progress-fill"',
+            'id="upscale-progress-text"',
+            'id="upscale-preview"',
+            'id="upscale-preview-img"',
+            'id="upscale-preview-empty"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertLess(text.index('id="tab-editor"'), text.index('id="tab-upscaler"'))
+
+    def test_app_js_incluye_upscaler(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "/api/upscale/models",
+            'postJson("/api/upscale"',
+            'switchTab("upscaler")',
+            "loadUpscaleSources",
+            "loadUpscaleModels",
+            "generateUpscale",
+            "finishUpscale",
+            "setUpscaleProgress",
+            "btn-upscale-cancel",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 if __name__ == "__main__":
     unittest.main()

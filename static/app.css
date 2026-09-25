@@ -100,7 +100,8 @@ main {
 
 #panel-image.active,
 #panel-video.active,
-#panel-editor.active {
+#panel-editor.active,
+#panel-upscaler.active {
   display: grid;
   grid-template-columns: 380px 1fr;
   grid-template-rows: minmax(0, 1fr);

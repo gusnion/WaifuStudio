@@ -13,6 +13,7 @@
       <button id="tab-image" class="tab active" type="button">Imagen</button>
       <button id="tab-video" class="tab" type="button">Video</button>
       <button id="tab-editor" class="tab" type="button">Editor</button>
+      <button id="tab-upscaler" class="tab" type="button">Upscaler</button>
     </nav>
     <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
   </header>
@@ -407,6 +408,46 @@
           <h2>Editor (Qwen-Image 2.1)</h2>
         </div>
         <p class="editor-placeholder">Qwen-Image 2.1 (INT8 ConvRot + text encoder + VAE) llega con las descargas M10. Hasta entonces, «Generar» solo valida la petición y responde con la guarda honesta.</p>
+      </section>
+    </section>
+
+    <section id="panel-upscaler" class="panel">
+      <aside class="controls">
+        <label class="field">
+          <span>Imagen de origen</span>
+          <select id="upscale-source"></select>
+          <p id="upscale-source-info" class="field-hint">Cargando galería…</p>
+        </label>
+        <p class="field-hint">Origen por defecto: la imagen seleccionada en el visor de Imagen; si no hay, la más reciente de la galería.</p>
+
+        <label class="field">
+          <span>Modelo</span>
+          <select id="upscale-model"></select>
+          <p id="upscale-model-note" class="field-hint"></p>
+        </label>
+        <p class="field-hint">Solo imágenes. RealESRGAN x2 duplica el tamaño.</p>
+
+        <div class="generate-row">
+          <button id="btn-upscale" class="primary" type="button">Escalar</button>
+          <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
+        </div>
+        <p id="upscale-status" class="status">Listo</p>
+        <div id="upscale-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="upscale-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="upscale-progress-text" class="progress-text">paso -/-</p>
+        </div>
+      </aside>
+
+      <section class="gallery-panel">
+        <div class="gallery-header">
+          <h2>Resultado</h2>
+        </div>
+        <button id="upscale-preview" class="image-preview" type="button" title="Ampliar imagen">
+          <img id="upscale-preview-img" class="hidden" alt="Imagen seleccionada">
+          <span id="upscale-preview-empty" class="empty">Sin generaciones de imagen</span>
+        </button>
       </section>
     </section>
   </main>

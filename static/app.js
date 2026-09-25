@@ -116,6 +116,8 @@ const state = {
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
+  upscalers: [],
+  upscaleSources: [],
   imageViewer: {
     page: 1,
     total: 1,
@@ -951,7 +953,12 @@ async function cancelJob(event) {
     return;
   }
   const button = event && event.currentTarget ? event.currentTarget : $("btn-cancel");
-  const statusFn = button.id === "btn-video-cancel" ? setVideoStatus : setStatus;
+  const statusFn =
+    button.id === "btn-video-cancel"
+      ? setVideoStatus
+      : button.id === "btn-upscale-cancel"
+      ? setUpscaleStatus
+      : setStatus;
   button.disabled = true;
   try {
     await api(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
@@ -2005,6 +2012,149 @@ async function generateEditor() {
   } finally {
     state.editorBusy = false;
     updateEditorControls();
+  }
+}
+
+function setUpscaleStatus(text, isError = false) {
+  const el = $("upscale-status");
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function setUpscaleProgress(progress) {
+  setProgress(progress, "upscale");
+}
+
+function upscaleModelNote() {
+  const model = state.upscalers.find(
+    (item) => item.id === $("upscale-model").value
+  );
+  $("upscale-model-note").textContent = model
+    ? `Escala ×${model.scale}${model.note ? ` · ${model.note}` : ""}`
+    : "Cargando modelos…";
+}
+
+async function loadUpscaleModels() {
+  const data = await api("/api/upscale/models");
+  state.upscalers = data.items || data.models || [];
+  const select = $("upscale-model");
+  const previous = select.value;
+  select.replaceChildren();
+  for (const model of state.upscalers) {
+    select.appendChild(
+      option(model.id, `${model.label || model.id} (×${model.scale})`)
+    );
+  }
+  setSelectValue(select, previous);
+  upscaleModelNote();
+}
+
+function selectedUpscaleSource() {
+  return (
+    state.upscaleSources.find(
+      (item) => String(item.id) === $("upscale-source").value
+    ) || null
+  );
+}
+
+function updateUpscaleSourceView() {
+  const item = selectedUpscaleSource();
+  const url = imageViewUrl(item);
+  const img = $("upscale-preview-img");
+  const empty = $("upscale-preview-empty");
+  if (url) {
+    img.src = url;
+    img.alt = item.prompt ? `#${item.id} ${item.prompt}` : `Generación #${item.id}`;
+    img.classList.remove("hidden");
+    empty.classList.add("hidden");
+  } else {
+    img.removeAttribute("src");
+    img.alt = "";
+    img.classList.add("hidden");
+    empty.classList.remove("hidden");
+    empty.textContent = item
+      ? item.status === "error"
+        ? "Origen sin resultado (error)"
+        : "Origen sin resultado"
+      : "Sin generaciones de imagen";
+  }
+  $("upscale-preview").classList.toggle("has-image", Boolean(url));
+  $("upscale-source-info").textContent = item
+    ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
+    : "Genera una imagen en la pestaña Imagen";
+}
+
+async function loadUpscaleSources({ selectId = null } = {}) {
+  const data = await api("/api/gallery?kind=image&limit=24&offset=0");
+  const merged = new Map();
+  for (const item of [...(data.items || []), ...state.imageViewer.items]) {
+    merged.set(item.id, item);
+  }
+  state.upscaleSources = [...merged.values()].sort((a, b) => b.id - a.id);
+  const select = $("upscale-source");
+  const previous = select.value ? Number(select.value) : null;
+  select.replaceChildren();
+  for (const item of state.upscaleSources) {
+    select.appendChild(
+      option(String(item.id), `#${item.id} · ${formatGalleryDate(item.created_at)}`)
+    );
+  }
+  const wanted = selectId != null ? selectId : previous;
+  const fallback =
+    state.imageViewer.selectedId != null
+      ? state.imageViewer.selectedId
+      : state.upscaleSources.length
+      ? state.upscaleSources[0].id
+      : null;
+  const chosen = state.upscaleSources.some((item) => item.id === wanted)
+    ? wanted
+    : fallback;
+  if (chosen != null) {
+    select.value = String(chosen);
+  }
+  updateUpscaleSourceView();
+}
+
+async function finishUpscale() {
+  await reloadImageViewerFirstPage();
+  await loadUpscaleSources({ selectId: state.imageViewer.selectedId });
+}
+
+async function generateUpscale() {
+  if (state.busy) {
+    return;
+  }
+  const source = selectedUpscaleSource();
+  if (!source) {
+    setUpscaleStatus("No hay imagen de origen; genera una en Imagen", true);
+    return;
+  }
+  const model = $("upscale-model").value;
+  if (!model) {
+    setUpscaleStatus("Elige un modelo de escalado", true);
+    return;
+  }
+  state.busy = true;
+  $("btn-upscale").disabled = true;
+  setUpscaleStatus("Encolando...");
+  try {
+    const data = await postJson("/api/upscale", {
+      source_gen: source.id,
+      model,
+    });
+    await pollJob(
+      data.job_id,
+      setUpscaleStatus,
+      finishUpscale,
+      setUpscaleProgress,
+      true,
+      "btn-upscale-cancel"
+    );
+  } catch (error) {
+    setUpscaleStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    $("btn-upscale").disabled = false;
   }
 }
 
@@ -3766,12 +3916,18 @@ function switchTab(tab) {
   const image = tab === "image";
   const video = tab === "video";
   const editor = tab === "editor";
+  const upscaler = tab === "upscaler";
   $("tab-image").classList.toggle("active", image);
   $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
+  $("tab-upscaler").classList.toggle("active", upscaler);
   $("panel-image").classList.toggle("active", image);
   $("panel-video").classList.toggle("active", video);
   $("panel-editor").classList.toggle("active", editor);
+  $("panel-upscaler").classList.toggle("active", upscaler);
+  if (upscaler) {
+    loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
+  }
 }
 
 const PANEL_SECTIONS = {
@@ -3825,6 +3981,7 @@ const REQUIRED_IDS = [
   "tab-image",
   "tab-video",
   "tab-editor",
+  "tab-upscaler",
   "btn-enhance",
   "btn-enhance-use",
   "btn-enhance-discard",
@@ -3877,6 +4034,20 @@ const REQUIRED_IDS = [
   "editor-prompt",
   "editor-refs",
   "btn-editor-generate",
+  "panel-upscaler",
+  "upscale-source",
+  "upscale-source-info",
+  "upscale-model",
+  "upscale-model-note",
+  "btn-upscale",
+  "btn-upscale-cancel",
+  "upscale-status",
+  "upscale-progress",
+  "upscale-progress-fill",
+  "upscale-progress-text",
+  "upscale-preview",
+  "upscale-preview-img",
+  "upscale-preview-empty",
   "size",
   "preprompt",
   "btn-preprompt-manage",
@@ -3938,6 +4109,7 @@ function bind() {
   on("tab-image", "click", () => switchTab("image"));
   on("tab-video", "click", () => switchTab("video"));
   on("tab-editor", "click", () => switchTab("editor"));
+  on("tab-upscaler", "click", () => switchTab("upscaler"));
   on("btn-enhance", "click", enhancePrompt);
   on("btn-enhance-use", "click", useEnhanceResult);
   on("btn-enhance-discard", "click", discardEnhanceResult);
@@ -4032,6 +4204,17 @@ function bind() {
     );
   });
   on("btn-editor-generate", "click", generateEditor);
+  on("upscale-source", "change", updateUpscaleSourceView);
+  on("upscale-model", "change", upscaleModelNote);
+  on("btn-upscale", "click", generateUpscale);
+  on("btn-upscale-cancel", "click", cancelJob);
+  on("upscale-preview", "click", () => {
+    const item = selectedUpscaleSource();
+    const url = imageViewUrl(item);
+    if (url) {
+      openLightbox(url, `Generación #${item.id}`);
+    }
+  });
   on("size", "change", applySizeSelection);
   on("preprompt", "change", () => {
     refreshNegative().catch((error) => setStatus(error.message, true));
@@ -4182,6 +4365,8 @@ async function init() {
     await settle("negativo", refreshNegative);
     await settle("visor de video", () => loadVideoViewer());
     await settle("visor de imagen", () => loadImageViewer());
+    await settle("upscaler", loadUpscaleSources);
+    await settle("modelos de upscaler", loadUpscaleModels);
     await settle("zonas", renderZoneEditor);
     await settle("estado del editor", loadEditorStatus);
   } catch (error) {
