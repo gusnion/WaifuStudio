@@ -782,6 +782,37 @@ negativo cerradas.
 Verificado con `node --check static\app.js`, la suite CPU (718 tests OK, sin GPU/red) y conteo
 DOM↔JS sin ids perdidos.
 
+## Panel a 2 columnas y popover coherente (M9-B-fix8)
+
+Reorganización del panel lateral de la pestaña Imagen y sincronización del popover de zonas con
+las tags reales del prompt (solo `templates\index.html`, `static\app.css`, `static\app.js` y este
+README; sin GPU, red, dependencias, endpoints ni cambios en el payload de `/api/generate`):
+
+- **Layout 2 columnas**: `aside.controls` de Imagen pasa a grid
+  (`grid-template-columns: minmax(240px, 300px) minmax(320px, 1fr)`, `align-items: start`) con
+  dos columnas. **Columna 1** (izquierda, orden): «Generar» arriba del todo con Cancelar/estado/
+  progreso justo debajo, Modelo, Preprompt (con «Gestionar»), Rating, LoRAs, Imagen de referencia
+  y Opciones de generación (con Tamaño y Negativo dentro). **Columna 2** (derecha): barra compacta
+  «Mejorar prompt» + Fuerza, `#zone-editor` con scroll propio (`max-height`/`overflow-y: auto`)
+  para que la cabecera y la barra queden visibles, y al pie «Prompt final (solo lectura)»
+  plegable.
+- **Fallback responsive**: con `max-width: 900px` el panel vuelve a 1 columna apilada
+  (`grid-template-columns: minmax(0, 1fr)`).
+- **Popover coherente**: al abrir el popover de una zona (o de una subcat de General) se
+  pre-marcan los checkboxes de las tags que ya están en `state.promptZones` de esa zona/subcat
+  (comparación case-insensitive con `Map`) y el contador muestra «Sin selección.» / «N
+  seleccionada(s)» junto a los chips. «Insertar» aplica altas y bajas: añade las marcadas que
+  falten y quita las desmarcadas que estén en la zona, con dedup CI y `renderZoneEditor()`/
+  `composePrompt()` al terminar. Si el popover se abrió desde una subcat, las bajas aplican a esa
+  subcat (solo tags de ella) y las altas van a la subcat de origen. El buscador y «Limpiar
+  selección» no tocan `state.promptZones` hasta pulsar Insertar; los OCs aplicados desde el
+  popover de Personaje se reflejan en la selección.
+- Compatibilidad: se conservan todos los ids y la persistencia de colapsables
+  (`waifu.ui.section.zones|params|loras|negative|ref`).
+
+Verificado con `node --check static\app.js`, la suite CPU (732 tests OK, sin GPU/red) y
+`git status --short` limitado a los 4 archivos.
+
 ## Smoke
 
 ```

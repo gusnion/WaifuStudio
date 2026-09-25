@@ -113,6 +113,100 @@ main {
   padding-right: 0.3rem;
 }
 
+/* Panel Imagen: panel lateral en 2 columnas (1: generación, 2: prompt) */
+#panel-image.active {
+  grid-template-columns: minmax(620px, 780px) minmax(0, 1fr);
+}
+
+.controls.image-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(320px, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.image-controls .controls-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+}
+
+.image-controls .controls-column-primary {
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.image-controls .controls-column-zones {
+  overflow: hidden;
+}
+
+.generate-block,
+.zone-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.zone-toolbar {
+  flex: 0 0 auto;
+}
+
+.zones-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.zones-panel > .section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#zone-editor {
+  flex: 1 1 auto;
+  min-height: 10rem;
+  max-height: calc(100vh - 20rem);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.zone-popover-count {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 900px) {
+  #panel-image.active {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .controls.image-controls {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    overflow: visible;
+  }
+
+  .image-controls .controls-column-primary,
+  .image-controls .controls-column-zones {
+    overflow: visible;
+  }
+
+  #zone-editor {
+    max-height: 60vh;
+  }
+}
+
 .prompt-block {
   display: flex;
   flex-direction: column;

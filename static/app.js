@@ -138,7 +138,8 @@ let ocSearchTimer = null;
 let zoneInsertTarget = null;
 let zonePopoverOptions = null;
 let zonePopoverSubcat = null;
-let zonePopoverSelected = new Set();
+let zonePopoverOriginSubcat = null;
+let zonePopoverSelected = new Map();
 let zonePopoverSeq = 0;
 let zoneOcApplied = [];
 let zoneOcCharacter = null;
@@ -1544,6 +1545,27 @@ function allPromptTagKeys() {
   return seen;
 }
 
+function zoneScopeTags(zone, subcat) {
+  if (!zone || !ZONE_ORDER.includes(zone)) {
+    return [];
+  }
+  if (zone === "general") {
+    return generalBucket(subcat);
+  }
+  return state.promptZones[zone] || [];
+}
+
+function seedZonePopoverSelection(zone, subcat) {
+  zonePopoverSelected = new Map();
+  for (const raw of zoneScopeTags(zone, subcat)) {
+    const tag = String(raw == null ? "" : raw);
+    const folded = tag.toLowerCase();
+    if (folded) {
+      zonePopoverSelected.set(folded, tag);
+    }
+  }
+}
+
 function composePrompt() {
   const merged = [];
   const seen = new Set();
@@ -1640,6 +1662,30 @@ function removeTagsFromZones(tags) {
     );
   }
   renderZoneEditor();
+}
+
+function removeTagsFromZoneScope(zone, tags, subcat) {
+  const folded = new Set(
+    (tags || [])
+      .map((tag) => String(tag == null ? "" : tag).trim().toLowerCase())
+      .filter(Boolean)
+  );
+  if (!folded.size) {
+    return;
+  }
+  if (zone === "general") {
+    const key = GENERAL_SUBCATS.includes(subcat) ? subcat : "otros";
+    state.promptZones.general[key] = (
+      state.promptZones.general[key] || []
+    ).filter((tag) => !folded.has(String(tag).toLowerCase()));
+    return;
+  }
+  if (!ZONE_ORDER.includes(zone)) {
+    return;
+  }
+  state.promptZones[zone] = (state.promptZones[zone] || []).filter(
+    (tag) => !folded.has(String(tag).toLowerCase())
+  );
 }
 
 function applyZonesPayload(zonesPayload, { replace = false } = {}) {
@@ -1968,12 +2014,13 @@ function renderZonePopoverGroups() {
     row.className = "zone-option";
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.checked = zonePopoverSelected.has(item.tag);
+    box.checked = zonePopoverSelected.has(item.tag.toLowerCase());
     box.addEventListener("change", () => {
+      const folded = item.tag.toLowerCase();
       if (box.checked) {
-        zonePopoverSelected.add(item.tag);
+        zonePopoverSelected.set(folded, item.tag);
       } else {
-        zonePopoverSelected.delete(item.tag);
+        zonePopoverSelected.delete(folded);
       }
       renderZonePopoverSelected();
     });
@@ -1998,7 +2045,13 @@ function renderZonePopoverSelected() {
     container.appendChild(empty);
     return;
   }
-  for (const tag of zonePopoverSelected) {
+  const count = document.createElement("span");
+  count.className = "zone-popover-count";
+  count.textContent = `${zonePopoverSelected.size} seleccionada${
+    zonePopoverSelected.size === 1 ? "" : "s"
+  }`;
+  container.appendChild(count);
+  for (const tag of zonePopoverSelected.values()) {
     const chip = document.createElement("span");
     chip.className = "zone-selected-chip";
     const text = document.createElement("span");
@@ -2009,7 +2062,7 @@ function renderZonePopoverSelected() {
     remove.textContent = "×";
     remove.title = "Quitar";
     remove.addEventListener("click", () => {
-      zonePopoverSelected.delete(tag);
+      zonePopoverSelected.delete(String(tag).toLowerCase());
       renderZonePopoverSelected();
       renderZonePopoverGroups();
     });
@@ -2053,10 +2106,22 @@ async function applyOcFromPicker(character) {
   const mode = $("zone-ocs-traits").checked ? "traits" : "auto";
   const profile = await fetchCharacterProfile(character, mode);
   removeTagsFromZones(zoneOcApplied);
+  if (zoneInsertTarget === "character") {
+    for (const tag of zoneOcApplied) {
+      zonePopoverSelected.delete(String(tag).toLowerCase());
+    }
+  }
   zoneOcApplied = addTagsToZone(
     "character",
     promptTagsFromText(profile.text)
   );
+  if (zoneInsertTarget === "character") {
+    for (const tag of zoneOcApplied) {
+      zonePopoverSelected.set(String(tag).toLowerCase(), tag);
+    }
+    renderZonePopoverSelected();
+    renderZonePopoverGroups();
+  }
   zoneOcCharacter = character;
   const notes = [`modo ${profile.mode}`];
   if (profile.lora) {
@@ -2087,7 +2152,11 @@ async function openZoneInsert(zone, subcat) {
   zoneInsertTarget = zone;
   zonePopoverOptions = null;
   zonePopoverSubcat = null;
-  zonePopoverSelected = new Set();
+  zonePopoverOriginSubcat = zone === "general" ? subcat || null : null;
+  zonePopoverSelected = new Map();
+  if (zone !== "general") {
+    seedZonePopoverSelection(zone, null);
+  }
   zoneOcApplied = [];
   zoneOcCharacter = null;
   const isCharacter = zone === "character";
@@ -2126,6 +2195,17 @@ async function openZoneInsert(zone, subcat) {
       )
         ? wanted
         : defaultGeneralSubcat();
+      if (
+        zonePopoverOriginSubcat &&
+        (zoneSubcatLocked(zonePopoverOriginSubcat) ||
+          !zonePopoverOptions.some(
+            (group) => group.id === zonePopoverOriginSubcat
+          ))
+      ) {
+        zonePopoverOriginSubcat = null;
+      }
+      seedZonePopoverSelection(zone, zonePopoverSubcat);
+      renderZonePopoverSelected();
     }
     renderZonePopoverTabs();
     renderZonePopoverGroups();
@@ -2140,7 +2220,8 @@ function closeZoneInsert() {
   zoneInsertTarget = null;
   zonePopoverOptions = null;
   zonePopoverSubcat = null;
-  zonePopoverSelected = new Set();
+  zonePopoverOriginSubcat = null;
+  zonePopoverSelected = new Map();
   zoneOcApplied = [];
   zoneOcCharacter = null;
   $("zone-popover").classList.add("hidden");
@@ -2164,7 +2245,7 @@ function submitZoneInsert(event) {
   for (const part of raw.split(",")) {
     const tag = part.trim();
     if (tag) {
-      zonePopoverSelected.add(tag);
+      zonePopoverSelected.set(tag.toLowerCase(), tag);
     }
   }
   input.value = "";
@@ -2173,25 +2254,46 @@ function submitZoneInsert(event) {
 }
 
 function clearZoneSelection() {
-  zonePopoverSelected = new Set();
+  zonePopoverSelected = new Map();
   renderZonePopoverSelected();
   renderZonePopoverGroups();
 }
 
 async function insertZoneSelection() {
   const zone = zoneInsertTarget;
-  const tags = Array.from(zonePopoverSelected);
   if (!zone) {
     return;
   }
-  if (!tags.length) {
+  const subcat =
+    zone === "general"
+      ? zonePopoverOriginSubcat || zonePopoverSubcat || "otros"
+      : null;
+  const selected = Array.from(zonePopoverSelected.values());
+  const selectedFolded = new Set(selected.map((tag) => tag.toLowerCase()));
+  const removals = zoneScopeTags(zone, subcat).filter(
+    (tag) => !selectedFolded.has(String(tag).toLowerCase())
+  );
+  const known = allPromptTagKeys();
+  const additions = selected.filter(
+    (tag) => !known.has(String(tag).toLowerCase())
+  );
+  if (!additions.length && !removals.length) {
     setStatus("Selecciona o añade algún tag antes de insertar", true);
     return;
   }
-  const subcat = zone === "general" ? zonePopoverSubcat || "otros" : null;
-  addTagsToZone(zone, tags, subcat);
+  removeTagsFromZoneScope(zone, removals, subcat);
+  const added = pushTagsToZone(zone, additions, subcat, allPromptTagKeys());
+  renderZoneEditor();
+  composePrompt();
   closeZoneInsert();
-  setStatus(`Insertados ${tags.length} tag(s)`);
+  const parts = [];
+  if (added.length) {
+    parts.push(`${added.length} añadido(s)`);
+  }
+  if (removals.length) {
+    parts.push(`${removals.length} quitado(s)`);
+  }
+  setStatus(`Insertar: ${parts.join(" · ")}`);
 }
 
 async function attachReferenceFromUrl(url, name) {

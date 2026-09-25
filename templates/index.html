@@ -19,42 +19,26 @@
 
   <main>
     <section id="panel-image" class="panel active">
-      <aside class="controls">
-        <label class="field">
-          <span>Modelo</span>
-          <select id="model"></select>
-        </label>
+      <aside class="controls image-controls">
+        <div class="controls-column controls-column-primary">
+          <div class="generate-block">
+            <div class="generate-row">
+              <button id="btn-generate" class="primary" type="button">Generar</button>
+              <button id="btn-cancel" class="hidden" type="button">Cancelar</button>
+            </div>
+            <p id="job-status" class="status">Listo</p>
+            <div id="job-progress" class="progress hidden">
+              <div class="progress-track">
+                <div id="job-progress-fill" class="progress-fill"></div>
+              </div>
+              <p id="job-progress-text" class="progress-text">paso -/-</p>
+            </div>
+          </div>
 
-        <div class="prompt-block">
-          <div class="field">
-            <span>Prompt por zonas</span>
-            <div id="zone-editor" class="zone-editor"></div>
-          </div>
-          <div class="enhance-row">
-            <button id="btn-enhance" type="button">Mejorar prompt</button>
-            <label class="inline-field">
-              <span>Fuerza</span>
-              <select id="enhance-strength">
-                <option value="fiel">Fiel</option>
-                <option value="balanceado" selected>Balanceado</option>
-                <option value="creativo">Creativo</option>
-              </select>
-            </label>
-          </div>
-          <div id="enhance-result" class="enhance-result hidden">
-            <div class="enhance-block">
-              <span class="enhance-label">Positivo propuesto</span>
-              <p id="enhance-positive"></p>
-            </div>
-            <div class="enhance-block">
-              <span class="enhance-label">Negativo propuesto</span>
-              <p id="enhance-negative"></p>
-            </div>
-            <div class="enhance-actions">
-              <button id="btn-enhance-use" class="primary" type="button">Usar</button>
-              <button id="btn-enhance-discard" type="button">Descartar</button>
-            </div>
-          </div>
+          <label class="field">
+            <span>Modelo</span>
+            <select id="model"></select>
+          </label>
 
           <div class="field">
             <span>Preprompt</span>
@@ -63,6 +47,7 @@
               <button id="btn-preprompt-manage" type="button">Gestionar</button>
             </div>
           </div>
+
           <label class="field">
             <span>Rating</span>
             <select id="rating">
@@ -71,7 +56,96 @@
             </select>
           </label>
 
-          <details id="section-zones" class="advanced panel-section" data-section="zones" open>
+          <details id="section-loras" class="advanced panel-section" data-section="loras">
+            <summary>LoRAs (<span id="loras-count">0</span>)</summary>
+            <div class="section-body">
+              <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
+              <div id="loras-list" class="lora-chips"></div>
+            </div>
+          </details>
+
+          <details id="section-ref" class="advanced panel-section" data-section="ref">
+            <summary>Imagen de referencia</summary>
+            <div class="section-body">
+              <label class="field">
+                <span>Imagen de referencia (PNG)</span>
+                <input id="ref-image" type="file" accept="image/png">
+              </label>
+              <div id="ref-preview" class="ref-preview hidden">
+                <img id="ref-thumb" alt="Referencia seleccionada">
+                <button id="btn-ref-clear" type="button">Quitar</button>
+              </div>
+              <label class="field">
+                <span>Fuerza <output id="strength-value">0.60</output></span>
+                <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
+              </label>
+            </div>
+          </details>
+
+          <details id="section-params" class="advanced panel-section" data-section="params">
+            <summary>Opciones de generación</summary>
+            <div class="section-body">
+              <div class="grid-2">
+                <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
+                <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
+                <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
+                <label class="field"><span>Sampler</span><select id="sampler"></select></label>
+                <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
+              </div>
+              <div id="section-size" class="section-subblock">
+                <label class="field">
+                  <span>Tamaño</span>
+                  <select id="size"></select>
+                </label>
+                <div id="manual-size" class="grid-2 hidden">
+                  <label class="field"><span>Ancho</span><input id="width" type="number" value="768" step="8" min="64" max="4096"></label>
+                  <label class="field"><span>Alto</span><input id="height" type="number" value="1344" step="8" min="64" max="4096"></label>
+                </div>
+              </div>
+              <details id="section-negative" class="advanced panel-section" data-section="negative">
+                <summary>Negativo (avanzado)</summary>
+                <div class="section-body">
+                  <label class="field">
+                    <span>Negativo</span>
+                    <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
+                  </label>
+                  <button id="btn-negative-restore" type="button">Restaurar</button>
+                </div>
+              </details>
+            </div>
+          </details>
+        </div>
+
+        <div class="controls-column controls-column-zones">
+          <div class="zone-toolbar">
+            <div class="enhance-row">
+              <button id="btn-enhance" type="button">Mejorar prompt</button>
+              <label class="inline-field">
+                <span>Fuerza</span>
+                <select id="enhance-strength">
+                  <option value="fiel">Fiel</option>
+                  <option value="balanceado" selected>Balanceado</option>
+                  <option value="creativo">Creativo</option>
+                </select>
+              </label>
+            </div>
+            <div id="enhance-result" class="enhance-result hidden">
+              <div class="enhance-block">
+                <span class="enhance-label">Positivo propuesto</span>
+                <p id="enhance-positive"></p>
+              </div>
+              <div class="enhance-block">
+                <span class="enhance-label">Negativo propuesto</span>
+                <p id="enhance-negative"></p>
+              </div>
+              <div class="enhance-actions">
+                <button id="btn-enhance-use" class="primary" type="button">Usar</button>
+                <button id="btn-enhance-discard" type="button">Descartar</button>
+              </div>
+            </div>
+          </div>
+
+          <details id="section-zones" class="advanced panel-section zones-panel" data-section="zones" open>
             <summary>Prompt por zonas</summary>
             <div class="section-body">
               <div id="prompt-zones" class="prompt-zones">
@@ -116,8 +190,10 @@
                   </div>
                 </div>
               </div>
+              <div id="zone-editor" class="zone-editor"></div>
             </div>
           </details>
+
           <details id="section-final-prompt" class="advanced panel-section">
             <summary>Prompt final (solo lectura)</summary>
             <div class="section-body">
@@ -126,77 +202,6 @@
             </div>
           </details>
         </div>
-
-        <div class="generate-row">
-          <button id="btn-generate" class="primary" type="button">Generar</button>
-          <button id="btn-cancel" class="hidden" type="button">Cancelar</button>
-        </div>
-        <p id="job-status" class="status">Listo</p>
-        <div id="job-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="job-progress-fill" class="progress-fill"></div>
-          </div>
-          <p id="job-progress-text" class="progress-text">paso -/-</p>
-        </div>
-
-        <details id="section-loras" class="advanced panel-section" data-section="loras">
-          <summary>LoRAs (<span id="loras-count">0</span>)</summary>
-          <div class="section-body">
-            <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
-            <div id="loras-list" class="lora-chips"></div>
-          </div>
-        </details>
-
-        <details id="section-ref" class="advanced panel-section" data-section="ref">
-          <summary>Imagen de referencia</summary>
-          <div class="section-body">
-            <label class="field">
-              <span>Imagen de referencia (PNG)</span>
-              <input id="ref-image" type="file" accept="image/png">
-            </label>
-            <div id="ref-preview" class="ref-preview hidden">
-              <img id="ref-thumb" alt="Referencia seleccionada">
-              <button id="btn-ref-clear" type="button">Quitar</button>
-            </div>
-            <label class="field">
-              <span>Fuerza <output id="strength-value">0.60</output></span>
-              <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
-            </label>
-          </div>
-        </details>
-
-        <details id="section-params" class="advanced panel-section" data-section="params">
-          <summary>Opciones de generación</summary>
-          <div class="section-body">
-            <div class="grid-2">
-              <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
-              <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
-              <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
-              <label class="field"><span>Sampler</span><select id="sampler"></select></label>
-              <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
-            </div>
-            <div id="section-size" class="section-subblock">
-              <label class="field">
-                <span>Tamaño</span>
-                <select id="size"></select>
-              </label>
-              <div id="manual-size" class="grid-2 hidden">
-                <label class="field"><span>Ancho</span><input id="width" type="number" value="768" step="8" min="64" max="4096"></label>
-                <label class="field"><span>Alto</span><input id="height" type="number" value="1344" step="8" min="64" max="4096"></label>
-              </div>
-            </div>
-            <details id="section-negative" class="advanced panel-section" data-section="negative">
-              <summary>Negativo (avanzado)</summary>
-              <div class="section-body">
-                <label class="field">
-                  <span>Negativo</span>
-                  <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
-                </label>
-                <button id="btn-negative-restore" type="button">Restaurar</button>
-              </div>
-            </details>
-          </div>
-        </details>
       </aside>
 
       <section class="gallery-panel">
