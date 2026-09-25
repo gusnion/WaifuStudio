@@ -1,0 +1,56 @@
+{
+  "schema_version": "h3_presets/v1",
+  "descripcion": "Perfiles de video MiniMax H3 FL2VA (24 fps, length 5+17n): plantilla, modelo DiT, VAEs de video/audio, encoder con proyeccion (o null) y LoRA. 'referencia' reproduce el certificado actual (Qwen3-VL-32B, sin proyeccion); 'calidad' y 'ligero' usan el encoder 4B con ClipProj. Los segundos permitidos y las resoluciones (vertical y su espejo horizontal) son comunes al catalogo.",
+  "seconds": [5, 8, 10, 12, 15],
+  "resoluciones": {
+    "vertical": [
+      {"width": 576, "height": 1024},
+      {"width": 768, "height": 1344}
+    ],
+    "horizontal": [
+      {"width": 1024, "height": 576},
+      {"width": 1344, "height": 768}
+    ]
+  },
+  "perfiles": [
+    {
+      "id": "referencia",
+      "label": "Referencia",
+      "note": "certificado actual: encoder 32B sin proyección y VAE vídeo fp16; máxima fidelidad",
+      "template": "h3_fl2va_vertical.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "projection": null,
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [8]
+    },
+    {
+      "id": "calidad",
+      "label": "Calidad",
+      "note": "provisional: DiT int8 + ClipProj 4B; el encoder 4B libera ~7 GB frente al 32B",
+      "template": "h3_fl2va_calidad.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [8, 10, 12]
+    },
+    {
+      "id": "ligero",
+      "label": "Ligero",
+      "note": "provisional: DiT int4 + VAE vídeo int8 + ClipProj 4B; menor VRAM",
+      "template": "h3_fl2va_ligero.api.json",
+      "dit": "minimax_h3_fl2va_pruned-w4a8_convrot_pruned.safetensors",
+      "vae_video": "minimax_h3_video_vae_int8_convrot.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [8, 10, 12, 15]
+    }
+  ]
+}

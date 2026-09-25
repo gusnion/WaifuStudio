@@ -13,6 +13,7 @@ from pathlib import Path
 
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError, load_graph
+from app.h3_presets import h3_frames_for_seconds, h3_template_path, resolve_h3_profile
 from app.motion import MOTION_NEGATIVE
 from app.store import Store
 from app.video import (
@@ -777,6 +778,39 @@ class PrepareH3Tests(unittest.TestCase):
                 with self.assertRaises(EngineError):
                     prepare_h3_graph(self.graph, **(base | override))
 
+    def test_tamano_y_frames_patch(self):
+        patched = prepare_h3_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name="b.png",
+            prompt="p",
+            seed=1,
+            width=768,
+            height=1344,
+            frames=243,
+        )
+        self.assertEqual(patched["131"]["inputs"]["width"], 768)
+        self.assertEqual(patched["131"]["inputs"]["height"], 1344)
+        self.assertEqual(patched["131"]["inputs"]["length"], 243)
+
+    def test_tamano_o_frames_invalidos(self):
+        base = {
+            "first_image_name": "a.png",
+            "last_image_name": "b.png",
+            "prompt": "p",
+            "seed": 1,
+        }
+        for frames in (81, 120, 123, 363, True, "192", 192.0):
+            with self.subTest(frames=frames):
+                with self.assertRaises(EngineError):
+                    prepare_h3_graph(self.graph, **(base | {"frames": frames}))
+        for width, height in ((600, 1024), (2048, 576), (1024, 1024), (576, 1024.0)):
+            with self.subTest(width=width, height=height):
+                with self.assertRaises(EngineError):
+                    prepare_h3_graph(
+                        self.graph, **(base | {"width": width, "height": height})
+                    )
+
 
 class BuildVideoGraphTests(unittest.TestCase):
     def test_engine_invalido(self):
@@ -846,6 +880,103 @@ class BuildVideoGraphTests(unittest.TestCase):
             }
         )
         self.assertEqual(graph["9"]["inputs"]["length"], 129)
+
+
+class BuildVideoGraphH3Tests(unittest.TestCase):
+    def job(self, **overrides) -> dict:
+        base = {
+            "engine": "h3",
+            "image_name": "a.png",
+            "last_image_name": "b.png",
+            "prompt": "integrated_multimodal_description: test",
+            "seed": 3,
+        }
+        return base | overrides
+
+    def assert_grafo_valido(self, graph: dict) -> None:
+        self.assertEqual(graph["140"]["inputs"]["image"], "a.png")
+        self.assertEqual(graph["141"]["inputs"]["image"], "b.png")
+        self.assertEqual(
+            graph["131"]["inputs"]["prompt"],
+            "integrated_multimodal_description: test",
+        )
+
+    def test_sin_perfil_usa_referencia(self):
+        graph = build_video_graph(self.job())
+        self.assert_grafo_valido(graph)
+        self.assertEqual(graph["128"]["inputs"]["type"], "minimax")
+        self.assertEqual(graph["131"]["inputs"]["clip"], ["128", 0])
+        self.assertEqual(graph["131"]["inputs"]["width"], 576)
+        self.assertEqual(graph["131"]["inputs"]["height"], 1024)
+        self.assertEqual(graph["131"]["inputs"]["length"], 192)
+
+    def test_perfil_calidad_usa_plantilla_clipproj(self):
+        profile = resolve_h3_profile("calidad")
+        graph = build_video_graph(self.job(profile="calidad"))
+        self.assert_grafo_valido(graph)
+        self.assertEqual(graph["127"]["inputs"]["unet_name"], profile["dit"])
+        self.assertEqual(graph["119"]["inputs"]["vae_name"], profile["vae_video"])
+        self.assertEqual(graph["120"]["inputs"]["vae_name"], profile["vae_audio"])
+        self.assertEqual(graph["128"]["inputs"]["clip_name"], profile["encoder"])
+        self.assertEqual(graph["128"]["inputs"]["type"], "krea2")
+        self.assertEqual(graph["135"]["inputs"]["projection"], profile["projection"])
+        self.assertEqual(graph["135"]["inputs"]["clip"], ["128", 0])
+        self.assertEqual(graph["131"]["inputs"]["clip"], ["135", 0])
+        self.assertEqual(graph["131"]["inputs"]["length"], 192)
+
+    def test_perfil_ligero_con_segundos_y_resolucion(self):
+        profile = resolve_h3_profile("ligero")
+        graph = build_video_graph(
+            self.job(profile="ligero", seconds=10, width=768, height=1344)
+        )
+        self.assert_grafo_valido(graph)
+        self.assertEqual(graph["127"]["inputs"]["unet_name"], profile["dit"])
+        self.assertEqual(graph["119"]["inputs"]["vae_name"], profile["vae_video"])
+        self.assertEqual(graph["131"]["inputs"]["length"], h3_frames_for_seconds(10))
+        self.assertEqual(graph["131"]["inputs"]["width"], 768)
+        self.assertEqual(graph["131"]["inputs"]["height"], 1344)
+
+    def test_calidad_horizontal_y_frames_explicitos(self):
+        graph = build_video_graph(
+            self.job(profile="calidad", aspect="horizontal", frames=294)
+        )
+        self.assertEqual(graph["131"]["inputs"]["width"], 1024)
+        self.assertEqual(graph["131"]["inputs"]["height"], 576)
+        self.assertEqual(graph["131"]["inputs"]["length"], 294)
+
+    def test_plantilla_del_job_gana_al_perfil(self):
+        graph = build_video_graph(
+            self.job(profile="calidad", template=str(H3_TEMPLATE_PATH))
+        )
+        self.assertEqual(graph["131"]["inputs"]["clip"], ["128", 0])
+
+    def test_cada_perfil_carga_su_plantilla(self):
+        for profile in ("referencia", "calidad", "ligero"):
+            with self.subTest(profile=profile):
+                entry = resolve_h3_profile(profile)
+                job = self.job(profile=profile, template=str(h3_template_path(entry)))
+                graph = build_video_graph(job)
+                self.assert_grafo_valido(graph)
+
+    def test_invalidos(self):
+        cases = (
+            {"profile": "nope"},
+            {"profile": 5},
+            {"seconds": 6},
+            {"seconds": 0},
+            {"seconds": "8"},
+            {"frames": 81},
+            {"frames": True},
+            {"width": 600, "height": 1024},
+            {"width": 2048, "height": 576},
+            {"width": 576},
+            {"height": 1024},
+            {"aspect": "cuadrado"},
+        )
+        for override in cases:
+            with self.subTest(override=override):
+                with self.assertRaises(EngineError):
+                    build_video_graph(self.job(**override))
 
 
 class VideoTestCase(unittest.TestCase):

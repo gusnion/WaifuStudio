@@ -49,6 +49,9 @@ const PAGE_SIZE = 6;
 const IMAGE_PAGE_SIZE = 5;
 const VIDEO_PAGE_SIZE = 5;
 const VIDEO_FPS = 16;
+const H3_FPS = 24;
+const H3_FRAME_BASE = 5;
+const H3_FRAME_STEP = 17;
 
 const EDITOR_REF_LIMIT = 10;
 const EDITOR_SIZE_MIN = 512;
@@ -107,6 +110,9 @@ const state = {
   videoNegativeTouched: false,
   videoVramHint: "",
   videoPresets: [],
+  videoH3Profiles: [],
+  videoH3Seconds: [],
+  videoH3Resolutions: {},
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
@@ -1446,6 +1452,23 @@ async function reuseVideoGeneration(item) {
     $("video-seconds").value = String(Math.min(15, Math.max(1, seconds)));
   }
   updateVideoDurationInfo();
+  if (engine === "h3") {
+    const storedProfile =
+      typeof params.profile === "string" && params.profile
+        ? params.profile
+        : "referencia";
+    setSelectValue($("video-h3-profile"), storedProfile);
+    const h3Seconds = Number(params.seconds);
+    if (state.videoH3Seconds.includes(h3Seconds)) {
+      $("video-h3-seconds").value = String(h3Seconds);
+    }
+    const width = Number(params.width);
+    const height = Number(params.height);
+    if (Number.isFinite(width) && Number.isFinite(height)) {
+      setSelectValue($("video-h3-size"), `${width}x${height}`);
+    }
+    updateH3Notes();
+  }
   if (params.seed != null) {
     $("video-seed").value = params.seed;
   }
@@ -1487,6 +1510,8 @@ function startNewVideo() {
   $("video-motion-negative").value = "";
   $("video-image").value = "";
   $("video-last-image").value = "";
+  setSelectValue($("video-h3-profile"), "calidad");
+  setSelectValue($("video-h3-seconds"), String(defaultH3Seconds()));
   state.videoNegativeTouched = false;
   state.videoVramHint = "";
   applyVideoEngine();
@@ -1640,8 +1665,17 @@ async function generateVideo() {
         setVideoStatus("H3 requiere el prompt", true);
         return;
       }
+      const size = selectedH3Size();
+      if (!size) {
+        setVideoStatus("Resolución H3 inválida", true);
+        return;
+      }
       payload.last_image_b64 = await readFileBase64(last);
       payload.prompt = prompt;
+      payload.profile = $("video-h3-profile").value;
+      payload.seconds = Number($("video-h3-seconds").value);
+      payload.width = size.width;
+      payload.height = size.height;
     }
   } catch (error) {
     setVideoStatus(error.message, true);
@@ -1725,6 +1759,101 @@ function updateVideoPresetNote() {
   updateVideoAspectLabels();
 }
 
+function selectedH3Profile() {
+  return (
+    state.videoH3Profiles.find(
+      (profile) => profile.id === $("video-h3-profile").value
+    ) || null
+  );
+}
+
+function h3FramesForSeconds(seconds) {
+  const needed = Math.ceil(seconds * H3_FPS);
+  if (needed <= H3_FRAME_BASE) {
+    return H3_FRAME_BASE;
+  }
+  return (
+    H3_FRAME_BASE +
+    H3_FRAME_STEP * Math.ceil((needed - H3_FRAME_BASE) / H3_FRAME_STEP)
+  );
+}
+
+function defaultH3Seconds() {
+  const profile = state.videoH3Profiles.find((item) => item.id === "calidad");
+  const recommended = (profile && profile.seconds_recomendados) || [];
+  return recommended.length ? recommended[0] : state.videoH3Seconds[0] || 8;
+}
+
+function fillH3Sizes() {
+  const select = $("video-h3-size");
+  const previous = select.value;
+  select.replaceChildren();
+  for (const aspect of ["vertical", "horizontal"]) {
+    for (const size of state.videoH3Resolutions[aspect] || []) {
+      select.appendChild(
+        option(
+          `${size.width}x${size.height}`,
+          `${size.width}×${size.height} ${aspect}`
+        )
+      );
+    }
+  }
+  setSelectValue(select, previous);
+}
+
+function selectedH3Size() {
+  const parts = $("video-h3-size").value.split("x");
+  const width = Number(parts[0]);
+  const height = Number(parts[1]);
+  return Number.isFinite(width) && Number.isFinite(height)
+    ? { width, height }
+    : null;
+}
+
+function updateH3Notes() {
+  const profile = selectedH3Profile();
+  const note = $("video-h3-profile-note");
+  if (!profile) {
+    note.textContent = "Cargando perfiles…";
+  } else {
+    const encoder = profile.projection
+      ? `ClipProj ${profile.projection}`
+      : "encoder 32B sin proyección";
+    const recommended = (profile.seconds_recomendados || []).join("/");
+    note.textContent = `${profile.note} · ${encoder}` +
+      (recommended ? ` · recomendado: ${recommended} s` : "");
+  }
+  const seconds = Number($("video-h3-seconds").value);
+  $("video-h3-seconds-info").textContent = Number.isFinite(seconds)
+    ? `≈ ${seconds} s → ${h3FramesForSeconds(seconds)} frames (${H3_FPS} fps)`
+    : "";
+  const size = selectedH3Size();
+  $("video-h3-size-info").textContent = size
+    ? `múltiplos de 32 · máx 768×1344 · grid 5+17n`
+    : "";
+}
+
+async function loadH3Profiles() {
+  const data = await api("/api/video/h3_profiles");
+  state.videoH3Profiles = data.items || data.profiles || [];
+  state.videoH3Seconds = data.seconds || [];
+  state.videoH3Resolutions = data.resolutions || {};
+  const profileSelect = $("video-h3-profile");
+  profileSelect.replaceChildren();
+  for (const profile of state.videoH3Profiles) {
+    profileSelect.appendChild(option(profile.id, profile.label || profile.id));
+  }
+  const secondsSelect = $("video-h3-seconds");
+  secondsSelect.replaceChildren();
+  for (const seconds of state.videoH3Seconds) {
+    secondsSelect.appendChild(option(String(seconds), `${seconds} s`));
+  }
+  fillH3Sizes();
+  setSelectValue(profileSelect, "calidad");
+  setSelectValue(secondsSelect, String(defaultH3Seconds()));
+  updateH3Notes();
+}
+
 function applyVideoEngine() {
   const isWan = $("video-engine").value === "wan";
   const showLast = !isWan || $("video-mode").value === "flf2v";
@@ -1738,7 +1867,14 @@ function applyVideoEngine() {
   $("video-negative-details").style.display = isWan ? "" : "none";
   $("video-prompt-field").style.display = isWan ? "none" : "";
   $("video-last-field").style.display = showLast ? "" : "none";
+  for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field"]) {
+    $(id).style.display = isWan ? "none" : "";
+  }
+  for (const id of ["video-h3-profile", "video-h3-seconds", "video-h3-size"]) {
+    $(id).disabled = isWan;
+  }
   updateVideoPresetNote();
+  updateH3Notes();
 }
 
 function setEditorStatus(text, isError = false) {
@@ -3723,6 +3859,12 @@ const REQUIRED_IDS = [
   "video-preset",
   "video-preset-note",
   "video-seconds",
+  "video-h3-profile",
+  "video-h3-profile-note",
+  "video-h3-seconds",
+  "video-h3-seconds-info",
+  "video-h3-size",
+  "video-h3-size-info",
   "video-motion-negative",
   "video-preview",
   "video-preview-empty",
@@ -3871,12 +4013,15 @@ function bind() {
   on("video-engine", "change", () => {
     applyVideoEngine();
     if ($("video-engine").value !== "wan") {
-      setVideoStatus("H3: el preset de vídeo no aplica (solo Wan)");
+      setVideoStatus("H3: perfil ClipProj 4B · el preset Wan no aplica");
     }
   });
   on("video-mode", "change", applyVideoEngine);
   on("video-preset", "change", updateVideoPresetNote);
   on("video-seconds", "input", updateVideoDurationInfo);
+  on("video-h3-profile", "change", updateH3Notes);
+  on("video-h3-seconds", "change", updateH3Notes);
+  on("video-h3-size", "change", updateH3Notes);
   on("video-motion-negative", "input", () => {
     state.videoNegativeTouched = true;
   });
@@ -4022,6 +4167,7 @@ async function init() {
     await settle("secciones", initPanelSections);
     await settle("seed aleatoria", initSeedRandom);
     await settle("presets de video", loadVideoPresets);
+    await settle("perfiles H3", loadH3Profiles);
     await settle("video", () => {
       applyVideoEngine();
       updateVideoDurationInfo();

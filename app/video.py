@@ -22,6 +22,15 @@ from typing import Any, Callable
 
 from app.config import APP_ROOT
 from app.engine import ComfyEngine, EngineError, load_graph
+from app.h3_presets import (
+    h3_default_size,
+    h3_frames_for_seconds,
+    h3_template_path,
+    require_h3_frames,
+    require_h3_seconds,
+    resolve_h3_profile,
+    validate_h3_size,
+)
 from app.motion import MOTION_NEGATIVE
 from app.params import is_valid_sampler, is_valid_scheduler
 from app.progress import ProgressTracker
@@ -536,16 +545,25 @@ def prepare_h3_graph(
     last_image_name: str,
     prompt: str,
     seed: int,
+    width: int = 576,
+    height: int = 1024,
+    frames: int | None = None,
 ) -> dict:
-    """Copia el grafo H3 FL2VA y fija primer/último frame, prompt y seed.
+    """Copia el grafo H3 FL2VA y fija primer/último frame, prompt, seed y tamaño.
 
     Nodos del certificado: LoadImage ``140``/``141`` (first/last),
-    ``MiniMaxH3ImageToVideo`` ``131`` (prompt) y ``RandomNoise`` ``129``.
+    ``MiniMaxH3ImageToVideo`` ``131`` (prompt, width/height/length) y
+    ``RandomNoise`` ``129``. El tamaño valida múltiplo de 32, área máxima
+    (768x1344) y aspecto vertical/horizontal; `frames` opcional parchea
+    `length` exigiendo el grid 5+17n del modelo (124..362).
     """
     first_image_name = _require_text(first_image_name, "h3: first_image_name")
     last_image_name = _require_text(last_image_name, "h3: last_image_name")
     prompt = _require_text(prompt, "h3: prompt")
     seed = _require_seed(seed)
+    width, height = validate_h3_size(width, height)
+    if frames is not None:
+        frames = require_h3_frames(frames)
 
     prepared = copy.deepcopy(graph)
     first = _node_inputs(prepared, "140", "LoadImage")
@@ -555,8 +573,14 @@ def prepare_h3_graph(
     _require_field(last, "image", "141")
     last["image"] = last_image_name
     to_video = _node_inputs(prepared, "131", "MiniMaxH3ImageToVideo")
-    _require_field(to_video, "prompt", "131")
+    for field in ("prompt", "width", "height"):
+        _require_field(to_video, field, "131")
     to_video["prompt"] = prompt
+    to_video["width"] = width
+    to_video["height"] = height
+    if frames is not None:
+        _require_field(to_video, "length", "131")
+        to_video["length"] = frames
     noise = _node_inputs(prepared, "129", "RandomNoise")
     _require_field(noise, "noise_seed", "129")
     noise["noise_seed"] = seed
@@ -571,14 +595,50 @@ def build_video_graph(job: dict) -> dict:
     puede traer `frames` (4n+1) para parchear `length` y, para Wan, `preset`
     (id, ``"manual"`` o ausente) y overrides `sampler_name`/`scheduler`/`steps`/
     `shift` resueltos con `resolve_wan_profile` (overrides > preset >
-    certificado). H3 ignora esos campos.
+    certificado).
+
+    Para `engine="h3"` el job trae `profile` (ausente → ``referencia``), y
+    `seconds` (5/8/10/12/15) o `frames` (5+17n) más `width`/`height` (múltiplo
+    de 32, área <= 768x1344); la plantilla sale del perfil si falta `template`.
     """
+    engine_kind = job.get("engine")
+    seed = _require_seed(job.get("seed", 42))
+    if engine_kind == "h3":
+        profile = resolve_h3_profile(job.get("profile"))
+        template = job.get("template")
+        if not isinstance(template, str) or not template.strip():
+            template = str(h3_template_path(profile))
+        graph = load_graph(template)
+        aspect = job.get("aspect") or "vertical"
+        width = job.get("width")
+        height = job.get("height")
+        if width is None and height is None:
+            width, height = h3_default_size(aspect)
+        elif width is None or height is None:
+            raise EngineError("video: width y height deben ir juntos para h3")
+        width, height = validate_h3_size(width, height, aspect)
+        frames = job.get("frames")
+        if frames is None:
+            seconds = job.get("seconds")
+            if seconds is None:
+                seconds = profile["seconds_recomendados"][0]
+            frames = h3_frames_for_seconds(require_h3_seconds(seconds))
+        else:
+            frames = require_h3_frames(frames)
+        return prepare_h3_graph(
+            graph,
+            first_image_name=job.get("image_name"),
+            last_image_name=job.get("last_image_name"),
+            prompt=job.get("prompt"),
+            seed=seed,
+            width=width,
+            height=height,
+            frames=frames,
+        )
     template = job.get("template")
     if not isinstance(template, str) or not template.strip():
         raise EngineError("video: template requerido")
     graph = load_graph(template)
-    engine_kind = job.get("engine")
-    seed = _require_seed(job.get("seed", 42))
     if engine_kind == "wan":
         profile = resolve_wan_profile(
             preset=job.get("preset"),
@@ -622,14 +682,6 @@ def build_video_graph(job: dict) -> dict:
             motion_positive=job.get("motion_positive"),
             motion_negative=job.get("motion_negative") or MOTION_NEGATIVE,
             **common,
-        )
-    if engine_kind == "h3":
-        return prepare_h3_graph(
-            graph,
-            first_image_name=job.get("image_name"),
-            last_image_name=job.get("last_image_name"),
-            prompt=job.get("prompt"),
-            seed=seed,
         )
     raise EngineError(f"video: engine invalido {engine_kind!r}; usar wan|h3")
 

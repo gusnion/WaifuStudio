@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
+from app.h3_presets import h3_template_path, resolve_h3_profile
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, SYS_PROMPT_MOTION
 from app.registry import DEFAULT_PATH, ModelRegistry
@@ -302,6 +303,44 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         )
         self.assert_400(self.payload(engine="h3", preset="calidad"))
 
+    def test_h3_profile_invalido_400(self):
+        base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
+        for value in ("nope", "REFERENCIA", 5, True):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(**base, profile=value))
+
+    def test_h3_seconds_no_permitidos_400(self):
+        base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
+        for value in (0, 6, 7, 15.5, 16, -1, "8", True, "abc"):
+            with self.subTest(value=value):
+                self.assert_400(self.payload(**base, seconds=value))
+
+    def test_h3_tamano_invalido_400(self):
+        base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
+        for override in (
+            {"width": 600, "height": 1024},
+            {"width": 2048, "height": 576},
+            {"width": 1024, "height": 1024},
+            {"width": 576},
+            {"height": 1024},
+            {"width": "576", "height": 1024},
+            {"width": 576, "height": "1024"},
+        ):
+            with self.subTest(override=override):
+                self.assert_400(self.payload(**base, **override))
+
+    def test_h3_validaciones_no_escriben_imagenes(self):
+        client = self.make_client()
+        base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
+        client.post("/api/video/generate", json=self.payload(**base, profile="nope"))
+        client.post("/api/video/generate", json=self.payload(**base, seconds=6))
+        client.post(
+            "/api/video/generate",
+            json=self.payload(**base, width=2048, height=576),
+        )
+        self.assertEqual(self.input_files(), [])
+        self.assertEqual(self.store.count(), 0)
+
     def test_overrides_de_muestreo_invalidos_400(self):
         cases = (
             {"sampler_name": "nope"},
@@ -362,6 +401,49 @@ class VideoPresetsApiTests(ServerVideoTestCase):
         self.assertEqual(items[0]["profile"]["steps"], 20)
         self.assertEqual(items[1]["label"], "Calidad")
         self.assertEqual(items[1]["profile"]["sampler"], "er_sde")
+
+
+class H3ProfilesApiTests(ServerVideoTestCase):
+    def test_catalogo_de_perfiles(self):
+        response = self.make_client().get("/api/video/h3_profiles")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["profiles"], data["items"])
+        self.assertEqual(
+            [item["id"] for item in data["items"]],
+            ["referencia", "calidad", "ligero"],
+        )
+        self.assertEqual(data["seconds"], [5, 8, 10, 12, 15])
+        self.assertEqual(
+            data["resolutions"]["vertical"],
+            [{"width": 576, "height": 1024}, {"width": 768, "height": 1344}],
+        )
+        self.assertEqual(
+            data["resolutions"]["horizontal"],
+            [{"width": 1024, "height": 576}, {"width": 1344, "height": 768}],
+        )
+        for item in data["items"]:
+            with self.subTest(profile=item["id"]):
+                for field in (
+                    "id",
+                    "label",
+                    "note",
+                    "template",
+                    "dit",
+                    "vae_video",
+                    "vae_audio",
+                    "encoder",
+                    "projection",
+                    "lora",
+                    "seconds_recomendados",
+                ):
+                    self.assertIn(field, item)
+        self.assertIsNone(data["items"][0]["projection"])
+        self.assertEqual(data["items"][1]["label"], "Calidad")
+        self.assertEqual(
+            data["items"][1]["projection"], "mmh3-4b-ClipProj-v3.1.safetensors"
+        )
+        self.assertEqual(data["items"][2]["seconds_recomendados"], [8, 10, 12, 15])
 
 
 class VideoGenerateEnqueueTests(ServerVideoTestCase):
@@ -647,6 +729,84 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(row["kind"], "video")
         self.assertEqual(row["model_id"], "h3")
         self.assertEqual(row["prompt"], "integrated_multimodal_description: test")
+
+    def test_h3_sin_profile_usa_referencia(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "seed": 2,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["frames"], 192)
+        job = queue.jobs[0]
+        self.assertEqual(job["engine"], "h3")
+        self.assertEqual(job["template"], str(H3_TEMPLATE_PATH))
+        self.assertEqual(job["profile"], "referencia")
+        self.assertEqual(job["seconds"], 8.0)
+        self.assertEqual((job["width"], job["height"]), (576, 1024))
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["profile"], "referencia")
+        self.assertEqual(params["frames"], 192)
+        self.assertEqual(params["seconds"], 8.0)
+        self.assertEqual((params["width"], params["height"]), (576, 1024))
+
+    def test_h3_perfil_calidad_con_segundos_y_tamano(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "profile": "calidad",
+                "seconds": 12,
+                "width": 768,
+                "height": 1344,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["frames"], 294)
+        job = queue.jobs[0]
+        self.assertEqual(
+            job["template"], str(h3_template_path(resolve_h3_profile("calidad")))
+        )
+        self.assertEqual(job["profile"], "calidad")
+        self.assertEqual((job["width"], job["height"]), (768, 1344))
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["profile"], "calidad")
+        self.assertEqual(params["frames"], 294)
+        self.assertEqual((params["width"], params["height"]), (768, 1344))
+
+    def test_h3_ligero_horizontal_y_segundos_5(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "profile": "ligero",
+                "seconds": 5,
+                "width": 1344,
+                "height": 768,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["frames"], 124)
+        job = queue.jobs[0]
+        self.assertEqual(
+            job["template"], str(h3_template_path(resolve_h3_profile("ligero")))
+        )
+        self.assertEqual(job["profile"], "ligero")
+        self.assertEqual((job["width"], job["height"]), (1344, 768))
 
 
 class VideoCancelTests(ServerVideoTestCase):

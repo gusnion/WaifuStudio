@@ -43,6 +43,16 @@ from app.graphs import (
     patch_params,
     to_img2img,
 )
+from app.h3_presets import (
+    h3_aspect,
+    h3_catalog,
+    h3_default_size,
+    h3_frames_for_seconds,
+    h3_template_path,
+    require_h3_seconds,
+    resolve_h3_profile,
+    validate_h3_size,
+)
 from app.jobs import JobQueue
 from app.loras import families as lora_families
 from app.loras import list_loras, validate_selection
@@ -81,7 +91,6 @@ from app.store import Store
 from app.tags import by_group, list_groups, search
 from app.video import (
     ASPECTS,
-    H3_TEMPLATE_PATH,
     VIDEO_HISTORY_TIMEOUT_S,
     WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
@@ -759,6 +768,18 @@ def create_app(
             items.append(item)
         return {"items": items, "presets": items}
 
+    @app.get("/api/video/h3_profiles")
+    async def api_video_h3_profiles() -> dict:
+        """Perfiles H3 (M10-2c-1): catalogo + segundos y resoluciones permitidas."""
+        catalog = h3_catalog()
+        items = catalog["profiles"]
+        return {
+            "items": items,
+            "profiles": items,
+            "seconds": catalog["seconds"],
+            "resolutions": catalog["resolutions"],
+        }
+
     @app.get("/api/negative")
     async def api_negative(
         preprompt: str = DEFAULT_PREPROMPT, family: str = DEFAULT_FAMILY
@@ -1049,16 +1070,18 @@ def create_app(
 
     @app.post("/api/video/generate")
     async def api_video_generate(payload: dict = Body(...)) -> Any:
-        """Encola un video (M9-F1/M10-2a): mode i2v|flf2v, segundos y negativo editable.
+        """Encola un video (M9-F1/M10-2a/M10-2c): mode i2v|flf2v, segundos y negativo.
 
         `engine` sigue siendo `wan|h3`; si falta la clave, default `wan` (el
         `mode` de Wan elige plantilla I2V o FLF2V y `seconds` fija los frames
         4n+1). Para Wan, `preset` (id o `"manual"`; desconocido ⇒ 400) y los
         overrides `sampler_name`/`scheduler`/`steps`/`shift` se resuelven con
         precedencia overrides > preset > certificado; el tamano efectivo sale
-        del preset segun `aspect` y `vram_hint` lo refleja. La respuesta anade
-        `frames` y `vram_hint` (tabla de 12 GB). En `engine=h3` el preset no
-        aplica (EngineError si llega uno real).
+        del preset segun `aspect` y `vram_hint` lo refleja. En `engine=h3` el
+        preset Wan no aplica (400 si llega uno real) y `profile` (ausente →
+        `referencia`), `seconds` (5/8/10/12/15), `width`/`height` (múltiplo de
+        32, área <= 768x1344) eligen plantilla y grid 5+17n. La respuesta añade
+        `frames` y `vram_hint` (tabla Wan; null en H3).
         """
         if "engine" in payload:
             engine_kind = payload.get("engine")
@@ -1075,6 +1098,7 @@ def create_app(
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
         profile = None
+        h3_profile = None
         if engine_kind == "wan":
             profile = resolve_wan_profile(
                 preset=payload.get("preset"),
@@ -1084,27 +1108,41 @@ def create_app(
                 steps=payload.get("steps"),
                 shift=payload.get("shift"),
             )
+            seconds = payload.get("seconds")
+            if seconds is None:
+                seconds = 5
+            if isinstance(seconds, bool):
+                raise EngineError("seconds invalido; usar un numero entre 1 y 15")
+            try:
+                seconds = float(seconds)
+            except (TypeError, ValueError) as exc:
+                raise EngineError(
+                    "seconds invalido; usar un numero entre 1 y 15"
+                ) from exc
+            frames = frames_for_seconds(seconds)
+            width, height = profile["width"], profile["height"]
+            hint = vram_hint(frames, width, height)
         else:
             raw_preset = payload.get("preset")
             if isinstance(raw_preset, str):
                 raw_preset = raw_preset.strip()
             if raw_preset not in (None, "", PRESET_MANUAL):
                 raise EngineError("preset de video solo aplica a engine wan")
-        seconds = payload.get("seconds")
-        if seconds is None:
-            seconds = 5
-        if isinstance(seconds, bool):
-            raise EngineError("seconds invalido; usar un numero entre 1 y 15")
-        try:
-            seconds = float(seconds)
-        except (TypeError, ValueError) as exc:
-            raise EngineError("seconds invalido; usar un numero entre 1 y 15") from exc
-        frames = frames_for_seconds(seconds)
-        if profile is not None:
-            width, height = profile["width"], profile["height"]
-        else:
-            width, height = ASPECTS[aspect]
-        hint = vram_hint(frames, width, height)
+            h3_profile = resolve_h3_profile(payload.get("profile"))
+            raw_seconds = payload.get("seconds")
+            if raw_seconds is None:
+                raw_seconds = h3_profile["seconds_recomendados"][0]
+            seconds = float(require_h3_seconds(raw_seconds))
+            frames = h3_frames_for_seconds(seconds)
+            width = payload.get("width")
+            height = payload.get("height")
+            if width is None and height is None:
+                width, height = h3_default_size(aspect)
+            elif width is None or height is None:
+                raise EngineError("h3: width y height deben ir juntos")
+            width, height = validate_h3_size(width, height)
+            aspect = h3_aspect(width, height)
+            hint = None
         first_raw = _decode_image_b64(payload.get("image_b64"), "image")
         last_raw = None
         if engine_kind == "h3" or mode == "flf2v":
@@ -1145,7 +1183,7 @@ def create_app(
             _write_input_png(input_dir, last_raw) if last_raw is not None else None
         )
         if engine_kind == "h3":
-            template = H3_TEMPLATE_PATH
+            template = h3_template_path(h3_profile)
         elif mode == "flf2v":
             template = WAN_FLF_TEMPLATE_PATH
         else:
@@ -1170,6 +1208,10 @@ def create_app(
             "preset": PRESET_MANUAL if profile is None else profile["preset"],
             **profile_fields,
         }
+        if h3_profile is not None:
+            stored_params["profile"] = h3_profile["id"]
+            stored_params["width"] = width
+            stored_params["height"] = height
         gen_id = st.add(
             engine_kind,
             motion_positive if engine_kind == "wan" else prompt,
@@ -1195,6 +1237,10 @@ def create_app(
             "preset": stored_params["preset"],
             **profile_fields,
         }
+        if h3_profile is not None:
+            job["profile"] = h3_profile["id"]
+            job["width"] = width
+            job["height"] = height
         _JOBS[gen_id] = {
             "prompt_id": None,
             "tracker": None,
