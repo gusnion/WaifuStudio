@@ -3393,6 +3393,54 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(row["outputs"], ["upscaled_00001_.png"])
 
 
+class H3GuideUiStaticTests(ServerTestCase):
+    def test_index_incluye_guia_de_prompt_h3(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="video-h3-guide"',
+            "Guía de prompt H3",
+            'id="btn-h3-insert-template"',
+            "Insertar plantilla",
+            'id="btn-h3-copy-guide"',
+            "Copiar guía",
+            'id="h3-guide-status"',
+            "integrated_multimodal_description",
+            "overall_soundscape",
+            "non_diegetic_music",
+            "[Español]",
+            "speaker id estable",
+            "~2/3",
+            "sin cortes",
+            "FL2VA",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertLess(
+            text.index('id="video-prompt-field"'),
+            text.index('id="video-h3-guide"'),
+        )
+
+    def test_app_js_incluye_guia_y_plantilla_h3(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "H3_PROMPT_TEMPLATE",
+            "H3_GUIDE_TEXT",
+            "insertH3Template",
+            "copyH3Guide",
+            "setH3GuideStatus",
+            "${current}\\n\\n${H3_PROMPT_TEMPLATE}",
+            'on("btn-h3-insert-template", "click", insertH3Template);',
+            'on("btn-h3-copy-guide", "click", copyH3Guide);',
+            '$("video-h3-guide").style.display = isWan ? "none" : "";',
+            '"video-h3-guide",',
+            '"btn-h3-insert-template",',
+            '"btn-h3-copy-guide",',
+            '"h3-guide-status",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class UpscaleUiStaticTests(ServerTestCase):
     def test_index_incluye_pestana_y_controles_upscaler(self):
         text = self.make_client().get("/").text

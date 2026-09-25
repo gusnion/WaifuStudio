@@ -285,6 +285,28 @@
           <textarea id="video-prompt" rows="3" placeholder="integrated_multimodal_description: ..."></textarea>
         </label>
 
+        <details id="video-h3-guide" class="advanced" style="display: none">
+          <summary>Guía de prompt H3</summary>
+          <div class="section-body">
+            <p class="field-hint">H3 espera tres bloques, en una sola toma continua (sin cortes):</p>
+            <pre class="h3-guide-code">integrated_multimodal_description: &lt;sujeto, vestuario, entorno, luz, cámara y movimiento restringido&gt;
+overall_soundscape: &lt;ambiente y efectos; diálogo solo si aplica&gt;
+non_diegetic_music: &lt;música o None&gt;</pre>
+            <ul class="h3-guide-tips">
+              <li>Diálogo con idioma explícito: <code>&lt;d&gt;[Español] texto&lt;/d&gt;</code>.</li>
+              <li>Declara un speaker id estable antes de las voces (p. ej. <code>speaker_1</code>).</li>
+              <li>Un diálogo no debe llenar más de ~2/3 de su plano.</li>
+              <li>Una toma continua por generación: sin cortes.</li>
+              <li>También aplica a FL2VA (primer y último frame).</li>
+            </ul>
+            <div class="h3-guide-actions">
+              <button id="btn-h3-insert-template" type="button">Insertar plantilla</button>
+              <button id="btn-h3-copy-guide" type="button">Copiar guía</button>
+            </div>
+            <p id="h3-guide-status" class="field-hint"></p>
+          </div>
+        </details>
+
         <div class="grid-2">
           <label class="field" id="video-aspect-field">
             <span>Aspecto (Wan)</span>

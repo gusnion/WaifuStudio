@@ -1572,6 +1572,49 @@ input[type="checkbox"] {
   padding: 0.5rem 0.55rem;
 }
 
+.h3-guide-code {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.h3-guide-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.h3-guide-tips code {
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
+.h3-guide-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.h3-guide-actions button {
+  flex: 1;
+}
+
+#h3-guide-status.error {
+  color: var(--error);
+}
+
 .panel-section > summary {
   display: flex;
   align-items: center;

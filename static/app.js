@@ -53,6 +53,26 @@ const H3_FPS = 24;
 const H3_FRAME_BASE = 5;
 const H3_FRAME_STEP = 17;
 
+const H3_PROMPT_TEMPLATE = [
+  "integrated_multimodal_description:",
+  "overall_soundscape:",
+  "non_diegetic_music: None",
+].join("\n");
+
+const H3_GUIDE_TEXT = [
+  "Guía de prompt H3 (MiniMax):",
+  "",
+  H3_PROMPT_TEMPLATE,
+  "",
+  "Una toma continua por generación, sin cortes.",
+  "integrated_multimodal_description: sujeto, vestuario, entorno, luz, cámara y movimiento restringido.",
+  "overall_soundscape: ambiente y efectos; diálogo solo si aplica con <d>[Idioma] texto</d>.",
+  "Declara un speaker id estable antes de las voces (p. ej. speaker_1).",
+  "Un diálogo no debe llenar más de ~2/3 de su plano.",
+  "non_diegetic_music: música o None.",
+  "También aplica a FL2VA (primer y último frame).",
+].join("\n");
+
 const EDITOR_REF_LIMIT = 10;
 const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
@@ -1874,6 +1894,7 @@ function applyVideoEngine() {
   $("video-motion-actions").style.display = isWan ? "" : "none";
   $("video-negative-details").style.display = isWan ? "" : "none";
   $("video-prompt-field").style.display = isWan ? "none" : "";
+  $("video-h3-guide").style.display = isWan ? "none" : "";
   $("video-last-field").style.display = showLast ? "" : "none";
   for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field"]) {
     $(id).style.display = isWan ? "none" : "";
@@ -1883,6 +1904,47 @@ function applyVideoEngine() {
   }
   updateVideoPresetNote();
   updateH3Notes();
+}
+
+function setH3GuideStatus(text, isError = false) {
+  const el = $("h3-guide-status");
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function insertH3Template() {
+  const area = $("video-prompt");
+  if (!area) {
+    return;
+  }
+  const current = area.value.replace(/\s+$/, "");
+  area.value = current ? `${current}\n\n${H3_PROMPT_TEMPLATE}` : H3_PROMPT_TEMPLATE;
+  area.focus();
+  setH3GuideStatus("Plantilla insertada");
+}
+
+async function copyH3Guide() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(H3_GUIDE_TEXT);
+    } else {
+      const area = document.createElement("textarea");
+      area.value = H3_GUIDE_TEXT;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    setH3GuideStatus("Guía copiada");
+  } catch (error) {
+    setH3GuideStatus(error.message, true);
+  }
 }
 
 function setEditorStatus(text, isError = false) {
@@ -4139,6 +4201,10 @@ const REQUIRED_IDS = [
   "video-h3-seconds-info",
   "video-h3-size",
   "video-h3-size-info",
+  "video-h3-guide",
+  "btn-h3-insert-template",
+  "btn-h3-copy-guide",
+  "h3-guide-status",
   "video-motion-negative",
   "video-preview",
   "video-preview-empty",
@@ -4320,6 +4386,8 @@ function bind() {
   on("video-h3-profile", "change", updateH3Notes);
   on("video-h3-seconds", "change", updateH3Notes);
   on("video-h3-size", "change", updateH3Notes);
+  on("btn-h3-insert-template", "click", insertH3Template);
+  on("btn-h3-copy-guide", "click", copyH3Guide);
   on("video-motion-negative", "input", () => {
     state.videoNegativeTouched = true;
   });
