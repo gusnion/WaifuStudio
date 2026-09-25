@@ -1301,6 +1301,12 @@ input[type="checkbox"] {
   color: var(--accent-2);
 }
 
+.lora-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .lora-box {
   width: min(620px, 100%);
 }
@@ -1309,6 +1315,19 @@ input[type="checkbox"] {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+}
+
+.lora-library-box {
+  width: min(880px, 100%);
+}
+
+.lora-library-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
   min-height: 0;
   overflow-y: auto;
   padding: 0.8rem 1rem;

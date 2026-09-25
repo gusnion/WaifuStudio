@@ -271,6 +271,233 @@ class LorasRouteTests(ServerTestCase):
         self.assertIn("wan", data["families"])
 
 
+class LoraCrudRouteTests(ServerTestCase):
+    """CRUD de biblioteca LoRAs (M10-5b): registro y models/loras temporales."""
+
+    def setUp(self):
+        super().setUp()
+        self.loras_path = self.config.data_dir / "loras-test.json"
+        self.loras_root = self.config.comfy_root / "models" / "loras"
+        (self.loras_root / "anima").mkdir(parents=True, exist_ok=True)
+        for stem in ("a", "b", "c"):
+            (self.loras_root / "anima" / f"{stem}.safetensors").write_bytes(
+                b"fake-lora"
+            )
+        self.write_registry([self.entry("lora-a", "a"), self.entry("lora-b", "b")])
+        patcher = mock.patch.object(
+            loras_module, "DEFAULT_PATH", self.loras_path
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def entry(self, lora_id: str, stem: str, **overrides) -> dict:
+        data = {
+            "id": lora_id,
+            "family": "anima",
+            "file": f"anima/{stem}.safetensors",
+            "display_name": lora_id,
+            "trigger": "",
+            "default_weight": 1.0,
+            "source": "test",
+            "license": "test",
+            "notes": "",
+        }
+        data.update(overrides)
+        return data
+
+    def write_registry(self, entries: list[dict]) -> None:
+        self.loras_path.parent.mkdir(parents=True, exist_ok=True)
+        self.loras_path.write_text(
+            json.dumps({"version": 1, "loras": entries}), encoding="utf-8"
+        )
+
+    def registry_ids(self) -> list[str]:
+        payload = json.loads(self.loras_path.read_text(encoding="utf-8"))
+        return [item["id"] for item in payload["loras"]]
+
+    def test_get_sigue_devolviendo_items_y_familias(self):
+        data = self.make_client().get("/api/loras").json()
+        self.assertEqual([item["id"] for item in data["items"]], ["lora-a", "lora-b"])
+        self.assertEqual(data["families"], ["anima"])
+
+    def test_post_crea_y_devuelve_catalogo(self):
+        response = self.make_client().post(
+            "/api/loras",
+            json=self.entry("lora-c", "c", family="nueva", trigger="t1"),
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["item"]["id"], "lora-c")
+        self.assertEqual(data["item"]["trigger"], "t1")
+        self.assertEqual(
+            [item["id"] for item in data["items"]],
+            ["lora-a", "lora-b", "lora-c"],
+        )
+        self.assertEqual(data["families"], ["anima", "nueva"])
+        self.assertEqual(self.registry_ids(), ["lora-a", "lora-b", "lora-c"])
+
+    def test_post_id_duplicado_409_y_registro_intacto(self):
+        before = self.loras_path.read_text(encoding="utf-8")
+        response = self.make_client().post("/api/loras", json=self.entry("lora-a", "c"))
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("error", response.json())
+        self.assertEqual(self.loras_path.read_text(encoding="utf-8"), before)
+
+    def test_post_archivo_inexistente_400(self):
+        response = self.make_client().post(
+            "/api/loras", json=self.entry("lora-x", "no-existe")
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+        self.assertEqual(self.registry_ids(), ["lora-a", "lora-b"])
+
+    def test_post_archivo_no_confinado_o_absoluto_400(self):
+        escape_values = (
+            "../fuera.safetensors",
+            "..\\..\\fuera.safetensors",
+            "anima/../../fuera.safetensors",
+            str(self.loras_root / "anima" / "a.safetensors"),
+        )
+        for file_value in escape_values:
+            with self.subTest(file=file_value):
+                response = self.make_client().post(
+                    "/api/loras",
+                    json=self.entry("lora-x", "x", file=file_value),
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.registry_ids(), ["lora-a", "lora-b"])
+
+    def test_post_validacion_400(self):
+        for payload in (
+            self.entry("lora-x", "x", family=""),
+            self.entry("lora-x", "x", display_name=""),
+            self.entry("lora-x", "x", default_weight=3),
+            self.entry("Con Mayusculas", "x"),
+            self.entry("lora-x", "x", trigger=5),
+        ):
+            with self.subTest(payload=payload):
+                response = self.make_client().post("/api/loras", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.registry_ids(), ["lora-a", "lora-b"])
+
+    def test_put_edita_y_persiste(self):
+        response = self.make_client().put(
+            "/api/loras/lora-a",
+            json={
+                "display_name": "Otra",
+                "trigger": "t1",
+                "default_weight": 0.5,
+                "notes": "n",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["item"]
+        self.assertEqual(item["id"], "lora-a")
+        self.assertEqual(item["display_name"], "Otra")
+        self.assertEqual(item["default_weight"], 0.5)
+        saved = json.loads(self.loras_path.read_text(encoding="utf-8"))["loras"][0]
+        self.assertEqual(saved["trigger"], "t1")
+        self.assertEqual(saved["notes"], "n")
+        self.assertEqual(saved["file"], "anima/a.safetensors")
+
+    def test_put_cambia_file_si_existe(self):
+        response = self.make_client().put(
+            "/api/loras/lora-a", json={"file": "anima/c.safetensors"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["item"]["file"], "anima/c.safetensors")
+
+    def test_put_404_400_y_id_inmutable(self):
+        client = self.make_client()
+        before = self.loras_path.read_text(encoding="utf-8")
+        self.assertEqual(
+            client.put("/api/loras/no-existe", json={"trigger": "t"}).status_code, 404
+        )
+        self.assertEqual(
+            client.put("/api/loras/lora-a", json={"id": "otro"}).status_code, 400
+        )
+        self.assertEqual(
+            client.put(
+                "/api/loras/lora-a", json={"file": "anima/no-existe.safetensors"}
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            client.put("/api/loras/lora-a", json={"display_name": ""}).status_code,
+            400,
+        )
+        self.assertEqual(self.loras_path.read_text(encoding="utf-8"), before)
+
+    def test_delete_quita_entrada_y_no_el_fichero(self):
+        response = self.make_client().delete("/api/loras/lora-a")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["deleted"], "lora-a")
+        self.assertEqual([item["id"] for item in data["items"]], ["lora-b"])
+        self.assertEqual(data["families"], ["anima"])
+        self.assertEqual(self.registry_ids(), ["lora-b"])
+        self.assertTrue((self.loras_root / "anima" / "a.safetensors").is_file())
+
+    def test_delete_404_no_toca_el_registro(self):
+        response = self.make_client().delete("/api/loras/no-existe")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+        self.assertEqual(self.registry_ids(), ["lora-a", "lora-b"])
+
+
+class LoraLibraryUiStaticTests(ServerTestCase):
+    def test_index_incluye_gestion_de_biblioteca(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="btn-lora-manage"',
+            ">Gestionar biblioteca<",
+            'id="btn-lora-manage-modal"',
+            'id="lora-library-modal"',
+            'id="btn-lora-library-close"',
+            'id="lora-library-status"',
+            'id="lora-library-list"',
+            'id="lora-library-form"',
+            'id="lora-library-form-title"',
+            'id="lora-form-id"',
+            'id="lora-form-family"',
+            'id="lora-form-file"',
+            'id="lora-form-display"',
+            'id="lora-form-trigger"',
+            'id="lora-form-weight"',
+            'id="lora-form-source"',
+            'id="lora-form-license"',
+            'id="lora-form-notes"',
+            'id="btn-lora-form-cancel"',
+            "NO se borra",
+            "models\\loras",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_incluye_crud_biblioteca(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "putJson",
+            "loadLoraLibrary",
+            "renderLoraLibrary",
+            "editLoraEntry",
+            "saveLoraEntry",
+            "deleteLoraEntry",
+            "openLoraLibrary",
+            "closeLoraLibrary",
+            'postJson("/api/loras"',
+            "/api/loras/${encodeURIComponent",
+            '{ method: "DELETE" }',
+            'on("btn-lora-manage", "click", openLoraLibrary);',
+            'on("btn-lora-manage-modal", "click", openLoraLibrary);',
+            '"lora-library-modal",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class ParamsRouteTests(ServerTestCase):
     def test_params_enums_y_defaults(self):
         response = self.make_client().get("/api/params")

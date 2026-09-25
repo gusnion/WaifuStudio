@@ -166,6 +166,8 @@ const state = {
   loras: [],
   loraControls: {},
   loraSelection: new Map(),
+  loraLibrary: [],
+  loraEditId: null,
   customPreprompts: [],
   trainCharacterId: null,
   trainItems: [],
@@ -248,6 +250,14 @@ async function api(path, options = {}) {
 function postJson(path, payload) {
   return api(path, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+function putJson(path, payload) {
+  return api(path, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -401,8 +411,8 @@ function renderLoraChips() {
   if (!state.loras.length) {
     container.appendChild(
       emptyLoraMessage(
-        "No hay LoRAs de imagen registradas. Añádelas en registry/loras.json " +
-          "con familia anima (o espera las descargas de M10)"
+        "No hay LoRAs de imagen registradas. Añádelas con «Gestionar " +
+          "biblioteca» (o en registry/loras.json) con familia anima"
       )
     );
     return;
@@ -498,8 +508,8 @@ function renderLoraModalList() {
   if (!state.loras.length) {
     container.appendChild(
       emptyLoraMessage(
-        "No hay LoRAs de imagen registradas. Añádelas en registry/loras.json " +
-          "con familia anima (o espera las descargas de M10)"
+        "No hay LoRAs de imagen registradas. Añádelas con «Gestionar " +
+          "biblioteca» (o en registry/loras.json) con familia anima"
       )
     );
     return;
@@ -632,6 +642,213 @@ function applyLorasSelection(loras) {
   }
   renderLoraChips();
   updateLoraCounters();
+}
+
+function setLoraLibraryStatus(text, isError = false) {
+  const el = $("lora-library-status");
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function loraLibraryEntry(loraId) {
+  return state.loraLibrary.find((lora) => lora.id === loraId) || null;
+}
+
+function loraLibraryRow(lora) {
+  const row = document.createElement("div");
+  row.className = "oc-item";
+  const header = document.createElement("div");
+  header.className = "oc-item-header";
+  const title = document.createElement("strong");
+  title.textContent = lora.display_name || lora.id;
+  const badge = document.createElement("span");
+  badge.className = "oc-item-badge";
+  badge.textContent = lora.family;
+  header.append(title, badge);
+  const meta = document.createElement("div");
+  meta.className = "oc-item-tags";
+  const bits = [`@ ${Number(lora.default_weight).toFixed(2)}`, `id: ${lora.id}`];
+  if (lora.trigger) {
+    bits.push(`trigger: ${lora.trigger}`);
+  }
+  if (lora.notes) {
+    bits.push(lora.notes);
+  }
+  meta.textContent = bits.join(" · ");
+  const file = document.createElement("div");
+  file.className = "oc-item-tags";
+  file.textContent = lora.file;
+  const actions = document.createElement("div");
+  actions.className = "oc-item-actions";
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.textContent = "Editar";
+  edit.addEventListener("click", () => editLoraEntry(lora.id));
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.textContent = "Borrar";
+  remove.addEventListener("click", () => {
+    deleteLoraEntry(lora.id).catch((error) =>
+      setLoraLibraryStatus(error.message, true)
+    );
+  });
+  actions.append(edit, remove);
+  row.append(header, meta, file, actions);
+  return row;
+}
+
+function renderLoraLibrary() {
+  const container = $("lora-library-list");
+  if (!container) {
+    return;
+  }
+  container.replaceChildren();
+  if (!state.loraLibrary.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin LoRAs registradas.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const lora of state.loraLibrary) {
+    container.appendChild(loraLibraryRow(lora));
+  }
+}
+
+async function loadLoraLibrary() {
+  const data = await api("/api/loras");
+  state.loraLibrary = data.items || [];
+  renderLoraLibrary();
+  return data;
+}
+
+function resetLoraForm() {
+  state.loraEditId = null;
+  const form = $("lora-library-form");
+  if (form) {
+    form.reset();
+  }
+  const title = $("lora-library-form-title");
+  if (title) {
+    title.textContent = "Añadir LoRA";
+  }
+  const idInput = $("lora-form-id");
+  if (idInput) {
+    idInput.disabled = false;
+  }
+  const cancel = $("btn-lora-form-cancel");
+  if (cancel) {
+    cancel.classList.add("hidden");
+  }
+}
+
+function editLoraEntry(loraId) {
+  const lora = loraLibraryEntry(loraId);
+  if (!lora) {
+    return;
+  }
+  state.loraEditId = lora.id;
+  $("lora-form-id").value = lora.id;
+  $("lora-form-id").disabled = true;
+  $("lora-form-family").value = lora.family;
+  $("lora-form-file").value = lora.file;
+  $("lora-form-display").value = lora.display_name;
+  $("lora-form-trigger").value = lora.trigger || "";
+  $("lora-form-weight").value = String(lora.default_weight);
+  $("lora-form-source").value = lora.source;
+  $("lora-form-license").value = lora.license;
+  $("lora-form-notes").value = lora.notes || "";
+  $("lora-library-form-title").textContent = `Editar «${lora.id}»`;
+  $("btn-lora-form-cancel").classList.remove("hidden");
+  setLoraLibraryStatus(`Editando ${lora.id} (id inmutable)`);
+}
+
+function readLoraForm() {
+  const rawWeight = $("lora-form-weight").value;
+  return {
+    id: state.loraEditId || $("lora-form-id").value.trim(),
+    family: $("lora-form-family").value.trim(),
+    file: $("lora-form-file").value.trim(),
+    display_name: $("lora-form-display").value.trim(),
+    trigger: $("lora-form-trigger").value.trim(),
+    default_weight: rawWeight === "" ? 1 : Number(rawWeight),
+    source: $("lora-form-source").value.trim(),
+    license: $("lora-form-license").value.trim(),
+    notes: $("lora-form-notes").value,
+  };
+}
+
+async function saveLoraEntry(event) {
+  event.preventDefault();
+  const payload = readLoraForm();
+  if (
+    !payload.id ||
+    !payload.family ||
+    !payload.file ||
+    !payload.display_name ||
+    !payload.source ||
+    !payload.license
+  ) {
+    setLoraLibraryStatus(
+      "Id, familia, archivo, nombre visible, fuente y licencia son obligatorios.",
+      true
+    );
+    return;
+  }
+  try {
+    if (state.loraEditId) {
+      const data = await putJson(
+        `/api/loras/${encodeURIComponent(state.loraEditId)}`,
+        payload
+      );
+      setLoraLibraryStatus(`LoRA «${data.item.id}» actualizada`);
+    } else {
+      const data = await postJson("/api/loras", payload);
+      setLoraLibraryStatus(`LoRA «${data.item.id}» añadida`);
+    }
+    resetLoraForm();
+    await loadLoraLibrary();
+    await loadLoras();
+  } catch (error) {
+    setLoraLibraryStatus(error.message, true);
+  }
+}
+
+async function deleteLoraEntry(loraId) {
+  const lora = loraLibraryEntry(loraId);
+  const label = lora ? lora.display_name || lora.id : loraId;
+  if (
+    !window.confirm(
+      `¿Quitar «${label}» del registro? El archivo .safetensors NO se borra.`
+    )
+  ) {
+    return;
+  }
+  await api(`/api/loras/${encodeURIComponent(loraId)}`, { method: "DELETE" });
+  if (state.loraEditId === loraId) {
+    resetLoraForm();
+  }
+  await loadLoraLibrary();
+  await loadLoras();
+  setLoraLibraryStatus(`LoRA «${loraId}» quitada del registro (archivo intacto)`);
+}
+
+function openLoraLibrary() {
+  closeLoraModal();
+  resetLoraForm();
+  $("lora-library-modal").classList.remove("hidden");
+  setLoraLibraryStatus("Listo");
+  loadLoraLibrary().catch((error) => setLoraLibraryStatus(error.message, true));
+}
+
+function closeLoraLibrary() {
+  const modal = $("lora-library-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
 }
 
 async function applyModel(modelId) {
@@ -4272,6 +4489,24 @@ const REQUIRED_IDS = [
   "btn-lora-done",
   "btn-lora-clear",
   "lora-search",
+  "btn-lora-manage",
+  "btn-lora-manage-modal",
+  "lora-library-modal",
+  "btn-lora-library-close",
+  "lora-library-status",
+  "lora-library-list",
+  "lora-library-form",
+  "lora-library-form-title",
+  "lora-form-id",
+  "lora-form-family",
+  "lora-form-file",
+  "lora-form-display",
+  "lora-form-trigger",
+  "lora-form-weight",
+  "lora-form-source",
+  "lora-form-license",
+  "lora-form-notes",
+  "btn-lora-form-cancel",
 ];
 
 function bind() {
@@ -4318,6 +4553,7 @@ function bind() {
     if (event.key === "Escape") {
       closeLightbox();
       closePrepromptModal();
+      closeLoraLibrary();
       closeLoraModal();
       const trainModal = $("oc-train-modal");
       if (trainModal && !trainModal.classList.contains("hidden")) {
@@ -4450,6 +4686,16 @@ function bind() {
   on("lora-modal", "click", (event) => {
     if (event.target === $("lora-modal")) {
       closeLoraModal();
+    }
+  });
+  on("btn-lora-manage", "click", openLoraLibrary);
+  on("btn-lora-manage-modal", "click", openLoraLibrary);
+  on("btn-lora-library-close", "click", closeLoraLibrary);
+  on("btn-lora-form-cancel", "click", resetLoraForm);
+  on("lora-library-form", "submit", saveLoraEntry);
+  on("lora-library-modal", "click", (event) => {
+    if (event.target === $("lora-library-modal")) {
+      closeLoraLibrary();
     }
   });
   on("btn-oc", "click", openOcModal);

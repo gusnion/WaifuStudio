@@ -55,8 +55,13 @@ from app.h3_presets import (
     validate_h3_size,
 )
 from app.jobs import JobQueue
+from app.loras import add_entry as add_lora
+from app.loras import delete_entry as delete_lora
 from app.loras import families as lora_families
-from app.loras import list_loras, validate_selection
+from app.loras import get as get_lora
+from app.loras import list_loras
+from app.loras import update_entry as update_lora
+from app.loras import validate_selection
 from app.motion import MOTION_NEGATIVE, write_motion
 from app.oc_traits import build_prompt, list_traits
 from app.params import (
@@ -245,6 +250,28 @@ def editor_installed(comfy_root: Any) -> bool:
     """
     models_root = Path(comfy_root) / "models"
     return all((models_root / relative).is_file() for relative in EDITOR_MODEL_FILES)
+
+
+def lora_file_path(comfy_root: Any, relative: object) -> Path:
+    """Resuelve ``file`` de una LoRA dentro de ``models/loras`` (M10-5b).
+
+    ``relative`` debe ser texto no vacio y quedarse dentro de la raiz (nada de
+    absolutos ni ``..``); el fichero debe existir. EngineError (400) en caso
+    contrario. No escanea el directorio: solo confina y comprueba existencia.
+    """
+    if not isinstance(relative, str) or not relative.strip():
+        raise EngineError(f"file de lora requerido (recibido {relative!r})")
+    if Path(relative).is_absolute():
+        raise EngineError(
+            f"file de lora debe ser relativo a models/loras: {relative!r}"
+        )
+    root = (Path(comfy_root) / "models" / "loras").resolve()
+    candidate = (root / relative).resolve()
+    if not candidate.is_relative_to(root):
+        raise EngineError(f"ruta de lora fuera de models/loras: {relative!r}")
+    if not candidate.is_file():
+        raise EngineError(f"archivo de lora no encontrado: {relative!r}")
+    return candidate
 
 
 def run_generation(
@@ -532,6 +559,51 @@ def create_app(
     @app.get("/api/loras")
     async def api_loras(family: str | None = None) -> dict:
         return {"items": list_loras(family), "families": lora_families()}
+
+    def _lora_catalog() -> dict:
+        return {"items": list_loras(), "families": lora_families()}
+
+    @app.post("/api/loras")
+    async def api_loras_add(payload: dict = Body(...)) -> Any:
+        """Crea una entrada: id unico, fichero existente y confinado (M10-5b)."""
+        lora_id = payload.get("id")
+        if any(item["id"] == lora_id for item in list_loras()):
+            return JSONResponse(
+                status_code=409, content={"error": f"id duplicado: {lora_id!r}"}
+            )
+        lora_file_path(cfg.comfy_root, payload.get("file"))
+        item = add_lora(payload)
+        return {"item": item, **_lora_catalog()}
+
+    @app.put("/api/loras/{lora_id}")
+    async def api_loras_update(lora_id: str, payload: dict = Body(...)) -> Any:
+        """Edita una entrada existente; el id es inmutable (M10-5b)."""
+        try:
+            get_lora(lora_id)
+        except EngineError:
+            return JSONResponse(
+                status_code=404, content={"error": f"lora no registrado: {lora_id!r}"}
+            )
+        if "id" in payload and payload["id"] != lora_id:
+            return JSONResponse(
+                status_code=400, content={"error": f"id inmutable: {lora_id!r}"}
+            )
+        if "file" in payload:
+            lora_file_path(cfg.comfy_root, payload.get("file"))
+        item = update_lora(lora_id, payload)
+        return {"item": item, **_lora_catalog()}
+
+    @app.delete("/api/loras/{lora_id}")
+    async def api_loras_delete(lora_id: str) -> Any:
+        """Quita la entrada del registro (el .safetensors no se borra, M10-5b)."""
+        try:
+            get_lora(lora_id)
+        except EngineError:
+            return JSONResponse(
+                status_code=404, content={"error": f"lora no registrado: {lora_id!r}"}
+            )
+        item = delete_lora(lora_id)
+        return {"deleted": item["id"], **_lora_catalog()}
 
     @app.get("/api/preprompts")
     async def api_preprompts(family: str = DEFAULT_FAMILY) -> dict:

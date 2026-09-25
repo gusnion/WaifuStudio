@@ -187,6 +187,53 @@ def add_entry(entry: dict, *, path: str | Path | None = None) -> dict:
     return copy.deepcopy(candidate)
 
 
+def update_entry(
+    loras_id: str, changes: dict, *, path: str | Path | None = None
+) -> dict:
+    """Aplica ``changes`` a la entrada ``loras_id`` y guarda (atomico).
+
+    Los campos ausentes conservan su valor y las claves desconocidas se ignoran;
+    el id no puede cambiar. EngineError si la entrada no existe, ``changes`` no
+    es un objeto JSON o el resultado no es valido. Devuelve una copia de la
+    entrada canonica guardada.
+    """
+    if not isinstance(changes, dict):
+        raise EngineError(
+            f"cambios invalidos: se esperaba objeto JSON, "
+            f"recibido {type(changes).__name__}"
+        )
+    registry = load_registry(path)
+    for position, item in enumerate(registry["loras"]):
+        if item["id"] != loras_id:
+            continue
+        if "id" in changes and changes["id"] != loras_id:
+            raise EngineError(f"id inmutable: {loras_id!r}")
+        data = {
+            key: changes[key] if key in changes else value
+            for key, value in item.items()
+        }
+        candidate = _entry_from_dict(data)
+        registry["loras"][position] = candidate
+        save_registry(registry, path=path)
+        return copy.deepcopy(candidate)
+    raise EngineError(f"lora no registrado: {loras_id!r}")
+
+
+def delete_entry(loras_id: str, *, path: str | Path | None = None) -> dict:
+    """Elimina la entrada ``loras_id`` del registro y guarda (atomico).
+
+    Solo toca ``registry/loras.json``: el fichero del modelo no se borra.
+    EngineError si no existe. Devuelve una copia de la entrada eliminada.
+    """
+    registry = load_registry(path)
+    for position, item in enumerate(registry["loras"]):
+        if item["id"] == loras_id:
+            removed = registry["loras"].pop(position)
+            save_registry(registry, path=path)
+            return copy.deepcopy(removed)
+    raise EngineError(f"lora no registrado: {loras_id!r}")
+
+
 def _entries(path: str | Path | None = None) -> list[dict]:
     return load_registry(path)["loras"]
 
@@ -260,10 +307,12 @@ __all__ = [
     "DEFAULT_PATH",
     "REGISTRY_VERSION",
     "add_entry",
+    "delete_entry",
     "families",
     "get",
     "list_loras",
     "load_registry",
     "save_registry",
+    "update_entry",
     "validate_selection",
 ]

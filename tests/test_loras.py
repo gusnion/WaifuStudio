@@ -8,8 +8,9 @@ import unittest
 from pathlib import Path
 
 from app.engine import EngineError
-from app.loras import DEFAULT_PATH, add_entry, families, get, list_loras
-from app.loras import load_registry, save_registry, validate_selection
+from app.loras import DEFAULT_PATH, add_entry, delete_entry, families, get
+from app.loras import list_loras, load_registry, save_registry, update_entry
+from app.loras import validate_selection
 
 ROOT = Path(__file__).resolve().parents[1]
 LORAS_DIR = ROOT / "ComfyUI" / "models" / "loras"
@@ -412,6 +413,123 @@ class AddEntryTests(unittest.TestCase):
         target = Path(self._tmp.name) / "sub" / "loras.json"
         save_registry({"version": 1, "loras": [entry()]}, path=target)
         self.assertEqual(list(target.parent.glob("*.tmp")), [])
+
+
+class UpdateDeleteEntryTests(unittest.TestCase):
+    """Edicion y borrado de entradas con registro temporal (M10-5b)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "loras.json"
+        self.write(
+            {
+                "version": 1,
+                "_comment": "nota",
+                "loras": [entry(), entry(id="otra", family="anima")],
+            }
+        )
+
+    def write(self, payload) -> None:
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def read(self) -> dict:
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def test_update_campos_persiste_y_devuelve_copia(self):
+        updated = update_entry(
+            "lora-test",
+            {"family": "anima", "default_weight": 0.6, "trigger": "t1"},
+            path=self.path,
+        )
+        self.assertEqual(updated["family"], "anima")
+        self.assertEqual(updated["default_weight"], 0.6)
+        updated["display_name"] = "mutado"
+        saved = get("lora-test", path=self.path)
+        self.assertEqual(saved["display_name"], "Lora de test")
+        self.assertEqual(saved["file"], "test.safetensors")
+        self.assertEqual(saved["trigger"], "t1")
+
+    def test_update_parcial_conserva_el_resto(self):
+        update_entry("lora-test", {"trigger": "t1"}, path=self.path)
+        saved = get("lora-test", path=self.path)
+        self.assertEqual(saved["trigger"], "t1")
+        self.assertEqual(saved["source"], "local (test)")
+        self.assertEqual(saved["license"], "test")
+
+    def test_update_claves_extra_se_ignoran(self):
+        update_entry("lora-test", {"trigger": "t", "inventado": 5}, path=self.path)
+        self.assertEqual(
+            set(get("lora-test", path=self.path)),
+            {
+                "id",
+                "family",
+                "file",
+                "display_name",
+                "trigger",
+                "default_weight",
+                "source",
+                "license",
+                "notes",
+            },
+        )
+
+    def test_update_id_inmutable(self):
+        before = self.path.read_text(encoding="utf-8")
+        with self.assertRaises(EngineError) as ctx:
+            update_entry("lora-test", {"id": "otro"}, path=self.path)
+        self.assertIn("inmutable", str(ctx.exception))
+        self.assertEqual(self.path.read_text(encoding="utf-8"), before)
+
+    def test_update_mismo_id_permitido(self):
+        updated = update_entry(
+            "lora-test", {"id": "lora-test", "trigger": "t"}, path=self.path
+        )
+        self.assertEqual(updated["id"], "lora-test")
+
+    def test_update_inexistente_lanza(self):
+        with self.assertRaises(EngineError):
+            update_entry("no-existe", {"trigger": "t"}, path=self.path)
+
+    def test_update_invalido_lanza_y_no_toca_el_fichero(self):
+        before = self.path.read_text(encoding="utf-8")
+        for changes in (
+            {"file": ""},
+            {"default_weight": 3},
+            {"trigger": 5},
+            None,
+            [],
+            "x",
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaises(EngineError):
+                    update_entry("lora-test", changes, path=self.path)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), before)
+
+    def test_update_conserva_orden_y_comment(self):
+        update_entry("lora-test", {"family": "z"}, path=self.path)
+        payload = self.read()
+        self.assertEqual(
+            [item["id"] for item in payload["loras"]], ["lora-test", "otra"]
+        )
+        self.assertEqual(payload["_comment"], "nota")
+
+    def test_delete_quita_solo_la_entrada(self):
+        removed = delete_entry("lora-test", path=self.path)
+        self.assertEqual(removed["id"], "lora-test")
+        removed["file"] = "mutado.safetensors"
+        self.assertEqual([item["id"] for item in list_loras(path=self.path)], ["otra"])
+        self.assertEqual(self.read()["_comment"], "nota")
+
+    def test_delete_inexistente_lanza_y_no_toca_el_fichero(self):
+        before = self.path.read_text(encoding="utf-8")
+        with self.assertRaises(EngineError):
+            delete_entry("no-existe", path=self.path)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), before)
+
+    def test_delete_no_deja_tmp(self):
+        delete_entry("lora-test", path=self.path)
+        self.assertEqual(list(self.path.parent.glob("*.tmp")), [])
 
 
 if __name__ == "__main__":
