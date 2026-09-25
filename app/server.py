@@ -89,7 +89,7 @@ from app.registry import ModelRegistry
 from app.sheet import make_sheet
 from app.store import Store
 from app.tags import by_group, list_groups, search
-from app.upscale import get_upscaler, list_upscalers, run_upscale
+from app.upscale import get_upscaler, list_upscalers, run_upscale, run_video_upscale
 from app.video import (
     ASPECTS,
     VIDEO_HISTORY_TIMEOUT_S,
@@ -436,13 +436,22 @@ def create_app(
                     "kind": "upscale",
                 },
             )
-            run_upscale(
-                job,
-                config=cfg,
-                store=st,
-                engine_factory=factory,
-                record=record,
-            )
+            if job.get("task") == "upscale_video":
+                run_video_upscale(
+                    job,
+                    config=cfg,
+                    store=st,
+                    engine_factory=video_factory,
+                    record=record,
+                )
+            else:
+                run_upscale(
+                    job,
+                    config=cfg,
+                    store=st,
+                    engine_factory=factory,
+                    record=record,
+                )
         else:
             run_generation(
                 job, config=cfg, store=st, registry=reg, engine_factory=factory
@@ -801,21 +810,34 @@ def create_app(
 
     @app.get("/api/upscale/models")
     async def api_upscale_models() -> dict:
-        """Catalogo de upscalers (M10-2d U1): id/label/file/scale/note."""
+        """Catalogo de upscalers (M10-2d U1/U2): id/label/file/scale/note + kinds."""
         items = list_upscalers()
-        return {"items": items, "models": items}
+        return {"items": items, "models": items, "kinds": ["image", "video"]}
 
     @app.post("/api/upscale")
     async def api_upscale(payload: dict = Body(...)) -> Any:
-        """Encola el escalado de una generacion de imagen (M10-2d U1).
+        """Encola el escalado de una generacion de imagen (U1) o de video (U2).
 
-        Body: ``{source_gen, file?, model}``. Valida que la generacion exista
-        con ``kind="image"``, que ``file`` (o la primera salida) quede dentro de
-        su carpeta de galeria y que el modelo este en el catalogo; copia el
-        origen a ``ComfyUI/input`` y encola un job ``kind="upscale"`` que
-        produce una imagen nueva en la galeria (``kind="image"``,
-        ``params.task="upscale"``).
+        Body: ``{source_gen, model, file?, kind?}`` con ``kind`` ``"image"``
+        (default) o ``"video"``. Valida que la generacion exista con ese kind,
+        que ``file`` (o la primera salida) quede dentro de su carpeta de
+        galeria y que el modelo este en el catalogo; copia el origen a
+        ``ComfyUI/input`` y encola un job ``kind="upscale"`` que produce una
+        generacion nueva: imagen (``kind="image"``, ``params.task="upscale"``)
+        o video con audio del origen (``kind="video"``,
+        ``params.task="upscale_video"``).
         """
+        source_kind = payload.get("kind")
+        if source_kind is None:
+            source_kind = "image"
+        if source_kind == "image":
+            label = "imagen"
+            extensions = (".png", ".jpg", ".jpeg", ".webp")
+        elif source_kind == "video":
+            label = "video"
+            extensions = (".mp4", ".webm")
+        else:
+            raise EngineError("kind invalido; usar image|video")
         source_gen = payload.get("source_gen")
         if isinstance(source_gen, bool) or not isinstance(source_gen, int):
             raise EngineError("source_gen requerido (entero)")
@@ -824,8 +846,10 @@ def create_app(
             return JSONResponse(
                 status_code=404, content={"error": "generacion origen desconocida"}
             )
-        if row.get("kind") != "image":
-            raise EngineError("origen invalido; se requiere una generacion de imagen")
+        if row.get("kind") != source_kind:
+            raise EngineError(
+                f"origen invalido; se requiere una generacion de {label}"
+            )
         raw_file = payload.get("file")
         if raw_file is not None and (
             not isinstance(raw_file, str) or not raw_file.strip()
@@ -851,40 +875,70 @@ def create_app(
             return JSONResponse(
                 status_code=403, content={"error": "ruta fuera de la galeria"}
             )
-        if source.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp") or not source.is_file():
+        if source.suffix.lower() not in extensions or not source.is_file():
             return JSONResponse(
                 status_code=404, content={"error": "archivo de origen no encontrado"}
             )
         entry = get_upscaler(payload.get("model"))
         input_dir = cfg.comfy_root / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
-        image_name = f"{uuid.uuid4().hex}{source.suffix.lower()}"
-        (input_dir / image_name).write_bytes(source.read_bytes())
-        params = {
-            "task": "upscale",
-            "source_gen": source_gen,
-            "source_file": file_name,
-            "model": entry["id"],
-            "scale": entry["scale"],
-        }
-        gen_id = st.add(
-            "upscale",
-            f"upscale #{source_gen}/{file_name}",
-            "",
-            params,
-            kind="image",
-        )
-        job = {
-            "kind": "upscale",
-            "gen_id": gen_id,
-            "source_gen": source_gen,
-            "source_file": file_name,
-            "image_name": image_name,
-            "model": entry["id"],
-            "model_file": entry["file"],
-            "scale": entry["scale"],
-            "params": dict(params),
-        }
+        media_name = f"{uuid.uuid4().hex}{source.suffix.lower()}"
+        (input_dir / media_name).write_bytes(source.read_bytes())
+        if source_kind == "video":
+            params = {
+                "task": "upscale_video",
+                "source_gen": source_gen,
+                "source_file": file_name,
+                "model": entry["id"],
+                "scale": entry["scale"],
+                "fps": None,
+            }
+            gen_id = st.add(
+                "upscale",
+                f"upscale #{source_gen}/{file_name}",
+                "",
+                params,
+                kind="video",
+            )
+            job = {
+                "kind": "upscale",
+                "task": "upscale_video",
+                "gen_id": gen_id,
+                "source_gen": source_gen,
+                "source_file": file_name,
+                "video_name": media_name,
+                "model": entry["id"],
+                "model_file": entry["file"],
+                "scale": entry["scale"],
+                "fps": None,
+                "params": dict(params),
+            }
+        else:
+            params = {
+                "task": "upscale",
+                "source_gen": source_gen,
+                "source_file": file_name,
+                "model": entry["id"],
+                "scale": entry["scale"],
+            }
+            gen_id = st.add(
+                "upscale",
+                f"upscale #{source_gen}/{file_name}",
+                "",
+                params,
+                kind="image",
+            )
+            job = {
+                "kind": "upscale",
+                "gen_id": gen_id,
+                "source_gen": source_gen,
+                "source_file": file_name,
+                "image_name": media_name,
+                "model": entry["id"],
+                "model_file": entry["file"],
+                "scale": entry["scale"],
+                "params": dict(params),
+            }
         _JOBS[gen_id] = {
             "prompt_id": None,
             "tracker": None,

@@ -2025,6 +2025,10 @@ function setUpscaleProgress(progress) {
   setProgress(progress, "upscale");
 }
 
+function upscaleKind() {
+  return $("upscale-kind").value === "video" ? "video" : "image";
+}
+
 function upscaleModelNote() {
   const model = state.upscalers.find(
     (item) => item.id === $("upscale-model").value
@@ -2058,36 +2062,65 @@ function selectedUpscaleSource() {
 }
 
 function updateUpscaleSourceView() {
+  const kind = upscaleKind();
   const item = selectedUpscaleSource();
-  const url = imageViewUrl(item);
+  const url = kind === "video" ? videoViewUrl(item) : imageViewUrl(item);
   const img = $("upscale-preview-img");
+  const video = $("upscale-preview-video");
   const empty = $("upscale-preview-empty");
-  if (url) {
+  if (url && kind === "video") {
+    if (video.getAttribute("src") !== url) {
+      video.pause();
+      video.setAttribute("src", url);
+      video.load();
+    }
+    video.classList.remove("hidden");
+    img.removeAttribute("src");
+    img.alt = "";
+    img.classList.add("hidden");
+    empty.classList.add("hidden");
+  } else if (url) {
     img.src = url;
     img.alt = item.prompt ? `#${item.id} ${item.prompt}` : `Generación #${item.id}`;
     img.classList.remove("hidden");
+    video.pause();
+    video.removeAttribute("src");
+    video.classList.add("hidden");
     empty.classList.add("hidden");
   } else {
     img.removeAttribute("src");
     img.alt = "";
     img.classList.add("hidden");
+    video.pause();
+    video.removeAttribute("src");
+    video.classList.add("hidden");
     empty.classList.remove("hidden");
-    empty.textContent = item
-      ? item.status === "error"
-        ? "Origen sin resultado (error)"
-        : "Origen sin resultado"
-      : "Sin generaciones de imagen";
+    if (!item) {
+      empty.textContent =
+        kind === "video" ? "Sin generaciones de vídeo" : "Sin generaciones de imagen";
+    } else {
+      empty.textContent =
+        item.status === "error" ? "Origen sin resultado (error)" : "Origen sin resultado";
+    }
   }
-  $("upscale-preview").classList.toggle("has-image", Boolean(url));
+  $("upscale-preview").classList.toggle("has-image", Boolean(url) && kind === "image");
+  $("upscale-preview").title =
+    kind === "video" ? "Origen de vídeo" : "Ampliar imagen";
   $("upscale-source-info").textContent = item
-    ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
+    ? kind === "video"
+      ? `#${item.id} · ${videoEngineLabel(item)} · ${formatGalleryDate(item.created_at)}`
+      : `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
+    : kind === "video"
+    ? "Genera un vídeo en la pestaña Vídeo"
     : "Genera una imagen en la pestaña Imagen";
 }
 
 async function loadUpscaleSources({ selectId = null } = {}) {
-  const data = await api("/api/gallery?kind=image&limit=24&offset=0");
+  const kind = upscaleKind();
+  const data = await api(`/api/gallery?kind=${kind}&limit=24&offset=0`);
+  const viewer = kind === "video" ? state.videoViewer : state.imageViewer;
   const merged = new Map();
-  for (const item of [...(data.items || []), ...state.imageViewer.items]) {
+  for (const item of [...(data.items || []), ...viewer.items]) {
     merged.set(item.id, item);
   }
   state.upscaleSources = [...merged.values()].sort((a, b) => b.id - a.id);
@@ -2101,8 +2134,8 @@ async function loadUpscaleSources({ selectId = null } = {}) {
   }
   const wanted = selectId != null ? selectId : previous;
   const fallback =
-    state.imageViewer.selectedId != null
-      ? state.imageViewer.selectedId
+    viewer.selectedId != null
+      ? viewer.selectedId
       : state.upscaleSources.length
       ? state.upscaleSources[0].id
       : null;
@@ -2115,18 +2148,37 @@ async function loadUpscaleSources({ selectId = null } = {}) {
   updateUpscaleSourceView();
 }
 
+function applyUpscaleKind() {
+  const kind = upscaleKind();
+  $("upscale-source-label").textContent =
+    kind === "video" ? "Vídeo de origen" : "Imagen de origen";
+  updateUpscaleSourceView();
+}
+
 async function finishUpscale() {
   await reloadImageViewerFirstPage();
   await loadUpscaleSources({ selectId: state.imageViewer.selectedId });
+}
+
+async function finishVideoUpscale() {
+  await reloadVideoViewerFirstPage();
+  await loadUpscaleSources({ selectId: state.videoViewer.selectedId });
+  switchTab("video");
 }
 
 async function generateUpscale() {
   if (state.busy) {
     return;
   }
+  const kind = upscaleKind();
   const source = selectedUpscaleSource();
   if (!source) {
-    setUpscaleStatus("No hay imagen de origen; genera una en Imagen", true);
+    setUpscaleStatus(
+      kind === "video"
+        ? "No hay vídeo de origen; genera uno en Vídeo"
+        : "No hay imagen de origen; genera una en Imagen",
+      true
+    );
     return;
   }
   const model = $("upscale-model").value;
@@ -2139,13 +2191,14 @@ async function generateUpscale() {
   setUpscaleStatus("Encolando...");
   try {
     const data = await postJson("/api/upscale", {
+      kind,
       source_gen: source.id,
       model,
     });
     await pollJob(
       data.job_id,
       setUpscaleStatus,
-      finishUpscale,
+      kind === "video" ? finishVideoUpscale : finishUpscale,
       setUpscaleProgress,
       true,
       "btn-upscale-cancel"
@@ -3926,6 +3979,7 @@ function switchTab(tab) {
   $("panel-editor").classList.toggle("active", editor);
   $("panel-upscaler").classList.toggle("active", upscaler);
   if (upscaler) {
+    applyUpscaleKind();
     loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
   }
 }
@@ -4035,7 +4089,9 @@ const REQUIRED_IDS = [
   "editor-refs",
   "btn-editor-generate",
   "panel-upscaler",
+  "upscale-kind",
   "upscale-source",
+  "upscale-source-label",
   "upscale-source-info",
   "upscale-model",
   "upscale-model-note",
@@ -4047,6 +4103,7 @@ const REQUIRED_IDS = [
   "upscale-progress-text",
   "upscale-preview",
   "upscale-preview-img",
+  "upscale-preview-video",
   "upscale-preview-empty",
   "size",
   "preprompt",
@@ -4204,6 +4261,10 @@ function bind() {
     );
   });
   on("btn-editor-generate", "click", generateEditor);
+  on("upscale-kind", "change", () => {
+    applyUpscaleKind();
+    loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
+  });
   on("upscale-source", "change", updateUpscaleSourceView);
   on("upscale-model", "change", upscaleModelNote);
   on("btn-upscale", "click", generateUpscale);

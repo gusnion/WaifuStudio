@@ -34,6 +34,7 @@ from app.store import Store
 from app.tags import list_groups
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-fake-png"
+MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
 MODEL_ID = "anima-2.9b-preview"
 
 
@@ -69,6 +70,46 @@ class FakeTransport:
                         "outputs": {
                             "9": {
                                 "images": [
+                                    {
+                                        "filename": self.output_name,
+                                        "subfolder": "",
+                                        "type": "output",
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                }
+            ).encode("utf-8")
+        raise AssertionError(f"transporte inesperado: {method} {path}")
+
+
+class FakeVideoTransport:
+    """Transporte HTTP falso: submit y history success con MP4 fake."""
+
+    def __init__(self, config, *, output_name="clip.mp4", write_output=True):
+        self.config = config
+        self.output_name = output_name
+        self.write_output = write_output
+        self.submits = []
+
+    def __call__(self, method, path, body=None, headers=None, timeout=None):
+        if method == "POST" and path == "/prompt":
+            self.submits.append(json.loads(body.decode("utf-8")))
+            return 200, b'{"prompt_id": "p1"}'
+        if method == "GET" and path == "/history/p1":
+            if self.write_output:
+                self.config.comfy_output_dir.mkdir(parents=True, exist_ok=True)
+                (self.config.comfy_output_dir / self.output_name).write_bytes(
+                    MP4_BYTES
+                )
+            return 200, json.dumps(
+                {
+                    "p1": {
+                        "status": {"status_str": "success"},
+                        "outputs": {
+                            "6": {
+                                "videos": [
                                     {
                                         "filename": self.output_name,
                                         "subfolder": "",
@@ -2776,6 +2817,7 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["models"], data["items"])
+        self.assertEqual(data["kinds"], ["image", "video"])
         self.assertEqual([item["id"] for item in data["items"]], [self.MODEL])
         entry = data["items"][0]
         for field in ("id", "label", "file", "scale", "note"):
@@ -2907,6 +2949,168 @@ class UpscaleRouteTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_video_encola_job_y_crea_video(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        response = self.make_client(queue=queue).post(
+            "/api/upscale",
+            json={"kind": "video", "source_gen": gen_id, "model": self.MODEL},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        self.assertEqual(len(queue.jobs), 1)
+        job = queue.jobs[0]
+        self.assertEqual(job["kind"], "upscale")
+        self.assertEqual(job["task"], "upscale_video")
+        self.assertEqual(job["source_gen"], gen_id)
+        self.assertEqual(job["source_file"], "clip.mp4")
+        self.assertEqual(job["model"], self.MODEL)
+        self.assertEqual(job["model_file"], "RealESRGAN_x2.pth")
+        self.assertEqual(job["scale"], 2)
+        self.assertIsNone(job["fps"])
+        self.assertEqual(
+            job["params"],
+            {
+                "task": "upscale_video",
+                "source_gen": gen_id,
+                "source_file": "clip.mp4",
+                "model": self.MODEL,
+                "scale": 2,
+                "fps": None,
+            },
+        )
+        files = sorted((self.config.comfy_root / "input").glob("*.mp4"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_bytes(), PNG_BYTES)
+        self.assertEqual(job["video_name"], files[0].name)
+        new_gen = self.store.list()[0]
+        self.assertEqual(new_gen["kind"], "video")
+        self.assertEqual(new_gen["status"], "queued")
+        self.assertEqual(new_gen["params"], job["params"])
+        self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
+
+    def test_video_file_explicito_se_usa(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("a.mp4", "b.mp4"))
+        response = self.make_client(queue=queue).post(
+            "/api/upscale",
+            json={
+                "kind": "video",
+                "source_gen": gen_id,
+                "file": "b.mp4",
+                "model": self.MODEL,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(queue.jobs[0]["source_file"], "b.mp4")
+        self.assertEqual(self.store.list()[0]["params"]["source_file"], "b.mp4")
+
+    def test_kind_invalido_400(self):
+        gen_id = self.make_source()
+        client = self.make_client()
+        for kind in ("", "nope", 5, True):
+            with self.subTest(kind=kind):
+                response = client.post(
+                    "/api/upscale",
+                    json={"kind": kind, "source_gen": gen_id, "model": self.MODEL},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_video_origen_imagen_400(self):
+        gen_id = self.make_source()
+        response = self.make_client().post(
+            "/api/upscale",
+            json={"kind": "video", "source_gen": gen_id, "model": self.MODEL},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("video", response.json()["error"])
+
+    def test_video_file_fuera_de_carpeta_403(self):
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        (self.config.data_dir / "secret.mp4").write_bytes(MP4_BYTES)
+        response = self.make_client().post(
+            "/api/upscale",
+            json={
+                "kind": "video",
+                "source_gen": gen_id,
+                "file": "../secret.mp4",
+                "model": self.MODEL,
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("error", response.json())
+
+    def test_video_file_inexistente_o_no_video_404(self):
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client()
+        for name in ("missing.mp4", "nota.txt", "otra.png"):
+            with self.subTest(name=name):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "video",
+                        "source_gen": gen_id,
+                        "file": name,
+                        "model": self.MODEL,
+                    },
+                )
+                self.assertEqual(response.status_code, 404)
+
+    def test_video_source_sin_salidas_404(self):
+        gen_id = self.make_source(kind="video", outputs=())
+        response = self.make_client().post(
+            "/api/upscale",
+            json={"kind": "video", "source_gen": gen_id, "model": self.MODEL},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_flujo_completo_video_con_worker(self):
+        transport = FakeVideoTransport(self.config, output_name="upscaled_00001_.mp4")
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/upscale",
+                json={"kind": "video", "source_gen": gen_id, "model": self.MODEL},
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 10)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            self.assertEqual(status["outputs"][0]["name"], "upscaled_00001_.mp4")
+            media = client.get(status["outputs"][0]["url"])
+            self.assertEqual(media.status_code, 200)
+            self.assertEqual(media.headers["content-type"], "video/mp4")
+            self.assertEqual(media.content, MP4_BYTES)
+            gallery = client.get("/api/gallery?kind=video").json()
+            self.assertEqual(gallery["count"], 2)
+            newest = gallery["items"][0]
+            self.assertEqual(newest["kind"], "video")
+            self.assertEqual(newest["params"]["task"], "upscale_video")
+            self.assertEqual(newest["params"]["source_gen"], gen_id)
+        graph = transport.submits[0]["prompt"]
+        video_name = graph["1"]["inputs"]["file"]
+        self.assertTrue(video_name.endswith(".mp4"))
+        self.assertNotEqual(video_name, "clip.mp4")
+        self.assertEqual(graph["1"]["class_type"], "LoadVideo")
+        self.assertEqual(graph["2"]["inputs"]["video"], ["1", 0])
+        self.assertEqual(graph["5"]["inputs"]["fps"], ["2", 2])
+        self.assertEqual(graph["5"]["inputs"]["audio"], ["2", 1])
+        self.assertEqual(graph["6"]["inputs"]["format"], "mp4")
+        row = self.store.get(newest["id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(row["kind"], "video")
+        self.assertEqual(row["outputs"], ["upscaled_00001_.mp4"])
+
     def test_flujo_completo_con_worker(self):
         transport = FakeTransport(self.config, output_name="upscaled_00001_.png")
         gen_id = self.make_source()
@@ -2953,7 +3157,11 @@ class UpscaleUiStaticTests(ServerTestCase):
             'id="tab-upscaler"',
             ">Upscaler<",
             'id="panel-upscaler"',
+            'id="upscale-kind"',
+            ">Imagen<",
+            ">Vídeo<",
             'id="upscale-source"',
+            'id="upscale-source-label"',
             'id="upscale-source-info"',
             'id="upscale-model"',
             'id="upscale-model-note"',
@@ -2965,6 +3173,7 @@ class UpscaleUiStaticTests(ServerTestCase):
             'id="upscale-progress-text"',
             'id="upscale-preview"',
             'id="upscale-preview-img"',
+            'id="upscale-preview-video"',
             'id="upscale-preview-empty"',
         ):
             with self.subTest(marker=marker):
@@ -2981,8 +3190,13 @@ class UpscaleUiStaticTests(ServerTestCase):
             "loadUpscaleModels",
             "generateUpscale",
             "finishUpscale",
+            "finishVideoUpscale",
+            "applyUpscaleKind",
             "setUpscaleProgress",
             "btn-upscale-cancel",
+            "upscale-kind",
+            "upscale-preview-video",
+            "reloadVideoViewerFirstPage",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

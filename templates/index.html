@@ -414,18 +414,26 @@
     <section id="panel-upscaler" class="panel">
       <aside class="controls">
         <label class="field">
-          <span>Imagen de origen</span>
+          <span>Tipo de origen</span>
+          <select id="upscale-kind">
+            <option value="image">Imagen</option>
+            <option value="video">Vídeo</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span id="upscale-source-label">Imagen de origen</span>
           <select id="upscale-source"></select>
           <p id="upscale-source-info" class="field-hint">Cargando galería…</p>
         </label>
-        <p class="field-hint">Origen por defecto: la imagen seleccionada en el visor de Imagen; si no hay, la más reciente de la galería.</p>
+        <p class="field-hint">Origen por defecto: la selección del visor (Imagen o Vídeo); si no hay, lo más reciente de la galería.</p>
 
         <label class="field">
           <span>Modelo</span>
           <select id="upscale-model"></select>
           <p id="upscale-model-note" class="field-hint"></p>
         </label>
-        <p class="field-hint">Solo imágenes. RealESRGAN x2 duplica el tamaño.</p>
+        <p class="field-hint">RealESRGAN x2 duplica el tamaño; aplica a la imagen o al vídeo (conservando fps y audio del origen).</p>
 
         <div class="generate-row">
           <button id="btn-upscale" class="primary" type="button">Escalar</button>
@@ -444,10 +452,11 @@
         <div class="gallery-header">
           <h2>Resultado</h2>
         </div>
-        <button id="upscale-preview" class="image-preview" type="button" title="Ampliar imagen">
+        <div id="upscale-preview" class="image-preview" title="Ampliar imagen">
           <img id="upscale-preview-img" class="hidden" alt="Imagen seleccionada">
+          <video id="upscale-preview-video" class="hidden" controls preload="metadata"></video>
           <span id="upscale-preview-empty" class="empty">Sin generaciones de imagen</span>
-        </button>
+        </div>
       </section>
     </section>
   </main>
