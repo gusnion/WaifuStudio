@@ -237,6 +237,7 @@ class LorasRouteTests(ServerTestCase):
                 "reika-kurashiki",
                 "minimax-h3-fl2v-turbo-4step",
                 "miku-nakano-anima",
+                "kurashiki-reika-saimin-anima",
             ],
         )
 
@@ -250,17 +251,26 @@ class LorasRouteTests(ServerTestCase):
         )
         self.assertTrue(all(item["family"] == "wan" for item in items))
 
-    def test_loras_familia_anima_devuelve_miku(self):
+    def test_loras_familia_anima_devuelve_miku_y_saimin(self):
         data = self.make_client().get(
             "/api/loras", params={"family": "anima"}
         ).json()
-        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(len(data["items"]), 2)
         item = data["items"][0]
         self.assertEqual(item["id"], "miku-nakano-anima")
         self.assertEqual(item["family"], "anima")
         self.assertEqual(item["file"], "anima\\Miku_Nakano_Anima_v0.7.safetensors")
         self.assertEqual(item["trigger"], "M1kuNakan0_anima")
         self.assertEqual(item["default_weight"], 1.0)
+        nueva = data["items"][1]
+        self.assertEqual(nueva["id"], "kurashiki-reika-saimin-anima")
+        self.assertEqual(nueva["family"], "anima")
+        self.assertEqual(
+            nueva["file"],
+            "anima\\Kurashiki Reika Saimin Seishidou.safetensors",
+        )
+        self.assertEqual(nueva["trigger"], "kur4sh1k1r31k4")
+        self.assertEqual(nueva["default_weight"], 1.0)
         self.assertIn("anima", data["families"])
 
     def test_loras_familia_desconocida_vacia(self):
@@ -1233,7 +1243,7 @@ class GenerateEngineParamsValidationTests(ServerTestCase):
 
 
 class GenerateLorasTests(ServerTestCase):
-    REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_1.safetensors"
+    REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_2.safetensors"
 
     def payload(self, **overrides) -> dict:
         data = {
@@ -1759,7 +1769,7 @@ class RunGenerationTests(ServerTestCase):
             graph["lora_1"]["inputs"],
             {
                 "model": ["1", 0],
-                "lora_name": "Reika Kurashiki\\Reika Kurashiki_1.safetensors",
+                "lora_name": "Reika Kurashiki\\Reika Kurashiki_2.safetensors",
                 "strength_model": 0.8,
             },
         )

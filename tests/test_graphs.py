@@ -337,7 +337,7 @@ class ApplyLorasTests(unittest.TestCase):
 
         self.assertEqual(
             patched["lora_1"]["inputs"]["lora_name"],
-            "Reika Kurashiki\\Reika Kurashiki_1.safetensors",
+            "Reika Kurashiki\\Reika Kurashiki_2.safetensors",
         )
         self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 0.8)
 

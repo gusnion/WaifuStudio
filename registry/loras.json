@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "_comment": "Los LoRAs de Anima llegan en M10 (descargas diferidas)",
   "loras": [
     {
       "id": "lightx2v-wan-high",
@@ -27,7 +26,7 @@
     {
       "id": "reika-kurashiki",
       "family": "animagine",
-      "file": "Reika Kurashiki\\Reika Kurashiki_1.safetensors",
+      "file": "Reika Kurashiki\\Reika Kurashiki_2.safetensors",
       "display_name": "Reika Kurashiki (animagine)",
       "trigger": "",
       "default_weight": 1.0,
@@ -56,6 +55,18 @@
       "source": "civitai.com/models/1158201 v3020851",
       "license": "Anima License (CircleStone Labs LLC)",
       "notes": "Anima base (28 bloques): nativo con anima-official-aesthetic-v11; en 2.9B requiere patch 28->40 (M10), peso 0.5-0.7. Triggers/recomendados en la ficha."
+    },
+    {
+      "id": "kurashiki-reika-saimin-anima",
+      "family": "anima",
+      "file": "anima\\Kurashiki Reika Saimin Seishidou.safetensors",
+      "display_name": "Kurashiki Reika Saimin Seishidou (Anima)",
+      "trigger": "kur4sh1k1r31k4",
+      "default_weight": 1.0,
+      "source": "local (aportado por el usuario 2026-09-25; ai-toolkit / Civitai Spine Controller; ss_output_name training_6602895-20260804081407000)",
+      "license": "no verificada (archivo local del usuario)",
+      "notes": "Anima LoRA (dim 64 / alpha 32, 30 imagenes, 2500 pasos, base Anima-Base-v1.0). Trigger inferido de modelspec.title; editable desde Gestionar biblioteca."
     }
-  ]
+  ],
+  "_comment": "Los LoRAs de Anima llegan en M10 (descargas diferidas)"
 }
