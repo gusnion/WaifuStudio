@@ -1765,6 +1765,55 @@ class GalleryCapTests(ServerTestCase):
         self.assertEqual(len(data["items"]), 1)
 
 
+class GalleryKindFilterTests(ServerTestCase):
+    """M9-D2b-fix: `kind` filtra el feed y `count` (paginacion del visor)."""
+
+    def seed_mixed(self) -> tuple[list[int], list[int]]:
+        images = [self.store.add(MODEL_ID, f"1girl {index}") for index in range(3)]
+        videos = [
+            self.store.add("wan", f"motion {index}", "", {}, kind="video")
+            for index in range(4)
+        ]
+        return images, videos
+
+    def test_kind_video_filtra_count_y_orden_desc(self):
+        _images, videos = self.seed_mixed()
+        data = self.make_client().get(
+            "/api/gallery", params={"kind": "video", "limit": 5}
+        ).json()
+        self.assertEqual(data["count"], 4)
+        self.assertEqual([item["id"] for item in data["items"]], list(reversed(videos)))
+        self.assertTrue(all(item["kind"] == "video" for item in data["items"]))
+
+    def test_kind_image_filtra_y_pagina_con_offset(self):
+        images, _videos = self.seed_mixed()
+        client = self.make_client()
+        page1 = client.get(
+            "/api/gallery", params={"kind": "image", "limit": 2, "offset": 0}
+        ).json()
+        self.assertEqual(page1["count"], 3)
+        self.assertEqual([item["id"] for item in page1["items"]], [images[2], images[1]])
+        page2 = client.get(
+            "/api/gallery", params={"kind": "image", "limit": 2, "offset": 2}
+        ).json()
+        self.assertEqual(page2["count"], 3)
+        self.assertEqual([item["id"] for item in page2["items"]], [images[0]])
+
+    def test_kind_desconocido_400(self):
+        response = self.make_client().get("/api/gallery", params={"kind": "nope"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "kind invalido; usar image|video")
+
+    def test_sin_kind_mantiene_feed_mixto(self):
+        images, videos = self.seed_mixed()
+        data = self.make_client().get("/api/gallery").json()
+        self.assertEqual(data["count"], 7)
+        self.assertEqual(
+            [item["id"] for item in data["items"]],
+            list(reversed(videos)) + list(reversed(images)),
+        )
+
+
 class TagsRoutesTests(ServerTestCase):
     def test_groups(self):
         response = self.make_client().get("/api/tags/groups")

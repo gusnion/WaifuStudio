@@ -191,7 +191,8 @@ Rutas JSON: `GET /api/models`, `GET /api/preprompts?family=`, `GET /api/traits`,
 `POST /api/generate` (valida modelo/prompt/base64/strength, `size` de preset **o**
 `width`/`height` manuales en [64, 4096] múltiplos de 8, y sampler/scheduler contra los
 enums; escribe la referencia en `comfy_root/input/`), `GET /api/jobs/{id}`,
-`GET /api/gallery?limit&offset` (cap de 24 por página),
+`GET /api/gallery?limit&offset&kind` (cap de 24 por página; `kind` opcional
+`image|video` filtra el feed **y** el `count` que lo acompaña, 400 con otro valor),
 `GET /api/refs/{name:path}` (sirve una referencia de `comfy_root/input/` con
 confinamiento estricto —`resolve()` + `is_relative_to`— y solo extensiones
 png/jpg/jpeg/webp: 403 si la ruta escapa o la extensión no vale, 404 si falta;
@@ -853,7 +854,8 @@ cambios en el payload de `/api/generate`; la pestaña Video queda intacta):
   seleccionada `#image-preview-info` (`#id · modelo · fecha`) y paginación
   `#image-prev-page` / `#image-page-info` / `#image-next-page` (`‹ página X de Y ›`).
 - **Miniaturas** `#image-thumbs`: **5 por página** (`IMAGE_PAGE_SIZE = 5`) servidas por
-  `/api/gallery?limit=5&offset=…` con `count`; la seleccionada lleva la clase `selected`
+  `/api/gallery?kind=image&limit=5&offset=…` con `count` (el filtro `kind` llega en
+  M9-D2b-fix; antes se descartaban los vídeos en cliente); la seleccionada lleva la clase `selected`
   (borde/aro de acento) y `aria-current="true"`. Clic en una miniatura la muestra en grande y
   carga sus condiciones con el flujo «Reusar» (`reuseGeneration`: modelo, prompt repartido en
   zonas, preprompt, rating, seed/pasos/cfg/sampler/scheduler, tamaño, LoRAs y referencia) con
@@ -868,14 +870,75 @@ cambios en el payload de `/api/generate`; la pestaña Video queda intacta):
   selección queda deshabilitado.
 - **Al terminar una generación** (`pollJob` → `reloadImageViewerFirstPage`): el visor recarga la
   **página 1**, selecciona la nueva y la muestra en grande.
-- La galería de **Video** conserva sus tarjetas, su pager propio (`PAGE_SIZE = 6`, ids
-  `video-gallery-*`) y el comportamiento de `loadGallery`/`renderVideoGallery`. El pager
-  heredado `#gallery-prev`/`#gallery-page`/`#gallery-next` se mantiene oculto (los ids siguen en
-  el DOM por compatibilidad con el chequeo DOM↔JS).
+- La galería de **Video** conservó en M9-D2a sus tarjetas y su pager propio (`PAGE_SIZE = 6`,
+  ids `video-gallery-*`); **M9-D2b** la sustituye por el visor de vídeo (ver abajo). El pager
+  heredado de Imagen `#gallery-prev`/`#gallery-page`/`#gallery-next` se mantiene oculto (los ids
+  siguen en el DOM por compatibilidad con el chequeo DOM↔JS).
 
 Verificado con `node --check static\app.js`, la suite CPU (732 tests OK, sin GPU/red),
 `git status --short` limitado a los 4 archivos y un arnés DOM (Node, fuera del repo) que
 ejercita paginación, selección, «Cargado #id», resets y «done → página 1».
+
+## Visor de video en la galería (M9-D2b)
+
+La pestaña Video pasa de grid de tarjetas a **visor** (solo `templates\index.html`,
+`static\app.css`, `static\app.js` y este README; sin GPU, red, dependencias ni
+cambios en el payload de `/api/video/generate`):
+
+**M9-D2b-fix** (paginación real): `GET /api/gallery` acepta `kind` opcional
+(`image|video`; 400 con otro valor) y filtra el feed y su `count`
+(`app\server.py` + `kind=None` retrocompatible en `store.list`/`store.count`);
+con eso el visor de vídeo pagina en servidor (`kind=video&limit=5&offset=…`) y el
+visor de imagen pasa a `kind=image` (antes descartaba vídeos en cliente).
+
+- **Preview grande** `#video-preview` (`<video controls preload="metadata">`) con placeholder
+  `#video-preview-empty` «Sin videos»: al abrir muestra el vídeo **más reciente**; los controls
+  nativos reproducen/pausan/hacen seek.
+- **Barra del visor** sobre las miniaturas: «Generar nuevo» `#btn-new-video`, info de la
+  seleccionada `#video-preview-info` (`#id · engine/mode · fecha`, p. ej. `#8 · wan/flf2v ·
+  2026-09-24 20:08`) y paginación `#video-prev-page` / `#video-page-info` / `#video-next-page`
+  (`‹ página X de Y ›`).
+- **Miniaturas** `#video-thumbs`: **5 por página** (`VIDEO_PAGE_SIZE = 5`) con paginación
+  **server-side** (`/api/gallery?kind=video&limit=5&offset=…` + `count`, igual que el visor de
+  imagen; M9-D2b-fix). Antes se pedía la ventana reciente `/api/gallery?limit=24`, se filtraba
+  `kind === "video"` en cliente y se paginaba el array: los vídeos fuera de los 24 ítems más
+  recientes (el feed mezcla imagen y vídeo) no aparecían. Cada miniatura es un `<video muted preload="metadata" playsinline>`
+  que busca el primer frame (`currentTime = 0.01` en `loadedmetadata`); la seleccionada lleva la
+  clase `selected` y `aria-current="true"`. Clic en una miniatura la muestra en grande y carga
+  sus condiciones.
+- **Cargar condiciones de vídeo** (`reuseVideoGeneration`, estado «Cargado #id»): lee el `params`
+  guardado por `/api/video/generate` (`engine`, `mode`, `aspect`, `seconds`/`frames`, `seed`,
+  `image`, `last_image`) y el positivo/negativo de la fila (`item.prompt` guarda
+  `motion_positive` en Wan o el prompt en H3; `item.negative` guarda `motion_negative`) y
+  rellena: motor `#video-engine` (Wan/H3), modo `#video-mode` (i2v/flf2v), aspecto
+  `#video-aspect`, duración `#video-seconds` con el texto de frames (`#video-seconds-info`,
+  p. ej. «≈ 7.5 s → 121 frames (16 fps)»), seed `#video-seed`, movimiento `#video-motion` (o
+  prompt H3 `#video-prompt`), negativo `#video-motion-negative` (vacío si la generación no
+  guardó ninguno) y **re-adjunta** la imagen inicial/final desde
+  `/api/refs/<image|last_image>` con el mismo patrón blob + `DataTransfer` que la referencia de
+  imagen (`attachVideoFrameFromUrl`/`applyVideoSavedFrames`); si un frame ya no existe, ese input
+  queda limpio y el estado lo avisa (`Cargado #id · frame guardado no disponible (HTTP 404)`).
+  `applyVideoEngine()` refresca la visibilidad de campos según motor/modo.
+- **Generar nuevo** `#btn-new-video` (`startNewVideo`): resetea a defaults — Wan/i2v, aspecto
+  vertical, 5 s (81 frames), seed por defecto de `#video-seed` (42), movimiento/negativo/prompt
+  H3 vacíos y referencias limpias — con estado «Nuevo: opciones por defecto»; el visor no se
+  vacía.
+- **Al terminar un vídeo** (`pollJob` → `reloadVideoViewerFirstPage`): el visor vuelve a la
+  página 1, selecciona el nuevo y lo muestra en grande. Progreso y cancelar del job no cambian.
+- **Ids heredados**: el pager antiguo de vídeo (`#video-gallery-prev`/`#video-gallery-page`/
+  `#video-gallery-next`) queda **oculto** en el DOM (igual que el pager heredado de imagen) para
+  no romper `REQUIRED_IDS`/el chequeo DOM↔JS; el grid `#video-gallery` se elimina junto con
+  `galleryCard`/`renderGallery`/`renderVideoGallery`/`loadGallery`. La constante `PAGE_SIZE = 6`
+  se conserva porque la suite la exige como marcador en `static\app.js`.
+
+Verificado con `node --check static\app.js`, la suite CPU (737 tests OK, sin GPU/red),
+`git status --short` limitado a los archivos del visor + `app\server.py`/`app\store.py`/`tests\`,
+y un arnés DOM (Node, fuera del repo) que ejercita preview, toolbar, paginación (página 1 de 2),
+5 miniaturas con selección, «Cargado #8» con motor/modo/aspecto/segundos/frames/seed/motion/
+negativo y frames re-adjuntados, H3, frame ausente, «Generar nuevo» y «done → página 1 + nuevo en
+grande». El fix se verificó además con `TestClient` sobre store temporal (3 imágenes + 4 vídeos):
+`/api/gallery?kind=video&limit=5` devuelve solo vídeos en orden desc con `count=4`,
+`/api/gallery?kind=nope` responde 400 y el visor pide `kind=video&limit=5&offset=…`.
 
 ## Smoke
 

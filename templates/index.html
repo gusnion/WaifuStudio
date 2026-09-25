@@ -323,8 +323,21 @@
           <h2>Galería de video</h2>
           <button id="btn-video-reload" type="button">Recargar</button>
         </div>
-        <div id="video-gallery" class="gallery"></div>
-        <div class="pager">
+        <div class="video-preview-box">
+          <video id="video-preview" class="hidden" controls preload="metadata"></video>
+          <span id="video-preview-empty" class="empty">Sin videos</span>
+        </div>
+        <div class="viewer-toolbar">
+          <button id="btn-new-video" type="button">Generar nuevo</button>
+          <span id="video-preview-info" class="viewer-info">Sin videos</span>
+          <div class="viewer-pager">
+            <button id="video-prev-page" type="button" aria-label="Página anterior">‹</button>
+            <span id="video-page-info">página 1 de 1</span>
+            <button id="video-next-page" type="button" aria-label="Página siguiente">›</button>
+          </div>
+        </div>
+        <div id="video-thumbs" class="video-thumbs"></div>
+        <div class="pager hidden" hidden>
           <button id="video-gallery-prev" type="button">‹ Anterior</button>
           <span id="video-gallery-page">página 1 de 1</span>
           <button id="video-gallery-next" type="button">Siguiente ›</button>

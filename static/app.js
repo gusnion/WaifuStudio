@@ -47,6 +47,7 @@ const GENERAL_SUBCAT_LABELS = {
 
 const PAGE_SIZE = 6;
 const IMAGE_PAGE_SIZE = 5;
+const VIDEO_PAGE_SIZE = 5;
 const VIDEO_FPS = 16;
 
 const EDITOR_REF_LIMIT = 10;
@@ -108,14 +109,18 @@ const state = {
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
-  videoItems: [],
   imageViewer: {
     page: 1,
     total: 1,
     items: [],
     selectedId: null,
   },
-  videoPager: null,
+  videoViewer: {
+    page: 1,
+    total: 1,
+    items: [],
+    selectedId: null,
+  },
   activeJobId: null,
   busy: false,
   seedRandom: false,
@@ -954,7 +959,7 @@ async function cancelJob(event) {
 async function pollJob(
   jobId,
   statusFn = setStatus,
-  onDone = reloadGalleryFirstPage,
+  onDone = reloadImageViewerFirstPage,
   progressFn = setProgress,
   manageCancel = true,
   cancelButtonId = "btn-cancel"
@@ -1091,103 +1096,6 @@ async function reuseGeneration(item) {
   }
 }
 
-function galleryCard(item) {
-  const card = document.createElement("figure");
-  card.className = "card";
-  if (item.urls && item.urls.length) {
-    const url = item.urls[0];
-    if (isVideoUrl(url)) {
-      const video = document.createElement("video");
-      video.src = url;
-      video.controls = true;
-      video.preload = "metadata";
-      card.appendChild(video);
-    } else {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = item.prompt || `Generación ${item.id}`;
-      img.loading = "lazy";
-      img.addEventListener("click", () => openLightbox(url, img.alt));
-      card.appendChild(img);
-    }
-  } else {
-    const missing = document.createElement("div");
-    missing.className = "card-missing";
-    missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
-    card.appendChild(missing);
-  }
-  const params = item.params || {};
-  const bits = [];
-  if (params.seed != null) {
-    bits.push(`seed ${params.seed}`);
-  }
-  if (params.steps != null) {
-    bits.push(`${params.steps} pasos`);
-  }
-  if (params.cfg != null) {
-    bits.push(`cfg ${params.cfg}`);
-  }
-  if (params.strength != null) {
-    bits.push(`fuerza ${params.strength}`);
-  }
-  if (Array.isArray(params.loras)) {
-    for (const lora of params.loras) {
-      bits.push(`lora ${lora.id} @ ${lora.weight}`);
-    }
-  }
-  const caption = document.createElement("figcaption");
-  const title = document.createElement("strong");
-  title.textContent = `#${item.id} · ${item.kind || "image"} · ${item.model_id}`;
-  const prompt = document.createElement("span");
-  prompt.textContent = item.prompt || "";
-  const meta = document.createElement("span");
-  meta.className = "meta";
-  meta.textContent = bits.join(" · ");
-  caption.append(title, prompt, meta);
-  card.appendChild(caption);
-  return card;
-}
-
-function renderGallery(container, items, emptyText, pager) {
-  container.replaceChildren();
-  const total = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-  pager.page = Math.min(Math.max(1, pager.page), total);
-  const slice = items.slice((pager.page - 1) * PAGE_SIZE, pager.page * PAGE_SIZE);
-  if (!slice.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty";
-    empty.textContent = emptyText;
-    container.appendChild(empty);
-  } else {
-    for (const item of slice) {
-      container.appendChild(galleryCard(item));
-    }
-  }
-  pager.label.textContent = `página ${pager.page} de ${total}`;
-  pager.prev.disabled = pager.page <= 1;
-  pager.next.disabled = pager.page >= total;
-}
-
-function renderVideoGallery() {
-  renderGallery(
-    $("video-gallery"),
-    state.videoItems,
-    "Sin videos todavía.",
-    state.videoPager
-  );
-}
-
-async function loadGallery() {
-  try {
-    const data = await api("/api/gallery?limit=24");
-    const items = data.items || [];
-    state.videoItems = items.filter((item) => item.kind === "video");
-    renderVideoGallery();
-  } catch (error) {
-    setStatus(error.message, true);
-  }
-}
-
 function formatGalleryDate(value) {
   const text = String(value || "").replace("T", " ");
   return text ? text.slice(0, 16) : "sin fecha";
@@ -1292,7 +1200,7 @@ async function loadImageViewer({ selectNewest = false } = {}) {
   const offset = (viewer.page - 1) * IMAGE_PAGE_SIZE;
   try {
     const data = await api(
-      `/api/gallery?limit=${IMAGE_PAGE_SIZE}&offset=${offset}`
+      `/api/gallery?kind=image&limit=${IMAGE_PAGE_SIZE}&offset=${offset}`
     );
     const raw = data.items || [];
     const count = Number(data.count);
@@ -1302,7 +1210,7 @@ async function loadImageViewer({ selectNewest = false } = {}) {
       viewer.page = viewer.total;
       return await loadImageViewer({ selectNewest });
     }
-    viewer.items = raw.filter((item) => item.kind !== "video");
+    viewer.items = raw;
     const onPage = viewer.items.some((item) => item.id === viewer.selectedId);
     if (selectNewest && viewer.items.length) {
       viewer.selectedId = viewer.items[0].id;
@@ -1321,26 +1229,260 @@ async function selectImageGeneration(item) {
   await reuseGeneration(item);
 }
 
-async function reloadGalleryFirstPage() {
-  if (state.videoPager) {
-    state.videoPager.page = 1;
-  }
-  await loadGallery();
-  await loadImageViewer();
-}
-
 async function reloadImageViewerFirstPage() {
   state.imageViewer.page = 1;
   await loadImageViewer({ selectNewest: true });
 }
 
-function makePager(prefix) {
-  return {
-    page: 1,
-    prev: $(`${prefix}-prev`),
-    next: $(`${prefix}-next`),
-    label: $(`${prefix}-page`),
-  };
+function selectedVideoView() {
+  return (
+    state.videoViewer.items.find(
+      (item) => item.id === state.videoViewer.selectedId
+    ) || null
+  );
+}
+
+function videoViewUrl(item) {
+  const urls = (item && item.urls) || [];
+  return urls.length && isVideoUrl(urls[0]) ? urls[0] : null;
+}
+
+function videoEngineLabel(item) {
+  const params = (item && item.params) || {};
+  const engine = params.engine || (item && item.model_id) || "wan";
+  const mode = params.mode === "flf2v" ? "flf2v" : "i2v";
+  return `${engine}/${mode}`;
+}
+
+function updateVideoPreview() {
+  const item = selectedVideoView();
+  const url = videoViewUrl(item);
+  const video = $("video-preview");
+  const empty = $("video-preview-empty");
+  if (url) {
+    if (video.getAttribute("src") !== url) {
+      video.pause();
+      video.setAttribute("src", url);
+      video.load();
+    }
+    video.classList.remove("hidden");
+    empty.classList.add("hidden");
+  } else {
+    video.pause();
+    video.removeAttribute("src");
+    video.classList.add("hidden");
+    empty.classList.remove("hidden");
+    empty.textContent = item
+      ? item.status === "error"
+        ? "Sin resultado (error)"
+        : "Sin resultado"
+      : "Sin videos";
+  }
+  const info = $("video-preview-info");
+  info.textContent = item
+    ? `#${item.id} · ${videoEngineLabel(item)} · ${formatGalleryDate(item.created_at)}`
+    : "Sin videos";
+}
+
+function renderVideoThumbs() {
+  const container = $("video-thumbs");
+  container.replaceChildren();
+  const viewer = state.videoViewer;
+  const items = viewer.items;
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin videos.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const item of items) {
+    const selected = item.id === viewer.selectedId;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "video-thumb";
+    button.classList.toggle("selected", selected);
+    if (selected) {
+      button.setAttribute("aria-current", "true");
+    }
+    button.title = `Cargar generación #${item.id}`;
+    button.setAttribute("aria-label", `Cargar generación #${item.id}`);
+    const url = videoViewUrl(item);
+    if (url) {
+      const thumb = document.createElement("video");
+      thumb.src = url;
+      thumb.muted = true;
+      thumb.preload = "metadata";
+      thumb.playsInline = true;
+      thumb.addEventListener(
+        "loadedmetadata",
+        () => {
+          thumb.currentTime = 0.01;
+        },
+        { once: true }
+      );
+      button.appendChild(thumb);
+    } else {
+      const missing = document.createElement("span");
+      missing.className = "thumb-missing";
+      missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
+      button.appendChild(missing);
+    }
+    button.addEventListener("click", () => {
+      selectVideoGeneration(item).catch((error) =>
+        setVideoStatus(error.message, true)
+      );
+    });
+    container.appendChild(button);
+  }
+}
+
+function renderVideoViewer() {
+  const viewer = state.videoViewer;
+  updateVideoPreview();
+  renderVideoThumbs();
+  $("video-page-info").textContent = `página ${viewer.page} de ${viewer.total}`;
+  $("video-prev-page").disabled = viewer.page <= 1;
+  $("video-next-page").disabled = viewer.page >= viewer.total;
+}
+
+async function loadVideoViewer({ selectNewest = false } = {}) {
+  const viewer = state.videoViewer;
+  viewer.page = Math.max(1, viewer.page);
+  const offset = (viewer.page - 1) * VIDEO_PAGE_SIZE;
+  try {
+    const data = await api(
+      `/api/gallery?kind=video&limit=${VIDEO_PAGE_SIZE}&offset=${offset}`
+    );
+    const raw = data.items || [];
+    const count = Number(data.count);
+    const total = Number.isFinite(count) && count > 0 ? count : raw.length;
+    viewer.total = Math.max(1, Math.ceil(total / VIDEO_PAGE_SIZE));
+    if (viewer.page > viewer.total) {
+      viewer.page = viewer.total;
+      return await loadVideoViewer({ selectNewest });
+    }
+    viewer.items = raw;
+    const onPage = viewer.items.some((item) => item.id === viewer.selectedId);
+    if (selectNewest && viewer.items.length) {
+      viewer.selectedId = viewer.items[0].id;
+    } else if (!onPage) {
+      viewer.selectedId = viewer.items.length ? viewer.items[0].id : null;
+    }
+    renderVideoViewer();
+  } catch (error) {
+    setVideoStatus(error.message, true);
+  }
+}
+
+async function selectVideoGeneration(item) {
+  state.videoViewer.selectedId = item.id;
+  renderVideoViewer();
+  await reuseVideoGeneration(item);
+}
+
+async function reloadVideoViewerFirstPage() {
+  state.videoViewer.page = 1;
+  await loadVideoViewer({ selectNewest: true });
+}
+
+async function attachVideoFrameFromUrl(inputId, name) {
+  const clean = typeof name === "string" ? name.trim() : "";
+  const input = $(inputId);
+  if (!clean) {
+    input.value = "";
+    return;
+  }
+  const response = await fetch(`/api/refs/${encodeURIComponent(clean)}`);
+  if (!response.ok) {
+    input.value = "";
+    throw new Error(`frame guardado no disponible (HTTP ${response.status})`);
+  }
+  const blob = await response.blob();
+  const file = new File([blob], clean, {
+    type: blob.type || "image/png",
+  });
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+}
+
+async function applyVideoSavedFrames(params) {
+  const saved = params || {};
+  const first = saved.image || saved.ref_image || "";
+  const last = saved.last_image || "";
+  const warnings = [];
+  for (const [inputId, name] of [
+    ["video-image", first],
+    ["video-last-image", last],
+  ]) {
+    try {
+      await attachVideoFrameFromUrl(inputId, name);
+    } catch (error) {
+      warnings.push(error.message);
+    }
+  }
+  if (warnings.length) {
+    throw new Error(warnings.join("; "));
+  }
+}
+
+async function reuseVideoGeneration(item) {
+  const params = item.params || {};
+  const engine = (params.engine || item.model_id) === "h3" ? "h3" : "wan";
+  $("video-engine").value = engine;
+  $("video-mode").value = params.mode === "flf2v" ? "flf2v" : "i2v";
+  setSelectValue($("video-aspect"), params.aspect);
+  const seconds = Number(params.seconds);
+  if (Number.isFinite(seconds)) {
+    $("video-seconds").value = String(Math.min(15, Math.max(1, seconds)));
+  }
+  updateVideoDurationInfo();
+  if (params.seed != null) {
+    $("video-seed").value = params.seed;
+  }
+  $("video-motion").value =
+    engine === "wan" ? String(params.motion_positive || item.prompt || "") : "";
+  $("video-prompt").value =
+    engine === "h3" ? String(params.prompt || item.prompt || "") : "";
+  const storedNegative =
+    typeof item.negative === "string" && item.negative
+      ? item.negative
+      : typeof params.motion_negative === "string"
+        ? params.motion_negative
+        : "";
+  $("video-motion-negative").value = storedNegative;
+  state.videoNegativeTouched = Boolean(storedNegative);
+  applyVideoEngine();
+  let warning = "";
+  try {
+    await applyVideoSavedFrames(params);
+  } catch (error) {
+    warning = error.message;
+  }
+  if (warning) {
+    setVideoStatus(`Cargado #${item.id} · ${warning}`, true);
+  } else {
+    setVideoStatus(`Cargado #${item.id}`);
+  }
+}
+
+function startNewVideo() {
+  $("video-engine").value = "wan";
+  $("video-mode").value = "i2v";
+  $("video-aspect").value = "vertical";
+  $("video-seconds").value = "5";
+  $("video-seed").value = $("video-seed").defaultValue || "42";
+  $("video-motion").value = "";
+  $("video-prompt").value = "";
+  $("video-motion-negative").value = "";
+  $("video-image").value = "";
+  $("video-last-image").value = "";
+  state.videoNegativeTouched = false;
+  state.videoVramHint = "";
+  applyVideoEngine();
+  updateVideoDurationInfo();
+  setVideoStatus("Nuevo: opciones por defecto");
 }
 
 function updateReferencePreview() {
@@ -1506,7 +1648,7 @@ async function generateVideo() {
     await pollJob(
       data.job_id,
       setVideoJobStatus,
-      reloadGalleryFirstPage,
+      reloadVideoViewerFirstPage,
       setVideoProgress,
       true,
       "btn-video-cancel"
@@ -3514,6 +3656,14 @@ const REQUIRED_IDS = [
   "video-mode",
   "video-seconds",
   "video-motion-negative",
+  "video-preview",
+  "video-preview-empty",
+  "video-preview-info",
+  "video-prev-page",
+  "video-next-page",
+  "video-page-info",
+  "video-thumbs",
+  "btn-new-video",
   "editor-prompt",
   "editor-refs",
   "btn-editor-generate",
@@ -3575,7 +3725,6 @@ function bind() {
     setStatus("UI desactualizada: recarga con Ctrl+F5", true);
     console.error("bind: faltan elementos de la UI", missing);
   }
-  state.videoPager = makePager("video-gallery");
   on("tab-image", "click", () => switchTab("image"));
   on("tab-video", "click", () => switchTab("video"));
   on("tab-editor", "click", () => switchTab("editor"));
@@ -3631,21 +3780,22 @@ function bind() {
     state.imageViewer.page += 1;
     loadImageViewer();
   });
-  on("video-gallery-prev", "click", () => {
-    state.videoPager.page -= 1;
-    renderVideoGallery();
+  on("video-prev-page", "click", () => {
+    state.videoViewer.page -= 1;
+    loadVideoViewer();
   });
-  on("video-gallery-next", "click", () => {
-    state.videoPager.page += 1;
-    renderVideoGallery();
+  on("video-next-page", "click", () => {
+    state.videoViewer.page += 1;
+    loadVideoViewer();
   });
+  on("btn-new-video", "click", startNewVideo);
   on("btn-reload", "click", () => {
     state.imageViewer.page = 1;
     loadImageViewer();
   });
   on("btn-video-reload", "click", () => {
-    state.videoPager.page = 1;
-    loadGallery();
+    state.videoViewer.page = 1;
+    loadVideoViewer();
   });
   on("btn-motion", "click", improveMotion);
   on("btn-video-generate", "click", generateVideo);
@@ -3809,7 +3959,7 @@ async function init() {
     await settle("preprompts OC", loadOcPreprompts);
     await settle("OCs", loadCharacters);
     await settle("negativo", refreshNegative);
-    await settle("galería de video", loadGallery);
+    await settle("visor de video", () => loadVideoViewer());
     await settle("visor de imagen", () => loadImageViewer());
     await settle("zonas", renderZoneEditor);
     await settle("estado del editor", loadEditorStatus);

@@ -137,6 +137,37 @@ class ListCountTests(StoreTestCase):
         self.store.add("m", "p")
         self.assertEqual(self.store.count(), 2)
 
+    def test_list_y_count_filtran_por_kind(self):
+        image1 = self.store.add("m", "img 1")
+        video1 = self.store.add("m", "vid 1", kind="video")
+        image2 = self.store.add("m", "img 2")
+        video2 = self.store.add("m", "vid 2", kind="video")
+        self.assertEqual(self.store.count(), 4)
+        self.assertEqual(self.store.count(kind="image"), 2)
+        self.assertEqual(self.store.count(kind="video"), 2)
+        self.assertEqual(self.store.count(kind="nope"), 0)
+        self.assertEqual(
+            [row["id"] for row in self.store.list(kind="video", order="asc")],
+            [video1, video2],
+        )
+        self.assertEqual(
+            [
+                row["id"]
+                for row in self.store.list(
+                    kind="video", limit=1, offset=1, order="asc"
+                )
+            ],
+            [video2],
+        )
+        self.assertEqual(
+            [row["id"] for row in self.store.list(kind="image", order="asc")],
+            [image1, image2],
+        )
+        self.assertEqual(
+            [row["id"] for row in self.store.list()],
+            [video2, image2, video1, image1],
+        )
+
 
 class UpdateTests(StoreTestCase):
     def test_update_parcial_y_roundtrip(self):

@@ -1326,18 +1326,30 @@ def create_app(
         return {"status": "cancelled"}
 
     @app.get("/api/gallery")
-    async def api_gallery(limit: int = 24, offset: int = 0) -> dict:
+    async def api_gallery(
+        limit: int = 24, offset: int = 0, kind: str | None = None
+    ) -> Any:
+        """Feed paginado (mas nuevo primero); `kind` opcional filtra image|video.
+
+        `count` refleja el filtro aplicado, no solo la ventana: el visor de
+        video pide `kind=video&limit=5&offset=…` y calcula su pagina X de Y.
+        """
+        kind = kind or None
+        if kind not in (None, "image", "video"):
+            return JSONResponse(
+                status_code=400, content={"error": "kind invalido; usar image|video"}
+            )
         limit = max(1, min(int(limit), 24))
         offset = max(0, int(offset))
         items = []
-        for row in st.list(limit=limit, offset=offset, order="desc"):
+        for row in st.list(limit=limit, offset=offset, order="desc", kind=kind):
             item = dict(row)
             item["urls"] = [
                 MEDIA_URL.format(gen_id=row["id"], name=name)
                 for name in (row.get("outputs") or [])
             ]
             items.append(item)
-        return {"items": items, "count": st.count()}
+        return {"items": items, "count": st.count(kind=kind)}
 
     @app.get("/media/characters/{char_id}/{name:path}")
     async def api_character_media(char_id: int, name: str) -> Any:

@@ -101,30 +101,49 @@ class Store:
         return self._row_to_dict(row) if row is not None else None
 
     def list(
-        self, limit: int = 50, offset: int = 0, order: str = "desc"
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        order: str = "desc",
+        kind: str | None = None,
     ) -> list[dict]:
-        """Generaciones paginadas por id; `order` es `asc` o `desc`."""
+        """Generaciones paginadas por id; `order` es `asc` o `desc`.
+
+        `kind` opcional filtra por tipo (`image`/`video`); `None` no filtra.
+        """
         direction = str(order).strip().lower()
         if direction not in ("asc", "desc"):
             raise EngineError(
                 f"store list: orden invalido {order!r} (usa asc|desc)"
             )
+        where = ""
+        filters: list[Any] = []
+        if kind is not None:
+            where = "WHERE kind = ? "
+            filters.append(str(kind))
         try:
             with closing(self._connect()) as conn, conn:
                 rows = conn.execute(
-                    f"SELECT {_COLUMNS} FROM generations "
+                    f"SELECT {_COLUMNS} FROM generations {where}"
                     f"ORDER BY id {direction.upper()} LIMIT ? OFFSET ?",
-                    (int(limit), int(offset)),
+                    (*filters, int(limit), int(offset)),
                 ).fetchall()
         except sqlite3.Error as exc:
             raise EngineError(f"store list fallo: {exc}") from exc
         return [self._row_to_dict(row) for row in rows]
 
-    def count(self) -> int:
-        """Numero total de generaciones."""
+    def count(self, kind: str | None = None) -> int:
+        """Numero total de generaciones, opcionalmente filtrado por `kind`."""
+        where = ""
+        filters: tuple[Any, ...] = ()
+        if kind is not None:
+            where = " WHERE kind = ?"
+            filters = (str(kind),)
         try:
             with closing(self._connect()) as conn, conn:
-                row = conn.execute("SELECT COUNT(*) FROM generations").fetchone()
+                row = conn.execute(
+                    f"SELECT COUNT(*) FROM generations{where}", filters
+                ).fetchone()
         except sqlite3.Error as exc:
             raise EngineError(f"store count fallo: {exc}") from exc
         return int(row[0])
