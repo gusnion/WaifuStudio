@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Preflight (Windows 10/11 x64 + GPU NVIDIA + >=140 GB libres) -> uv +
-    CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.34.0 pineado +
+    CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.37.4 pineado +
     dependencias del engine -> custom nodes pineados + ckpts RIFE +
     wheel SageAttention -> descarga y verificacion sha256 de los modelos de
     install\manifest\manifest.models.json (Civitai via $env:WAIFU_CIVITAI_TOKEN)

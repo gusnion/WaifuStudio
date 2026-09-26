@@ -5,26 +5,26 @@
   "task": "F3b (M10-6b) installer + manifiestos",
   "notes": [
     "Pines exactos de REPO_ASSETS_Y_INSTALLER.md §9.3/§10 (estado medido 2026-09-25). El instalador clona/checkout cada revision y verifica git rev-parse HEAD.",
-    "ComfyUI se clona con --branch v0.34.0 --depth 1 y despues se fija el commit; los nodos por commit directo.",
+    "ComfyUI se clona con --branch v0.37.4 --depth 1 y despues se fija el commit; los nodos por commit directo.",
     "comfyui-controlnet-aux queda opcional/obsoleto (solo se instala con -IncludeOptional; el flujo actual no lo usa).",
     "El wheel de SageAttention y los pines de torch/triton son los del venv auditado; el token de Civitai nunca vive en este archivo."
   ],
   "comfyui": {
     "name": "ComfyUI",
-    "version": "v0.34.0",
-    "tag": "v0.34.0",
-    "commit": "12d5279438bfefc058a269eae805ceab6047777f",
+    "version": "v0.37.4",
+    "tag": "v0.37.4",
+    "commit": "8ff6dc384ba5c410266b40e137799e049459d4f2",
     "url": "https://github.com/Comfy-Org/ComfyUI.git",
-    "notes": "Engine del producto (nodos H3 core incluidos); arranque: .venv\\Scripts\\python.exe -s main.py --listen 127.0.0.1 --port 8288 --disable-api-nodes --disable-auto-launch."
+    "notes": "Engine del producto (nodos H3 y Qwen-Image 2.1 en core); arranque: .venv\\Scripts\\python.exe -s main.py --listen 127.0.0.1 --port 8288 --disable-api-nodes --disable-auto-launch."
   },
   "custom_nodes": [
     {
       "id": "ComfyUI-GGUF",
-      "url": "https://github.com/city96/ComfyUI-GGUF.git",
-      "commit": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+      "url": "https://github.com/leejet/ComfyUI-GGUF.git",
+      "commit": "373048b8403a7820620065210a691263d4da0a61",
       "required": true,
       "obsolete": false,
-      "notes": "UnetLoaderGGUF (Wan 2.2 high/low y GGUF del Editor)."
+      "notes": "Fork activo leejet: qwen_image21 (fix #482) y minimax; UnetLoaderGGUF (Wan high/low, H3 y GGUF del Editor)."
     },
     {
       "id": "ComfyUI-KJNodes",
