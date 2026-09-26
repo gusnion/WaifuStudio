@@ -424,6 +424,12 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         <div class="generate-row">
           <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
         </div>
+        <div id="editor-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="editor-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="editor-progress-text" class="progress-text">paso -/-</p>
+        </div>
         <p id="editor-status" class="status">Listo</p>
       </aside>
 
@@ -431,7 +437,7 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         <div class="gallery-header">
           <h2>Editor (Qwen-Image 2.1)</h2>
         </div>
-        <p class="editor-placeholder">Qwen-Image 2.1 (INT8 ConvRot + text encoder + VAE) llega con las descargas M10. Hasta entonces, «Generar» solo valida la petición y responde con la guarda honesta.</p>
+        <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» encola de verdad cuando los tres archivos están instalados y el resultado aparece en el visor de Imagen.</p>
       </section>
     </section>
 

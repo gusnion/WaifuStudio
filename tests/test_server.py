@@ -2944,6 +2944,16 @@ class EditorStatusTests(ServerTestCase):
         data = self.make_client().get("/api/editor/status").json()
         self.assertIs(data["installed"], False)
 
+    def test_gguf_en_diffusion_models_desbloquea_el_editor(self):
+        for index, relative in enumerate(server_module.EDITOR_MODEL_FILES):
+            if index == 0:
+                relative = "diffusion_models/" + relative.split("/", 1)[1]
+            path = self.config.comfy_root / "models" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake-model")
+        data = self.make_client().get("/api/editor/status").json()
+        self.assertIs(data["installed"], True)
+
 
 class EditorGenerateValidationTests(ServerTestCase):
     def test_prompt_vacio_o_no_str_400(self):
@@ -3051,23 +3061,49 @@ class EditorGenerateGuardTests(ServerTestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {"error": "modelo no instalado (M10)"})
 
-    def test_501_con_instalacion_simulada(self):
+    def test_encola_de_verdad_con_instalacion_completa(self):
         for relative in server_module.EDITOR_MODEL_FILES:
             path = self.config.comfy_root / "models" / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fake-model")
-        response = self.make_client().post(
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
             "/api/editor/generate",
             json={
                 "prompt": "1girl",
                 "mode": "edit",
-                "ref_images_b64": [base64.b64encode(b"img").decode("ascii")],
+                "negative": "low quality",
+                "ref_images_b64": [
+                    base64.b64encode(PNG_BYTES).decode("ascii")
+                ],
                 "size": {"width": 512, "height": 2048},
                 "seed": 7,
             },
         )
-        self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.json(), {"error": "integracion pendiente (M10)"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        self.assertEqual(len(queue.jobs), 1)
+        job = queue.jobs[0]
+        self.assertEqual(job["kind"], "editor")
+        self.assertEqual(job["prompt"], "1girl")
+        self.assertEqual(job["negative"], "low quality")
+        self.assertEqual(job["seed"], 7)
+        self.assertEqual((job["width"], job["height"]), (512, 2048))
+        self.assertEqual(job["params"]["task"], "editor")
+        self.assertEqual(job["params"]["mode"], "edit")
+        self.assertEqual(len(job["params"]["ref_images"]), 1)
+        ref_path = (
+            self.config.comfy_root / "input" / job["params"]["ref_images"][0]
+        )
+        self.assertTrue(ref_path.is_file())
+        self.assertEqual(ref_path.read_bytes(), PNG_BYTES)
+        row = self.store.get(1)
+        self.assertEqual(row["kind"], "image")
+        self.assertEqual(row["model_id"], server_module.EDITOR_MODEL)
+        self.assertEqual(row["negative"], "low quality")
+        self.assertEqual(row["params"]["task"], "editor")
+        self.assertEqual(server_module._JOBS[1]["kind"], "editor")
+        self.assertEqual(server_module._JOBS[1]["status"], "queued")
 
 
 class EditorUiStaticTests(ServerTestCase):
@@ -3088,6 +3124,9 @@ class EditorUiStaticTests(ServerTestCase):
             'id="editor-height"',
             'id="editor-seed"',
             'id="btn-editor-generate"',
+            'id="editor-progress"',
+            'id="editor-progress-fill"',
+            'id="editor-progress-text"',
             'id="editor-status"',
             "múltiplos de 16",
         ):
@@ -3105,9 +3144,13 @@ class EditorUiStaticTests(ServerTestCase):
             "EDITOR_REF_LIMIT",
             "EDITOR_SIZE_MIN",
             "updateEditorControls",
+            "state.editorInstalled",
             "addEditorRefs",
             "removeEditorRef",
+            "setEditorProgress",
             "generateEditor",
+            "pollJob(",
+            "reloadImageViewerFirstPage",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

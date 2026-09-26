@@ -2144,20 +2144,23 @@ function setEditorBanner(installed) {
   const el = $("editor-banner");
   el.classList.toggle("ok", Boolean(installed));
   el.textContent = installed
-    ? "Qwen-Image 2.1 instalado — listo para M10"
-    : "Qwen-Image 2.1 no instalado — llega con las descargas M10";
+    ? "Qwen-Image 2.1 instalado — listo para generar"
+    : "Qwen-Image 2.1 no instalado — faltan archivos del modelo";
 }
 
 async function loadEditorStatus() {
   const data = await api("/api/editor/status");
   state.editorInstalled = Boolean(data.installed);
   setEditorBanner(state.editorInstalled);
+  updateEditorControls();
   return data;
 }
 
 function updateEditorControls() {
   $("btn-editor-generate").disabled =
-    state.editorBusy || !$("editor-prompt").value.trim();
+    state.editorBusy ||
+    !state.editorInstalled ||
+    !$("editor-prompt").value.trim();
 }
 
 function updateEditorRefs() {
@@ -2223,6 +2226,10 @@ function validEditorSize(value) {
   );
 }
 
+function setEditorProgress(progress) {
+  setProgress(progress, "editor");
+}
+
 async function generateEditor() {
   if (state.editorBusy) {
     return;
@@ -2253,10 +2260,16 @@ async function generateEditor() {
   }
   state.editorBusy = true;
   updateEditorControls();
-  setEditorStatus("Enviando...");
+  setEditorStatus("Encolando...");
   try {
     const data = await postJson("/api/editor/generate", payload);
-    setEditorStatus(data && data.job_id ? `Encolado: ${data.job_id}` : "Aceptado");
+    await pollJob(
+      data.job_id,
+      setEditorStatus,
+      reloadImageViewerFirstPage,
+      setEditorProgress,
+      false
+    );
   } catch (error) {
     setEditorStatus(error.message, true);
   } finally {

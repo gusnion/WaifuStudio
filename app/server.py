@@ -30,6 +30,11 @@ from fastapi.templating import Jinja2Templates
 from app import trainer
 from app.characters import CharacterStore, is_sheet
 from app.config import APP_ROOT, EngineConfig, load_config
+from app.editor import (
+    EDITOR_DEFAULT_SIZE,
+    EDITOR_SEED_MAX,
+    run_editor_generation,
+)
 from app.editor_models import editor_model
 from app.engine import ComfyEngine, EngineError, load_graph
 from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
@@ -248,10 +253,21 @@ def editor_installed(comfy_root: Any) -> bool:
 
     `expected` son las rutas relativas a `ComfyUI/models` del catalogo UC
     (`registry/editor_models-v1.json`, M10-6b); no se comprueba tamaño ni hash
-    y no se inventa que existan: con temp root el resultado es `False`.
+    y no se inventa que existan: con temp root el resultado es `False`. El GGUF
+    de difusion se acepta en `unet/` (ruta del manifiesto) o en
+    `diffusion_models/` (mismo alias que escanea UnetLoaderGGUF en ComfyUI):
+    la descarga M10 solo dejo el archivo en el segundo.
     """
     models_root = Path(comfy_root) / "models"
-    return all((models_root / relative).is_file() for relative in EDITOR_MODEL_FILES)
+    for relative in EDITOR_MODEL_FILES:
+        if (models_root / relative).is_file():
+            continue
+        if relative.startswith("unet/"):
+            alias = "diffusion_models/" + relative[len("unet/") :]
+            if (models_root / alias).is_file():
+                continue
+        return False
+    return True
 
 
 def lora_file_path(comfy_root: Any, relative: object) -> Path:
@@ -463,6 +479,24 @@ def create_app(
                 config=cfg,
                 store=st,
                 engine_factory=video_factory,
+                record=record,
+            )
+        elif job.get("kind") == "editor":
+            record = _JOBS.setdefault(
+                job["gen_id"],
+                {
+                    "prompt_id": None,
+                    "tracker": None,
+                    "status": "queued",
+                    "engine": None,
+                    "kind": "editor",
+                },
+            )
+            run_editor_generation(
+                job,
+                config=cfg,
+                store=st,
+                engine_factory=factory,
                 record=record,
             )
         elif job.get("kind") == "upscale":
@@ -1584,12 +1618,12 @@ def create_app(
 
     @app.get("/api/editor/status")
     async def api_editor_status() -> dict:
-        """Estado del editor Qwen-Image 2.1 (M9-G): guarda de modelo no instalado.
+        """Estado real del editor Qwen-Image 2.1 (M9-G/M10-3).
 
         `expected` son las rutas relativas a `ComfyUI/models` del par UC (GGUF
         + text encoder int8 ConvRot + VAE bf16) definidas en
-        `registry/editor_models-v1.json`; `installed` exige que existan TODAS.
-        La descarga e integración llegan en M10.
+        `registry/editor_models-v1.json`; `installed` exige que existan TODAS y
+        es lo que habilita el encolado real de `/api/editor/generate`.
         """
         return {
             "installed": editor_installed(cfg.comfy_root),
@@ -1600,12 +1634,15 @@ def create_app(
 
     @app.post("/api/editor/generate")
     async def api_editor_generate(payload: dict = Body(...)) -> Any:
-        """Valida la petición del editor y responde 503/501 hasta M10.
+        """Valida y encola una generación del editor Qwen-Image 2.1 (M10-3).
 
-        La forma se valida siempre (400): prompt, mode `generate|edit`, máximo
-        10 refs base64 válidas, size en [512, 2048] múltiplos de 16 y seed
-        entera. Después: 503 si falta el modelo y 501 si está instalado pero la
-        integración aún no existe (placeholder honesto).
+        La forma se valida siempre (400): prompt, `mode` `generate|edit`,
+        `negative` opcional (texto), máximo 10 refs base64 válidas, size en
+        [512, 2048] múltiplos de 16 y seed entera en 0..2^64-1. Con el par UC
+        instalado (los 3 archivos del catálogo) escribe las referencias en
+        `ComfyUI/input` y encola un job `kind="editor"` que produce una
+        generación nueva (`kind="image"`, `params.task="editor"`, visible en la
+        galería de Imagen); 503 si falta algún archivo del modelo.
         """
         prompt = payload.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
@@ -1615,7 +1652,13 @@ def create_app(
             return JSONResponse(
                 status_code=400, content={"error": "mode invalido; usar generate|edit"}
             )
+        negative = payload.get("negative")
+        if negative is None:
+            negative = ""
+        if not isinstance(negative, str):
+            return JSONResponse(status_code=400, content={"error": "negative invalido"})
         refs = payload.get("ref_images_b64")
+        raw_refs: list[bytes] = []
         if refs is not None:
             if not isinstance(refs, list):
                 return JSONResponse(
@@ -1630,7 +1673,9 @@ def create_app(
                     },
                 )
             for index, ref in enumerate(refs):
-                _decode_image_b64(ref, f"ref_images_b64[{index}]")
+                raw_refs.append(_decode_image_b64(ref, f"ref_images_b64[{index}]"))
+        width = None
+        height = None
         size = payload.get("size")
         if size not in (None, ""):
             if not isinstance(size, dict):
@@ -1661,21 +1706,66 @@ def create_app(
                             )
                         },
                     )
+                if name == "width":
+                    width = int(number)
+                else:
+                    height = int(number)
         seed = payload.get("seed")
-        if seed is not None:
-            if isinstance(seed, bool):
-                return JSONResponse(status_code=400, content={"error": "seed invalido"})
-            try:
-                int(seed)
-            except (TypeError, ValueError):
-                return JSONResponse(status_code=400, content={"error": "seed invalido"})
+        if seed is None:
+            seed = 42
+        if isinstance(seed, bool):
+            return JSONResponse(status_code=400, content={"error": "seed invalido"})
+        try:
+            seed = int(seed)
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"error": "seed invalido"})
+        if not 0 <= seed <= EDITOR_SEED_MAX:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"seed fuera de 0..{EDITOR_SEED_MAX}"},
+            )
         if not editor_installed(cfg.comfy_root):
             return JSONResponse(
                 status_code=503, content={"error": "modelo no instalado (M10)"}
             )
-        return JSONResponse(
-            status_code=501, content={"error": "integracion pendiente (M10)"}
+        if width is None:
+            width = EDITOR_DEFAULT_SIZE
+        if height is None:
+            height = EDITOR_DEFAULT_SIZE
+        input_dir = cfg.comfy_root / "input"
+        ref_images = [_write_input_png(input_dir, raw) for raw in raw_refs]
+        params = {
+            "task": "editor",
+            "mode": mode,
+            "width": width,
+            "height": height,
+            "seed": seed,
+            "ref_images": ref_images,
+        }
+        gen_id = st.add(
+            EDITOR_MODEL, prompt.strip(), negative.strip(), params, kind="image"
         )
+        job = {
+            "kind": "editor",
+            "gen_id": gen_id,
+            "prompt": prompt.strip(),
+            "negative": negative.strip(),
+            "seed": seed,
+            "width": width,
+            "height": height,
+            "ref_images": ref_images,
+            "params": dict(params),
+        }
+        _JOBS[gen_id] = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "editor",
+        }
+        job_id = queue.submit(job)
+        app.state.jobs[job_id] = job
+        return {"job_id": job_id}
 
     @app.get("/api/jobs/{job_id}")
     async def api_job(job_id: str) -> Any:
