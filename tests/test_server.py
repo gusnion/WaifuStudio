@@ -2333,7 +2333,7 @@ class TagsRoutesTests(ServerTestCase):
         response = self.make_client().get("/api/tags/groups")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"groups": list_groups()})
-        self.assertEqual(len(response.json()["groups"]), 10)
+        self.assertEqual(len(response.json()["groups"]), len(list_groups()))
 
     def test_por_grupo_y_grupo_desconocido(self):
         client = self.make_client()
@@ -2362,7 +2362,12 @@ class TagsRoutesTests(ServerTestCase):
         self.assertEqual(len(data["items"]), 200)
         self.assertEqual(
             data["items"][0],
-            {"tag": "long hair", "label": "Cabello largo", "group": "hair"},
+            {
+                "tag": "long hair",
+                "label": "Cabello largo",
+                "group": "hair",
+                "rank": 0,
+            },
         )
         limited = client.get("/api/tags", params={"limit": 0}).json()
         self.assertEqual(len(limited["items"]), 1)

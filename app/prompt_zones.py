@@ -16,7 +16,7 @@ zona para la UI. Sin red, GPU ni dependencias.
 from __future__ import annotations
 
 from app.engine import EngineError
-from app.tags import all_tags, get as tag_get
+from app.tags import BULK_GROUPS, all_tags, get as tag_get
 
 ZONE_ORDER = ("quality", "safety", "subject", "character", "general")
 ZONE_LABELS = {
@@ -600,6 +600,8 @@ def _general_option_subgroups() -> list[dict]:
         seen.add(folded)
         buckets[_CURATED_SUBCAT[tag]].append(_option_tag(tag))
     for entry in all_tags():
+        if entry["group"] in BULK_GROUPS:
+            continue
         folded = entry["tag"].lower()
         if folded in seen or classify_tag(entry["tag"]) != "general":
             continue

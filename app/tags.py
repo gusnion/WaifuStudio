@@ -17,6 +17,7 @@ from app.engine import EngineError
 CATALOG_PATH = APP_ROOT / "registry" / "tags_danbooru.json"
 MAX_SEARCH_LIMIT = 200
 DEFAULT_SEARCH_LIMIT = 50
+BULK_GROUPS = ("general_top", "character", "series", "artist")
 
 
 def _load_catalog(path: Path = CATALOG_PATH) -> tuple[list[str], list[dict]]:
@@ -55,7 +56,12 @@ def _load_catalog(path: Path = CATALOG_PATH) -> tuple[list[str], list[dict]]:
         if folded in seen:
             raise EngineError(f"tag duplicado en {path}: {tag!r}")
         seen.add(folded)
-        entries.append({"tag": tag.strip(), "label": label.strip(), "group": group})
+        rank = item.get("rank", 0)
+        if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+            raise EngineError(f"rank invalido para {tag!r} en {path}: {rank!r}")
+        entries.append(
+            {"tag": tag.strip(), "label": label.strip(), "group": group, "rank": rank}
+        )
     order = {group: index for index, group in enumerate(groups)}
     entries.sort(key=lambda entry: order[entry["group"]])
     return list(groups), entries
@@ -112,6 +118,7 @@ def all_tags() -> list[dict]:
 
 
 __all__ = [
+    "BULK_GROUPS",
     "CATALOG_PATH",
     "GROUPS",
     "MAX_SEARCH_LIMIT",

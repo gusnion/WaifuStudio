@@ -28,6 +28,10 @@ EXPECTED_GROUPS = [
     "setting",
     "action",
     "meta",
+    "general_top",
+    "character",
+    "series",
+    "artist",
 ]
 META_REQUIRED = (
     "score_7",
@@ -47,20 +51,26 @@ class CatalogFileTests(unittest.TestCase):
         self.tags = self.data["tags"]
 
     def test_json_valido_y_rango_de_tamano(self):
-        self.assertEqual(set(self.data), {"schema_version", "descripcion", "groups", "tags"})
+        self.assertEqual(
+            set(self.data), {"schema_version", "descripcion", "source", "groups", "tags"}
+        )
         self.assertEqual(self.data["groups"], EXPECTED_GROUPS)
         self.assertGreaterEqual(len(self.tags), 250)
-        self.assertLessEqual(len(self.tags), 350)
+        self.assertLessEqual(len(self.tags), 4000)
+        self.assertEqual(self.data["schema_version"], "tags-danbooru/v2")
+        self.assertTrue(self.data["source"]["sha256"])
 
     def test_entradas_completas_unicas_y_minusculas(self):
         seen: set[str] = set()
         for item in self.tags:
             with self.subTest(tag=item.get("tag")):
-                self.assertEqual(set(item), {"tag", "label", "group"})
+                self.assertEqual(set(item), {"tag", "label", "group", "rank"})
                 self.assertTrue(item["tag"].strip())
                 self.assertEqual(item["tag"], item["tag"].lower())
                 self.assertTrue(item["label"].strip())
                 self.assertIn(item["group"], EXPECTED_GROUPS)
+                self.assertIsInstance(item["rank"], int)
+                self.assertGreaterEqual(item["rank"], 0)
                 folded = item["tag"].lower()
                 self.assertNotIn(folded, seen)
                 seen.add(folded)
@@ -97,6 +107,14 @@ class ByGroupTests(unittest.TestCase):
         self.assertTrue(items)
         self.assertTrue(all(item["group"] == "hair" for item in items))
         self.assertIn("long hair", [item["tag"] for item in items])
+
+    def test_grupos_bulk_ordenados_por_rank(self):
+        for group in ("general_top", "character", "series", "artist"):
+            with self.subTest(group=group):
+                ranks = [item["rank"] for item in by_group(group)]
+                self.assertTrue(ranks)
+                self.assertEqual(ranks, sorted(ranks, reverse=True))
+                self.assertGreater(ranks[0], 0)
 
     def test_grupo_desconocido_engine_error(self):
         with self.assertRaises(EngineError):
@@ -150,7 +168,13 @@ class GetTests(unittest.TestCase):
     def test_get_canonico_y_case_insensitive(self):
         entry = get("long hair")
         self.assertEqual(
-            entry, {"tag": "long hair", "label": "Cabello largo", "group": "hair"}
+            entry,
+            {
+                "tag": "long hair",
+                "label": "Cabello largo",
+                "group": "hair",
+                "rank": 0,
+            },
         )
         self.assertEqual(get("LONG HAIR"), entry)
         self.assertIsNone(get("no existe"))
