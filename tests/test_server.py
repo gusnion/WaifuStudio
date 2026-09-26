@@ -1050,6 +1050,45 @@ class EnhanceZonesRouteTests(ServerTestCase):
         self.assertNotIn("Zona objetivo:", llm.calls[0]["user"])
 
 
+class PromptGeneralUiStaticTests(ServerTestCase):
+    """Generador general de prompt (M10-2e): cuadro natural + fusión por zonas."""
+
+    def test_index_prompt_general_arriba_en_la_columna_2(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="prompt-general"',
+            "Describe en lenguaje natural: escena, personaje, acción, estilo",
+            'id="btn-enhance" type="button">Generar prompt</button>',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertLess(
+            text.index("controls-column-zones"),
+            text.index('id="prompt-general"'),
+        )
+        self.assertLess(
+            text.index('id="prompt-general"'),
+            text.index('id="btn-enhance"'),
+        )
+
+    def test_app_js_genera_desde_prompt_general_y_fusiona(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "enhancePrompt",
+            'const generalField = $("prompt-general");',
+            '"Escribe una descripción en el prompt general"',
+            'button.textContent = "Generar prompt"',
+            "applyZonesPayload(data.zones || [])",
+            '$("negative").value = negative;',
+            "enhanceZoneDraft",
+            "zoneNaturalRow",
+            "text,\n      zone",
+            '"prompt-general",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class GenerateValidationTests(ServerTestCase):
     def payload(self, **overrides) -> dict:
         data = {
@@ -2722,6 +2761,7 @@ class IndexTests(ServerTestCase):
             'id="job-progress"',
             'id="job-progress-fill"',
             'id="job-progress-text"',
+            'id="prompt-general"',
             'id="prompt-zones"',
             'id="zone-editor"',
             'id="prompt-final"',

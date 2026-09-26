@@ -941,51 +941,37 @@ async function restoreNegative() {
   }
 }
 
-function zoneDraftEntries() {
-  const entries = [];
-  for (const [zone, draft] of Object.entries(state.zoneDrafts)) {
-    const text = String(draft || "").trim();
-    if (text) {
-      entries.push([zone, text]);
-    }
-  }
-  return entries;
-}
-
-function clearZoneDrafts(entries) {
-  for (const [zone] of entries) {
-    state.zoneDrafts[zone] = "";
-  }
-}
-
 async function enhancePrompt() {
   if (state.pendingEnhance) {
     return;
   }
-  const drafts = zoneDraftEntries();
-  const text = drafts.length
-    ? drafts.map(([, draft]) => draft).join(", ")
-    : composePrompt().trim();
+  const generalField = $("prompt-general");
+  const text = String(generalField.value || "").trim();
   if (!text) {
-    setStatus("Escribe un prompt para mejorarlo", true);
+    setStatus("Escribe una descripción en el prompt general", true);
+    generalField.focus();
     return;
   }
   const button = $("btn-enhance");
   state.pendingEnhance = true;
   button.disabled = true;
-  button.textContent = "Mejorando…";
-  setStatus("Mejorando prompt...");
+  button.textContent = "Generando…";
+  setStatus("Generando prompt...");
   try {
     const data = await postJson("/api/prompt/enhance_zones", {
       text,
       strength: $("enhance-strength").value,
       rating: $("rating").value,
     });
-    clearZoneDrafts(drafts);
     applyZonesPayload(data.zones || []);
+    const negative = String(data.negative || "").trim();
+    if (negative) {
+      $("negative").value = negative;
+      state.negativeTouched = false;
+    }
     renderZoneEditor();
-    button.textContent = "Mejorado ✓";
-    setStatus("Mejorado ✓");
+    button.textContent = "Generado ✓";
+    setStatus("Prompt generado ✓");
   } catch (error) {
     button.textContent = "Error";
     setStatus(error.message, true);
@@ -997,7 +983,7 @@ async function enhancePrompt() {
     }
     enhanceResetTimer = setTimeout(() => {
       if (!state.pendingEnhance) {
-        button.textContent = "Mejorar prompt";
+        button.textContent = "Generar prompt";
       }
     }, 1600);
   }
@@ -1056,6 +1042,7 @@ async function startNewGeneration() {
   for (const zone of Object.keys(state.zoneDrafts)) {
     state.zoneDrafts[zone] = "";
   }
+  $("prompt-general").value = "";
   state.negativeTouched = false;
   clearReference();
   $("rating").value = "sfw";
@@ -4362,6 +4349,7 @@ const REQUIRED_IDS = [
   "tab-editor",
   "tab-upscaler",
   "btn-enhance",
+  "prompt-general",
   "btn-generate",
   "btn-cancel",
   "btn-seed-random",

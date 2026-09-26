@@ -160,6 +160,15 @@ main {
   flex: 0 0 auto;
 }
 
+.prompt-general-field {
+  flex: 0 0 auto;
+}
+
+.prompt-general-field textarea {
+  font-size: 0.82rem;
+  min-height: 64px;
+}
+
 .zones-panel {
   display: flex;
   flex-direction: column;
