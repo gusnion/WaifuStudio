@@ -531,7 +531,8 @@ def split_character_tags(tags: list[str]) -> dict:
 
     Usa el catalogo real de ``app.prompt_zones``: ``traits`` son los tags de
     subcategoria ``rasgos`` (grupos hair/eyes/face/body); ``extras`` el resto
-    de general (ropa/accesorios/accion/expresion/camara/fondo/otros) y tambien
+    de general (ropa/accesorios/accion/poses/expresion/camara/fondo, incluidos
+    los desconocidos via ``GENERAL_FALLBACK_SUBCAT``) y tambien
     calidad/safety/sujeto (no definen al personaje). Dedup case-insensitive en
     orden estable; EngineError si ``tags`` no es lista de str.
     """

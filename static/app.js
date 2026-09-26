@@ -28,10 +28,13 @@ const GENERAL_SUBCATS = [
   "ropa",
   "accesorios",
   "accion",
+  "poses",
+  "poses_sexuales",
+  "poses_sexys",
   "expresion",
+  "expresiones_nsfw",
   "camara",
   "fondo",
-  "otros",
 ];
 
 const GENERAL_SUBCAT_LABELS = {
@@ -39,11 +42,16 @@ const GENERAL_SUBCAT_LABELS = {
   ropa: "Ropa",
   accesorios: "Accesorios",
   accion: "Acción/Pose",
+  poses: "Poses",
+  poses_sexuales: "Poses sexuales",
+  poses_sexys: "Poses sexys",
   expresion: "Expresión",
+  expresiones_nsfw: "Expresiones NSFW",
   camara: "Cámara",
   fondo: "Fondo/Escena",
-  otros: "Otros",
 };
+
+const GENERAL_SUBCAT_FALLBACK = "fondo";
 
 const PAGE_SIZE = 6;
 const IMAGE_PAGE_SIZE = 5;
@@ -89,7 +97,8 @@ const STARTUP_DEFAULTS = {
   preprompt: "anima_default",
   rating: "nsfw",
   negative:
-    "worst quality, low quality, jpeg artifacts, blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name",
+    "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, " +
+    "blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name",
   video_engine: "h3",
 };
 
@@ -126,18 +135,14 @@ const state = {
       ropa: [],
       accesorios: [],
       accion: [],
+      poses: [],
+      poses_sexuales: [],
+      poses_sexys: [],
       expresion: [],
+      expresiones_nsfw: [],
       camara: [],
       fondo: [],
-      otros: [],
     },
-  },
-  zoneDrafts: {
-    quality: "",
-    safety: "",
-    subject: "",
-    character: "",
-    general: "",
   },
   pendingEnhance: false,
   pendingMotion: false,
@@ -202,6 +207,7 @@ let zonePopoverSubcat = null;
 let zonePopoverOriginSubcat = null;
 let zonePopoverSelected = new Map();
 let zonePopoverSeq = 0;
+let zonePopoverAnchor = null;
 let zoneOcApplied = [];
 let zoneOcCharacter = null;
 
@@ -911,6 +917,11 @@ async function applyStartupDefaults() {
   state.negativeTouched = false;
   state.negativeBase = STARTUP_DEFAULTS.negative;
   $("negative").value = STARTUP_DEFAULTS.negative;
+  try {
+    await refreshNegative();
+  } catch (error) {
+    console.error("defaults: negativo dinamico no disponible", error);
+  }
   $("video-engine").value = STARTUP_DEFAULTS.video_engine;
   applyVideoEngine();
 }
@@ -1077,17 +1088,9 @@ function applyRandomSeed() {
 
 async function startNewGeneration() {
   resetPromptZones();
-  for (const zone of Object.keys(state.zoneDrafts)) {
-    state.zoneDrafts[zone] = "";
-  }
   $("prompt-general").value = "";
-  state.negativeTouched = false;
   clearReference();
-  $("rating").value = "sfw";
-  const defaultModel = state.models.length ? state.models[0].id : $("model").value;
-  $("model").value = defaultModel;
-  await applyModel(defaultModel);
-  await restoreNegative();
+  await applyStartupDefaults();
   if (!state.seedRandom) {
     $("seed").value = $("seed").defaultValue || "42";
   }
@@ -2616,7 +2619,7 @@ function promptTagsFromText(text) {
 }
 
 function generalBucket(subcat) {
-  const key = GENERAL_SUBCATS.includes(subcat) ? subcat : "otros";
+  const key = GENERAL_SUBCATS.includes(subcat) ? subcat : GENERAL_SUBCAT_FALLBACK;
   if (!Array.isArray(state.promptZones.general[key])) {
     state.promptZones.general[key] = [];
   }
@@ -2770,7 +2773,7 @@ function removeTagsFromZoneScope(zone, tags, subcat) {
     return;
   }
   if (zone === "general") {
-    const key = GENERAL_SUBCATS.includes(subcat) ? subcat : "otros";
+    const key = GENERAL_SUBCATS.includes(subcat) ? subcat : GENERAL_SUBCAT_FALLBACK;
     state.promptZones.general[key] = (
       state.promptZones.general[key] || []
     ).filter((tag) => !folded.has(String(tag).toLowerCase()));
@@ -2799,7 +2802,7 @@ function applyZonesPayload(zonesPayload, { replace = false } = {}) {
       const subcats =
         Array.isArray(item.subcats) && item.subcats.length
           ? item.subcats
-          : [{ id: "otros", tags: item.tags || [] }];
+          : [{ id: GENERAL_SUBCAT_FALLBACK, tags: item.tags || [] }];
       for (const block of subcats) {
         added.push(
           ...pushTagsToZone("general", block.tags || [], block.id, seen)
@@ -2839,7 +2842,7 @@ function updateGenerateState() {
 function removeTagFromZone(zone, tag, subcat) {
   const folded = String(tag).toLowerCase();
   if (zone === "general") {
-    const key = GENERAL_SUBCATS.includes(subcat) ? subcat : "otros";
+    const key = GENERAL_SUBCATS.includes(subcat) ? subcat : GENERAL_SUBCAT_FALLBACK;
     state.promptZones.general[key] = (
       state.promptZones.general[key] || []
     ).filter((item) => String(item).toLowerCase() !== folded);
@@ -2879,65 +2882,40 @@ function zoneAddButton(zone, subcat, label) {
   add.textContent = "＋";
   add.title = `Añadir a ${label}`;
   add.addEventListener("click", () => {
-    openZoneInsert(zone, subcat).catch((error) => setStatus(error.message, true));
+    openZoneInsert(zone, subcat, add).catch((error) =>
+      setStatus(error.message, true)
+    );
   });
   return add;
 }
 
-async function enhanceZoneDraft(zone, button) {
-  const text = String(state.zoneDrafts[zone] || "").trim();
-  if (!text) {
-    setStatus("Escribe algo para mejorar", true);
-    return;
-  }
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Mejorando…";
-  }
-  setStatus("Mejorando…");
-  try {
-    const data = await postJson("/api/prompt/enhance_zones", {
-      text,
-      zone,
-      strength: $("enhance-strength").value,
-      rating: $("rating").value,
-    });
-    state.zoneDrafts[zone] = "";
-    applyZonesPayload(data.zones || []);
-    renderZoneEditor();
-    setStatus("Mejorado ✓");
-  } catch (error) {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "Mejorar";
-    }
-    setStatus(error.message, true);
-  }
-}
-
-function zoneNaturalRow(zone) {
-  const row = document.createElement("div");
-  row.className = "zone-natural-row";
+function zoneQuickRow(zone, subcat, label) {
+  const row = document.createElement("form");
+  row.className = "zone-quick";
   const input = document.createElement("input");
   input.type = "text";
-  input.className = "zone-natural";
-  input.dataset.zone = zone;
-  input.placeholder = "Describe en lenguaje natural…";
-  input.value = state.zoneDrafts[zone] || "";
-  input.addEventListener("input", () => {
-    state.zoneDrafts[zone] = input.value;
-  });
-  const enhance = document.createElement("button");
-  enhance.type = "button";
-  enhance.className = "zone-enhance";
-  enhance.dataset.zone = zone;
-  enhance.textContent = "Mejorar";
-  enhance.addEventListener("click", () => {
-    enhanceZoneDraft(zone, enhance).catch((error) =>
-      setStatus(error.message, true)
+  input.className = "zone-quick-input";
+  input.placeholder = "Tag(s) separados por comas…";
+  input.setAttribute("aria-label", `Añadir tag a ${label}`);
+  const insert = document.createElement("button");
+  insert.type = "submit";
+  insert.className = "zone-quick-add";
+  insert.textContent = "Insertar";
+  insert.title = `Añadir a ${label}`;
+  row.append(input, insert);
+  row.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const tags = promptTagsFromText(input.value);
+    if (!tags.length) {
+      return;
+    }
+    const added = addTagsToZone(zone, tags, subcat);
+    setStatus(
+      added.length
+        ? `${added.length} tag(s) añadido(s) a ${label}`
+        : `Sin cambios en ${label}: ya estaba`
     );
   });
-  row.append(input, enhance);
   return row;
 }
 
@@ -2964,9 +2942,6 @@ function renderZoneEditor() {
     if (zone === "general") {
       for (const subcat of GENERAL_SUBCATS) {
         const tags = state.promptZones.general[subcat] || [];
-        if (!tags.length) {
-          continue;
-        }
         const subLabel = GENERAL_SUBCAT_LABELS[subcat] || subcat;
         const subBlock = document.createElement("div");
         subBlock.className = "zone-subblock";
@@ -2974,14 +2949,18 @@ function renderZoneEditor() {
         subHead.className = "zone-subblock-head";
         const subTitle = document.createElement("span");
         subTitle.textContent = subLabel;
-        subHead.append(subTitle, zoneAddButton("general", subcat, subLabel));
-        subBlock.append(subHead, zoneTagsRow("general", tags, subcat));
+        subHead.append(subTitle);
+        subBlock.append(subHead);
+        if (tags.length) {
+          subBlock.appendChild(zoneTagsRow("general", tags, subcat));
+        }
+        subBlock.appendChild(zoneQuickRow("general", subcat, subLabel));
         block.appendChild(subBlock);
       }
     } else {
       block.appendChild(zoneTagsRow(zone, state.promptZones[zone] || [], null));
+      block.appendChild(zoneQuickRow(zone, null, label));
     }
-    block.appendChild(zoneNaturalRow(zone));
     container.appendChild(block);
   }
   const finalArea = $("prompt-final");
@@ -3241,11 +3220,37 @@ async function applyOcFromPicker(character) {
   setStatus(`OC «${character.name}» aplicado a la zona Personaje`);
 }
 
-async function openZoneInsert(zone, subcat) {
+function positionZonePopover() {
+  const popover = $("zone-popover");
+  if (
+    !popover ||
+    popover.classList.contains("hidden") ||
+    !zonePopoverAnchor ||
+    !zonePopoverAnchor.isConnected
+  ) {
+    return;
+  }
+  const rect = zonePopoverAnchor.getBoundingClientRect();
+  const margin = 8;
+  const width = popover.offsetWidth;
+  const height = popover.offsetHeight;
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (top + height > window.innerHeight - margin) {
+    top = rect.top - height - 6;
+  }
+  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+  top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+}
+
+async function openZoneInsert(zone, subcat, anchor = null) {
   if (!ZONE_LABELS[zone]) {
     return;
   }
   zoneInsertTarget = zone;
+  zonePopoverAnchor = anchor || null;
   zonePopoverOptions = null;
   zonePopoverSubcat = null;
   zonePopoverOriginSubcat = zone === "general" ? subcat || null : null;
@@ -3275,6 +3280,7 @@ async function openZoneInsert(zone, subcat) {
   $("zone-popover-tabs").replaceChildren();
   $("zone-popover-groups").replaceChildren();
   renderZonePopoverSelected();
+  positionZonePopover();
   const seq = ++zonePopoverSeq;
   try {
     const data = await api(
@@ -3305,6 +3311,7 @@ async function openZoneInsert(zone, subcat) {
     }
     renderZonePopoverTabs();
     renderZonePopoverGroups();
+    positionZonePopover();
   } catch (error) {
     if (seq === zonePopoverSeq) {
       setStatus(error.message, true);
@@ -3314,6 +3321,7 @@ async function openZoneInsert(zone, subcat) {
 
 function closeZoneInsert() {
   zoneInsertTarget = null;
+  zonePopoverAnchor = null;
   zonePopoverOptions = null;
   zonePopoverSubcat = null;
   zonePopoverOriginSubcat = null;
@@ -3360,11 +3368,25 @@ async function insertZoneSelection() {
   if (!zone) {
     return;
   }
+  const selected = Array.from(zonePopoverSelected.values());
+  if (zone === "general" && !zonePopoverOriginSubcat) {
+    if (!selected.length) {
+      setStatus("Selecciona o añade algún tag antes de insertar", true);
+      return;
+    }
+    const added = await mergeZonesText(selected.join(", "));
+    closeZoneInsert();
+    setStatus(
+      added.length
+        ? `Insertar: ${added.length} añadido(s)`
+        : "Insertar: sin cambios (ya estaban)"
+    );
+    return;
+  }
   const subcat =
     zone === "general"
-      ? zonePopoverOriginSubcat || zonePopoverSubcat || "otros"
+      ? zonePopoverOriginSubcat || zonePopoverSubcat || GENERAL_SUBCAT_FALLBACK
       : null;
-  const selected = Array.from(zonePopoverSelected.values());
   const selectedFolded = new Set(selected.map((tag) => tag.toLowerCase()));
   const removals = zoneScopeTags(zone, subcat).filter(
     (tag) => !selectedFolded.has(String(tag).toLowerCase())
@@ -4686,13 +4708,8 @@ function bind() {
     state.negativeTouched = true;
   });
   on("btn-copy-prompt", "click", copyFinalPrompt);
-  for (const chip of document.querySelectorAll(".zone-chip")) {
-    chip.addEventListener("click", () => {
-      openZoneInsert(chip.dataset.zone).catch((error) =>
-        setStatus(error.message, true)
-      );
-    });
-  }
+  document.addEventListener("scroll", positionZonePopover, true);
+  window.addEventListener("resize", positionZonePopover);
   on("zone-insert-form", "submit", submitZoneInsert);
   on("zone-insert-cancel", "click", closeZoneInsert);
   on("zone-popover-close", "click", closeZoneInsert);

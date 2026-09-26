@@ -701,12 +701,37 @@ class PromptZonesRoutesTests(ServerTestCase):
         self.assertEqual(set(data), {"zone", "subgroups"})
         self.assertEqual(data["zone"], "general")
         ids = [sub["id"] for sub in data["subgroups"]]
+        self.assertEqual(
+            ids,
+            [
+                "rasgos",
+                "ropa",
+                "accesorios",
+                "accion",
+                "poses",
+                "poses_sexuales",
+                "poses_sexys",
+                "expresion",
+                "expresiones_nsfw",
+                "camara",
+                "fondo",
+            ],
+        )
         self.assertIn("camara", ids)
         self.assertIn("rasgos", ids)
-        self.assertIn("otros", ids)
+        self.assertIn("poses", ids)
+        self.assertNotIn("otros", ids)
         camara = next(sub for sub in data["subgroups"] if sub["id"] == "camara")
         self.assertEqual(
             [item["tag"] for item in camara["tags"]], list(CAMERA_TAGS)
+        )
+        poses = next(sub for sub in data["subgroups"] if sub["id"] == "poses")
+        self.assertIn(
+            "standing", [item["tag"] for item in poses["tags"]]
+        )
+        fondo = next(sub for sub in data["subgroups"] if sub["id"] == "fondo")
+        self.assertIn(
+            "blurry background", [item["tag"] for item in fondo["tags"]]
         )
         for item in camara["tags"]:
             self.assertEqual(set(item), {"tag", "label"})
@@ -1080,13 +1105,16 @@ class PromptGeneralUiStaticTests(ServerTestCase):
             'button.textContent = "Generar prompt"',
             "applyZonesPayload(data.zones || [])",
             '$("negative").value = negative;',
-            "enhanceZoneDraft",
-            "zoneNaturalRow",
-            "text,\n      zone",
+            "zoneQuickRow",
+            "mergeZonesText(selected.join",
+            "positionZonePopover",
             '"prompt-general",',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
+        for removed in ("enhanceZoneDraft", "zoneNaturalRow", "zoneDrafts"):
+            with self.subTest(removed=removed):
+                self.assertNotIn(removed, text)
 
 
 class GenerateValidationTests(ServerTestCase):
@@ -2766,7 +2794,6 @@ class IndexTests(ServerTestCase):
             'id="zone-editor"',
             'id="prompt-final"',
             'id="btn-copy-prompt"',
-            'id="prompt-zones-chips"',
             'id="zone-insert-form"',
             'id="zone-insert-input"',
             'id="zone-insert-cancel"',
@@ -2775,8 +2802,6 @@ class IndexTests(ServerTestCase):
             'id="zone-popover-tabs"',
             'id="zone-popover-groups"',
             'id="zone-popover-insert"',
-            'data-zone="character"',
-            "+ Personaje",
             'id="oc-refs-note"',
             "IPAdapter",
         ):
@@ -3868,10 +3893,15 @@ STARTUP_NEGATIVE_123 = (
     "worst quality, low quality, jpeg artifacts, blurry, mosaic censoring, "
     "bar censor, score_1, score_2, score_3, artist name"
 )
+STARTUP_NEGATIVE_ANTI_MINORS = "child, teen, loli, young-looking"
+STARTUP_NEGATIVE_COMPOSED = (
+    "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, "
+    "blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name"
+)
 
 
 class StartupDefaultsUiStaticTests(ServerTestCase):
-    """M10-2g: defaults de arranque fijados a la generacion #123 y motor H3."""
+    """M10-2g/M10-2f: defaults de arranque (#123) + anti-menores y motor H3."""
 
     def test_index_fija_defaults_de_arranque(self):
         text = self.make_client().get("/").text
@@ -3881,7 +3911,7 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
             'id="seed" type="number" value="42"',
             '<option value="nsfw" selected>nsfw</option>',
             '<option value="h3" selected>',
-            STARTUP_NEGATIVE_123,
+            STARTUP_NEGATIVE_COMPOSED,
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
@@ -3901,7 +3931,9 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
             'preprompt: "anima_default"',
             'rating: "nsfw"',
             'video_engine: "h3"',
-            STARTUP_NEGATIVE_123,
+            "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, ",
+            "blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name",
+            STARTUP_NEGATIVE_ANTI_MINORS,
             "applyStartupDefaults",
             'await settle("defaults de arranque", applyStartupDefaults);',
         ):
@@ -3909,13 +3941,14 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
         self.assertNotIn("839054188", text)
 
-    def test_negativo_123_no_lo_compone_el_preprompt(self):
+    def test_default_del_negativo_es_la_composicion_dinamica(self):
         response = self.make_client().get(
             "/api/negative", params={"preprompt": "anima_default", "family": "anima"}
         )
         self.assertEqual(response.status_code, 200)
         negative = response.json()["negative"]
         self.assertEqual(negative, apply_preprompt("", "anima", "anima_default")[1])
+        self.assertEqual(negative, STARTUP_NEGATIVE_COMPOSED)
         self.assertIn("child, teen, loli, young-looking", negative)
         self.assertNotEqual(negative, STARTUP_NEGATIVE_123)
 

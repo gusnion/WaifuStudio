@@ -7,8 +7,10 @@ general) con las listas canonicas de calidad/safety/sujeto y el catalogo de
 ``split_zones`` reparte el prompt en zonas deduplicando case-insensitive y
 ``compose_zones`` lo vuelve a unir en el orden Anima. ``canonical_order``
 reordena un texto completo por zonas y, dentro de general, por subcategorias
-(``GENERAL_SUBCATS``) y ``prompt_options`` publica las opciones de una zona
-para la UI. Sin red, GPU ni dependencias.
+(``GENERAL_SUBCATS``, sin ``otros`` desde M10-2f: las poses/expresiones NSFW
+son listas curadas con precedencia tipo ``CAMERA_TAGS`` y lo desconocido cae en
+``GENERAL_FALLBACK_SUBCAT``) y ``prompt_options`` publica las opciones de una
+zona para la UI. Sin red, GPU ni dependencias.
 """
 
 from __future__ import annotations
@@ -99,29 +101,42 @@ SUBJECT_TAGS = frozenset(
     }
 )
 
-# Subcategorias de la zona general (M9-C2), en orden canonico, con label ES.
+# Subcategorias de la zona general (M9-C2 + M10-2f), en orden canonico, con label
+# ES. Sin ``otros`` (M10-2f): lo desconocido cae en ``GENERAL_FALLBACK_SUBCAT``.
 GENERAL_SUBCATS = (
     "rasgos",
     "ropa",
     "accesorios",
     "accion",
+    "poses",
+    "poses_sexuales",
+    "poses_sexys",
     "expresion",
+    "expresiones_nsfw",
     "camara",
     "fondo",
-    "otros",
 )
 GENERAL_SUBCAT_LABELS = {
     "rasgos": "Rasgos",
     "ropa": "Ropa",
     "accesorios": "Accesorios",
     "accion": "Acción/Pose",
+    "poses": "Poses",
+    "poses_sexuales": "Poses sexuales",
+    "poses_sexys": "Poses sexys",
     "expresion": "Expresión",
+    "expresiones_nsfw": "Expresiones NSFW",
     "camara": "Cámara",
     "fondo": "Fondo/Escena",
-    "otros": "Otros",
 }
 
-# Grupo del catalogo -> subcategoria; lo no listado (p. ej. ``meta``) va a otros.
+# Fallback de ``general_subcat`` sin ``otros`` (M10-2f): el bucket de escena
+# cierra el orden general, asi los tags desconocidos no se pierden y quedan al
+# final (misma posicion relativa que tenia ``otros``).
+GENERAL_FALLBACK_SUBCAT = "fondo"
+
+# Grupo del catalogo -> subcategoria; lo no listado (meta) se resuelve por tag
+# o cae en ``GENERAL_FALLBACK_SUBCAT``.
 CATALOG_GROUP_SUBCAT = {
     "hair": "rasgos",
     "eyes": "rasgos",
@@ -132,6 +147,14 @@ CATALOG_GROUP_SUBCAT = {
     "action": "accion",
     "expression": "expresion",
     "setting": "fondo",
+}
+
+# Tags del grupo meta del catalogo con subcategoria propia (M10-2f): los 3 tags
+# de fondo que antes caian en ``otros``.
+CATALOG_TAG_SUBCAT = {
+    "blurry background": "fondo",
+    "detailed background": "fondo",
+    "simple background": "fondo",
 }
 
 # Tags de camara/encuadre (M9-C2): manda sobre el catalogo en ``general_subcat``.
@@ -157,6 +180,88 @@ CAMERA_TAGS = (
     "dynamic angle",
     "foreshortening",
     "depth of field",
+)
+
+# Tags curados de las subcategorias nuevas (M10-2f), en orden de aparicion.
+# Mandan sobre el catalogo en ``general_subcat`` (precedencia tipo
+# ``CAMERA_TAGS``, que sigue mandando por encima de estas listas). NSFW sin
+# filtros: el proyecto es NSFW-permisivo.
+POSES_TAGS = (
+    "standing",
+    "sitting",
+    "kneeling",
+    "lying",
+    "on back",
+    "on stomach",
+    "on side",
+    "squatting",
+    "seiza",
+    "wariza",
+    "all fours",
+    "crossed arms",
+    "arms up",
+    "hands up",
+    "hand on hip",
+    "hand on own face",
+    "head tilt",
+    "leaning forward",
+    "stretching",
+    "waving",
+    "pointing",
+    "peace sign",
+    "thumbs up",
+    "salute",
+    "bowing",
+)
+POSES_SEXUALES_TAGS = (
+    "sex",
+    "vaginal sex",
+    "anal sex",
+    "oral",
+    "fellatio",
+    "cunnilingus",
+    "paizuri",
+    "handjob",
+    "fingering",
+    "masturbation",
+    "mating press",
+    "missionary",
+    "doggy style",
+    "cowgirl position",
+    "reverse cowgirl position",
+    "full nelson",
+    "suspended congress",
+    "prone bone",
+    "standing sex",
+    "spitroast",
+)
+POSES_SEXYS_TAGS = (
+    "presenting",
+    "arched back",
+    "top-down bottom-up",
+    "spread legs",
+    "legs up",
+    "knee up",
+    "crossed legs",
+    "bent over",
+    "hand on own chest",
+    "hand between legs",
+    "thigh gap",
+    "undressing",
+)
+EXPRESIONES_NSFW_TAGS = (
+    "ahegao",
+    "naughty face",
+    "seductive smile",
+    "fucked silly",
+    "orgasm",
+    "moaning",
+    "heavy breathing",
+    "drooling",
+    "tongue out",
+    "half-closed eyes",
+    "rolling eyes",
+    "mind break",
 )
 
 # Opciones cortas de las zonas curadas de C1, en el orden con que se muestran.
@@ -239,6 +344,15 @@ _OPTION_TAGS = {
     "subject": SUBJECT_OPTIONS,
 }
 _CAMERA_TAG_SET = frozenset(CAMERA_TAGS)
+_CURATED_SUBCAT: dict[str, str] = {}
+for _subcat, _tags in (
+    ("poses", POSES_TAGS),
+    ("poses_sexuales", POSES_SEXUALES_TAGS),
+    ("poses_sexys", POSES_SEXYS_TAGS),
+    ("expresiones_nsfw", EXPRESIONES_NSFW_TAGS),
+):
+    for _tag in _tags:
+        _CURATED_SUBCAT[_tag] = _subcat
 
 
 def _is_number(text: str) -> bool:
@@ -295,24 +409,32 @@ def classify_tag(tag: str) -> str:
 
 
 def general_subcat(tag: str) -> str:
-    """Subcategoria general de un tag (``GENERAL_SUBCATS``).
+    """Subcategoria general de un tag (``GENERAL_SUBCATS``), sin ``otros``.
 
-    ``CAMERA_TAGS`` manda siempre (incluso si el tag esta en el catalogo); si
-    esta, se usa el grupo del catalogo (``hair/eyes/face/body`` -> rasgos,
-    ``outfit`` -> ropa, ...); desconocido, no-catalogo o vacio -> ``otros``.
+    ``CAMERA_TAGS`` manda siempre (incluso si el tag esta en el catalogo o en
+    las listas curadas); despues mandan las listas curadas (``poses``,
+    ``poses_sexuales``, ``poses_sexys``, ``expresiones_nsfw``); si el tag esta
+    en el catalogo se usa ``CATALOG_TAG_SUBCAT`` (los 3 tags de fondo del grupo
+    ``meta``) o el grupo (``hair/eyes/face/body`` -> rasgos, ``outfit`` ->
+    ropa, ...). Desconocido, no-catalogo o vacio -> ``GENERAL_FALLBACK_SUBCAT``.
     ``EngineError`` si el tag no es str.
     """
     if not isinstance(tag, str):
         raise EngineError(f"tag invalido: {tag!r}")
     normalized = _normalize_tag(tag)
     if not normalized:
-        return "otros"
+        return GENERAL_FALLBACK_SUBCAT
     if normalized in _CAMERA_TAG_SET:
         return "camara"
+    curated = _CURATED_SUBCAT.get(normalized)
+    if curated is not None:
+        return curated
     entry = tag_get(normalized)
     if entry is None:
-        return "otros"
-    return CATALOG_GROUP_SUBCAT.get(entry["group"], "otros")
+        return GENERAL_FALLBACK_SUBCAT
+    if normalized in CATALOG_TAG_SUBCAT:
+        return CATALOG_TAG_SUBCAT[normalized]
+    return CATALOG_GROUP_SUBCAT.get(entry["group"], GENERAL_FALLBACK_SUBCAT)
 
 
 def _general_buckets(tags: list[str]) -> dict[str, list[str]]:
@@ -461,19 +583,30 @@ def _option_tag(tag: str) -> dict[str, str]:
 
 
 def _general_option_subgroups() -> list[dict]:
-    """Subgrupos de general: ``CAMERA_TAGS`` + catalogo por subcategoria.
+    """Subgrupos de general: curadas (camara/poses/expresiones) + catalogo.
 
     Las subcategorias salen en orden ``GENERAL_SUBCATS`` y solo se publican las
-    que tienen tags. Los tags de camara no se repiten en su grupo de catalogo.
+    que tienen tags. ``CAMERA_TAGS`` y las listas curadas de M10-2f van primero
+    en su subcategoria; los tags del catalogo que clasifican a otra zona
+    (calidad/safety/sujeto) no se publican en general y un tag no se repite.
     """
     camera = [_option_tag(tag) for tag in CAMERA_TAGS]
     seen = {item["tag"].lower() for item in camera}
     buckets: dict[str, list[dict]] = {subcat: [] for subcat in GENERAL_SUBCATS}
-    for entry in all_tags():
-        if entry["tag"].lower() in seen:
+    for tag in POSES_TAGS + POSES_SEXUALES_TAGS + POSES_SEXYS_TAGS + EXPRESIONES_NSFW_TAGS:
+        folded = tag.lower()
+        if folded in seen:
             continue
-        subcat = CATALOG_GROUP_SUBCAT.get(entry["group"], "otros")
-        buckets[subcat].append({"tag": entry["tag"], "label": entry["label"]})
+        seen.add(folded)
+        buckets[_CURATED_SUBCAT[tag]].append(_option_tag(tag))
+    for entry in all_tags():
+        folded = entry["tag"].lower()
+        if folded in seen or classify_tag(entry["tag"]) != "general":
+            continue
+        seen.add(folded)
+        buckets[general_subcat(entry["tag"])].append(
+            {"tag": entry["tag"], "label": entry["label"]}
+        )
     subgroups: list[dict] = []
     for subcat in GENERAL_SUBCATS:
         tags = camera if subcat == "camara" else buckets[subcat]
@@ -519,8 +652,14 @@ def prompt_options(zone: str) -> dict:
 __all__ = [
     "CAMERA_TAGS",
     "CATALOG_GROUP_SUBCAT",
+    "CATALOG_TAG_SUBCAT",
+    "EXPRESIONES_NSFW_TAGS",
+    "GENERAL_FALLBACK_SUBCAT",
     "GENERAL_SUBCATS",
     "GENERAL_SUBCAT_LABELS",
+    "POSES_SEXUALES_TAGS",
+    "POSES_SEXYS_TAGS",
+    "POSES_TAGS",
     "QUALITY_OPTIONS",
     "QUALITY_TAGS",
     "SAFETY_OPTIONS",

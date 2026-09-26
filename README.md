@@ -205,8 +205,9 @@ El runner `run_generation(job, config, store, registry, engine_factory)` carga
 `ref_image`+`strength`), encola en la `JobQueue` (`submit`→`wait`→`outputs`) y copia los PNG a
 `data_dir/gallery/<gen_id>/` actualizando el store; un fallo queda en store y job sin matar al
 worker. La UI (`templates/index.html` + `static/app.css` + `static/app.js`, sin CDN) trae la
-pestaña **Imagen**: editor por zonas como único editor del positivo, con un hueco de texto
-natural por zona y «Mejorar prompt» global, y select de fuerza (Fiel/Balanceado/Creativo,
+pestaña **Imagen**: editor por zonas como único editor del positivo, con input rápido
+(tags directos) por zona/subcategoría y «Generar prompt» global desde el cuadro de
+lenguaje natural, y select de fuerza (Fiel/Balanceado/Creativo,
 default Balanceado) con estados del botón; preprompt/modelo; sampler y scheduler como `<select>`
 poblados desde `/api/params`; tamaño como `<select>` con los 11 presets + `Manual` (Ancho/Alto
 solo en manual); negativo pre-cargado desde `/api/negative` (se refresca al cambiar preprompt
@@ -364,26 +365,35 @@ inválida, tag vacío o zona desconocida).
 
 La UI (sin CDN) usa el **editor por zonas como único editor** del positivo
 (`#zone-editor`, sin textarea de prompt): cada zona muestra sus tags como chips
-(con «×» para quitar) y, dentro de cada bloque, un **hueco de texto natural** +
-«Mejorar» (M9-C3b-2). El **prompt final** (`#prompt-final`, `<textarea>`
-readonly con «Copiar») se recompone con `composePrompt()` tras cada cambio; el
-chip destacado **«Personaje»** abre el popover con «Mis OCs» y tags manuales
-(el caso del nombre del OC) y el resto de zonas abren su popover de opciones.
+(con «×» para quitar) y, dentro de cada bloque, un **input rápido** + «Insertar»
+(M10-2f) que añade el texto como tags (separados por comas, con trim y dedup
+global, sin LLM). El **prompt final** (`#prompt-final`, `<textarea>` readonly
+con «Copiar») se recompone con `composePrompt()` tras cada cambio; el botón `+`
+de cada zona abre su popover de opciones —el de **«Personaje»** incluye «Mis
+OCs»— anclado junto al botón que lo abre (M10-2f). Solo la cabecera de
+`general` conserva el `+` de subcategoría; las subcategorías se insertan con su
+input rápido.
 
-## Opciones por zona y orden canónico (M9-C2)
+## Opciones por zona y orden canónico (M9-C2, sin «otros» desde M10-2f)
 
 `app\prompt_zones.py` añade la capa de opciones y el orden canónico:
 
 - `GENERAL_SUBCATS` y `GENERAL_SUBCAT_LABELS`: subcategorías de `general` en
-  orden —`rasgos`, `ropa`, `accesorios`, `accion`, `expresion`, `camara`,
-  `fondo`, `otros`— con labels ES (`Rasgos`, `Ropa`, `Accesorios`,
-  `Acción/Pose`, `Expresión`, `Cámara`, `Fondo/Escena`, `Otros`).
+  orden —`rasgos`, `ropa`, `accesorios`, `accion`, `poses`, `poses_sexuales`,
+  `poses_sexys`, `expresion`, `expresiones_nsfw`, `camara`, `fondo`— con labels
+  ES (`Rasgos`, `Ropa`, `Accesorios`, `Acción/Pose`, `Poses`, `Poses sexuales`,
+  `Poses sexys`, `Expresión`, `Expresiones NSFW`, `Cámara`, `Fondo/Escena`).
+  No hay `otros`; lo desconocido cae en `GENERAL_FALLBACK_SUBCAT` (`fondo`).
 - `general_subcat(tag)`: `CAMERA_TAGS` (~21 encuadres/ángulos: `close-up`,
   `portrait`, `full body`, `from above`, `dutch angle`, `looking at viewer`,
-  `depth of field`...) manda siempre; si no, el grupo del catálogo
-  (`hair/eyes/face/body`→`rasgos`, `outfit`→`ropa`, `accessories`→`accesorios`,
-  `action`→`accion`, `expression`→`expresion`, `setting`→`fondo`) y
-  desconocido/no-catálogo→`otros`.
+  `depth of field`...) manda siempre; después mandan las listas curadas de
+  M10-2f (`POSES_TAGS`, `POSES_SEXUALES_TAGS`, `POSES_SEXYS_TAGS`,
+  `EXPRESIONES_NSFW_TAGS`, con precedencia tipo `CAMERA_TAGS`); si no, el grupo
+  del catálogo (`hair/eyes/face/body`→`rasgos`, `outfit`→`ropa`,
+  `accessories`→`accesorios`, `action`→`accion`, `expression`→`expresion`,
+  `setting`→`fondo`) y los 3 tags de fondo del grupo `meta`
+  (`blurry/detailed/simple background`→`fondo`, `CATALOG_TAG_SUBCAT`);
+  desconocido/vacío→`GENERAL_FALLBACK_SUBCAT`.
 - `canonical_order(text)`: reordena por zonas (`quality`, `safety`, `subject`,
   `character`, `general`) y dentro de general por `GENERAL_SUBCATS`; dedup
   global case-insensitive preservando la primera aparición, pesos `(tag:1.2)`
@@ -392,16 +402,22 @@ chip destacado **«Personaje»** abre el popover con «Mis OCs» y tags manuales
   tags}]` (solo subcategorías con tags).
 - `prompt_options(zone)`: `{zone, subgroups: [{id, label, tags: [{tag,
   label}]}]}`; quality/safety/subject desde las listas curadas de C1, general
-  desde `CAMERA_TAGS` + catálogo por subcategoría (sin duplicar) y `character`
-  vacío (los OCs llegan en M9-B3); `EngineError` (400) con zona inválida.
+  desde `CAMERA_TAGS` + listas curadas de M10-2f + catálogo por subcategoría
+  (sin duplicar; los tags del catálogo que clasifican a otra zona no se
+  publican en general) y `character` vacío (los OCs llegan en M9-B3);
+  `EngineError` (400) con zona inválida.
 
 `GET /api/prompt/options?zone=` publica esas opciones. `enhance` aplica
 `canonical_order` al positivo compuesto (preprompt incluido) sin tocar el
-negativo ni el `raw`. La UI abre un **popover** por chip con buscador,
-checkboxes con etiquetas visibles, input manual + «Añadir» e «Insertar»
-(varias llamadas a `/api/prompt/insert`), tabs por subcategoría en general y
-la subcategoría Rasgos bloqueada con la nota «Fijado por el OC» cuando hay un
-OC activo.
+negativo ni el `raw`. La UI abre un **popover** por botón `+` con buscador,
+checkboxes con etiquetas visibles, input manual + «Añadir» e «Insertar», tabs
+por subcategoría en general y la subcategoría Rasgos bloqueada con la nota
+«Fijado por el OC» cuando hay un OC activo. El popover se ancla junto al botón
+que lo abre (`position: fixed` + `getBoundingClientRect` con clamp de viewport,
+M10-2f). El `+` de la cabecera de `general` (las subcategorías ya no tienen `+`,
+M10-2f) no inserta en un subcat fijo: «Insertar» manda los tags a
+`POST /api/prompt/zones` y cada uno cae donde lo clasifique el backend
+(`general_subcat` + zonas); los tags desconocidos van al fallback.
 
 ## Mejora con zona objetivo (M9-C3a)
 
@@ -421,24 +437,24 @@ prompt y lo devuelve ya repartido para el editor por zonas.
   `zones_payload(positive)` (con `subcats` en general) y `composed` el
   `compose_zones` canónico del positivo.
 
-## Huecos naturales por zona (M9-C3b-2)
+## Input rápido e inserción por subcategoría (M10-2f)
 
-Cada bloque del editor por zonas (`renderZoneEditor()`) añade un hueco de texto
-natural (`input.zone-natural` con `data-zone` y placeholder «Describe en
-lenguaje natural…») + botón «Mejorar» (`button.zone-enhance` con `data-zone`):
+Cada bloque del editor por zonas (`renderZoneEditor()`) añade un **input
+rápido** (`form.zone-quick` con `input.zone-quick-input` + botón «Insertar»),
+en cada zona y en cada subcategoría de `general` (las 11 se pintan siempre,
+aunque estén vacías). Sustituye a los huecos de texto natural + «Mejorar» por
+zona de M9-C3b-2, retirados con su `state.zoneDrafts` y sus llamadas a
+`enhance_zones`:
 
-- Al escribir solo se actualiza `state.zoneDrafts[zona]` (sin re-render, para no
-  perder el foco); `state.zoneDrafts` arranca con las cinco zonas vacías.
-- «Mejorar» por zona toma el hueco; si está vacío avisa «Escribe algo para
-  mejorar». Si no, llama a `POST /api/prompt/enhance_zones {text, zone,
-  strength, rating}` con el botón en «Mejorando…», fusiona la respuesta con
-  `applyZonesPayload(data.zones)` (dedup global, sin borrar lo ya presente),
-  limpia ese hueco, repinta el editor y deja «Mejorado ✓» (o el error del
-  servidor, p. ej. 503 `LLM no disponible`).
-- El botón global «Mejorar prompt» (`#btn-enhance`) reúne los huecos con texto
-  (`Object.entries(state.zoneDrafts)`, unidos por «, »; si no hay ninguno usa
-  `composePrompt()`), llama a `enhance_zones` **sin `zone`**, fusiona las zonas,
-  limpia los huecos usados, repinta y deja «Mejorado ✓»/error.
+- «Insertar» toma el texto, lo separa por comas, limpia y añade cada tag a su
+  zona/subcategoría con dedup global (`addTagsToZone`), sin LLM; si ya estaba
+  avisa «Sin cambios en …: ya estaba».
+- El botón global «Generar prompt» (`#btn-enhance`, M10-2e) sigue usando
+  `POST /api/prompt/enhance_zones` sin `zone` desde el cuadro «Prompt general»
+  y fusiona las zonas con `applyZonesPayload(data.zones)`.
+- El `+` de la cabecera de `general` abre el popover y «Insertar» clasifica los
+  tags seleccionados con `mergeZonesText` (`POST /api/prompt/zones`), de modo
+  que cada uno cae donde `general_subcat`/`classify_tag` lo resuelva.
 
 ## OCs en Personaje y rasgos/extras (M9-B3)
 
@@ -450,9 +466,10 @@ catálogo real de `app.prompt_zones`:
   quedan con `extras` vacío y `get`/`list` devuelven siempre `tags` (rasgos) y
   `extras`.
 - `split_character_tags(tags)`: `traits` = subcategoría `rasgos` (grupos
-  hair/eyes/face/body); `extras` = ropa/accesorios/acción/expresión/cámara/fondo/
-  otros y también calidad/safety/sujeto (no definen al personaje). Dedup
-  case-insensitive en orden estable.
+  hair/eyes/face/body); `extras` = ropa/accesorios/acción/poses/expresión/cámara/
+  fondo (incluidos los desconocidos, que caen en el fallback) y también
+  calidad/safety/sujeto (no definen al personaje). Dedup case-insensitive en
+  orden estable.
 - `add`/`update` normalizan: `tags` guarda solo rasgos y los extras se separan a
   `extras` (aceptan además `extras` explícito); `update(tags=...)` preserva los
   extras guardados y suma los nuevos, `update(extras=...)` los reemplaza. Nada se

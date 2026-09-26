@@ -993,25 +993,6 @@ input[type="checkbox"] {
   background: #86efac;
 }
 
-.zone-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.zone-chip {
-  padding: 0.25rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-}
-
-.zone-chip-accent {
-  background: var(--accent-2);
-  border-color: var(--accent-2);
-  color: #fff;
-  font-weight: 600;
-}
-
 .zone-insert {
   display: flex;
   gap: 0.35rem;
@@ -1022,13 +1003,19 @@ input[type="checkbox"] {
 }
 
 .zone-popover {
+  position: fixed;
+  z-index: 9;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(78vh, 640px);
+  overflow-y: auto;
   padding: 0.5rem;
   background: var(--bg);
   border: 1px solid var(--accent-2);
   border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 .zone-popover-head {
@@ -1712,22 +1699,22 @@ input[type="checkbox"] {
   gap: 0.3rem;
 }
 
-.zone-natural-row {
+.zone-quick {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
-.zone-natural-row .zone-natural {
+.zone-quick-input {
   flex: 1;
   min-width: 0;
-  padding: 0.3rem 0.45rem;
-  font-size: 0.78rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
 }
 
-.zone-enhance {
+.zone-quick-add {
   flex: none;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
 }
 
 .zone-chip-text {
@@ -1749,11 +1736,6 @@ input[type="checkbox"] {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-.zone-subblock-head .zone-add {
-  padding: 0 0.4rem;
-  font-size: 0.7rem;
 }
 
 #prompt-final {

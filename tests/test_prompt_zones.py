@@ -8,8 +8,14 @@ from app.engine import EngineError
 from app.prompt_zones import (
     CAMERA_TAGS,
     CATALOG_GROUP_SUBCAT,
+    CATALOG_TAG_SUBCAT,
+    EXPRESIONES_NSFW_TAGS,
+    GENERAL_FALLBACK_SUBCAT,
     GENERAL_SUBCATS,
     GENERAL_SUBCAT_LABELS,
+    POSES_SEXUALES_TAGS,
+    POSES_SEXYS_TAGS,
+    POSES_TAGS,
     QUALITY_OPTIONS,
     QUALITY_TAGS,
     SAFETY_OPTIONS,
@@ -59,10 +65,13 @@ class GeneralSubcatTests(unittest.TestCase):
                 "ropa",
                 "accesorios",
                 "accion",
+                "poses",
+                "poses_sexuales",
+                "poses_sexys",
                 "expresion",
+                "expresiones_nsfw",
                 "camara",
                 "fondo",
-                "otros",
             ),
         )
         self.assertEqual(
@@ -72,13 +81,19 @@ class GeneralSubcatTests(unittest.TestCase):
                 "ropa": "Ropa",
                 "accesorios": "Accesorios",
                 "accion": "Acción/Pose",
+                "poses": "Poses",
+                "poses_sexuales": "Poses sexuales",
+                "poses_sexys": "Poses sexys",
                 "expresion": "Expresión",
+                "expresiones_nsfw": "Expresiones NSFW",
                 "camara": "Cámara",
                 "fondo": "Fondo/Escena",
-                "otros": "Otros",
             },
         )
         self.assertEqual(set(GENERAL_SUBCAT_LABELS), set(GENERAL_SUBCATS))
+        self.assertNotIn("otros", GENERAL_SUBCATS)
+        self.assertEqual(GENERAL_FALLBACK_SUBCAT, "fondo")
+        self.assertIn(GENERAL_FALLBACK_SUBCAT, GENERAL_SUBCATS)
 
     def test_grupos_del_catalogo(self):
         cases = {
@@ -110,6 +125,19 @@ class GeneralSubcatTests(unittest.TestCase):
             },
         )
 
+    def test_tres_tags_de_fondo_del_meta_van_a_fondo(self):
+        self.assertEqual(
+            CATALOG_TAG_SUBCAT,
+            {
+                "blurry background": "fondo",
+                "detailed background": "fondo",
+                "simple background": "fondo",
+            },
+        )
+        for tag in CATALOG_TAG_SUBCAT:
+            with self.subTest(tag=tag):
+                self.assertEqual(general_subcat(tag), "fondo")
+
     def test_camara_manda_sobre_el_catalogo(self):
         self.assertGreaterEqual(len(CAMERA_TAGS), 20)
         self.assertEqual(len(set(CAMERA_TAGS)), len(CAMERA_TAGS))
@@ -120,10 +148,29 @@ class GeneralSubcatTests(unittest.TestCase):
         self.assertEqual(general_subcat("  DUTCH   ANGLE  "), "camara")
         self.assertEqual(general_subcat("full body"), "camara")
 
-    def test_desconocido_o_vacio_otros(self):
+    def test_poses_nsfw_curadas_mandan_sobre_el_catalogo(self):
+        for tags, expected in (
+            (POSES_TAGS, "poses"),
+            (POSES_SEXUALES_TAGS, "poses_sexuales"),
+            (POSES_SEXYS_TAGS, "poses_sexys"),
+            (EXPRESIONES_NSFW_TAGS, "expresiones_nsfw"),
+        ):
+            self.assertTrue(tags)
+            self.assertEqual(len(set(tags)), len(tags))
+            with self.subTest(subcat=expected):
+                for tag in tags:
+                    self.assertEqual(general_subcat(tag), expected)
+        self.assertEqual(general_subcat("standing"), "poses")
+        self.assertEqual(general_subcat("sex"), "poses_sexuales")
+        self.assertEqual(general_subcat("presenting"), "poses_sexys")
+        self.assertEqual(general_subcat("ahegao"), "expresiones_nsfw")
+        self.assertEqual(general_subcat("HEAVY   BREATHING"), "expresiones_nsfw")
+        self.assertEqual(general_subcat("(full nelson:1.2)"), "poses_sexuales")
+
+    def test_desconocido_o_vacio_fallback(self):
         for tag in ("inventado xyz", "hatsune miku", "meta tag raro", ""):
             with self.subTest(tag=tag):
-                self.assertEqual(general_subcat(tag), "otros")
+                self.assertEqual(general_subcat(tag), GENERAL_FALLBACK_SUBCAT)
 
     def test_tag_no_str(self):
         for tag in (None, 3, ["long hair"]):
@@ -155,6 +202,16 @@ class CanonicalOrderTests(unittest.TestCase):
             ),
             "long hair, blue eyes, school uniform, hair ornament, standing, "
             "smile, blue sky",
+        )
+
+    def test_poses_y_nsfw_en_orden_canonico(self):
+        self.assertEqual(
+            canonical_order("ahegao, standing, sex, walking, presenting, smile"),
+            "walking, standing, sex, presenting, smile, ahegao",
+        )
+        self.assertEqual(
+            canonical_order("inventado xyz, smile, standing"),
+            "standing, smile, inventado xyz",
         )
 
     def test_dedup_global_ci(self):
@@ -231,21 +288,46 @@ class PromptOptionsTests(unittest.TestCase):
         data = prompt_options("general")
         ids = [sub["id"] for sub in data["subgroups"]]
         self.assertEqual(ids, [sub for sub in GENERAL_SUBCATS if sub in set(ids)])
+        self.assertEqual(ids, list(GENERAL_SUBCATS))
         self.assertIn("camara", ids)
         self.assertIn("rasgos", ids)
-        self.assertIn("otros", ids)
+        self.assertIn("poses", ids)
+        self.assertNotIn("otros", ids)
         by_id = {sub["id"]: sub for sub in data["subgroups"]}
         camera_tags = [item["tag"] for item in by_id["camara"]["tags"]]
         self.assertEqual(camera_tags, list(CAMERA_TAGS))
+        for subcat, curated in (
+            ("poses", POSES_TAGS),
+            ("poses_sexuales", POSES_SEXUALES_TAGS),
+            ("poses_sexys", POSES_SEXYS_TAGS),
+            ("expresiones_nsfw", EXPRESIONES_NSFW_TAGS),
+        ):
+            with self.subTest(subcat=subcat):
+                self.assertEqual(
+                    [item["tag"] for item in by_id[subcat]["tags"]], list(curated)
+                )
         flat = [
             item["tag"].lower()
             for sub in data["subgroups"]
             for item in sub["tags"]
         ]
         self.assertEqual(len(flat), len(set(flat)))
-        for subcat in ("rasgos", "accion", "expresion", "fondo", "otros"):
+        for subcat in GENERAL_SUBCATS:
+            if subcat == "camara":
+                continue
             for item in by_id[subcat]["tags"]:
                 self.assertNotIn(item["tag"], CAMERA_TAGS)
+        for sub in data["subgroups"]:
+            for item in sub["tags"]:
+                with self.subTest(tag=item["tag"]):
+                    self.assertEqual(classify_tag(item["tag"]), "general")
+        for tag in ("masterpiece", "nsfw", "1girl", "score_9"):
+            with self.subTest(tag=tag):
+                self.assertNotIn(tag, flat)
+        fondo = [item["tag"] for item in by_id["fondo"]["tags"]]
+        for tag in ("blue sky", "blurry background", "detailed background", "simple background"):
+            with self.subTest(tag=tag):
+                self.assertIn(tag, fondo)
         rasgos = {item["tag"]: item["label"] for item in by_id["rasgos"]["tags"]}
         self.assertIn("long hair", rasgos)
         self.assertEqual(rasgos["long hair"], "Cabello largo")
@@ -522,6 +604,22 @@ class ZonesPayloadTests(unittest.TestCase):
             {"id": "expresion", "label": "Expresión", "tags": ["smile"]},
         )
         self.assertNotIn("subcats", payload["quality"])
+
+    def test_subcats_nuevas_poses_y_nsfw(self):
+        payload = {
+            item["id"]: item
+            for item in zones_payload("standing, sex, ahegao, blue sky, hatsune miku")
+        }
+        general = payload["general"]
+        self.assertEqual(
+            [sub["id"] for sub in general["subcats"]],
+            ["poses", "poses_sexuales", "expresiones_nsfw", "fondo"],
+        )
+        subcats = {sub["id"]: sub["tags"] for sub in general["subcats"]}
+        self.assertEqual(subcats["poses"], ["standing"])
+        self.assertEqual(subcats["poses_sexuales"], ["sex"])
+        self.assertEqual(subcats["expresiones_nsfw"], ["ahegao"])
+        self.assertEqual(subcats["fondo"], ["blue sky", "hatsune miku"])
 
     def test_tags_por_zona(self):
         payload = {
