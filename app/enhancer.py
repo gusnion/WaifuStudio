@@ -279,6 +279,7 @@ def enhance(
     k: int | None = None,
     strength: str = DEFAULT_STRENGTH_PRESET,
     zone_hint: str | None = None,
+    context_tags: list[str] | None = None,
 ) -> dict[str, str]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
 
@@ -318,6 +319,33 @@ def enhance(
             f"Zona objetivo: {zone_hint.strip()}. Coloca sólo etiquetas de esa zona; "
             "si algo no pertenece, omítelo."
         )
+    if context_tags is not None:
+        if not isinstance(context_tags, list) or any(
+            not isinstance(tag, str) for tag in context_tags
+        ):
+            raise EngineError("enhance: context_tags debe ser lista de strings")
+        seen_tags: set[str] = set()
+        clean_tags: list[str] = []
+        for tag in context_tags:
+            spaced = " ".join(tag.split())
+            folded = spaced.lower()
+            if not folded or folded in seen_tags:
+                continue
+            seen_tags.add(folded)
+            clean_tags.append(spaced)
+            if len(clean_tags) >= 120:
+                break
+        if clean_tags:
+            lines.append(
+                "Tags ya aplicadas (NO las repitas en la salida): "
+                + ", ".join(clean_tags)
+            )
+    lines.append(
+        "Instrucciones de tags: convierte cada concepto en etiquetas danbooru canónicas "
+        "en inglés, en minúsculas y separadas por comas; usa el nombre exacto del tag "
+        "cuando exista (p. ej. 'pelo largo al viento' -> long hair, wind); añade solo "
+        "etiquetas nuevas, sin frases ni traducciones."
+    )
     if preset["instruction"]:
         lines.append(f"instruccion: {preset['instruction']}")
     notes = retrieve(text, k=preset["k"] if k is None else k)

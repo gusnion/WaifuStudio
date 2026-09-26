@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
+from app.h3_prompt import SYS_PROMPT_H3
 from app.h3_presets import h3_template_path, resolve_h3_profile
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, SYS_PROMPT_MOTION
@@ -193,6 +194,64 @@ class MotionRouteTests(ServerVideoTestCase):
     def test_rating_invalido_400(self):
         response = self.make_client(llm=FakeLLM()).post(
             "/api/motion", json={"text": "camina", "rating": "explicit"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+
+class H3PromptRouteTests(ServerVideoTestCase):
+    H3_OUTPUT = (
+        "integrated_multimodal_description: 1girl walks by the sea at sunset\n"
+        "overall_soundscape: waves and wind\n"
+        "non_diegetic_music: None"
+    )
+
+    def test_sin_llm_503(self):
+        response = self.make_client().post(
+            "/api/video/h3_prompt", json={"text": "la chica camina"}
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "LLM no disponible"})
+
+    def test_ok_devuelve_tres_bloques(self):
+        llm = FakeLLM(self.H3_OUTPUT)
+        response = self.make_client(llm=llm).post(
+            "/api/video/h3_prompt",
+            json={"text": "la chica camina", "rating": "nsfw"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"h3_prompt": self.H3_OUTPUT})
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3)
+        self.assertIn("escena: la chica camina", user)
+        self.assertIn("rating: nsfw", user)
+
+    def test_rating_por_defecto_nsfw(self):
+        llm = FakeLLM(self.H3_OUTPUT)
+        response = self.make_client(llm=llm).post(
+            "/api/video/h3_prompt", json={"text": "camina"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("rating: nsfw", llm.calls[0][1])
+
+    def test_texto_vacio_400(self):
+        client = self.make_client(llm=FakeLLM(self.H3_OUTPUT))
+        for text in ("", "   "):
+            with self.subTest(text=text):
+                response = client.post("/api/video/h3_prompt", json={"text": text})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_rating_invalido_400(self):
+        response = self.make_client(llm=FakeLLM(self.H3_OUTPUT)).post(
+            "/api/video/h3_prompt", json={"text": "camina", "rating": "explicit"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_llm_sin_bloques_400(self):
+        response = self.make_client(llm=FakeLLM("solo texto")).post(
+            "/api/video/h3_prompt", json={"text": "camina"}
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())

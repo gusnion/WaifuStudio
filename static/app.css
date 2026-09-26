@@ -442,6 +442,7 @@ input[type="checkbox"] {
 }
 
 .viewer-toolbar #btn-new-generation,
+.viewer-toolbar #btn-describe-image,
 .viewer-toolbar #btn-save-to-oc {
   flex: 0 0 auto;
 }
@@ -624,6 +625,64 @@ input[type="checkbox"] {
 
 .oc-status.error {
   color: var(--error);
+}
+
+.vision-box {
+  width: min(720px, 100%);
+}
+
+.vision-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+}
+
+.vision-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.vision-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.vision-block-head h3 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.vision-text {
+  margin: 0;
+  max-height: 28vh;
+  overflow-y: auto;
+  padding: 0.55rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vision-body .empty.error {
+  color: var(--error);
+}
+
+.vision-box .modal-footer {
+  gap: 0.5rem;
 }
 
 .oc-body {
@@ -1593,7 +1652,8 @@ input[type="checkbox"] {
   flex: 1;
 }
 
-#h3-guide-status.error {
+#h3-guide-status.error,
+#h3-prompt-status.error {
   color: var(--error);
 }
 

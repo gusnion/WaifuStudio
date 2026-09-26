@@ -85,6 +85,7 @@ const EDITOR_REF_LIMIT = 10;
 const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
 const EDITOR_SIZE_STEP = 16;
+const PROMPT_TAGS_MAX = 120;
 
 const STARTUP_DEFAULTS = {
   model: "one-obsession-anima-v40",
@@ -146,6 +147,7 @@ const state = {
   },
   pendingEnhance: false,
   pendingMotion: false,
+  pendingH3Prompt: false,
   videoNegativeTouched: false,
   videoVramHint: "",
   videoPresets: [],
@@ -199,6 +201,8 @@ const state = {
 
 let enhanceResetTimer = null;
 let motionResetTimer = null;
+let h3PromptResetTimer = null;
+let h3PromptStatusTimer = null;
 let refObjectUrl = null;
 let ocSearchTimer = null;
 let zoneInsertTarget = null;
@@ -210,6 +214,9 @@ let zonePopoverSeq = 0;
 let zonePopoverAnchor = null;
 let zoneOcApplied = [];
 let zoneOcCharacter = null;
+let visionRequestSeq = 0;
+let visionInsertTimer = null;
+let visionResult = { tags: [], caption: "" };
 
 const $ = (id) => document.getElementById(id);
 
@@ -1011,6 +1018,7 @@ async function enhancePrompt() {
       text,
       strength: $("enhance-strength").value,
       rating: $("rating").value,
+      tags: collectPromptZoneTags(),
     });
     applyZonesPayload(data.zones || []);
     const negative = String(data.negative || "").trim();
@@ -1381,6 +1389,10 @@ function updateImagePreview() {
   }
   $("image-preview").classList.toggle("has-image", Boolean(url));
   $("btn-save-to-oc").disabled = !item;
+  const describeButton = $("btn-describe-image");
+  if (describeButton) {
+    describeButton.disabled = !(item && item.kind === "image" && url);
+  }
   const info = $("image-preview-info");
   info.textContent = item
     ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
@@ -1476,6 +1488,270 @@ async function selectImageGeneration(item) {
 async function reloadImageViewerFirstPage() {
   state.imageViewer.page = 1;
   await loadImageViewer({ selectNewest: true });
+}
+
+function visionGenId(item) {
+  if (!item) {
+    return null;
+  }
+  const raw = item.gen_id != null ? item.gen_id : item.id;
+  return raw == null ? null : String(raw);
+}
+
+function setVisionStatus(text, isError = false) {
+  const el = $("vision-status");
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function resetVisionModal() {
+  visionResult = { tags: [], caption: "" };
+  const empty = $("vision-empty");
+  if (empty) {
+    empty.textContent = "Analizando…";
+    empty.classList.remove("hidden", "error");
+  }
+  for (const id of ["vision-caption-block", "vision-tags-block"]) {
+    const block = $(id);
+    if (block) {
+      block.classList.add("hidden");
+    }
+  }
+  for (const id of ["vision-caption", "vision-tags"]) {
+    const text = $(id);
+    if (text) {
+      text.textContent = "";
+    }
+  }
+  for (const id of [
+    "btn-vision-copy-caption",
+    "btn-vision-copy-tags",
+    "btn-vision-insert-caption",
+    "btn-vision-insert-tags",
+  ]) {
+    const button = $(id);
+    if (button) {
+      button.disabled = true;
+    }
+  }
+  const insertCaption = $("btn-vision-insert-caption");
+  if (insertCaption) {
+    insertCaption.textContent = "Insertar caption";
+  }
+  const insertTags = $("btn-vision-insert-tags");
+  if (insertTags) {
+    insertTags.textContent = "Insertar tags";
+  }
+}
+
+function showVisionError(message) {
+  setVisionStatus("Error", true);
+  const empty = $("vision-empty");
+  if (empty) {
+    empty.textContent = message || "No se pudo describir la imagen";
+    empty.classList.remove("hidden");
+    empty.classList.add("error");
+  }
+}
+
+function renderVisionResult(data) {
+  const raw = data && typeof data === "object" ? data : {};
+  const tags = Array.isArray(raw.tags)
+    ? raw.tags.map((tag) => String(tag == null ? "" : tag).trim()).filter(Boolean)
+    : [];
+  const caption = typeof raw.caption === "string" ? raw.caption.trim() : "";
+  visionResult = { tags, caption };
+  const model = raw.model && typeof raw.model === "object" ? raw.model : {};
+  const names = [model.wd14, model.vl].filter(
+    (name) => typeof name === "string" && name
+  );
+  const modelNote = names.length ? ` · ${names.join(" + ")}` : "";
+  if (caption) {
+    const captionEl = $("vision-caption");
+    if (captionEl) {
+      captionEl.textContent = caption;
+    }
+    const captionBlock = $("vision-caption-block");
+    if (captionBlock) {
+      captionBlock.classList.remove("hidden");
+    }
+    const copyCaption = $("btn-vision-copy-caption");
+    if (copyCaption) {
+      copyCaption.disabled = false;
+    }
+    const insertCaption = $("btn-vision-insert-caption");
+    if (insertCaption) {
+      insertCaption.disabled = false;
+    }
+  }
+  if (tags.length) {
+    const tagsEl = $("vision-tags");
+    if (tagsEl) {
+      tagsEl.textContent = tags.join(", ");
+    }
+    const tagsBlock = $("vision-tags-block");
+    if (tagsBlock) {
+      tagsBlock.classList.remove("hidden");
+    }
+    const copyTags = $("btn-vision-copy-tags");
+    if (copyTags) {
+      copyTags.disabled = false;
+    }
+    const insertTags = $("btn-vision-insert-tags");
+    if (insertTags) {
+      insertTags.disabled = false;
+    }
+  }
+  const empty = $("vision-empty");
+  if (!caption && !tags.length) {
+    if (empty) {
+      empty.textContent = "El modelo no devolvió tags ni caption.";
+      empty.classList.remove("hidden");
+    }
+    setVisionStatus(`Sin resultados${modelNote}`);
+    return;
+  }
+  if (empty) {
+    empty.classList.add("hidden");
+  }
+  setVisionStatus(`Listo${modelNote}`);
+}
+
+async function openVisionModal() {
+  const item = selectedImageView();
+  const genId = visionGenId(item);
+  if (genId == null) {
+    setStatus("Selecciona una imagen para describir", true);
+    return;
+  }
+  const modal = $("vision-modal");
+  if (!modal) {
+    return;
+  }
+  resetVisionModal();
+  modal.classList.remove("hidden");
+  setVisionStatus("Analizando…");
+  const seq = ++visionRequestSeq;
+  try {
+    const data = await postJson("/api/vision/image_to_prompt", {
+      gen_id: genId,
+      use_tags: true,
+      use_caption: true,
+    });
+    if (seq !== visionRequestSeq) {
+      return;
+    }
+    renderVisionResult(data);
+  } catch (error) {
+    if (seq !== visionRequestSeq) {
+      return;
+    }
+    showVisionError(error.message);
+  }
+}
+
+function closeVisionModal() {
+  visionRequestSeq += 1;
+  if (visionInsertTimer) {
+    clearTimeout(visionInsertTimer);
+    visionInsertTimer = null;
+  }
+  const modal = $("vision-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
+function visionGeneralTarget() {
+  const area = $("prompt-general");
+  if (area) {
+    return { el: area, label: "«Prompt general»", separator: "\n" };
+  }
+  const input = document.querySelector(
+    "#zone-editor .zone-block-general .zone-quick-input"
+  );
+  if (input) {
+    return { el: input, label: "la zona General", separator: ", " };
+  }
+  return null;
+}
+
+function insertVisionIntoPrompt(kind) {
+  const isTags = kind === "tags";
+  const text = isTags ? visionResult.tags.join(", ") : visionResult.caption;
+  if (!text) {
+    setVisionStatus(
+      isTags ? "Sin tags que insertar" : "Sin caption que insertar",
+      true
+    );
+    return false;
+  }
+  const target = visionGeneralTarget();
+  if (!target) {
+    setVisionStatus("No hay campo de prompt disponible", true);
+    return false;
+  }
+  const current = String(target.el.value || "").replace(/\s+$/, "");
+  target.el.value = current ? `${current}${target.separator}${text}` : text;
+  target.el.focus();
+  setStatus(
+    `${isTags ? "Tags insertados" : "Caption insertado"} en ${target.label} ✓`
+  );
+  return true;
+}
+
+function insertVisionFromModal(kind) {
+  if (!insertVisionIntoPrompt(kind)) {
+    return;
+  }
+  const button = $(
+    kind === "tags" ? "btn-vision-insert-tags" : "btn-vision-insert-caption"
+  );
+  if (button) {
+    button.textContent = "Insertado ✓";
+  }
+  setVisionStatus(kind === "tags" ? "Tags insertados ✓" : "Caption insertado ✓");
+  if (visionInsertTimer) {
+    clearTimeout(visionInsertTimer);
+  }
+  visionInsertTimer = setTimeout(() => {
+    visionInsertTimer = null;
+    closeVisionModal();
+  }, 500);
+}
+
+async function copyVisionText(kind) {
+  const isTags = kind === "tags";
+  const text = isTags ? visionResult.tags.join(", ") : visionResult.caption;
+  if (!text) {
+    setVisionStatus(isTags ? "Sin tags que copiar" : "Sin caption que copiar", true);
+    return;
+  }
+  try {
+    await writeClipboard(text);
+    setVisionStatus(isTags ? "Tags copiados ✓" : "Caption copiado ✓");
+  } catch (error) {
+    setVisionStatus(error.message, true);
+  }
+}
+
+async function writeClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
 }
 
 function selectedVideoView() {
@@ -1828,6 +2104,60 @@ async function improveMotion() {
   }
 }
 
+async function improveH3Prompt() {
+  if (state.pendingH3Prompt) {
+    return;
+  }
+  const area = $("video-prompt");
+  const text = area.value.trim();
+  if (!text) {
+    setH3PromptStatus("Escribe el prompt H3 para mejorarlo", true);
+    area.focus();
+    return;
+  }
+  const button = $("btn-h3-prompt");
+  state.pendingH3Prompt = true;
+  button.disabled = true;
+  button.textContent = "Generando…";
+  setH3PromptStatus("Generando…");
+  if (h3PromptStatusTimer) {
+    clearTimeout(h3PromptStatusTimer);
+    h3PromptStatusTimer = null;
+  }
+  try {
+    const ratingEl = $("video-rating");
+    const data = await postJson("/api/video/h3_prompt", {
+      text,
+      rating: (ratingEl && ratingEl.value) || "nsfw",
+    });
+    area.value = data.h3_prompt || "";
+    button.textContent = "Listo ✓";
+    setH3PromptStatus("Generado ✓");
+    if (h3PromptStatusTimer) {
+      clearTimeout(h3PromptStatusTimer);
+    }
+    h3PromptStatusTimer = setTimeout(() => {
+      if (!state.pendingH3Prompt) {
+        setH3PromptStatus("");
+      }
+    }, 2000);
+  } catch (error) {
+    button.textContent = "Error";
+    setH3PromptStatus(error.message, true);
+  } finally {
+    state.pendingH3Prompt = false;
+    button.disabled = false;
+    if (h3PromptResetTimer) {
+      clearTimeout(h3PromptResetTimer);
+    }
+    h3PromptResetTimer = setTimeout(() => {
+      if (!state.pendingH3Prompt) {
+        button.textContent = "Mejorar prompt (H3)";
+      }
+    }, 1600);
+  }
+}
+
 function readVideoSeed() {
   const value = Number($("video-seed").value);
   return Number.isFinite(value) ? Math.trunc(value) : 42;
@@ -2122,6 +2452,7 @@ function applyVideoEngine() {
   $("video-motion-actions").style.display = isWan ? "" : "none";
   $("video-negative-details").style.display = isWan ? "" : "none";
   $("video-prompt-field").style.display = isWan ? "none" : "";
+  $("video-h3-prompt-actions").style.display = isWan ? "none" : "";
   $("video-h3-guide").style.display = isWan ? "none" : "";
   $("video-last-field").style.display = showLast ? "" : "none";
   for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field", "video-h3-variant-field", "video-h3-sage-field"]) {
@@ -2136,6 +2467,15 @@ function applyVideoEngine() {
 
 function setH3GuideStatus(text, isError = false) {
   const el = $("h3-guide-status");
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+function setH3PromptStatus(text, isError = false) {
+  const el = $("h3-prompt-status");
   if (!el) {
     return;
   }
@@ -2692,6 +3032,40 @@ function composePrompt() {
     push(state.promptZones[zone]);
   }
   return merged.join(", ");
+}
+
+function collectPromptZoneTags() {
+  const tags = [];
+  const seen = new Set();
+  const push = (raw) => {
+    if (tags.length >= PROMPT_TAGS_MAX) {
+      return;
+    }
+    const tag = String(raw == null ? "" : raw).trim();
+    if (!tag) {
+      return;
+    }
+    const folded = tag.toLowerCase();
+    if (seen.has(folded)) {
+      return;
+    }
+    seen.add(folded);
+    tags.push(tag);
+  };
+  for (const zone of ZONE_ORDER) {
+    if (zone === "general") {
+      for (const subcat of GENERAL_SUBCATS) {
+        for (const tag of state.promptZones.general[subcat] || []) {
+          push(tag);
+        }
+      }
+      continue;
+    }
+    for (const tag of state.promptZones[zone] || []) {
+      push(tag);
+    }
+  }
+  return tags;
 }
 
 function resetPromptZones() {
@@ -4431,6 +4805,7 @@ const REQUIRED_IDS = [
   "btn-lightbox-close",
   "lightbox",
   "btn-new-generation",
+  "btn-describe-image",
   "btn-save-to-oc",
   "image-preview",
   "image-preview-img",
@@ -4467,6 +4842,11 @@ const REQUIRED_IDS = [
   "btn-h3-copy-guide",
   "h3-guide-status",
   "video-motion-negative",
+  "video-input-hint",
+  "video-h3-prompt-actions",
+  "btn-h3-prompt",
+  "h3-prompt-status",
+  "enhance-hint",
   "video-preview",
   "video-preview-empty",
   "video-preview-info",
@@ -4568,6 +4948,18 @@ const REQUIRED_IDS = [
   "lora-form-license",
   "lora-form-notes",
   "btn-lora-form-cancel",
+  "vision-modal",
+  "btn-vision-close",
+  "vision-status",
+  "vision-empty",
+  "vision-caption-block",
+  "vision-caption",
+  "btn-vision-copy-caption",
+  "vision-tags-block",
+  "vision-tags",
+  "btn-vision-copy-tags",
+  "btn-vision-insert-caption",
+  "btn-vision-insert-tags",
 ];
 
 function bind() {
@@ -4598,6 +4990,23 @@ function bind() {
   on("btn-negative-restore", "click", restoreNegative);
   on("btn-ref-clear", "click", clearReference);
   on("btn-lightbox-close", "click", closeLightbox);
+  on("btn-describe-image", "click", () => {
+    openVisionModal().catch((error) => setStatus(error.message, true));
+  });
+  on("btn-vision-close", "click", closeVisionModal);
+  on("vision-modal", "click", (event) => {
+    if (event.target === $("vision-modal")) {
+      closeVisionModal();
+    }
+  });
+  on("btn-vision-copy-caption", "click", () => {
+    copyVisionText("caption").catch((error) => setVisionStatus(error.message, true));
+  });
+  on("btn-vision-copy-tags", "click", () => {
+    copyVisionText("tags").catch((error) => setVisionStatus(error.message, true));
+  });
+  on("btn-vision-insert-caption", "click", () => insertVisionFromModal("caption"));
+  on("btn-vision-insert-tags", "click", () => insertVisionFromModal("tags"));
   on("image-preview", "click", () => {
     const item = selectedImageView();
     const url = imageViewUrl(item);
@@ -4613,6 +5022,7 @@ function bind() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeLightbox();
+      closeVisionModal();
       closePrepromptModal();
       closeLoraLibrary();
       closeLoraModal();
@@ -4650,6 +5060,7 @@ function bind() {
     loadVideoViewer();
   });
   on("btn-motion", "click", improveMotion);
+  on("btn-h3-prompt", "click", improveH3Prompt);
   on("btn-video-generate", "click", generateVideo);
   on("btn-video-cancel", "click", cancelJob);
   on("video-engine", "change", () => {

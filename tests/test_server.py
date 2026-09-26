@@ -534,13 +534,13 @@ class ParamsRouteTests(ServerTestCase):
 
 
 class FormatsRouteTests(ServerTestCase):
-    def test_formats_11_y_default(self):
+    def test_formats_13_y_default(self):
         response = self.make_client().get("/api/formats")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["default"], DEFAULT_FORMAT)
         self.assertEqual(data["default"], "retrato_plan")
-        self.assertEqual(len(data["formats"]), 11)
+        self.assertEqual(len(data["formats"]), 13)
         self.assertEqual(data["formats"], list_image_formats())
         first = data["formats"][0]
         self.assertEqual(set(first), {"id", "label", "width", "height"})
@@ -1020,6 +1020,47 @@ class EnhanceZonesRouteTests(ServerTestCase):
                 )
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
+
+    def test_400_tags_invalidas(self):
+        for tags in (5, "1girl", [1, 2], {"a": 1}):
+            with self.subTest(tags=tags):
+                response = self.make_client(llm=self.zones_llm).post(
+                    "/api/prompt/enhance_zones",
+                    json={"text": "1girl", "tags": tags},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_400_tags_maximo(self):
+        response = self.make_client(llm=self.zones_llm).post(
+            "/api/prompt/enhance_zones",
+            json={"text": "1girl", "tags": ["tag"] * 121},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_tags_llegan_al_llm_con_dedup(self):
+        llm = CapturingLLM(self.zones_llm("", ""))
+        response = self.make_client(llm=llm).post(
+            "/api/prompt/enhance_zones",
+            json={"text": "1girl", "tags": ["Long Hair", "long hair", "wind"]},
+        )
+        self.assertEqual(response.status_code, 200)
+        user = llm.calls[0]["user"]
+        self.assertIn(
+            "Tags ya aplicadas (NO las repitas en la salida): Long Hair, wind", user
+        )
+        self.assertIn("Instrucciones de tags:", user)
+
+    def test_sin_tags_no_aparece_la_linea_pero_si_las_instrucciones(self):
+        llm = CapturingLLM(self.zones_llm("", ""))
+        response = self.make_client(llm=llm).post(
+            "/api/prompt/enhance_zones", json={"text": "1girl"}
+        )
+        self.assertEqual(response.status_code, 200)
+        user = llm.calls[0]["user"]
+        self.assertNotIn("Tags ya aplicadas", user)
+        self.assertIn("Instrucciones de tags:", user)
 
     def test_sin_llm_503_mismo_mensaje_que_enhance(self):
         response = self.make_client().post(

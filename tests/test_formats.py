@@ -25,11 +25,13 @@ EXPECTED_IDS = (
     "retrato_plan",
     "retrato_hd",
     "retrato_xl",
+    "video_vertical_hd",
     "video_horizontal",
     "paisaje_sm",
     "paisaje_plan",
     "paisaje_hd",
     "paisaje_xl",
+    "video_horizontal_hd",
     "cuadro_hd",
 )
 
@@ -39,11 +41,13 @@ EXPECTED_SIZES = {
     "retrato_plan": (768, 1344),
     "retrato_hd": (832, 1216),
     "retrato_xl": (1024, 1536),
+    "video_vertical_hd": (576, 1024),
     "video_horizontal": (768, 432),
     "paisaje_sm": (896, 512),
     "paisaje_plan": (1344, 768),
     "paisaje_hd": (1216, 832),
     "paisaje_xl": (1536, 1024),
+    "video_horizontal_hd": (1024, 576),
     "cuadro_hd": (1024, 1024),
 }
 
@@ -56,10 +60,10 @@ class RegistryFileTests(unittest.TestCase):
     def test_json_verbatim_del_contrato(self):
         data = json.loads(FORMATS_PATH.read_text(encoding="utf-8"))
         self.assertEqual(data["schema_version"], "formatos/v1")
-        self.assertEqual(len(data["formatos"]), 13)
+        self.assertEqual(len(data["formatos"]), 15)
         imagen = [entry for entry in data["formatos"] if entry["tipo"] == "imagen"]
         video = [entry for entry in data["formatos"] if entry["tipo"] == "video"]
-        self.assertEqual(len(imagen), 11)
+        self.assertEqual(len(imagen), 13)
         self.assertEqual(len(video), 2)
         self.assertEqual(
             [entry["id"] for entry in imagen], list(EXPECTED_IDS)
@@ -69,7 +73,7 @@ class RegistryFileTests(unittest.TestCase):
 class ImageFormatsTests(unittest.TestCase):
     def test_once_formatos_en_orden(self):
         self.assertEqual(tuple(IMAGE_FORMATS), EXPECTED_IDS)
-        self.assertEqual(len(IMAGE_FORMATS), 11)
+        self.assertEqual(len(IMAGE_FORMATS), 13)
 
     def test_cada_formato_tiene_id_label_width_height(self):
         for format_id, item in IMAGE_FORMATS.items():

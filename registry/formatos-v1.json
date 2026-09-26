@@ -7,11 +7,13 @@
     {"id": "retrato_plan", "label_es": "Retrato 768x1344", "width": 768, "height": 1344, "tipo": "imagen", "grupo": "vertical"},
     {"id": "retrato_hd", "label_es": "Retrato 832x1216", "width": 832, "height": 1216, "tipo": "imagen", "grupo": "vertical"},
     {"id": "retrato_xl", "label_es": "Retrato 1024x1536", "width": 1024, "height": 1536, "tipo": "imagen", "grupo": "vertical"},
+    {"id": "video_vertical_hd", "label_es": "VIDEO 9:16 HD", "width": 576, "height": 1024, "tipo": "imagen", "grupo": "vertical"},
     {"id": "video_horizontal", "label_es": "VIDEO 16:9", "width": 768, "height": 432, "tipo": "imagen", "grupo": "horizontal"},
     {"id": "paisaje_sm", "label_es": "Paisaje 896x512", "width": 896, "height": 512, "tipo": "imagen", "grupo": "horizontal"},
     {"id": "paisaje_plan", "label_es": "Paisaje 1344x768", "width": 1344, "height": 768, "tipo": "imagen", "grupo": "horizontal"},
     {"id": "paisaje_hd", "label_es": "Paisaje 1216x832", "width": 1216, "height": 832, "tipo": "imagen", "grupo": "horizontal"},
     {"id": "paisaje_xl", "label_es": "Paisaje 1536x1024", "width": 1536, "height": 1024, "tipo": "imagen", "grupo": "horizontal"},
+    {"id": "video_horizontal_hd", "label_es": "VIDEO 16:9 HD", "width": 1024, "height": 576, "tipo": "imagen", "grupo": "horizontal"},
     {"id": "cuadro_hd", "label_es": "Cuadrado 1024x1024", "width": 1024, "height": 1024, "tipo": "imagen", "grupo": "cuadrado"},
     {"id": "video_vertical", "label_es": "VIDEO 9:16", "width": 432, "height": 768, "tipo": "video", "grupo": "vertical"},
     {"id": "video_horizontal", "label_es": "VIDEO 16:9", "width": 768, "height": 432, "tipo": "video", "grupo": "horizontal"}

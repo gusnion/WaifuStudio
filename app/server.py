@@ -68,6 +68,7 @@ from app.loras import get as get_lora
 from app.loras import list_loras
 from app.loras import update_entry as update_lora
 from app.loras import validate_selection
+from app.h3_prompt import write_h3_prompt
 from app.motion import MOTION_NEGATIVE, write_motion
 from app.oc_traits import build_prompt, list_traits
 from app.params import (
@@ -1239,6 +1240,16 @@ def create_app(
             return JSONResponse(
                 status_code=400, content={"error": "rating invalido; usar sfw|nsfw"}
             )
+        tags = payload.get("tags")
+        if tags is None:
+            tags = []
+        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "tags invalido; usar lista de strings"},
+            )
+        if len(tags) > 120:
+            return JSONResponse(status_code=400, content={"error": "tags: maximo 120"})
         if llm is None:
             return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
         result = enhance_prompt(
@@ -1247,6 +1258,7 @@ def create_app(
             rating=rating,
             llm=llm,
             zone_hint=zone,
+            context_tags=tags,
         )
         zones = split_zones(result["positive"])
         return {
@@ -1262,6 +1274,16 @@ def create_app(
         if llm is None:
             return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
         return write_motion(
+            payload.get("text"),
+            rating=str(payload.get("rating") or "nsfw"),
+            llm=llm,
+        )
+
+    @app.post("/api/video/h3_prompt")
+    async def api_video_h3_prompt(payload: dict = Body(...)) -> Any:
+        if llm is None:
+            return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
+        return write_h3_prompt(
             payload.get("text"),
             rating=str(payload.get("rating") or "nsfw"),
             llm=llm,

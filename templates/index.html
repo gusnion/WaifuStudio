@@ -136,6 +136,7 @@
                 </select>
               </label>
             </div>
+            <p id="enhance-hint" class="field-hint">Escribe la escena en lenguaje natural: se convierte en tags danbooru por zona. Tus tags ya insertadas se respetan (no se repiten).</p>
           </div>
 
           <details id="section-zones" class="advanced panel-section zones-panel" data-section="zones" open>
@@ -201,6 +202,7 @@
         </button>
         <div class="viewer-toolbar">
           <button id="btn-new-generation" type="button">Generar nuevo</button>
+          <button id="btn-describe-image" type="button" disabled>Describir</button>
           <button id="btn-save-to-oc" type="button" disabled>Guardar en OC</button>
           <span id="image-preview-info" class="viewer-info">Sin generaciones</span>
           <div class="viewer-pager">
@@ -238,6 +240,7 @@
         <label class="field">
           <span>Imagen inicial (first frame)</span>
           <input id="video-image" type="file" accept="image/png">
+          <p id="video-input-hint" class="field-hint">Consejo: genera la imagen de entrada con el mismo aspecto y más resolución que el vídeo (p. ej. 768×1344 para un vídeo 432×768 vertical, 1344×768 para 768×432 horizontal). A más resolución de entrada, más detalle en cara y ojos.</p>
         </label>
         <label class="field" id="video-last-field" style="display: none">
           <span>Imagen final (last frame)</span>
@@ -271,6 +274,13 @@
           <span>Prompt H3 (FL2VA)</span>
           <textarea id="video-prompt" rows="3" placeholder="integrated_multimodal_description: ..."></textarea>
         </label>
+
+        <div id="video-h3-prompt-actions" style="display: none">
+          <div class="enhance-row">
+            <button id="btn-h3-prompt" type="button">Mejorar prompt (H3)</button>
+          </div>
+          <p id="h3-prompt-status" class="field-hint"></p>
+        </div>
 
         <details id="video-h3-guide" class="advanced" style="display: none">
           <summary>Guía de prompt H3</summary>
@@ -759,6 +769,37 @@ non_diegetic_music: &lt;música o None&gt;</pre>
             <button id="btn-lora-form-cancel" class="hidden" type="button">Cancelar edición</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="vision-modal" class="modal hidden">
+    <div class="modal-box vision-box">
+      <div class="modal-header">
+        <h2>Imagen → prompt</h2>
+        <span id="vision-status" class="oc-status">Listo</span>
+        <button id="btn-vision-close" type="button">Cerrar</button>
+      </div>
+      <div class="vision-body">
+        <p id="vision-empty" class="empty">Analizando…</p>
+        <section id="vision-caption-block" class="vision-block hidden">
+          <div class="vision-block-head">
+            <h3>Caption</h3>
+            <button id="btn-vision-copy-caption" type="button" disabled>Copiar</button>
+          </div>
+          <pre id="vision-caption" class="vision-text"></pre>
+        </section>
+        <section id="vision-tags-block" class="vision-block hidden">
+          <div class="vision-block-head">
+            <h3>Tags</h3>
+            <button id="btn-vision-copy-tags" type="button" disabled>Copiar</button>
+          </div>
+          <pre id="vision-tags" class="vision-text"></pre>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-vision-insert-caption" class="primary" type="button" disabled>Insertar caption</button>
+        <button id="btn-vision-insert-tags" type="button" disabled>Insertar tags</button>
       </div>
     </div>
   </div>
