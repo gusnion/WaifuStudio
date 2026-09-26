@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ from app.loras import validate_selection
 
 ROOT = Path(__file__).resolve().parents[1]
 LORAS_DIR = ROOT / "ComfyUI" / "models" / "loras"
+TEST_ASSETS_ENV = "WAIFU_TEST_ASSETS"
 REAL_IDS = [
     "lightx2v-wan-high",
     "lightx2v-wan-low",
@@ -51,6 +53,21 @@ def entry(**overrides) -> dict:
 
 
 class RealRegistryTests(unittest.TestCase):
+    def require_disk(self, name: str) -> Path:
+        """Ruta del LoRA en disco; skip si falta y el clon no trae assets (F3b).
+
+        En el clon limpio del instalador las LoRAs de usuario no se descargan
+        (no redistribuibles): con ``WAIFU_TEST_ASSETS=1`` la exigencia de disco
+        se mantiene; sin la variable, el test se salta solo si el archivo falta.
+        """
+        path = LORAS_DIR / name
+        if not path.is_file() and os.environ.get(TEST_ASSETS_ENV) != "1":
+            self.skipTest(
+                "LoRA no instalada en el clon (aporta el archivo o define "
+                f"{TEST_ASSETS_ENV}=1): {name}"
+            )
+        return path
+
     def test_default_path_apunta_al_registro_del_repo(self):
         self.assertEqual(DEFAULT_PATH, ROOT / "registry" / "loras.json")
         self.assertTrue(DEFAULT_PATH.is_file())
@@ -81,6 +98,17 @@ class RealRegistryTests(unittest.TestCase):
                 self.assertIsInstance(item["notes"], str)
 
     def test_ficheros_registrados_existen_en_disco(self):
+        if os.environ.get(TEST_ASSETS_ENV) != "1":
+            missing = [
+                item["file"]
+                for item in list_loras()
+                if not (LORAS_DIR / item["file"]).is_file()
+            ]
+            if missing:
+                self.skipTest(
+                    "LoRAs de usuario no instaladas en el clon (define "
+                    f"{TEST_ASSETS_ENV}=1): {', '.join(missing)}"
+                )
         for item in list_loras():
             with self.subTest(lora=item["id"]):
                 self.assertTrue(
@@ -128,7 +156,7 @@ class RealRegistryTests(unittest.TestCase):
         self.assertIn("28", miku["notes"])
         self.assertIn("2.9B", miku["notes"])
         self.assertIn("M10", miku["notes"])
-        path = LORAS_DIR / miku["file"]
+        path = self.require_disk(miku["file"])
         self.assertTrue(path.is_file(), f"falta en disco: {path}")
         self.assertEqual(path.stat().st_size, 132299512)
         self.assertEqual(
@@ -156,7 +184,7 @@ class RealRegistryTests(unittest.TestCase):
         self.assertIn("Anima-Base-v1.0", saimin["notes"])
         self.assertIn("modelspec.title", saimin["notes"])
         self.assertIn("Gestionar biblioteca", saimin["notes"])
-        path = LORAS_DIR / saimin["file"]
+        path = self.require_disk(saimin["file"])
         self.assertTrue(path.is_file(), f"falta en disco: {path}")
         self.assertEqual(path.stat().st_size, SAIMIN_SIZE)
         self.assertEqual(
@@ -186,7 +214,7 @@ class RealRegistryTests(unittest.TestCase):
         self.assertIn("anima_baseV10", shuuko["notes"])
         self.assertIn("shuuko komi", shuuko["notes"])
         self.assertIn("komi shouko", shuuko["notes"])
-        path = LORAS_DIR / shuuko["file"]
+        path = self.require_disk(shuuko["file"])
         self.assertTrue(path.is_file(), f"falta en disco: {path}")
         self.assertEqual(path.stat().st_size, SHUUKO_SIZE)
         self.assertEqual(

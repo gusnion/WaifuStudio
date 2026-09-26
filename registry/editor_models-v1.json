@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "qwen-image-2.1",
+  "display_name": "Qwen-Image 2.1 UC (Editor)",
+  "note": "La descarga e integración llegan en M10",
+  "files": [
+    "unet/qwen-image-2.1-UC-Q4_K_M.gguf",
+    "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+    "vae/qwen_image_2.1_vae_bf16.safetensors"
+  ],
+  "source": "install/manifest/manifest.models.json",
+  "notes": [
+    "Nombres REALES del par UC (abenzerps/Qwen-Image-2.1-Uncensored-GGUF); sustituyen a los nombres M10 que no coincidían con lo publicado.",
+    "El VAE del Editor (vae/qwen_image_2.1_vae_bf16.safetensors) NO es el VAE de Anima (vae/qwen_image_vae.safetensors): no se pisan."
+  ]
+}

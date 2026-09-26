@@ -30,6 +30,7 @@ from fastapi.templating import Jinja2Templates
 from app import trainer
 from app.characters import CharacterStore, is_sheet
 from app.config import APP_ROOT, EngineConfig, load_config
+from app.editor_models import editor_model
 from app.engine import ComfyEngine, EngineError, load_graph
 from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
 from app.enhancer import apply_preprompt
@@ -138,13 +139,13 @@ CHARACTER_MEDIA_TYPES = {
 }
 CHARACTER_REFS_DIRNAME = "characters"
 TAGS_UNFILTERED_LIMIT = 200
-EDITOR_MODEL = "qwen-image-2.1"
-EDITOR_MODEL_FILES = (
-    "diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
-    "text_encoders/qwen_image_2.1_text_encoder_int8_convrot.safetensors",
-    "vae/qwen_image_vae.safetensors",
-)
-EDITOR_NOTE = "La descarga e integración llegan en M10"
+# Catalogo del Editor (M10-6b): nombres reales del par UC en
+# registry/editor_models-v1.json; el VAE del editor (qwen_image_2.1_vae_bf16)
+# no es el de Anima (qwen_image_vae) y no lo pisa.
+_EDITOR = editor_model()
+EDITOR_MODEL = _EDITOR.id
+EDITOR_MODEL_FILES = _EDITOR.files
+EDITOR_NOTE = _EDITOR.note
 EDITOR_REF_LIMIT = 10
 EDITOR_SIZE_MIN = 512
 EDITOR_SIZE_MAX = 2048
@@ -245,8 +246,9 @@ def _write_input_png(input_dir: Any, raw: bytes) -> str:
 def editor_installed(comfy_root: Any) -> bool:
     """True solo si existen TODOS los archivos esperados del editor (M9-G).
 
-    `expected` son rutas relativas a `ComfyUI/models`; no se comprueba tamaño ni
-    hash y no se inventa que existan: con temp root el resultado es `False`.
+    `expected` son las rutas relativas a `ComfyUI/models` del catalogo UC
+    (`registry/editor_models-v1.json`, M10-6b); no se comprueba tamaño ni hash
+    y no se inventa que existan: con temp root el resultado es `False`.
     """
     models_root = Path(comfy_root) / "models"
     return all((models_root / relative).is_file() for relative in EDITOR_MODEL_FILES)
@@ -1584,9 +1586,10 @@ def create_app(
     async def api_editor_status() -> dict:
         """Estado del editor Qwen-Image 2.1 (M9-G): guarda de modelo no instalado.
 
-        `expected` son las rutas relativas a `ComfyUI/models` del par INT8
-        ConvRot (difusión + text encoder) y el VAE; `installed` exige que
-        existan TODAS. La descarga e integración llegan en M10.
+        `expected` son las rutas relativas a `ComfyUI/models` del par UC (GGUF
+        + text encoder int8 ConvRot + VAE bf16) definidas en
+        `registry/editor_models-v1.json`; `installed` exige que existan TODAS.
+        La descarga e integración llegan en M10.
         """
         return {
             "installed": editor_installed(cfg.comfy_root),

@@ -12,3 +12,5 @@ tmp/
 *.log
 .env
 config.local.json
+.install-state/
+install/env.ps1

@@ -717,10 +717,12 @@ no ejecuta nada todavía (sin GPU, red ni dependencias nuevas).
 - `GET /api/editor/status` → `{"installed", "model", "expected", "note"}` con
   `model: "qwen-image-2.1"` y `note: "La descarga e integración llegan en M10"`. `installed` exige
   que existan **todos** los archivos esperados (rutas relativas a `ComfyUI/models`, no se inventa
-  que existan):
-  - `diffusion_models/qwen_image_2.1_int8_convrot.safetensors`
-  - `text_encoders/qwen_image_2.1_text_encoder_int8_convrot.safetensors`
-  - `vae/qwen_image_vae.safetensors`
+  que existan). El catálogo vive en `registry/editor_models-v1.json` (M10-6b) y son los nombres
+  reales del par UC (`abenzerps/Qwen-Image-2.1-Uncensored-GGUF`), cargados por `app/editor_models.py`:
+  - `unet/qwen-image-2.1-UC-Q4_K_M.gguf`
+  - `text_encoders/qwen3vl_8b_int8_convrot.safetensors`
+  - `vae/qwen_image_2.1_vae_bf16.safetensors` (VAE del Editor; **no** es el de Anima
+    `vae/qwen_image_vae.safetensors`, que no se pisa)
 - `POST /api/editor/generate` `{prompt, mode ("generate"|"edit", default generate), ref_images_b64?,
   size? {width,height}, seed?}`: valida la forma (400) con prompt no vacío, `mode` válido, máximo
   **10** referencias base64 válidas, `size` en `[512, 2048]` múltiplos de 16 y `seed` entera. Si la
@@ -730,8 +732,9 @@ no ejecuta nada todavía (sin GPU, red ni dependencias nuevas).
   con las descargas M10» (verde si instalado), prompt, modo Generar/Editar, hasta 10 referencias con
   miniaturas y «Quitar», ancho/alto manuales (nota 2K máx: 512-2048, múltiplos de 16), seed y
   «Generar» habilitado solo con prompt; al pulsar, si no está instalado muestra el 503 del servidor.
-- **M10** traerá la descarga/integración del par INT8 ConvRot + text encoder + VAE y el job real
-  (encolado, progreso y galería) sobre este contrato.
+- **M10** traerá la descarga/integración del par UC (GGUF Q4_K_M + text encoder int8 ConvRot + VAE
+  bf16) y el job real (encolado, progreso y galería) sobre este contrato; el manifiesto y la
+  verificación sha256 viven en `install/`.
 
 ## Arreglos UI (M9-B-fix6)
 

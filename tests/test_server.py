@@ -2861,6 +2861,34 @@ class EditorStatusTests(ServerTestCase):
         )
         self.assertIn("M10", data["note"])
 
+    def test_expected_apunta_a_los_nombres_uc(self):
+        data = self.make_client().get("/api/editor/status").json()
+        self.assertEqual(
+            data["expected"],
+            [
+                "unet/qwen-image-2.1-UC-Q4_K_M.gguf",
+                "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+                "vae/qwen_image_2.1_vae_bf16.safetensors",
+            ],
+        )
+        self.assertNotIn("vae/qwen_image_vae.safetensors", data["expected"])
+
+    def test_vae_de_anima_no_desbloquea_el_editor(self):
+        path = (
+            self.config.comfy_root
+            / "models"
+            / "vae"
+            / "qwen_image_vae.safetensors"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"anima-vae")
+        data = self.make_client().get("/api/editor/status").json()
+        self.assertIs(data["installed"], False)
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl"}
+        )
+        self.assertEqual(response.status_code, 503)
+
     def test_installed_true_solo_con_todos_los_archivos(self):
         for relative in server_module.EDITOR_MODEL_FILES:
             path = self.config.comfy_root / "models" / relative

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "generated": "2026-09-26",
+  "app": "WAIFU",
+  "task": "F3b (M10-6b) installer + manifiestos",
+  "notes": [
+    "Pines exactos de REPO_ASSETS_Y_INSTALLER.md §9.3/§10 (estado medido 2026-09-25). El instalador clona/checkout cada revision y verifica git rev-parse HEAD.",
+    "ComfyUI se clona con --branch v0.34.0 --depth 1 y despues se fija el commit; los nodos por commit directo.",
+    "comfyui-controlnet-aux queda opcional/obsoleto (solo se instala con -IncludeOptional; el flujo actual no lo usa).",
+    "El wheel de SageAttention y los pines de torch/triton son los del venv auditado; el token de Civitai nunca vive en este archivo."
+  ],
+  "comfyui": {
+    "name": "ComfyUI",
+    "version": "v0.34.0",
+    "tag": "v0.34.0",
+    "commit": "12d5279438bfefc058a269eae805ceab6047777f",
+    "url": "https://github.com/Comfy-Org/ComfyUI.git",
+    "notes": "Engine del producto (nodos H3 core incluidos); arranque: .venv\\Scripts\\python.exe -s main.py --listen 127.0.0.1 --port 8288 --disable-api-nodes --disable-auto-launch."
+  },
+  "custom_nodes": [
+    {
+      "id": "ComfyUI-GGUF",
+      "url": "https://github.com/city96/ComfyUI-GGUF.git",
+      "commit": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+      "required": true,
+      "obsolete": false,
+      "notes": "UnetLoaderGGUF (Wan 2.2 high/low y GGUF del Editor)."
+    },
+    {
+      "id": "ComfyUI-KJNodes",
+      "url": "https://github.com/kijai/ComfyUI-KJNodes.git",
+      "commit": "d3cfe21625e5170126ce06fbfcfe1d88108688c3",
+      "required": true,
+      "obsolete": false,
+      "notes": "PathchSageAttentionKJ (toggle SageAttention en H3)."
+    },
+    {
+      "id": "ComfyUI-Frame-Interpolation",
+      "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git",
+      "commit": "26545cc2dd95bc3d27f056016300673bdeee78f5",
+      "required": true,
+      "obsolete": false,
+      "notes": "RIFE VFI (U3); los 4 ckpts rife*.pth estan en manifest.models.json con root ComfyUI."
+    },
+    {
+      "id": "ComfyUI-ClipProj",
+      "url": "https://github.com/nicolab28/ComfyUI-ClipProj.git",
+      "commit": "c01ba8fb8f41b4f2094dbd0b185cdc238fb6134c",
+      "required": true,
+      "obsolete": false,
+      "notes": "ClipProjApply (H3 Calidad/Ligero)."
+    },
+    {
+      "id": "comfyui-controlnet-aux",
+      "url": "https://github.com/comfyorg/comfyui-controlnet-aux.git",
+      "commit": "83463c2e4b04e729268e57f638b4212e0da4badc",
+      "required": false,
+      "obsolete": true,
+      "notes": "Solo flujo pose legacy (junto a xinsir-controlnet-openpose-sdxl, obsolete en manifest.models.json); no lo instala el instalador por defecto."
+    }
+  ],
+  "runtime": {
+    "python": {
+      "version": "3.12.12",
+      "manager": "uv",
+      "install_command": "uv python install 3.12.12 --no-bin --no-registry",
+      "install_dir": "python"
+    },
+    "uv": {
+      "version": "0.11.14",
+      "notes": "Version auditada; el instalador avisa si la disponible difiere (no bloquea)."
+    },
+    "torch": {
+      "torch": "2.11.0+cu130",
+      "torchvision": "0.26.0+cu130",
+      "torchaudio": "2.11.0+cu130",
+      "backend": "cu130",
+      "index_url": "https://download.pytorch.org/whl/cu130",
+      "notes": "Pines del constraints del entorno auditado; se instalan despues de requirements del engine para forzar el backend cu130."
+    },
+    "triton_windows": "3.8.0.post28"
+  },
+  "sageattention": {
+    "filename": "sageattention-2.2.0+cu130torch2.10.0andhigher.post6-cp310-abi3-win_amd64.whl",
+    "version": "2.2.0+cu130torch2.10.0andhigher.post6",
+    "repo": "https://github.com/woct0rdho/SageAttention",
+    "release": "v2.2.0-windows.post6",
+    "url": "https://github.com/woct0rdho/SageAttention/releases/download/v2.2.0-windows.post6/sageattention-2.2.0%2Bcu130torch2.10.0andhigher.post6-cp310-abi3-win_amd64.whl",
+    "bytes": 16656067,
+    "sha256": "1635283f5c01ec3cda58a784d0d7eabbcaffaf9511d1b263db4750e1ed7958bb",
+    "install": "uv pip install --no-deps <wheel>",
+    "local_fallback": "data/downloads/sage/sageattention-2.2.0+cu130torch2.10.0andhigher.post6-cp310-abi3-win_amd64.whl",
+    "notes": "Wheel windows post6 ya verificado en el entorno auditado; se instala --no-deps porque triton_windows ya esta presente."
+  }
+}
