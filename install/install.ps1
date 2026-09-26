@@ -3,7 +3,7 @@
     Instalador idempotente de WAIFU en una maquina limpia (F3b / M10-6b).
 
 .DESCRIPTION
-    Preflight (Windows 10/11 x64 + GPU NVIDIA + >=124 GB libres) -> uv +
+    Preflight (Windows 10/11 x64 + GPU NVIDIA + >=140 GB libres) -> uv +
     CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.34.0 pineado +
     dependencias del engine -> custom nodes pineados + ckpts RIFE +
     wheel SageAttention -> descarga y verificacion sha256 de los modelos de
@@ -52,7 +52,7 @@ $StateDir           = Join-Path $Root '.install-state'
 $ComfyRoot          = Join-Path $Root 'ComfyUI'
 $ComfyModelsRoot    = Join-Path $ComfyRoot 'models'
 $VenvPython         = Join-Path $Root '.venv\Scripts\python.exe'
-$MinFreeBytes       = [long]124000000000
+$MinFreeBytes       = [long]140000000000
 $ComfyUrl           = 'http://127.0.0.1:8288'
 $CivitaiApiBase     = 'https://civitai.com/api/download/models/'
 $Cu130Index         = 'https://download.pytorch.org/whl/cu130'
@@ -125,7 +125,7 @@ function Invoke-Preflight {
     $free = (New-Object System.IO.DriveInfo($driveRoot)).AvailableFreeSpace
     $freeGb = [math]::Round($free / 1e9, 1)
     if ($free -lt $MinFreeBytes) {
-        throw ("Espacio libre insuficiente: {0} GB (minimo 124 GB)." -f $freeGb)
+        throw ("Espacio libre insuficiente: {0} GB (minimo 140 GB)." -f $freeGb)
     }
     Write-Ok ("Espacio libre: {0} GB" -f $freeGb)
     if ($free -lt 140000000000) {
