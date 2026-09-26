@@ -148,6 +148,25 @@ class Store:
             raise EngineError(f"store count fallo: {exc}") from exc
         return int(row[0])
 
+    def fail_stale(self, message: str = "interrumpido por un reinicio de la app") -> int:
+        """Marca como `error` las filas `queued`/`running` huerfanas de un reinicio.
+
+        El worker vive en memoria: al reiniciar la app no puede retomar lo que
+        quedo en curso y esas filas quedarian en `queued` para siempre. Cierra
+        solo esas dos estados; `done`/`error`/`cancelled` no se tocan. Devuelve
+        el numero de filas afectadas.
+        """
+        try:
+            with closing(self._connect()) as conn, conn:
+                cursor = conn.execute(
+                    "UPDATE generations SET status = 'error', error = ? "
+                    "WHERE status IN ('queued', 'running')",
+                    (str(message),),
+                )
+                return int(cursor.rowcount)
+        except sqlite3.Error as exc:
+            raise EngineError(f"store fail_stale fallo: {exc}") from exc
+
     def update(
         self,
         gen_id: int,

@@ -191,6 +191,32 @@ class UpdateTests(StoreTestCase):
         self.assertFalse(self.store.update(999, status="done"))
 
 
+class FailStaleTests(StoreTestCase):
+    def test_marca_queued_y_running_y_respeta_estados_finales(self):
+        done = self.store.add("m", "p", status="done")
+        queued = self.store.add("m", "p", status="queued")
+        running = self.store.add("m", "p", status="running", kind="video")
+        error = self.store.add("m", "p", status="error")
+        cancelled = self.store.add("m", "p", status="cancelled")
+        affected = self.store.fail_stale()
+        self.assertEqual(affected, 2)
+        self.assertEqual(self.store.get(done)["status"], "done")
+        self.assertEqual(self.store.get(error)["status"], "error")
+        self.assertEqual(self.store.get(cancelled)["status"], "cancelled")
+        for gen_id in (queued, running):
+            row = self.store.get(gen_id)
+            self.assertEqual(row["status"], "error")
+            self.assertEqual(
+                row["error"], "interrumpido por un reinicio de la app"
+            )
+
+    def test_sin_filas_y_mensaje_personalizado(self):
+        self.assertEqual(self.store.fail_stale(), 0)
+        gen_id = self.store.add("m", "p", status="queued")
+        self.assertEqual(self.store.fail_stale("custom"), 1)
+        self.assertEqual(self.store.get(gen_id)["error"], "custom")
+
+
 class MalformedJsonTests(StoreTestCase):
     def _corrupt_params(self, gen_id: int) -> None:
         with closing(sqlite3.connect(str(self.db_path))) as connection, connection:

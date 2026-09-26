@@ -32,6 +32,7 @@ from app.registry import DEFAULT_PATH, ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
 from app.tags import list_groups
+from app.vision import VisionUnavailable
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-fake-png"
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
@@ -1114,6 +1115,124 @@ class EnhanceZonesRouteTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("Zona objetivo:", llm.calls[0]["user"])
+
+
+class FakeVision:
+    """Vision inyectada: registra llamadas y devuelve resultados fijos."""
+
+    def __init__(self, *, available: bool = True) -> None:
+        self.available = available
+        self.calls: list[tuple[bytes, bool, bool]] = []
+
+    def status(self) -> dict:
+        return {
+            "installed": self.available,
+            "wd14": {"installed": self.available, "model": "wd14-fake"},
+            "vl": {"installed": self.available, "model": "vl-fake"},
+            "note": "fake",
+        }
+
+    def describe(
+        self, image_bytes: bytes, *, use_tags: bool = True, use_caption: bool = True
+    ) -> dict:
+        if not self.available:
+            raise VisionUnavailable("vision no instalada (fake)")
+        self.calls.append((image_bytes, use_tags, use_caption))
+        return {
+            "tags": ["1girl"] if use_tags else None,
+            "caption": "a girl" if use_caption else None,
+            "model": {"wd14": "wd14-fake", "vl": "vl-fake"},
+        }
+
+
+class VisionRouteTests(ServerTestCase):
+    def test_status_200(self):
+        response = self.make_client(vision=FakeVision()).get("/api/vision/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["installed"])
+        self.assertEqual(data["wd14"]["model"], "wd14-fake")
+        self.assertEqual(data["vl"]["model"], "vl-fake")
+
+    def test_image_to_prompt_por_gen_id(self):
+        gen_id = self.store.add(MODEL_ID, "p", status="done")
+        self.add_gallery_png(gen_id, "x.png")
+        self.store.update(gen_id, outputs=["x.png"])
+        vision = FakeVision()
+        response = self.make_client(vision=vision).post(
+            "/api/vision/image_to_prompt", json={"gen_id": str(gen_id)}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["tags"], ["1girl"])
+        self.assertEqual(data["caption"], "a girl")
+        raw, use_tags, use_caption = vision.calls[0]
+        self.assertEqual(raw, PNG_BYTES)
+        self.assertTrue(use_tags)
+        self.assertTrue(use_caption)
+
+    def test_image_to_prompt_por_b64_y_flags(self):
+        vision = FakeVision()
+        response = self.make_client(vision=vision).post(
+            "/api/vision/image_to_prompt",
+            json={
+                "image_b64": base64.b64encode(PNG_BYTES).decode("ascii"),
+                "use_caption": False,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["caption"])
+        self.assertEqual(vision.calls[0][1:], (True, False))
+
+    def test_400_gen_y_b64_a_la_vez_o_ninguno(self):
+        client = self.make_client(vision=FakeVision())
+        for payload in ({"gen_id": 1, "image_b64": "aGk="}, {}):
+            with self.subTest(payload=payload):
+                response = client.post("/api/vision/image_to_prompt", json=payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_400_gen_id_invalido(self):
+        client = self.make_client(vision=FakeVision())
+        for value in (True, 3.5, [], "abc"):
+            with self.subTest(value=value):
+                response = client.post(
+                    "/api/vision/image_to_prompt", json={"gen_id": value}
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_400_flags_invalidas(self):
+        client = self.make_client(vision=FakeVision())
+        for payload in (
+            {"image_b64": "aGk=", "use_tags": "si"},
+            {"image_b64": "aGk=", "use_tags": False, "use_caption": False},
+        ):
+            with self.subTest(payload=payload):
+                response = client.post("/api/vision/image_to_prompt", json=payload)
+                self.assertEqual(response.status_code, 400)
+
+    def test_404_generacion_desconocida(self):
+        response = self.make_client(vision=FakeVision()).post(
+            "/api/vision/image_to_prompt", json={"gen_id": 999}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_400_generacion_no_imagen(self):
+        gen_id = self.store.add(MODEL_ID, "p", status="done", kind="video")
+        self.add_gallery_png(gen_id, "x.png")
+        self.store.update(gen_id, outputs=["x.png"])
+        response = self.make_client(vision=FakeVision()).post(
+            "/api/vision/image_to_prompt", json={"gen_id": gen_id}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_503_sin_vision_disponible(self):
+        response = self.make_client(vision=FakeVision(available=False)).post(
+            "/api/vision/image_to_prompt",
+            json={"image_b64": base64.b64encode(PNG_BYTES).decode("ascii")},
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("error", response.json())
 
 
 class PromptGeneralUiStaticTests(ServerTestCase):

@@ -124,6 +124,7 @@ from app.video import (
     vram_hint,
 )
 from app.video_presets import PRESET_MANUAL, list_video_presets
+from app.vision import VisionService, VisionUnavailable
 
 APP_HOST = "127.0.0.1"
 APP_PORT = 8765
@@ -430,6 +431,7 @@ def create_app(
     queue: JobQueue | None = None,
     start_worker: bool = True,
     character_store: CharacterStore | None = None,
+    vision: VisionService | None = None,
 ) -> FastAPI:
     """Construye la app con todas sus dependencias inyectables.
 
@@ -540,12 +542,15 @@ def create_app(
                 job, config=cfg, store=st, registry=reg, engine_factory=factory
             )
 
+    vision_service = vision if vision is not None else VisionService(cfg.comfy_root)
+
     if queue is None:
         queue = JobQueue(_dispatch)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if start_worker:
+            st.fail_stale()
             queue.start()
         try:
             yield
@@ -1288,6 +1293,84 @@ def create_app(
             rating=str(payload.get("rating") or "nsfw"),
             llm=llm,
         )
+
+    @app.get("/api/vision/status")
+    async def api_vision_status() -> dict:
+        return vision_service.status()
+
+    @app.post("/api/vision/image_to_prompt")
+    async def api_vision_image_to_prompt(payload: dict = Body(...)) -> Any:
+        """Tags WD14 y/o caption VL de una imagen (galeria por `gen_id` o base64)."""
+        gen_id = payload.get("gen_id")
+        image_b64 = payload.get("image_b64")
+        if (gen_id is None) == (image_b64 is None):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "usar gen_id o image_b64 (uno solo)"},
+            )
+        use_tags = payload.get("use_tags", True)
+        use_caption = payload.get("use_caption", True)
+        if not isinstance(use_tags, bool) or not isinstance(use_caption, bool):
+            return JSONResponse(
+                status_code=400, content={"error": "use_tags/use_caption booleanos"}
+            )
+        if not use_tags and not use_caption:
+            return JSONResponse(
+                status_code=400, content={"error": "activa use_tags o use_caption"}
+            )
+        if image_b64 is not None:
+            raw = _decode_image_b64(image_b64, "vision")
+        else:
+            if isinstance(gen_id, bool) or not isinstance(gen_id, (int, str)):
+                return JSONResponse(
+                    status_code=400, content={"error": "gen_id invalido"}
+                )
+            try:
+                gid = int(gen_id)
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    status_code=400, content={"error": "gen_id invalido"}
+                )
+            row = st.get(gid)
+            if row is None:
+                return JSONResponse(
+                    status_code=404, content={"error": "generacion desconocida"}
+                )
+            if row.get("kind") != "image":
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "se requiere una generacion de imagen"},
+                )
+            file_name = ""
+            for output in row.get("outputs") or []:
+                candidate = output.get("name") if isinstance(output, dict) else output
+                if isinstance(candidate, str) and candidate.strip():
+                    file_name = candidate.strip()
+                    break
+            if not file_name:
+                return JSONResponse(
+                    status_code=404, content={"error": "la generacion no tiene salidas"}
+                )
+            gallery_root = (cfg.data_dir / "gallery" / str(gid)).resolve()
+            source = (gallery_root / file_name).resolve()
+            if not source.is_relative_to(gallery_root):
+                return JSONResponse(
+                    status_code=403, content={"error": "ruta fuera de la galeria"}
+                )
+            if (
+                source.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp")
+                or not source.is_file()
+            ):
+                return JSONResponse(
+                    status_code=404, content={"error": "archivo de origen no encontrado"}
+                )
+            raw = source.read_bytes()
+        try:
+            return vision_service.describe(
+                raw, use_tags=use_tags, use_caption=use_caption
+            )
+        except VisionUnavailable as exc:
+            return JSONResponse(status_code=503, content={"error": str(exc)})
 
     @app.post("/api/generate")
     async def api_generate(payload: dict = Body(...)) -> Any:
