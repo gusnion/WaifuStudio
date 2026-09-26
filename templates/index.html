@@ -54,7 +54,7 @@
             <span>Rating</span>
             <select id="rating">
               <option value="sfw">sfw</option>
-              <option value="nsfw">nsfw</option>
+              <option value="nsfw" selected>nsfw</option>
             </select>
           </label>
 
@@ -92,8 +92,8 @@
             <div class="section-body">
               <div class="grid-2">
                 <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
-                <label class="field"><span>Pasos</span><input id="steps" type="number" value="20" min="1"></label>
-                <label class="field"><span>CFG</span><input id="cfg" type="number" value="4.0" step="0.1"></label>
+                <label class="field"><span>Pasos</span><input id="steps" type="number" value="30" min="1"></label>
+                <label class="field"><span>CFG</span><input id="cfg" type="number" value="6" step="0.1"></label>
                 <label class="field"><span>Sampler</span><select id="sampler"></select></label>
                 <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
               </div>
@@ -103,14 +103,14 @@
                   <select id="size"></select>
                 </label>
                 <div id="manual-size" class="grid-2 hidden">
-                  <label class="field"><span>Ancho</span><input id="width" type="number" value="768" step="8" min="64" max="4096"></label>
-                  <label class="field"><span>Alto</span><input id="height" type="number" value="1344" step="8" min="64" max="4096"></label>
+                  <label class="field"><span>Ancho</span><input id="width" type="number" value="1024" step="8" min="64" max="4096"></label>
+                  <label class="field"><span>Alto</span><input id="height" type="number" value="1024" step="8" min="64" max="4096"></label>
                 </div>
               </div>
               <details id="section-negative" class="advanced panel-section" data-section="negative">
                 <summary>Negativo (avanzado)</summary>
                 <div class="section-body">
-                  <textarea id="negative" rows="3" placeholder="worst quality, low quality, ..."></textarea>
+                  <textarea id="negative" rows="3" placeholder="worst quality, low quality, ...">worst quality, low quality, jpeg artifacts, blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name</textarea>
                   <button id="btn-negative-restore" type="button">Restaurar</button>
                 </div>
               </details>
@@ -231,7 +231,7 @@
           <span>Motor</span>
           <select id="video-engine">
             <option value="wan">Wan 2.2 · 16 fps · 432×768</option>
-            <option value="h3">MiniMax H3 FL2VA · 8 s · 24 fps</option>
+            <option value="h3" selected>MiniMax H3 FL2VA · 8 s · 24 fps</option>
           </select>
         </label>
         <label class="field" id="video-mode-field">

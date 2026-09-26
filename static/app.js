@@ -78,6 +78,21 @@ const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
 const EDITOR_SIZE_STEP = 16;
 
+const STARTUP_DEFAULTS = {
+  model: "one-obsession-anima-v40",
+  steps: 30,
+  cfg: 6,
+  sampler: "euler",
+  scheduler: "normal",
+  width: 1024,
+  height: 1024,
+  preprompt: "anima_default",
+  rating: "nsfw",
+  negative:
+    "worst quality, low quality, jpeg artifacts, blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name",
+  video_engine: "h3",
+};
+
 const SEED_RANDOM_KEY = "waifu.seed.random";
 const SEED_RANDOM_MAX = 2147483647;
 
@@ -875,6 +890,29 @@ async function applyModel(modelId) {
   if (!state.negativeTouched) {
     await refreshNegative();
   }
+}
+
+async function applyStartupDefaults() {
+  const modelSelect = $("model");
+  const hasModel = Array.from(modelSelect.options).some(
+    (opt) => opt.value === STARTUP_DEFAULTS.model
+  );
+  if (hasModel) {
+    modelSelect.value = STARTUP_DEFAULTS.model;
+    await applyModel(STARTUP_DEFAULTS.model);
+  }
+  setSelectValue($("preprompt"), STARTUP_DEFAULTS.preprompt);
+  $("rating").value = STARTUP_DEFAULTS.rating;
+  $("steps").value = STARTUP_DEFAULTS.steps;
+  $("cfg").value = STARTUP_DEFAULTS.cfg;
+  setSelectValue($("sampler"), STARTUP_DEFAULTS.sampler);
+  setSelectValue($("scheduler"), STARTUP_DEFAULTS.scheduler);
+  setSizeFromDefaults(STARTUP_DEFAULTS.width, STARTUP_DEFAULTS.height);
+  state.negativeTouched = false;
+  state.negativeBase = STARTUP_DEFAULTS.negative;
+  $("negative").value = STARTUP_DEFAULTS.negative;
+  $("video-engine").value = STARTUP_DEFAULTS.video_engine;
+  applyVideoEngine();
 }
 
 function readBaseParams() {
@@ -1701,7 +1739,7 @@ async function reuseVideoGeneration(item) {
 }
 
 function startNewVideo() {
-  $("video-engine").value = "wan";
+  $("video-engine").value = STARTUP_DEFAULTS.video_engine;
   $("video-mode").value = "i2v";
   $("video-aspect").value = "vertical";
   $("video-preset").value = "manual";
@@ -4790,6 +4828,7 @@ async function init() {
     await settle("preprompts OC", loadOcPreprompts);
     await settle("OCs", loadCharacters);
     await settle("negativo", refreshNegative);
+    await settle("defaults de arranque", applyStartupDefaults);
     await settle("visor de video", () => loadVideoViewer());
     await settle("visor de imagen", () => loadImageViewer());
     await settle("upscaler", loadUpscaleSources);

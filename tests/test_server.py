@@ -3864,5 +3864,61 @@ class UpscaleUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+STARTUP_NEGATIVE_123 = (
+    "worst quality, low quality, jpeg artifacts, blurry, mosaic censoring, "
+    "bar censor, score_1, score_2, score_3, artist name"
+)
+
+
+class StartupDefaultsUiStaticTests(ServerTestCase):
+    """M10-2g: defaults de arranque fijados a la generacion #123 y motor H3."""
+
+    def test_index_fija_defaults_de_arranque(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="steps" type="number" value="30"',
+            'id="cfg" type="number" value="6"',
+            'id="seed" type="number" value="42"',
+            '<option value="nsfw" selected>nsfw</option>',
+            '<option value="h3" selected>',
+            STARTUP_NEGATIVE_123,
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertNotIn("839054188", text)
+
+    def test_app_js_fija_defaults_de_arranque(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "const STARTUP_DEFAULTS = {",
+            'model: "one-obsession-anima-v40"',
+            "steps: 30",
+            "cfg: 6",
+            'sampler: "euler"',
+            'scheduler: "normal"',
+            "width: 1024",
+            "height: 1024",
+            'preprompt: "anima_default"',
+            'rating: "nsfw"',
+            'video_engine: "h3"',
+            STARTUP_NEGATIVE_123,
+            "applyStartupDefaults",
+            'await settle("defaults de arranque", applyStartupDefaults);',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertNotIn("839054188", text)
+
+    def test_negativo_123_no_lo_compone_el_preprompt(self):
+        response = self.make_client().get(
+            "/api/negative", params={"preprompt": "anima_default", "family": "anima"}
+        )
+        self.assertEqual(response.status_code, 200)
+        negative = response.json()["negative"]
+        self.assertEqual(negative, apply_preprompt("", "anima", "anima_default")[1])
+        self.assertIn("child, teen, loli, young-looking", negative)
+        self.assertNotEqual(negative, STARTUP_NEGATIVE_123)
+
+
 if __name__ == "__main__":
     unittest.main()
