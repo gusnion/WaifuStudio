@@ -1,0 +1,2 @@
+# Dependencias solo para tests (fastapi.testclient / TestClient).
+httpx==0.28.1

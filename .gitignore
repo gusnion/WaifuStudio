@@ -7,6 +7,8 @@ cache/
 data/
 outputs/
 tmp/
+.pytest_cache/
+*.tmp
 *.log
 .env
 config.local.json

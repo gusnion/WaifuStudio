@@ -1,4 +1,9 @@
+# Dependencias de la app WAIFU (runtime, sin engine).
+# El engine (torch/ComfyUI y sus dependencias) se instala aparte mediante
+# install/install.ps1 y su lock propio; no debe fijarse aqui.
 fastapi==0.141.1
 uvicorn==0.53.0
 jinja2==3.1.6
 aiohttp==3.14.3
+Pillow==12.3.0
+llama-cpp-python==0.3.35
