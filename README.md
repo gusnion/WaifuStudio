@@ -12,7 +12,7 @@ Sin nube obligatoria: el engine corre en loopback y la app consume su API local.
 | F2 | Manual de prompting + «Mejorar prompt» (LLM+RAG) + store de generaciones |
 | F3 | Webapp · pestaña Imagen (MVP): prompt, preprompt/modelo/params, I2I, galería, OC traits |
 | F4 | Webapp · pestaña Video (independiente): Wan y H3 |
-| F5 | Migración de assets a `E:\IA\WAIFU` y archivo del legacy |
+| F5 | Migración de assets a `E:\IA\WAIFU` y archivo del legacy (retirado en 2026-09-26) |
 
 ## Layout
 
@@ -82,6 +82,7 @@ E:\IA\WAIFU
 │  ├─ environment.ps1               # envs y dirs de cache/tmp del repo
 │  ├─ start_engine.ps1              # arranca el engine ComfyUI en 8288 (idempotente)
 │  └─ stop_engine.ps1               # para el engine (exige /queue vacía)
+├─ install/           # instalador en máquina limpia: install.ps1, manifiestos y README_INSTALL.md (F3b/M10-6b)
 ├─ ComfyUI/           # engine movido en F5 (ignorado por git)
 ├─ python/            # CPython base del venv (ignorado por git)
 ├─ .venv/             # venv del repo (ignorado por git)
@@ -230,7 +231,9 @@ uno) en vez de morir en silencio dejando los desplegables vacíos.
 ### Requisitos y arranque
 
 Las 3 dependencias están instaladas en el venv del propio repo y fijadas en `requirements.txt`
-(fastapi 0.141.1, uvicorn 0.53.0, jinja2 3.1.6):
+(fastapi 0.141.1, uvicorn 0.53.0, jinja2 3.1.6). Para una **máquina limpia**, la instalación
+reproducible (engine, runtime, modelos y LoRAs de usuario) está en `install\README_INSTALL.md`
+(F3b):
 
 ```powershell
 # launchers en la raíz del repo
@@ -489,15 +492,17 @@ plantilla API-format certificada en `workflows\`:
 | **MiniMax H3 FL2VA** | `workflows\h3_fl2va_vertical.api.json` | FL2VA (`MiniMaxH3ImageToVideo`) con first/last frame: 576×1024, 192 frames (~8 s a 24 fps), 4 pasos, turbo LoRA, `res_multistep`/`simple`, VAE de video + VAE de audio |
 
 La plantilla Wan se exportó del legacy con la función pura `build_wan_graph`
-(`E:\IA\VIDEO\scripts\nw04_wan_graph.py`, solo lectura) con seed 42, prefijo `waifu/video` y textos
-placeholder neutros; la de H3 es copia verbatim del certificado. `app\video.py` las parchea sobre
-copias profundas: `prepare_wan_graph` fija CLIPTextEncode `5`/`6`, LoadImage `7`, width/height de
+(archivada en `data\gates\m10\evidencia-legacy\nw04_wan_graph.py`, fuera de git) con seed 42,
+prefijo `waifu/video` y textos placeholder neutros; la de H3 es copia verbatim del certificado.
+`app\video.py` las parchea sobre copias profundas: `prepare_wan_graph` fija CLIPTextEncode `5`/`6`,
+LoadImage `7`, width/height de
 `WanImageToVideo` y la seed de los samplers; `prepare_h3_graph` fija LoadImage `140`/`141`,
 `MiniMaxH3ImageToVideo` `131` y `RandomNoise` `129`; ambos lanzan `EngineError` si faltan nodos o
 campos.
 
 `app\motion.py` escribe el motion positivo con el LLM local: `SYS_PROMPT_MOTION` y
-`MOTION_NEGATIVE` son copias EXACTAS del legacy (`local_prompt_planner\motion.py`), `write_motion`
+`MOTION_NEGATIVE` son copias EXACTAS del legacy (archivado en
+`data\gates\m10\evidencia-legacy\motion.py`), `write_motion`
 valida texto/rating y usa el `llm(system, user) -> str` inyectado (reutiliza
 `load_local_llm` de `app.enhancer`; sin LLM lanza `EngineError("LLM no inyectado")`).
 
@@ -537,7 +542,6 @@ diferidas)** y solo se registran ficheros presentes en disco:
 |----|---------|---------|
 | `lightx2v-wan-high` | `wan` | `lightx2v\wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
 | `lightx2v-wan-low` | `wan` | `lightx2v\wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors` |
-| `reika-kurashiki` | `animagine` | `Reika Kurashiki\Reika Kurashiki_2.safetensors` (legacy, no se usa en Anima) |
 | `minimax-h3-fl2v-turbo-4step` | `h3` | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors` (turbo de la plantilla H3) |
 | `miku-nakano-anima` | `anima` | `anima\Miku_Nakano_Anima_v0.7.safetensors` (Anima base 28 bloques: nativo con `anima-official-aesthetic-v11`; en los 2.9B, patch 28→40 de M10 y peso 0.5-0.7) |
 | `kurashiki-reika-saimin-anima` | `anima` | `anima\Kurashiki Reika Saimin Seishidou.safetensors` (Anima nativo; trigger `kur4sh1k1r31k4`) |
@@ -967,8 +971,12 @@ si el engine no responde. `data_dir` puede faltar sin romper el smoke.
 ## Nota legacy
 
 Desde F5 el engine y los assets viven en `E:\IA\WAIFU` (ComfyUI, modelos, workflows, salidas,
-`python\` y `.venv\`). `E:\IA\VIDEO` queda como repo legacy de solo lectura (herramientas y
-fuentes) y ya no contiene `ComfyUI\`, `python\` ni `.venv\`.
+`python\` y `.venv\`). `E:\IA\VIDEO` se retiró por completo el 2026-09-26: la ruta ya no existe y
+el repo no depende de ella. Las fuentes certificadas que salieron del legacy viven copiadas en
+`app\` (`enhancer.py`, `motion.py`, `preprompts.py`, `formats.py`) y el material legacy (planner,
+`build_wan_graph`, manifiestos de descarga) quedó archivado como evidencia local en
+`data\gates\m10\evidencia-legacy\` (fuera de git). La instalación limpia se documenta en
+`install\README_INSTALL.md`.
 
 ## Gate F0
 

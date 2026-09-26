@@ -11,7 +11,7 @@
         "clip_type": "stable_diffusion",
         "vae_name": "qwen_image_vae.safetensors"
       },
-      "source": "local (E:\\IA\\VIDEO\\ComfyUI\\models)",
+      "source": "local (ComfyUI/models)",
       "license": "ver README del modelo en ComfyUI/models (no inventar)",
       "preprompt": "glossy",
       "defaults": {

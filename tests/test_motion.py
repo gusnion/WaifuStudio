@@ -1,15 +1,14 @@
 """Tests CPU del motion de video (F4). Sin red, GPU ni LLM real.
 
-El golden de `SYS_PROMPT_MOTION`/`MOTION_NEGATIVE` se extrae por AST del archivo
-legacy certificado (`E:\\IA\\VIDEO\\local_prompt_planner\\motion.py`, solo lectura);
-si el legacy no esta montado, ese test se salta.
+El golden de `SYS_PROMPT_MOTION`/`MOTION_NEGATIVE` está INTERNALIZADO como
+literal certificado (copiado exacto del legacy retirado el 2026-09-26 y
+archivado en `data\\gates\\m10\\evidencia-legacy\\motion.py`, fuera de git):
+la suite no depende de ninguna ruta legacy en disco.
 """
 
 from __future__ import annotations
 
-import ast
 import unittest
-from pathlib import Path
 
 from app.engine import EngineError
 from app.enhancer import load_local_llm as enhancer_load_local_llm
@@ -21,28 +20,27 @@ from app.motion import (
     write_motion,
 )
 
-LEGACY_MOTION_PY = Path(r"E:\IA\VIDEO\local_prompt_planner\motion.py")
-
 GOLDEN_MOTION_NEGATIVE = (
     "worst quality, low quality, blurry, static image, no motion, mosaic censoring, "
     "bar censor, child, teen, loli, young-looking, deformed hands, extra limbs"
 )
 
-
-def legacy_constants() -> dict:
-    """Extrae las constantes del legacy por AST (sin importarlo)."""
-    tree = ast.parse(LEGACY_MOTION_PY.read_text(encoding="utf-8"))
-    values = {}
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                try:
-                    values[target.id] = ast.literal_eval(node.value)
-                except ValueError:
-                    continue
-    return values
+GOLDEN_SYS_PROMPT_MOTION = (
+    "Eres el escritor de motion prompts de un generador de video anime local "
+    "(Wan 2.2 I2V).\n"
+    "Recibes en lenguaje natural (espanol) lo que debe pasar en el video y el rating activo.\n"
+    "Escribe UN motion prompt en INGLES con 1-3 frases naturales (NO tags danbooru, "
+    "NO listas, NO comillas, NO preambulo):\n"
+    "- describe el movimiento de los cuerpos y de la camara (handheld, estatica, leve "
+    "paneo...) manteniendo la coherencia con el frame de entrada (I2V);\n"
+    "- si rating=nsfw se explicito con el acto y el movimiento, sin eufemismos; NUNCA "
+    "describas ni pidas censura (nada de mosaic/bar censor);\n"
+    "- HARD RULE: todos los personajes son adultos (21+); nunca menores ni los terminos "
+    "child, teen, loli o young-looking;\n"
+    "- las lineas internas de contexto (movimiento/rating/duracion) son referencia: "
+    "nunca las copies literalmente;\n"
+    "- responde SOLO con el motion prompt."
+)
 
 
 class FakeLLM:
@@ -56,18 +54,10 @@ class FakeLLM:
 
 
 class GoldenTests(unittest.TestCase):
-    def setUp(self):
-        if not LEGACY_MOTION_PY.is_file():
-            self.skipTest(f"legacy no disponible: {LEGACY_MOTION_PY}")
-        self.legacy = legacy_constants()
+    def test_sys_prompt_es_la_copia_certificada_del_legacy(self):
+        self.assertEqual(SYS_PROMPT_MOTION, GOLDEN_SYS_PROMPT_MOTION)
 
-    def test_sys_prompt_es_copia_exacta_del_legacy(self):
-        self.assertEqual(SYS_PROMPT_MOTION, self.legacy["SYS_PROMPT_MOTION"])
-
-    def test_motion_negative_es_copia_exacta_del_legacy(self):
-        self.assertEqual(MOTION_NEGATIVE, self.legacy["MOTION_NEGATIVE"])
-
-    def test_motion_negative_es_el_literal_certificado(self):
+    def test_motion_negative_es_la_copia_certificada_del_legacy(self):
         self.assertEqual(MOTION_NEGATIVE, GOLDEN_MOTION_NEGATIVE)
 
     def test_sys_prompt_estructura(self):

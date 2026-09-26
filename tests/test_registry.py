@@ -77,7 +77,7 @@ class RealRegistryTests(unittest.TestCase):
 
         self.assertEqual(entry.family, "anima")
         self.assertEqual(entry.display_name, "Anima 2.9B preview v1")
-        self.assertEqual(entry.source, "local (E:\\IA\\VIDEO\\ComfyUI\\models)")
+        self.assertEqual(entry.source, "local (ComfyUI/models)")
         self.assertEqual(entry.license, "ver README del modelo en ComfyUI/models (no inventar)")
         self.assertEqual(entry.preprompt, "glossy")
         self.assertEqual(entry.defaults, GRAPH_DEFAULTS)

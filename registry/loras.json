@@ -24,17 +24,6 @@
       "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado)"
     },
     {
-      "id": "reika-kurashiki",
-      "family": "animagine",
-      "file": "Reika Kurashiki\\Reika Kurashiki_2.safetensors",
-      "display_name": "Reika Kurashiki (animagine)",
-      "trigger": "",
-      "default_weight": 1.0,
-      "source": "legacy (ComfyUI\\models\\loras)",
-      "license": "legacy (no verificada)",
-      "notes": "legacy; no se usa en Anima (modelo animagine)"
-    },
-    {
       "id": "minimax-h3-fl2v-turbo-4step",
       "family": "h3",
       "file": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",

@@ -1,9 +1,11 @@
 # Manual de prompting Anima (local)
 
-Guía local del prompt de imagen Anima. Fuentes certificadas: el `SYS_PROMPT` y el `NEGATIVE` del
-planner legacy (`E:\IA\VIDEO\local_prompt_planner\local_planner.py`), sus preprompts de calidad
-(`QUALITY_PREPROMPTS`) y la guía Anima resumida del usuario. No se documenta nada fuera de esas
-fuentes: sin lore, sin parámetros de sampler y sin modelos inventados.
+Guía local del prompt de imagen Anima. Fuentes certificadas: los textos de `app\enhancer.py`
+(`SYS_PROMPT`, `BASE_NEGATIVE`) y `app\motion.py` (`SYS_PROMPT_MOTION`, `MOTION_NEGATIVE`), los
+preprompts de calidad (`QUALITY_PREPROMPTS`) de `app\preprompts.py` —copias exactas del planner
+legacy— y la guía Anima resumida del usuario. El planner legacy se retiró el 2026-09-26 y quedó
+archivado como evidencia local en `data\gates\m10\evidencia-legacy\` (fuera de git). No se
+documenta nada fuera de esas fuentes: sin lore, sin parámetros de sampler y sin modelos inventados.
 
 ## Orden canónico de tags
 

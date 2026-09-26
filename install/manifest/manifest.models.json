@@ -10,7 +10,7 @@
     "Fuente de bytes/sha/revisiones: REPO_ASSETS_Y_INSTALLER.md (2026-09-25) y PLAN_LIMPIEZA_Y_REPO.md §5.2 (2026-09-26). Los sha completos se verificaron contra el prefijo de 12 digitos del informe y/o contra los lfs oid de Hugging Face (2026-09-26).",
     "required=true = parte del flujo en uso (imagen, Wan, H3 y post-proceso); obsolete=true = retirado del flujo en F2, NO lo descarga el instalador; required=false sin obsolete = opcional/aporte del usuario.",
     "Los pesos de Anima son de licencia no comercial: el instalador los descarga desde el origen y no se re-empaquetan.",
-    "Las LoRAs de usuario (Reika Saimin, Shuuko, Reika Kurashiki_2) y la de Civitai (Miku) no son redistribuibles: el instalador no las descarga por defecto.",
+    "Las LoRAs de usuario (Reika Saimin, Shuuko) y la de Civitai (Miku) no son redistribuibles: el instalador no las descarga por defecto. Reika Kurashiki_2 (legacy animagine) queda como aporte opcional fuera del registro.",
     "Editor M10: qwen-image-2.1-UC-* usa los nombres reales del par UC (registry/editor_models-v1.json). El VAE UC (vae/qwen_image_2.1_vae_bf16.safetensors) NO pisa el VAE de Anima (vae/qwen_image_vae.safetensors)."
   ],
   "models": [
@@ -520,7 +520,7 @@
       "url": null,
       "license": "legacy no verificada (archivo local del usuario; no redistribuir)",
       "required": false,
-      "notes": "LoRA legacy de la familia animagine (registrado en registry/loras.json); aportar aparte; sha256 calculado del archivo local y verificado contra el prefijo 08B00D135D3E."
+      "notes": "LoRA legacy de la familia animagine (retirado de registry/loras.json el 2026-09-26 al desaparecer el modelo base); aportar aparte solo si el usuario decide registrarlo; sha256 calculado del archivo local y verificado contra el prefijo 08B00D135D3E."
     }
   ]
 }

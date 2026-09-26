@@ -228,13 +228,12 @@ class LorasRouteTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(set(data), {"items", "families"})
-        self.assertEqual(data["families"], ["wan", "animagine", "h3", "anima"])
+        self.assertEqual(data["families"], ["wan", "h3", "anima"])
         self.assertEqual(
             [item["id"] for item in data["items"]],
             [
                 "lightx2v-wan-high",
                 "lightx2v-wan-low",
-                "reika-kurashiki",
                 "minimax-h3-fl2v-turbo-4step",
                 "miku-nakano-anima",
                 "kurashiki-reika-saimin-anima",
@@ -1253,7 +1252,7 @@ class GenerateEngineParamsValidationTests(ServerTestCase):
 
 
 class GenerateLorasTests(ServerTestCase):
-    REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_2.safetensors"
+    MIKU_FILE = "anima\\Miku_Nakano_Anima_v0.7.safetensors"
 
     def payload(self, **overrides) -> dict:
         data = {
@@ -1269,13 +1268,13 @@ class GenerateLorasTests(ServerTestCase):
         queue = RecordingQueue()
         response = self.make_client(queue=queue).post(
             "/api/generate",
-            json=self.payload(loras=[{"id": "reika-kurashiki", "weight": 0.8}]),
+            json=self.payload(loras=[{"id": "miku-nakano-anima", "weight": 0.8}]),
         )
         self.assertEqual(response.status_code, 200)
         expected = [
             {
-                "id": "reika-kurashiki",
-                "file": self.REIKA_FILE,
+                "id": "miku-nakano-anima",
+                "file": self.MIKU_FILE,
                 "weight": 0.8,
             }
         ]
@@ -1304,12 +1303,12 @@ class GenerateLorasTests(ServerTestCase):
     def test_generate_lora_invalida_400(self):
         for loras in (
             [{"id": "no-existe"}],
-            [{"id": "reika-kurashiki", "weight": 3.0}],
-            [{"id": "reika-kurashiki", "weight": True}],
+            [{"id": "miku-nakano-anima", "weight": 3.0}],
+            [{"id": "miku-nakano-anima", "weight": True}],
             [{}],
-            ["reika-kurashiki"],
-            {"id": "reika-kurashiki"},
-            "reika-kurashiki",
+            ["miku-nakano-anima"],
+            {"id": "miku-nakano-anima"},
+            "miku-nakano-anima",
         ):
             with self.subTest(loras=loras):
                 response = self.make_client().post(
@@ -1763,7 +1762,7 @@ class RunGenerationTests(ServerTestCase):
     def test_lora_en_el_grafo(self):
         transport = FakeTransport(self.config)
         job = self.make_job(
-            loras=[{"id": "reika-kurashiki", "weight": 0.8}]
+            loras=[{"id": "miku-nakano-anima", "weight": 0.8}]
         )
         run_generation(
             job,
@@ -1779,7 +1778,7 @@ class RunGenerationTests(ServerTestCase):
             graph["lora_1"]["inputs"],
             {
                 "model": ["1", 0],
-                "lora_name": "Reika Kurashiki\\Reika Kurashiki_2.safetensors",
+                "lora_name": "anima\\Miku_Nakano_Anima_v0.7.safetensors",
                 "strength_model": 0.8,
             },
         )

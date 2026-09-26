@@ -1,10 +1,11 @@
 """Motion de video escrito por el LLM local (F4).
 
-Reimplementación de ``local_prompt_planner.motion`` con el LLM INYECTADO
+Reimplementación del planner de motion legacy con el LLM INYECTADO
 (`llm(system, user) -> str`) para que los tests corran offline: el loader real
 se reutiliza de `app.enhancer.load_local_llm` y jamás se ejecuta en tests.
 `SYS_PROMPT_MOTION` y `MOTION_NEGATIVE` son copias EXACTAS del legacy
-certificado (`E:\\IA\\VIDEO\\local_prompt_planner\\motion.py`); el negativo es
+certificado (retirado el 2026-09-26; archivado en
+``data\\gates\\m10\\evidencia-legacy\\motion.py``, fuera de git); el negativo es
 determinista y el LLM solo escribe el positivo.
 """
 

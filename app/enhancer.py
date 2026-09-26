@@ -3,9 +3,9 @@
 Offline y sin GPU: el LLM se INYECTA (`llm(system, user) -> str`) para tests;
 `load_local_llm` es el unico camino que toca `llama_cpp` y jamas se ejecuta en
 tests. El SYS_PROMPT y `BASE_NEGATIVE` (negativo base: calidad + anti-menores +
-anti-censura) son copias EXACTAS del planner legacy certificado
-(``E:\\IA\\VIDEO\\local_prompt_planner\\local_planner.py``); el RAG y el manual
-salen de las mismas fuentes (``docs/prompting_anima.md``). El negativo final es
+anti-censura) son copias EXACTAS del planner legacy certificado (retirado el
+2026-09-26; archivado en ``data\\gates\\m10\\evidencia-legacy``, fuera de git);
+el RAG y el manual salen de las mismas fuentes (``docs/prompting_anima.md``). El negativo final es
 SIEMPRE `BASE_NEGATIVE` + negativo del preprompt, con dedup case-insensitive.
 """
 

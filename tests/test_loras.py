@@ -19,13 +19,15 @@ TEST_ASSETS_ENV = "WAIFU_TEST_ASSETS"
 REAL_IDS = [
     "lightx2v-wan-high",
     "lightx2v-wan-low",
-    "reika-kurashiki",
     "minimax-h3-fl2v-turbo-4step",
     "miku-nakano-anima",
     "kurashiki-reika-saimin-anima",
     "shuuko-komi-s1s2-anima",
 ]
-REIKA_FILE = "Reika Kurashiki\\Reika Kurashiki_2.safetensors"
+WAN_HIGH_ID = "lightx2v-wan-high"
+WAN_HIGH_FILE = (
+    "lightx2v\\wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors"
+)
 MIKU_ID = "miku-nakano-anima"
 MIKU_FILE = "anima\\Miku_Nakano_Anima_v0.7.safetensors"
 SAIMIN_ID = "kurashiki-reika-saimin-anima"
@@ -72,11 +74,11 @@ class RealRegistryTests(unittest.TestCase):
         self.assertEqual(DEFAULT_PATH, ROOT / "registry" / "loras.json")
         self.assertTrue(DEFAULT_PATH.is_file())
 
-    def test_siete_entradas_en_orden_del_json(self):
+    def test_seis_entradas_en_orden_del_json(self):
         self.assertEqual([item["id"] for item in list_loras()], REAL_IDS)
 
     def test_familias_en_orden_de_aparicion(self):
-        self.assertEqual(families(), ["wan", "animagine", "h3", "anima"])
+        self.assertEqual(families(), ["wan", "h3", "anima"])
 
     def test_campos_de_cada_entrada(self):
         expected = {
@@ -128,12 +130,11 @@ class RealRegistryTests(unittest.TestCase):
         self.assertIn("4 pasos", high["notes"])
         self.assertIn("4 pasos", low["notes"])
 
-    def test_reika_legacy_no_se_usa_en_anima(self):
-        reika = get("reika-kurashiki")
-        self.assertEqual(reika["family"], "animagine")
-        self.assertEqual(reika["file"], REIKA_FILE)
-        self.assertIn("legacy", reika["notes"])
-        self.assertIn("Anima", reika["notes"])
+    def test_reika_legacy_retirada_del_registro(self):
+        with self.assertRaises(EngineError):
+            get("reika-kurashiki")
+        self.assertEqual(list_loras("animagine"), [])
+        self.assertNotIn("reika-kurashiki", [item["id"] for item in list_loras()])
 
     def test_minimax_h3_de_la_plantilla(self):
         entry_data = get("minimax-h3-fl2v-turbo-4step")
@@ -241,9 +242,7 @@ class RealRegistryTests(unittest.TestCase):
             [item["id"] for item in list_loras(family="wan")],
             ["lightx2v-wan-high", "lightx2v-wan-low"],
         )
-        self.assertEqual(
-            [item["id"] for item in list_loras("animagine")], ["reika-kurashiki"]
-        )
+        self.assertEqual(list_loras("animagine"), [])
         self.assertEqual(
             [item["id"] for item in list_loras("h3")],
             ["minimax-h3-fl2v-turbo-4step"],
@@ -256,9 +255,9 @@ class RealRegistryTests(unittest.TestCase):
         self.assertEqual(list_loras("no-existe"), [])
 
     def test_get_devuelve_copia_e_inexistente_lanza(self):
-        first = get("reika-kurashiki")
+        first = get(WAN_HIGH_ID)
         first["file"] = "mutado.safetensors"
-        self.assertEqual(get("reika-kurashiki")["file"], REIKA_FILE)
+        self.assertEqual(get(WAN_HIGH_ID)["file"], WAN_HIGH_FILE)
         with self.assertRaises(EngineError):
             get("no-existe")
 
@@ -270,17 +269,17 @@ class RealRegistryTests(unittest.TestCase):
 
 class ValidateSelectionTests(unittest.TestCase):
     def test_normaliza_con_file_y_peso_del_registro(self):
-        normalized = validate_selection([{"id": "reika-kurashiki"}])
+        normalized = validate_selection([{"id": MIKU_ID}])
         self.assertEqual(
             normalized,
-            [{"id": "reika-kurashiki", "file": REIKA_FILE, "weight": 1.0}],
+            [{"id": MIKU_ID, "file": MIKU_FILE, "weight": 1.0}],
         )
 
     def test_peso_explicito_y_texto_numerico(self):
         normalized = validate_selection(
             [
-                {"id": "lightx2v-wan-high", "weight": 0.8},
-                {"id": "reika-kurashiki", "weight": "1.5"},
+                {"id": WAN_HIGH_ID, "weight": 0.8},
+                {"id": MIKU_ID, "weight": "1.5"},
             ]
         )
         self.assertEqual(normalized[0]["weight"], 0.8)
@@ -289,8 +288,8 @@ class ValidateSelectionTests(unittest.TestCase):
     def test_pesos_en_los_limites(self):
         normalized = validate_selection(
             [
-                {"id": "reika-kurashiki", "weight": 0},
-                {"id": "reika-kurashiki", "weight": 2},
+                {"id": MIKU_ID, "weight": 0},
+                {"id": MIKU_ID, "weight": 2},
             ]
         )
         self.assertEqual([item["weight"] for item in normalized], [0.0, 2.0])
@@ -318,7 +317,7 @@ class ValidateSelectionTests(unittest.TestCase):
                     validate_selection(selection)
 
     def test_item_invalido_lanza(self):
-        for selection in ([None], ["reika-kurashiki"], [{"weight": 1.0}]):
+        for selection in ([None], [MIKU_ID], [{"weight": 1.0}]):
             with self.subTest(selection=selection):
                 with self.assertRaises(EngineError):
                     validate_selection(selection)
@@ -333,7 +332,7 @@ class ValidateSelectionTests(unittest.TestCase):
         for weight in (True, -0.1, 2.01, "abc", [0.5], float("nan"), float("inf")):
             with self.subTest(weight=weight):
                 with self.assertRaises(EngineError):
-                    validate_selection([{"id": "reika-kurashiki", "weight": weight}])
+                    validate_selection([{"id": MIKU_ID, "weight": weight}])
 
 
 class TempRegistryTests(unittest.TestCase):

@@ -332,17 +332,17 @@ class ApplyLorasTests(unittest.TestCase):
 
     def test_resuelve_file_y_weight_por_id(self):
         patched = apply_loras(
-            real_graph(), [{"id": "reika-kurashiki", "weight": 0.8}]
+            real_graph(), [{"id": "kurashiki-reika-saimin-anima", "weight": 0.8}]
         )
 
         self.assertEqual(
             patched["lora_1"]["inputs"]["lora_name"],
-            "Reika Kurashiki\\Reika Kurashiki_2.safetensors",
+            "anima\\Kurashiki Reika Saimin Seishidou.safetensors",
         )
         self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 0.8)
 
     def test_id_sin_weight_usa_el_default_del_registro(self):
-        patched = apply_loras(real_graph(), [{"id": "reika-kurashiki"}])
+        patched = apply_loras(real_graph(), [{"id": "shuuko-komi-s1s2-anima"}])
 
         self.assertEqual(patched["lora_1"]["inputs"]["strength_model"], 1.0)
 

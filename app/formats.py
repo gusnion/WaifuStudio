@@ -1,8 +1,8 @@
 """Catalogo local de formatos (tamano) de imagen: ``registry/formatos-v1.json``.
 
-Procedencia legacy: copia VERBATIM de
-``E:\\IA\\VIDEO\\prompt_standards\\contracts\\formatos-v1.json`` (contrato
-``formatos/v1``, repo legacy de solo lectura). El JSON lista 11 formatos de
+Procedencia legacy: copia VERBATIM del contrato ``formatos/v1`` (el origen
+vivía en el repo legacy, retirado el 2026-09-26; la copia canónica es
+``registry/formatos-v1.json``). El JSON lista 11 formatos de
 imagen + 2 de video (``video_vertical``/``video_horizontal`` se repiten con
 ``tipo`` distinto); aqui solo se exponen los de ``tipo == "imagen"``, en el
 orden real del catalogo. Sin red y sin dependencias: solo stdlib.
