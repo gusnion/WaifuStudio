@@ -982,7 +982,7 @@ grande». El fix se verificó además con `TestClient` sobre store temporal (3 i
 - **Imagen → prompt (M10-4b)**: botón **«Describir»** en el visor de imagen; `POST /api/vision/image_to_prompt` devuelve tags WD14 (onnxruntime, CPU) y caption Qwen2.5-VL (llama.cpp + mmproj; `WAIFU_VL_GPU_LAYERS`, default 0); `GET /api/vision/status` muestra el estado real de cada componente.
 - **Prompt de vídeo H3** (M10-4e): botón «Mejorar prompt (H3)» (`POST /api/video/h3_prompt`) que reescribe los tres bloques (`integrated_multimodal_description` / `overall_soundscape` / `non_diegetic_music`).
 - **Generar prompt con tags** (M10-4d): `/api/prompt/enhance_zones` acepta `tags` (≤120) como «ya aplicadas» para no repetirlas; la UI las envía desde el editor por zonas.
-- **Perfiles de tamaño de vídeo** (M10-4d): `VIDEO 9:16 HD` (576×1024) y `VIDEO 16:9 HD` (1024×576), pensados como imagen de entrada de vídeo (mismo aspecto y mayor resolución → más detalle en cara/ojos).
+- **Perfiles de tamaño de vídeo** (M10-4d): `VIDEO 9:16 HD` (576×1024), `VIDEO 16:9 HD` (1024×576) y **`VIDEO 9:16 XL` (1008×1792) / `VIDEO 16:9 XL` (1792×1008)** — mismo aspecto exacto que el vídeo y 1,81 MP (más que el mayor normal), pensados como imagen de entrada (más resolución → más detalle en cara/ojos).
 - **Catálogo de tags completo** (M10-5): `registry/tags_danbooru.json` v2 con base curada (labels es) + top-N con `rank` de Danbooru; se regenera con `python scripts/build_tags_catalog.py`.
 - **Huérfanos por reinicio**: al arrancar la app, `Store.fail_stale()` cierra las filas `queued/running` («interrumpido por un reinicio de la app»).
 

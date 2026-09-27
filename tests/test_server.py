@@ -535,13 +535,13 @@ class ParamsRouteTests(ServerTestCase):
 
 
 class FormatsRouteTests(ServerTestCase):
-    def test_formats_13_y_default(self):
+    def test_formats_15_y_default(self):
         response = self.make_client().get("/api/formats")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["default"], DEFAULT_FORMAT)
         self.assertEqual(data["default"], "retrato_plan")
-        self.assertEqual(len(data["formats"]), 13)
+        self.assertEqual(len(data["formats"]), 15)
         self.assertEqual(data["formats"], list_image_formats())
         first = data["formats"][0]
         self.assertEqual(set(first), {"id", "label", "width", "height"})
