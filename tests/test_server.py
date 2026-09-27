@@ -240,6 +240,8 @@ class LorasRouteTests(ServerTestCase):
                 "miku-nakano-anima",
                 "kurashiki-reika-saimin-anima",
                 "shuuko-komi-s1s2-anima",
+                "mina-ashido-1-anima",
+                "mina-ashido-2-anima",
             ],
         )
 
@@ -253,11 +255,11 @@ class LorasRouteTests(ServerTestCase):
         )
         self.assertTrue(all(item["family"] == "wan" for item in items))
 
-    def test_loras_familia_anima_devuelve_miku_saimin_y_shuuko(self):
+    def test_loras_familia_anima_devuelve_miku_saimin_shuuko_y_mina(self):
         data = self.make_client().get(
             "/api/loras", params={"family": "anima"}
         ).json()
-        self.assertEqual(len(data["items"]), 3)
+        self.assertEqual(len(data["items"]), 5)
         item = data["items"][0]
         self.assertEqual(item["id"], "miku-nakano-anima")
         self.assertEqual(item["family"], "anima")
@@ -279,6 +281,18 @@ class LorasRouteTests(ServerTestCase):
         self.assertEqual(shuuko["file"], "anima\\shuuko-komi-s1s2.safetensors")
         self.assertEqual(shuuko["trigger"], "shuuko komi")
         self.assertEqual(shuuko["default_weight"], 1.0)
+        mina1 = data["items"][3]
+        self.assertEqual(mina1["id"], "mina-ashido-1-anima")
+        self.assertEqual(mina1["family"], "anima")
+        self.assertEqual(mina1["file"], "anima\\Mina Ashido 1.safetensors")
+        self.assertEqual(mina1["trigger"], "aniashido")
+        self.assertEqual(mina1["default_weight"], 1.0)
+        mina2 = data["items"][4]
+        self.assertEqual(mina2["id"], "mina-ashido-2-anima")
+        self.assertEqual(mina2["family"], "anima")
+        self.assertEqual(mina2["file"], "anima\\Mina Ashido 2.safetensors")
+        self.assertEqual(mina2["trigger"], "")
+        self.assertEqual(mina2["default_weight"], 1.0)
         self.assertIn("no verificada", shuuko["license"])
         self.assertIn("nochekaiser", shuuko["source"])
         self.assertIn("anima_baseV10", shuuko["notes"])

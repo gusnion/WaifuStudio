@@ -23,6 +23,8 @@ REAL_IDS = [
     "miku-nakano-anima",
     "kurashiki-reika-saimin-anima",
     "shuuko-komi-s1s2-anima",
+    "mina-ashido-1-anima",
+    "mina-ashido-2-anima",
 ]
 WAN_HIGH_ID = "lightx2v-wan-high"
 WAN_HIGH_FILE = (
@@ -225,17 +227,23 @@ class RealRegistryTests(unittest.TestCase):
         normalized = validate_selection([{"id": SHUUKO_ID, "weight": 0.6}])
         self.assertEqual(normalized[0]["weight"], 0.6)
 
-    def test_filtro_anima_miku_saimin_y_shuuko(self):
+    def test_filtro_anima_miku_saimin_shuuko_y_mina(self):
         self.assertEqual(
             [item["id"] for item in list_loras("anima")],
-            [MIKU_ID, SAIMIN_ID, SHUUKO_ID],
+            [
+                MIKU_ID,
+                SAIMIN_ID,
+                SHUUKO_ID,
+                "mina-ashido-1-anima",
+                "mina-ashido-2-anima",
+            ],
         )
 
-    def test_comment_m10(self):
+    def test_comment_del_registro(self):
         payload = load_registry()
         self.assertEqual(payload["version"], 1)
-        self.assertIn("M10", payload["_comment"])
-        self.assertIn("LoRAs de Anima", payload["_comment"])
+        self.assertIn("Registro local de LoRAs", payload["_comment"])
+        self.assertIn("Gestionar biblioteca", payload["_comment"])
 
     def test_filtro_por_familia(self):
         self.assertEqual(
@@ -249,9 +257,16 @@ class RealRegistryTests(unittest.TestCase):
         )
         anima = list_loras("anima")
         self.assertEqual(
-            [item["id"] for item in anima], [MIKU_ID, SAIMIN_ID, SHUUKO_ID]
+            [item["id"] for item in anima],
+            [
+                MIKU_ID,
+                SAIMIN_ID,
+                SHUUKO_ID,
+                "mina-ashido-1-anima",
+                "mina-ashido-2-anima",
+            ],
         )
-        self.assertEqual([item["default_weight"] for item in anima], [1.0, 1.0, 1.0])
+        self.assertEqual([item["default_weight"] for item in anima], [1.0] * 5)
         self.assertEqual(list_loras("no-existe"), [])
 
     def test_get_devuelve_copia_e_inexistente_lanza(self):

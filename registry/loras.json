@@ -66,7 +66,29 @@
       "source": "local (aportado por el usuario 2026-09-25; anima lora nochekaiser; ss_output_name shuuko-komi-s1s2-anima-lora-nochekaiser)",
       "license": "no verificada (archivo local del usuario)",
       "notes": "Anima LoRA (dim 32 / alpha 32, 408 imagenes, 1000 pasos, base anima_baseV10). Trigger principal 'shuuko komi' (tag_frequency); menciona tambien 'komi shouko'."
+    },
+    {
+      "id": "mina-ashido-1-anima",
+      "family": "anima",
+      "file": "anima\\Mina Ashido 1.safetensors",
+      "display_name": "Mina Ashido 1 - AniAshido (Anima)",
+      "trigger": "aniashido",
+      "default_weight": 1.0,
+      "source": "local (aportado por el usuario 2026-09-27; autor darksidewalker; ss_output_name AniAshido)",
+      "license": "no verificada (archivo local del usuario)",
+      "notes": "Anima LoRA (dim 48 / alpha 32, 122 imagenes x20, 1200 pasos, base anima_baseV10, 28 bloques): nativo con anima-official-aesthetic-v11; en 2.9B requiere patch 28->40 (M10). Trigger 'aniashido' (tag_frequency 122/122)."
+    },
+    {
+      "id": "mina-ashido-2-anima",
+      "family": "anima",
+      "file": "anima\\Mina Ashido 2.safetensors",
+      "display_name": "Mina Ashido 2 - timeskip (Anima)",
+      "trigger": "",
+      "default_weight": 1.0,
+      "source": "local (aportado por el usuario 2026-09-27; ss_output_name mina_ashido_timeskip)",
+      "license": "no verificada (archivo local del usuario)",
+      "notes": "Anima LoRA (dim 32 / alpha 16, 86 imagenes x1000, 2400 pasos, base anima_baseV10, 28 bloques): nativo con anima-official-aesthetic-v11; en 2.9B requiere patch 28->40 (M10). Sin trigger en captions (dataset '10_mina_ashido'); se activa por personaje/rasgos."
     }
   ],
-  "_comment": "Los LoRAs de Anima llegan en M10 (descargas diferidas)"
+  "_comment": "Registro local de LoRAs; editable desde «Gestionar biblioteca» en la app."
 }
