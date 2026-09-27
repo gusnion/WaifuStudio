@@ -250,6 +250,40 @@ def _write_input_png(input_dir: Any, raw: bytes) -> str:
     return name
 
 
+def _fit_reference(raw: bytes, width: int, height: int) -> bytes:
+    """Ajusta la referencia al tamano pedido (cover + recorte centrado, PNG).
+
+    Con referencia el grafo pasa a img2img y el latente hereda el tamano de la
+    imagen de entrada; sin este ajuste el selector de tamano quedaba ignorado.
+    Mantiene el aspect ratio escalando y recortando (sin deformar).
+    """
+    from io import BytesIO
+
+    from PIL import Image
+
+    try:
+        with Image.open(BytesIO(raw)) as handle:
+            image = handle.convert("RGB")
+    except Exception as exc:
+        raise EngineError("referencia invalida; usar PNG/JPG/WebP") from exc
+    if image.size == (width, height):
+        return raw
+    scale = max(width / image.size[0], height / image.size[1])
+    resized = image.resize(
+        (
+            max(1, round(image.size[0] * scale)),
+            max(1, round(image.size[1] * scale)),
+        ),
+        Image.LANCZOS,
+    )
+    left = (resized.size[0] - width) // 2
+    top = (resized.size[1] - height) // 2
+    cropped = resized.crop((left, top, left + width, top + height))
+    buffer = BytesIO()
+    cropped.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def editor_installed(comfy_root: Any) -> bool:
     """True solo si existen TODOS los archivos esperados del editor (M9-G).
 
@@ -1488,6 +1522,8 @@ def create_app(
                 return JSONResponse(
                     status_code=400, content={"error": "imagen de referencia vacia"}
                 )
+            if width is not None and height is not None:
+                raw = _fit_reference(raw, width, height)
             input_dir = cfg.comfy_root / "input"
             input_dir.mkdir(parents=True, exist_ok=True)
             ref_image = f"{uuid.uuid4().hex}.png"

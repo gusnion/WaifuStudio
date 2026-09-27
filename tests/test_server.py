@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import os
 import tempfile
@@ -1353,6 +1354,36 @@ class GenerateValidationTests(ServerTestCase):
         response = self.make_client().get("/api/jobs/no-existe")
         self.assertEqual(response.status_code, 404)
         self.assertIn("error", response.json())
+
+    def test_referencia_se_ajusta_cover_al_tamano_pedido(self):
+        source = Image.new("RGB", (128, 256), (10, 20, 30))
+        buffer = io.BytesIO()
+        source.save(buffer, format="PNG")
+        raw = base64.b64encode(buffer.getvalue()).decode("ascii")
+        client = self.make_client()
+        response = client.post(
+            "/api/generate",
+            json=self.payload(ref_image_b64=raw, size="cuadro_hd", strength=0.5),
+        )
+        self.assertEqual(response.status_code, 200)
+        row = self.store.list()[0]
+        path = self.config.comfy_root / "input" / row["params"]["ref_image"]
+        with Image.open(path) as image:
+            self.assertEqual(image.size, (1024, 1024))
+
+    def test_referencia_sin_tamano_conserva_dimensiones(self):
+        source = Image.new("RGB", (128, 256), (10, 20, 30))
+        buffer = io.BytesIO()
+        source.save(buffer, format="PNG")
+        raw = base64.b64encode(buffer.getvalue()).decode("ascii")
+        response = self.make_client().post(
+            "/api/generate", json=self.payload(ref_image_b64=raw, strength=0.5)
+        )
+        self.assertEqual(response.status_code, 200)
+        row = self.store.list()[0]
+        path = self.config.comfy_root / "input" / row["params"]["ref_image"]
+        with Image.open(path) as image:
+            self.assertEqual(image.size, (128, 256))
 
 
 class GenerateSizeTests(ServerTestCase):
