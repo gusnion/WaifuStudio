@@ -228,6 +228,11 @@
 
     <section id="panel-video" class="panel">
       <aside class="controls">
+        <div class="generate-row">
+          <button id="btn-video-generate" class="primary" type="button">Generar video</button>
+          <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
+          <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
+        </div>
         <label class="field">
           <span>Motor</span>
           <select id="video-engine">
@@ -360,11 +365,6 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <p class="field-warn">VRAM 12 GB: ≤5 s certificado · 6-7.5 s ajustado · &gt;7.5 s riesgo</p>
         </div>
 
-        <div class="generate-row">
-          <button id="btn-video-generate" class="primary" type="button">Generar video</button>
-          <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
-          <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
-        </div>
         <p id="video-status" class="status">Listo</p>
         <div id="video-progress" class="progress hidden">
           <div class="progress-track">
@@ -403,6 +403,10 @@ non_diegetic_music: &lt;música o None&gt;</pre>
 
     <section id="panel-editor" class="panel">
       <aside class="controls">
+        <div class="generate-row">
+          <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
+          <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
+        </div>
         <p id="editor-banner" class="editor-banner">Comprobando Qwen-Image 2.1…</p>
         <label class="field">
           <span>Prompt</span>
@@ -435,10 +439,6 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <span>Seed</span>
           <input id="editor-seed" type="number" value="42">
         </label>
-        <div class="generate-row">
-          <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
-          <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
-        </div>
         <div id="editor-progress" class="progress hidden">
           <div class="progress-track">
             <div id="editor-progress-fill" class="progress-fill"></div>
@@ -475,6 +475,10 @@ non_diegetic_music: &lt;música o None&gt;</pre>
 
     <section id="panel-upscaler" class="panel">
       <aside class="controls">
+        <div class="generate-row">
+          <button id="btn-upscale" class="primary" type="button">Escalar</button>
+          <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
+        </div>
         <label class="field">
           <span>Tipo de origen</span>
           <select id="upscale-kind">
@@ -524,10 +528,6 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <p class="field-hint">Interpola los fotogramas del vídeo de origen a ×2 o ×4 fps, conservando el audio.</p>
         </label>
 
-        <div class="generate-row">
-          <button id="btn-upscale" class="primary" type="button">Escalar</button>
-          <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
-        </div>
         <p id="upscale-status" class="status">Listo</p>
         <div id="upscale-progress" class="progress hidden">
           <div class="progress-track">
