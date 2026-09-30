@@ -19,10 +19,16 @@ from fastapi.testclient import TestClient
 from app import server as server_module
 from app.config import EngineConfig
 from app.editor import (
+    EDITOR_CFG_MAX,
+    EDITOR_CFG_MIN,
+    EDITOR_DEFAULT_CFG,
     EDITOR_DEFAULT_SIZE,
+    EDITOR_DEFAULT_STEPS,
     EDITOR_REF_LIMIT,
     EDITOR_SIZE_MAX,
     EDITOR_SIZE_MIN,
+    EDITOR_STEPS_MAX,
+    EDITOR_STEPS_MIN,
     EDITOR_TEMPLATE_PATH,
     build_editor_graph,
     prepare_editor_graph,
@@ -261,6 +267,47 @@ class PrepareEditorGraphTests(unittest.TestCase):
         )
         self.assertEqual(result[SAMPLER_ID]["inputs"]["seed"], 2**64 - 1)
 
+    def test_defaults_de_steps_y_cfg(self):
+        result = prepare_editor_graph(self.template(), prompt="1girl")
+        self.assertEqual(result[SAMPLER_ID]["inputs"]["steps"], EDITOR_DEFAULT_STEPS)
+        self.assertEqual(result[SAMPLER_ID]["inputs"]["cfg"], EDITOR_DEFAULT_CFG)
+
+    def test_parcheo_exacto_de_steps_y_cfg(self):
+        graph = self.template()
+        result = prepare_editor_graph(graph, prompt="1girl", steps=30, cfg=2.5)
+        self.assertEqual(result[SAMPLER_ID]["inputs"]["steps"], 30)
+        self.assertEqual(result[SAMPLER_ID]["inputs"]["cfg"], 2.5)
+        self.assertEqual(graph[SAMPLER_ID]["inputs"]["steps"], 25)
+        self.assertEqual(graph[SAMPLER_ID]["inputs"]["cfg"], 1.0)
+
+    def test_steps_y_cfg_en_los_limites(self):
+        for steps in (EDITOR_STEPS_MIN, EDITOR_STEPS_MAX):
+            with self.subTest(steps=steps):
+                result = prepare_editor_graph(
+                    self.template(), prompt="1girl", steps=steps
+                )
+                self.assertEqual(result[SAMPLER_ID]["inputs"]["steps"], steps)
+        for cfg in (EDITOR_CFG_MIN, EDITOR_CFG_MAX):
+            with self.subTest(cfg=cfg):
+                result = prepare_editor_graph(
+                    self.template(), prompt="1girl", cfg=cfg
+                )
+                self.assertEqual(result[SAMPLER_ID]["inputs"]["cfg"], cfg)
+
+    def test_steps_invalidos(self):
+        for steps in (9, 51, 25.5, "25.5", True, "x", None):
+            with self.subTest(steps=steps):
+                with self.assertRaises(EngineError):
+                    prepare_editor_graph(
+                        self.template(), prompt="1girl", steps=steps
+                    )
+
+    def test_cfg_invalida(self):
+        for cfg in (0.9, 10.1, True, "x", None):
+            with self.subTest(cfg=cfg):
+                with self.assertRaises(EngineError):
+                    prepare_editor_graph(self.template(), prompt="1girl", cfg=cfg)
+
     def test_tamano_fuera_de_rango_o_no_multiplo_16(self):
         for width, height in (
             (EDITOR_SIZE_MIN - 1, 1024),
@@ -317,6 +364,11 @@ class PrepareEditorGraphTests(unittest.TestCase):
         self.assertEqual(result[ENCODE_ID]["inputs"]["prompt"], "1girl")
         self.assertEqual(result[SAMPLER_ID]["inputs"]["seed"], 3)
         self.assertEqual(result[LATENT_ID]["inputs"]["height"], 2048)
+
+    def test_build_editor_graph_pasa_steps_y_cfg(self):
+        result = build_editor_graph(prompt="1girl", steps=40, cfg=3.0)
+        self.assertEqual(result[SAMPLER_ID]["inputs"]["steps"], 40)
+        self.assertEqual(result[SAMPLER_ID]["inputs"]["cfg"], 3.0)
 
 
 class RunEditorGenerationTests(unittest.TestCase):
@@ -398,6 +450,22 @@ class RunEditorGenerationTests(unittest.TestCase):
         self.assertEqual(
             graph[ENCODE_ID]["inputs"]["images.image_1"], ["ref_1", 0]
         )
+
+    def test_envia_steps_y_cfg_del_job(self):
+        transport = FakeEditorTransport(self.config)
+        job = self.make_job(steps=30, cfg=2.5)
+        record = {"prompt_id": None, "tracker": None, "status": "queued", "engine": None}
+        run_editor_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+            record=record,
+        )
+        self.assertEqual(self.store.get(job["gen_id"])["status"], "done")
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph[SAMPLER_ID]["inputs"]["steps"], 30)
+        self.assertEqual(graph[SAMPLER_ID]["inputs"]["cfg"], 2.5)
 
     def test_error_no_propaga_y_marca_store(self):
         transport = FakeEditorTransport(self.config, write_output=False)

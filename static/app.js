@@ -2905,7 +2905,11 @@ async function setEditorEditSource(url, item) {
   state.editorRefs = [];
   await addEditorRefFromUrl(source, "visor");
   if (item) {
-    applyEditorMetadata({ ...(item.params || {}), prompt: item.prompt });
+    applyEditorMetadata({
+      ...(item.params || {}),
+      prompt: item.prompt,
+      negative: item.negative,
+    });
   }
   setEditorStatus("Imagen del visor cargada para editar");
 }
@@ -2980,6 +2984,18 @@ function applyEditorMetadata(meta) {
   if (meta.seed != null && Number.isFinite(seed)) {
     $("editor-seed").value = String(Math.trunc(seed));
   }
+  if (typeof meta.negative === "string") {
+    $("editor-negative").value = meta.negative;
+  }
+  const steps = Number(meta.steps);
+  if (meta.steps != null && Number.isFinite(steps)) {
+    $("editor-steps").value = String(Math.trunc(steps));
+  }
+  const cfg = Number(meta.cfg);
+  if (meta.cfg != null && Number.isFinite(cfg)) {
+    $("editor-cfg").value = String(cfg);
+    updateEditorCfgNote();
+  }
   if (meta.original_size === true) {
     setSelectValue($("editor-size"), "original");
     applyEditorSizeSelection();
@@ -3001,6 +3017,15 @@ function applyEditorMetadata(meta) {
     $("editor-height").value = String(height);
   }
   applyEditorSizeSelection();
+}
+
+function updateEditorCfgNote() {
+  const cfg = Number($("editor-cfg").value);
+  const note = $("editor-cfg-note");
+  if (!note) {
+    return;
+  }
+  note.classList.toggle("hidden", !(Number.isFinite(cfg) && cfg > 1));
 }
 
 function validEditorSize(value) {
@@ -3134,7 +3159,7 @@ function showEditorResult(job) {
   state.editorResultUrl = output.url;
   state.editorResultMeta =
     job && typeof job === "object"
-      ? { ...(job.params || {}), prompt: job.prompt }
+      ? { ...(job.params || {}), prompt: job.prompt, negative: job.negative }
       : null;
   box.classList.remove("hidden");
   updateEditorPreview();
@@ -3219,11 +3244,24 @@ async function generateEditor() {
     }
     sizePayload = { width, height };
   }
+  const steps = Number($("editor-steps").value);
+  if (!Number.isInteger(steps) || steps < 10 || steps > 50) {
+    setEditorStatus("Pasos fuera de [10, 50]", true);
+    return;
+  }
+  const cfg = Number($("editor-cfg").value);
+  if (!Number.isFinite(cfg) || cfg < 1 || cfg > 10) {
+    setEditorStatus("CFG fuera de [1, 10]", true);
+    return;
+  }
   applyRandomSeed("editor-seed");
   const seedValue = Number($("editor-seed").value);
   const payload = {
     prompt,
     mode: $("editor-mode").value,
+    negative: $("editor-negative").value,
+    steps,
+    cfg,
     size: sizePayload,
     seed: Number.isFinite(seedValue) ? Math.trunc(seedValue) : 42,
   };
@@ -5850,6 +5888,10 @@ const REQUIRED_IDS = [
   "editor-refs-hint",
   "editor-size",
   "editor-manual-size",
+  "editor-negative",
+  "editor-steps",
+  "editor-cfg",
+  "editor-cfg-note",
   "editor-result",
   "editor-preview",
   "editor-preview-img",
@@ -6205,6 +6247,7 @@ function bind() {
     state.videoNegativeTouched = true;
   });
   on("editor-prompt", "input", updateEditorControls);
+  on("editor-cfg", "input", updateEditorCfgNote);
   on("editor-refs", "change", (event) => {
     addEditorRefs(event.target.files).catch((error) =>
       setEditorStatus(error.message, true)

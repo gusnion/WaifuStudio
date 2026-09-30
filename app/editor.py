@@ -36,6 +36,12 @@ EDITOR_SIZE_MAX = 2048
 EDITOR_SIZE_STEP = 16
 EDITOR_DEFAULT_SIZE = 1024
 EDITOR_SEED_MAX = 2**64 - 1
+EDITOR_STEPS_MIN = 10
+EDITOR_STEPS_MAX = 50
+EDITOR_DEFAULT_STEPS = 25
+EDITOR_CFG_MIN = 1.0
+EDITOR_CFG_MAX = 10.0
+EDITOR_DEFAULT_CFG = 1.0
 REFERENCE_RESOLUTION_MAX = 4096
 REFERENCE_RESOLUTION_STEP = 32
 
@@ -86,6 +92,36 @@ def _require_size_value(value: Any, name: str) -> int:
             f"o no multiplo de {EDITOR_SIZE_STEP}: {value!r}"
         )
     return number
+
+
+def _require_steps(value: Any) -> int:
+    if isinstance(value, bool):
+        raise EngineError(f"steps invalido: {value!r}")
+    if isinstance(value, float) and not value.is_integer():
+        raise EngineError(f"steps invalido: {value!r}")
+    try:
+        steps = int(value)
+    except (TypeError, ValueError) as exc:
+        raise EngineError(f"steps invalido: {value!r}") from exc
+    if not EDITOR_STEPS_MIN <= steps <= EDITOR_STEPS_MAX:
+        raise EngineError(
+            f"steps fuera de [{EDITOR_STEPS_MIN}, {EDITOR_STEPS_MAX}]: {value!r}"
+        )
+    return steps
+
+
+def _require_cfg(value: Any) -> float:
+    if isinstance(value, bool):
+        raise EngineError(f"cfg invalido: {value!r}")
+    try:
+        cfg = float(value)
+    except (TypeError, ValueError) as exc:
+        raise EngineError(f"cfg invalido: {value!r}") from exc
+    if not EDITOR_CFG_MIN <= cfg <= EDITOR_CFG_MAX:
+        raise EngineError(
+            f"cfg fuera de [{EDITOR_CFG_MIN}, {EDITOR_CFG_MAX}]: {value!r}"
+        )
+    return cfg
 
 
 def _require_refs(value: Any) -> list[str]:
@@ -164,15 +200,18 @@ def prepare_editor_graph(
     prompt: Any,
     negative: Any = "",
     seed: Any = 42,
+    steps: Any = EDITOR_DEFAULT_STEPS,
+    cfg: Any = EDITOR_DEFAULT_CFG,
     width: Any = EDITOR_DEFAULT_SIZE,
     height: Any = EDITOR_DEFAULT_SIZE,
     ref_images: Any = (),
 ) -> dict:
-    """Copia de ``graph`` con prompt/negativo/seed/tamano/refs aplicados.
+    """Copia de ``graph`` con prompt/negativo/seed/steps/cfg/tamano/refs.
 
     El encoder ``TextEncodeQwenImage21`` recibe prompt, ``negative_prompt`` y el
     ``resolution`` (presupuesto de las referencias, multiplo de 32); el
-    EmptyLatentImage fija el tamano de salida. Cada referencia anade un
+    EmptyLatentImage fija el tamano de salida. El KSampler recibe ``steps``
+    (10-50) y ``cfg`` (1.0-10.0) ademas de la seed. Cada referencia anade un
     LoadImage ``ref_N`` y su enlace ``images.image_N`` (hasta 10). Los refs
     existentes se reemplazan. EngineError con cualquier valor fuera de rango o
     nodo ausente; el grafo de entrada nunca se muta.
@@ -180,6 +219,8 @@ def prepare_editor_graph(
     prompt = _require_text(prompt, "prompt")
     negative = _require_negative(negative)
     seed = _require_seed(seed)
+    steps = _require_steps(steps)
+    cfg = _require_cfg(cfg)
     width = _require_size_value(width, "width")
     height = _require_size_value(height, "height")
     refs = _require_refs(ref_images)
@@ -209,8 +250,11 @@ def prepare_editor_graph(
     latent["height"] = height
 
     sampler_id, sampler = _find_node(prepared, KSAMPLER_CLASS)
-    _require_field(sampler, "seed", sampler_id)
+    for field in ("seed", "steps", "cfg"):
+        _require_field(sampler, field, sampler_id)
     sampler["seed"] = seed
+    sampler["steps"] = steps
+    sampler["cfg"] = cfg
 
     for index, image in enumerate(refs, start=1):
         node_id = f"{REF_ID_PREFIX}{index}"
@@ -229,6 +273,8 @@ def build_editor_graph(
     prompt: Any,
     negative: Any = "",
     seed: Any = 42,
+    steps: Any = EDITOR_DEFAULT_STEPS,
+    cfg: Any = EDITOR_DEFAULT_CFG,
     width: Any = EDITOR_DEFAULT_SIZE,
     height: Any = EDITOR_DEFAULT_SIZE,
     ref_images: Any = (),
@@ -241,6 +287,8 @@ def build_editor_graph(
         prompt=prompt,
         negative=negative,
         seed=seed,
+        steps=steps,
+        cfg=cfg,
         width=width,
         height=height,
         ref_images=ref_images,
@@ -286,6 +334,8 @@ def run_editor_generation(
             prompt=job.get("prompt"),
             negative=job.get("negative") or "",
             seed=job.get("seed", 42),
+            steps=job.get("steps", EDITOR_DEFAULT_STEPS),
+            cfg=job.get("cfg", EDITOR_DEFAULT_CFG),
             width=job.get("width", EDITOR_DEFAULT_SIZE),
             height=job.get("height", EDITOR_DEFAULT_SIZE),
             ref_images=job.get("ref_images") or (),
@@ -346,9 +396,15 @@ def run_editor_generation(
 
 
 __all__ = [
+    "EDITOR_CFG_MAX",
+    "EDITOR_CFG_MIN",
+    "EDITOR_DEFAULT_CFG",
     "EDITOR_DEFAULT_SIZE",
+    "EDITOR_DEFAULT_STEPS",
     "EDITOR_REF_LIMIT",
     "EDITOR_SEED_MAX",
+    "EDITOR_STEPS_MAX",
+    "EDITOR_STEPS_MIN",
     "EDITOR_SIZE_MAX",
     "EDITOR_SIZE_MIN",
     "EDITOR_SIZE_STEP",

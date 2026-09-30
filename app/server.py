@@ -32,8 +32,14 @@ from app import trainer
 from app.characters import CharacterStore, is_sheet
 from app.config import APP_ROOT, EngineConfig, load_config
 from app.editor import (
+    EDITOR_CFG_MAX,
+    EDITOR_CFG_MIN,
+    EDITOR_DEFAULT_CFG,
     EDITOR_DEFAULT_SIZE,
+    EDITOR_DEFAULT_STEPS,
     EDITOR_SEED_MAX,
+    EDITOR_STEPS_MAX,
+    EDITOR_STEPS_MIN,
     inherit_size_from_image,
     run_editor_generation,
 )
@@ -2011,7 +2017,8 @@ def create_app(
 
         La forma se valida siempre (400): prompt, `mode` `generate|edit`,
         `negative` opcional (texto), máximo 10 refs base64 válidas, size en
-        [512, 2048] múltiplos de 16 y seed entera en 0..2^64-1. Con el par UC
+        [512, 2048] múltiplos de 16, seed entera en 0..2^64-1, `steps` entero
+        en [10, 50] y `cfg` en [1.0, 10.0]. Con el par UC
         instalado (los 3 archivos del catálogo) escribe las referencias en
         `ComfyUI/input` y encola un job `kind="editor"` que produce una
         generación nueva (`kind="image"`, `params.task="editor"`, visible en la
@@ -2106,6 +2113,38 @@ def create_app(
                 status_code=400,
                 content={"error": f"seed fuera de 0..{EDITOR_SEED_MAX}"},
             )
+        steps = payload.get("steps")
+        if steps is None:
+            steps = EDITOR_DEFAULT_STEPS
+        if isinstance(steps, bool) or (
+            isinstance(steps, float) and not steps.is_integer()
+        ):
+            return JSONResponse(status_code=400, content={"error": "steps invalido"})
+        try:
+            steps = int(steps)
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"error": "steps invalido"})
+        if not EDITOR_STEPS_MIN <= steps <= EDITOR_STEPS_MAX:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": f"steps fuera de [{EDITOR_STEPS_MIN}, {EDITOR_STEPS_MAX}]"
+                },
+            )
+        cfg_value = payload.get("cfg")
+        if cfg_value is None:
+            cfg_value = EDITOR_DEFAULT_CFG
+        if isinstance(cfg_value, bool):
+            return JSONResponse(status_code=400, content={"error": "cfg invalido"})
+        try:
+            cfg_value = float(cfg_value)
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"error": "cfg invalido"})
+        if not EDITOR_CFG_MIN <= cfg_value <= EDITOR_CFG_MAX:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"cfg fuera de [{EDITOR_CFG_MIN}, {EDITOR_CFG_MAX}]"},
+            )
         if original_size:
             if not raw_refs:
                 return JSONResponse(
@@ -2134,6 +2173,8 @@ def create_app(
             "width": width,
             "height": height,
             "seed": seed,
+            "steps": steps,
+            "cfg": cfg_value,
             "ref_images": ref_images,
         }
         if original_size:
@@ -2147,6 +2188,8 @@ def create_app(
             "prompt": prompt.strip(),
             "negative": negative.strip(),
             "seed": seed,
+            "steps": steps,
+            "cfg": cfg_value,
             "width": width,
             "height": height,
             "ref_images": ref_images,
@@ -2197,6 +2240,9 @@ def create_app(
             "outputs": outputs,
             "error": job.get("error"),
             "progress": progress,
+            "params": job.get("params") or {},
+            "prompt": job.get("prompt"),
+            "negative": job.get("negative"),
         }
 
     @app.post("/api/jobs/{job_id}/cancel")

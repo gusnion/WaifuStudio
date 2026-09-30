@@ -419,7 +419,7 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <span>Modo</span>
           <select id="editor-mode">
             <option value="generate">Generar</option>
-            <option value="edit">Editar</option>
+            <option value="edit" selected>Editar</option>
           </select>
         </label>
         <p id="editor-edit-hint" class="field-hint">En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio.</p>
@@ -441,6 +441,19 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         <label class="field">
           <span>Seed</span>
           <input id="editor-seed" type="number" value="42">
+        </label>
+        <label class="field">
+          <span>Negativo</span>
+          <textarea id="editor-negative" rows="3" placeholder="Lo que no quieres (opcional)"></textarea>
+        </label>
+        <label class="field">
+          <span>Pasos</span>
+          <input id="editor-steps" type="number" value="25" min="10" max="50">
+        </label>
+        <label class="field">
+          <span>CFG</span>
+          <input id="editor-cfg" type="number" value="1.0" min="1" max="10" step="0.1">
+          <p id="editor-cfg-note" class="field-hint hidden">Aviso: cfg mayor que 1 puede degradar la edición (el par UC está certificado con cfg 1).</p>
         </label>
       </aside>
 

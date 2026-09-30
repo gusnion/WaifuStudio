@@ -3657,6 +3657,79 @@ class EditorGenerateValidationTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_steps_invalidos_400(self):
+        client = self.make_client()
+        for steps in (9, 51, "x", True, 25.5):
+            with self.subTest(steps=steps):
+                response = client.post(
+                    "/api/editor/generate",
+                    json={"prompt": "1girl", "steps": steps},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_cfg_invalido_400(self):
+        client = self.make_client()
+        for cfg in (0.9, 10.1, "x", True):
+            with self.subTest(cfg=cfg):
+                response = client.post(
+                    "/api/editor/generate",
+                    json={"prompt": "1girl", "cfg": cfg},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_steps_y_cfg_validos_en_cola_y_params(self):
+        self.install_editor()
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/editor/generate",
+            json={"prompt": "1girl", "steps": 30, "cfg": 2.5},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        job = queue.jobs[0]
+        self.assertEqual(job["steps"], 30)
+        self.assertEqual(job["cfg"], 2.5)
+        self.assertEqual(job["params"]["steps"], 30)
+        self.assertEqual(job["params"]["cfg"], 2.5)
+        self.assertEqual(server_module._JOBS[1]["status"], "queued")
+
+    def test_steps_y_cfg_ausentes_usan_defaults(self):
+        self.install_editor()
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/editor/generate", json={"prompt": "1girl"}
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["steps"], server_module.EDITOR_DEFAULT_STEPS)
+        self.assertEqual(job["cfg"], server_module.EDITOR_DEFAULT_CFG)
+        self.assertEqual(job["params"]["steps"], server_module.EDITOR_DEFAULT_STEPS)
+        self.assertEqual(job["params"]["cfg"], server_module.EDITOR_DEFAULT_CFG)
+
+    def test_api_job_expone_params_prompt_y_negativo(self):
+        self.install_editor()
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        response = client.post(
+            "/api/editor/generate",
+            json={
+                "prompt": "1girl",
+                "negative": "lowres",
+                "steps": 30,
+                "cfg": 2.5,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job_id = response.json()["job_id"]
+        status = client.get(f"/api/jobs/{job_id}").json()
+        self.assertEqual(status["status"], "queued")
+        self.assertEqual(status["prompt"], "1girl")
+        self.assertEqual(status["negative"], "lowres")
+        self.assertEqual(status["params"]["steps"], 30)
+        self.assertEqual(status["params"]["cfg"], 2.5)
+
     def test_validaciones_antes_de_la_guarda_503(self):
         response = self.make_client().post(
             "/api/editor/generate",
@@ -3736,6 +3809,7 @@ class EditorGenerateGuardTests(ServerTestCase):
 class EditorUiStaticTests(ServerTestCase):
     def test_index_incluye_pestana_y_controles_editor(self):
         text = self.make_client().get("/").text
+        self.assertIn('<option value="edit" selected>Editar</option>', text)
         for marker in (
             'id="tab-editor"',
             ">Editor<",
@@ -3752,6 +3826,10 @@ class EditorUiStaticTests(ServerTestCase):
             'id="editor-width"',
             'id="editor-height"',
             'id="editor-seed"',
+            'id="editor-negative"',
+            'id="editor-steps"',
+            'id="editor-cfg"',
+            'id="editor-cfg-note"',
             'id="editor-edit-hint"',
             'id="editor-refs-field"',
             'id="editor-refs-hint"',
@@ -3794,6 +3872,9 @@ class EditorUiStaticTests(ServerTestCase):
             "setEditorEditSource",
             "updateEditorPreview",
             "applyEditorMetadata",
+            '$("editor-negative")',
+            '$("editor-steps")',
+            '$("editor-cfg")',
             "pollJob(",
             "reloadImageViewerFirstPage",
         ):
