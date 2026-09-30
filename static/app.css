@@ -25,6 +25,9 @@ body {
   color: var(--text);
   font-family: "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -34,6 +37,7 @@ body {
   padding: 0.6rem 1rem;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .topbar h1 {
@@ -89,7 +93,9 @@ button:disabled {
 }
 
 main {
-  height: calc(100% - 3.2rem);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
 }
 
 .panel {
@@ -128,7 +134,7 @@ main {
 
 .controls.image-controls {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.7rem;
   align-items: start;
   height: 100%;
