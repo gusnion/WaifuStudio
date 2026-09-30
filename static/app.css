@@ -291,7 +291,9 @@ input[type="checkbox"] {
   flex: 1;
 }
 
-#btn-seed-random {
+#btn-seed-random,
+#btn-video-seed-random,
+#btn-editor-seed-random {
   flex: 0 0 auto;
   padding: 0.4rem 0.65rem;
   font-size: 1rem;
@@ -299,7 +301,11 @@ input[type="checkbox"] {
 }
 
 #btn-seed-random.active,
-#btn-seed-random[aria-pressed="true"] {
+#btn-seed-random[aria-pressed="true"],
+#btn-video-seed-random.active,
+#btn-video-seed-random[aria-pressed="true"],
+#btn-editor-seed-random.active,
+#btn-editor-seed-random[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;

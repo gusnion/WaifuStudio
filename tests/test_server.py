@@ -3783,6 +3783,31 @@ class EditorUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class SeedDiceUiStaticTests(ServerTestCase):
+    def test_index_dado_en_imagen_video_y_editor(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="btn-seed-random"',
+            'id="btn-video-seed-random"',
+            'id="btn-editor-seed-random"',
+            'title="Seed aleatoria"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_dado_compartido_y_roll_por_pestana(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            'applyRandomSeed("video-seed")',
+            'applyRandomSeed("editor-seed")',
+            "updateSeedRandomButton",
+            'on("btn-video-seed-random", "click", () => toggleSeedRandom(setVideoStatus))',
+            'on("btn-editor-seed-random", "click", () => toggleSeedRandom(setEditorStatus))',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class DescribeRefUiStaticTests(ServerTestCase):
     def test_index_boton_describir_referencia(self):
         text = self.make_client().get("/").text

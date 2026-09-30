@@ -1141,12 +1141,20 @@ function randomSeed() {
 }
 
 function updateSeedRandomButton() {
-  const button = $("btn-seed-random");
-  if (!button) {
-    return;
+  for (const id of [
+  "btn-seed-random",
+  "btn-video-seed-random",
+  "btn-editor-seed-random",
+    "btn-video-seed-random",
+    "btn-editor-seed-random",
+  ]) {
+    const button = $(id);
+    if (!button) {
+      continue;
+    }
+    button.classList.toggle("active", state.seedRandom);
+    button.setAttribute("aria-pressed", state.seedRandom ? "true" : "false");
   }
-  button.classList.toggle("active", state.seedRandom);
-  button.setAttribute("aria-pressed", state.seedRandom ? "true" : "false");
 }
 
 function initSeedRandom() {
@@ -1154,18 +1162,25 @@ function initSeedRandom() {
   updateSeedRandomButton();
 }
 
-function toggleSeedRandom() {
+function toggleSeedRandom(statusFn = setStatus) {
   state.seedRandom = !state.seedRandom;
   storeSeedRandom(state.seedRandom);
   updateSeedRandomButton();
-  setStatus(state.seedRandom ? "Seed aleatoria activada" : "Seed aleatoria desactivada");
+  if (typeof statusFn === "function") {
+    statusFn(
+      state.seedRandom ? "Seed aleatoria activada" : "Seed aleatoria desactivada"
+    );
+  }
 }
 
-function applyRandomSeed() {
+function applyRandomSeed(inputId = "seed") {
   if (!state.seedRandom) {
     return;
   }
-  $("seed").value = randomSeed();
+  const input = $(inputId);
+  if (input) {
+    input.value = randomSeed();
+  }
 }
 
 async function startNewGeneration() {
@@ -2318,6 +2333,7 @@ async function generateVideo() {
     setVideoStatus("Sube la imagen inicial (first frame)", true);
     return;
   }
+  applyRandomSeed("video-seed");
   const payload = {
     engine,
     aspect: $("video-aspect").value,
@@ -2932,6 +2948,7 @@ async function generateEditor() {
     }
     sizePayload = { width, height };
   }
+  applyRandomSeed("editor-seed");
   const seedValue = Number($("editor-seed").value);
   const payload = {
     prompt,
@@ -5453,7 +5470,9 @@ function bind() {
   on("btn-enhance", "click", enhancePrompt);
   on("btn-generate", "click", generate);
   on("btn-cancel", "click", cancelJob);
-  on("btn-seed-random", "click", toggleSeedRandom);
+  on("btn-seed-random", "click", () => toggleSeedRandom());
+  on("btn-video-seed-random", "click", () => toggleSeedRandom(setVideoStatus));
+  on("btn-editor-seed-random", "click", () => toggleSeedRandom(setEditorStatus));
   on("btn-new-generation", "click", () => {
     startNewGeneration().catch((error) => setStatus(error.message, true));
   });
