@@ -3017,8 +3017,15 @@ function showEditorResult(job) {
 }
 
 async function openEditorResultInGallery() {
-  switchTab("image");
-  await reloadImageViewerFirstPage();
+  switchTab("gallery");
+  await loadGalleryTab(1);
+  const resultUrl = state.editorResultUrl;
+  const item = (state.galleryTab.items || []).find((entry) =>
+    (entry.urls || []).some((candidate) => candidate === resultUrl)
+  );
+  if (item) {
+    openGalleryModal(item);
+  }
 }
 
 async function editEditorResult() {
