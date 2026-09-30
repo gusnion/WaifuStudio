@@ -15,7 +15,12 @@ import comfy.sd
 import comfy.utils
 import folder_paths
 
-from .mapping import ANIMA_BASE_BLOCKS, ANIMA_EXPANDED_BLOCKS, remap_state_dict
+from .mapping import (
+    ANIMA_BASE_BLOCKS,
+    ANIMA_EXPANDED_BLOCKS,
+    LAYOUT_BASE28,
+    remap_state_dict,
+)
 
 LOGGER = logging.getLogger("waifu_anima_patch")
 
@@ -52,7 +57,7 @@ class WaifuAnimaPatch28to40:
         lora_sd = comfy.utils.load_torch_file(lora_path, safe_load=True)
         remapped_sd, report = remap_state_dict(lora_sd)
         LOGGER.info("[waifu_anima_patch] %s -> %s", lora_name, report["message"])
-        if report["layout"] == "base28" and report["remapped"] == 0:
+        if report["layout"] == LAYOUT_BASE28 and report["remapped"] == 0:
             LOGGER.warning(
                 "[waifu_anima_patch] %s detectado como base28 sin claves que "
                 "cambien; se aplica tal cual.",

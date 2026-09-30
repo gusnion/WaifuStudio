@@ -226,12 +226,17 @@ class LoRAsRealesTests(unittest.TestCase):
         if not path.is_file():
             self.skipTest("LoRA de Miku no presente en esta maquina")
         remap, report = mapping.build_key_map(self._claves_reales(path))
-        self.assertEqual(report["layout"], mapping.LAYOUT_BASE28)
-        self.assertEqual(report["dit_blocks"], list(range(28)))
-        self.assertGreater(report["remapped"], 0)
-        self.assertTrue(
-            all(clave.startswith("lora_unet_blocks_") for clave in remap)
-        )
+        if report["layout"] == mapping.LAYOUT_BASE28:
+            self.assertGreater(report["remapped"], 0)
+            self.assertTrue(
+                all(clave.startswith("lora_unet_blocks_") for clave in remap)
+            )
+            self.assertEqual(report["dit_blocks"], list(range(28)))
+        else:
+            # Si el archivo local se sustituye por un LoRA nativo del modelo
+            # expandido, no debe remapearse nada.
+            self.assertEqual(report["layout"], mapping.LAYOUT_EXPANDED)
+            self.assertEqual(remap, {})
 
 
 if __name__ == "__main__":
