@@ -2698,6 +2698,7 @@ function updateEditorRefs() {
     item.append(img, remove);
     box.appendChild(item);
   });
+  updateEditorPreview();
 }
 
 function removeEditorRef(index) {
@@ -2767,7 +2768,7 @@ async function addEditorRefFromUrl(url, name) {
   setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
 }
 
-async function setEditorEditSource(url) {
+async function setEditorEditSource(url, item) {
   const source = String(url || "");
   if (!source) {
     return;
@@ -2779,6 +2780,9 @@ async function setEditorEditSource(url) {
   }
   state.editorRefs = [];
   await addEditorRefFromUrl(source, "visor");
+  if (item) {
+    applyEditorMetadata({ ...(item.params || {}), prompt: item.prompt });
+  }
   setEditorStatus("Imagen del visor cargada para editar");
 }
 
@@ -2794,7 +2798,7 @@ function syncEditorEditSource() {
     }
     return;
   }
-  setEditorEditSource(url).catch((error) => setEditorStatus(error.message, true));
+  setEditorEditSource(url, item).catch((error) => setEditorStatus(error.message, true));
 }
 
 function updateEditorMode(options = {}) {
@@ -2812,6 +2816,67 @@ function updateEditorMode(options = {}) {
   if (edit && options.sync !== false) {
     syncEditorEditSource();
   }
+  updateEditorPreview();
+}
+
+function updateEditorPreview() {
+  const box = $("editor-preview");
+  if (!box) {
+    return;
+  }
+  const image = $("editor-preview-img");
+  const empty = $("editor-preview-empty");
+  const edit = $("editor-mode").value === "edit";
+  const refUrl = state.editorRefs.length ? state.editorRefs[0].url : "";
+  const url = refUrl || state.editorResultUrl || "";
+  if (url) {
+    image.src = url;
+    image.classList.remove("hidden");
+    empty.classList.add("hidden");
+    box.classList.add("has-image");
+    return;
+  }
+  image.removeAttribute("src");
+  image.classList.add("hidden");
+  box.classList.remove("has-image");
+  empty.textContent = edit
+    ? "Selecciona una imagen en el visor de Imagen o en la galería"
+    : "Carga referencias (archivo local o clic en la galería)";
+  empty.classList.remove("hidden");
+}
+
+function applyEditorMetadata(meta) {
+  if (!meta || typeof meta !== "object") {
+    return;
+  }
+  if (typeof meta.prompt === "string" && meta.prompt.trim()) {
+    $("editor-prompt").value = meta.prompt;
+  }
+  const seed = Number(meta.seed);
+  if (meta.seed != null && Number.isFinite(seed)) {
+    $("editor-seed").value = String(Math.trunc(seed));
+  }
+  if (meta.original_size === true) {
+    setSelectValue($("editor-size"), "original");
+    applyEditorSizeSelection();
+    return;
+  }
+  const width = Number(meta.width);
+  const height = Number(meta.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height)) {
+    return;
+  }
+  const preset = (state.formats || []).find(
+    (format) => format.width === width && format.height === height
+  );
+  if (preset) {
+    setSelectValue($("editor-size"), preset.id);
+  } else {
+    setSelectValue($("editor-size"), "manual");
+    $("editor-width").value = String(width);
+    $("editor-height").value = String(height);
+  }
+  applyEditorSizeSelection();
 }
 
 function validEditorSize(value) {
@@ -2890,7 +2955,7 @@ function renderEditorGallery() {
       button.appendChild(img);
       button.addEventListener("click", () => {
         if ($("editor-mode").value === "edit") {
-          setEditorEditSource(url).catch((error) =>
+          setEditorEditSource(url, item).catch((error) =>
             setEditorStatus(error.message, true)
           );
         } else {
@@ -2939,13 +3004,16 @@ async function loadEditorGallery(page = 1) {
 function showEditorResult(job) {
   const output = ((job && job.outputs) || [])[0];
   const box = $("editor-result");
-  const image = $("editor-result-img");
-  if (!output || !output.url || !box || !image) {
+  if (!output || !output.url || !box) {
     return;
   }
   state.editorResultUrl = output.url;
-  image.src = output.url;
+  state.editorResultMeta =
+    job && typeof job === "object"
+      ? { ...(job.params || {}), prompt: job.prompt }
+      : null;
   box.classList.remove("hidden");
+  updateEditorPreview();
 }
 
 async function openEditorResultInGallery() {
@@ -2967,6 +3035,7 @@ async function editEditorResult() {
   state.editorRefs = [];
   updateEditorRefs();
   await addEditorRefFromUrl(url);
+  applyEditorMetadata(state.editorResultMeta);
   $("editor-mode").value = "edit";
   setSelectValue($("editor-size"), "original");
   applyEditorSizeSelection();
@@ -5602,7 +5671,9 @@ const REQUIRED_IDS = [
   "editor-size",
   "editor-manual-size",
   "editor-result",
-  "editor-result-img",
+  "editor-preview",
+  "editor-preview-img",
+  "editor-preview-empty",
   "btn-editor-generate",
   "btn-editor-open-gallery",
   "btn-editor-edit-result",

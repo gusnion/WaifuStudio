@@ -229,6 +229,13 @@
           <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
           <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
         </div>
+        <p id="video-status" class="status">Listo</p>
+        <div id="video-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="video-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="video-progress-text" class="progress-text">paso -/-</p>
+        </div>
         <label class="field">
           <span>Motor</span>
           <select id="video-engine">
@@ -361,13 +368,6 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <p class="field-warn">VRAM 12 GB: ≤5 s certificado · 6-7.5 s ajustado · &gt;7.5 s riesgo</p>
         </div>
 
-        <p id="video-status" class="status">Listo</p>
-        <div id="video-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="video-progress-fill" class="progress-fill"></div>
-          </div>
-          <p id="video-progress-text" class="progress-text">paso -/-</p>
-        </div>
       </aside>
 
       <section class="gallery-panel">
@@ -403,6 +403,13 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
           <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
         </div>
+        <p id="editor-status" class="status">Listo</p>
+        <div id="editor-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="editor-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="editor-progress-text" class="progress-text">paso -/-</p>
+        </div>
         <p id="editor-banner" class="editor-banner">Comprobando Qwen-Image 2.1…</p>
         <label class="field">
           <span>Prompt</span>
@@ -435,28 +442,24 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <span>Seed</span>
           <input id="editor-seed" type="number" value="42">
         </label>
-        <div id="editor-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="editor-progress-fill" class="progress-fill"></div>
-          </div>
-          <p id="editor-progress-text" class="progress-text">paso -/-</p>
-        </div>
-        <p id="editor-status" class="status">Listo</p>
       </aside>
 
       <section class="gallery-panel">
         <div class="gallery-header">
           <h2>Editor (Qwen-Image 2.1)</h2>
         </div>
+        <div id="editor-preview" class="image-preview">
+          <img id="editor-preview-img" class="hidden" alt="Imagen del editor">
+          <span id="editor-preview-empty" class="empty">Sin imagen</span>
+        </div>
         <div id="editor-result" class="editor-result hidden">
-          <img id="editor-result-img" alt="Resultado del editor">
           <div class="editor-result-actions">
             <button id="btn-editor-open-gallery" type="button">Ver en la galería</button>
             <button id="btn-editor-edit-result" type="button">Editar este resultado</button>
             <button id="btn-editor-download" type="button">Descargar</button>
           </div>
         </div>
-        <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» encola de verdad cuando los tres archivos están instalados; el resultado aparece aquí y en la galería de Imagen.</p>
+        <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» cuando los tres archivos están instalados; el resultado aparece en el visor y en la galería.</p>
         <section class="editor-gallery">
           <h3>Galería</h3>
           <div id="editor-gallery-thumbs" class="image-thumbs"></div>
@@ -474,6 +477,13 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         <div class="generate-row">
           <button id="btn-upscale" class="primary" type="button">Escalar</button>
           <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
+        </div>
+        <p id="upscale-status" class="status">Listo</p>
+        <div id="upscale-progress" class="progress hidden">
+          <div class="progress-track">
+            <div id="upscale-progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="upscale-progress-text" class="progress-text">paso -/-</p>
         </div>
         <label class="field">
           <span>Tipo de origen</span>
@@ -523,14 +533,6 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           </select>
           <p class="field-hint">Interpola los fotogramas del vídeo de origen a ×2 o ×4 fps, conservando el audio.</p>
         </label>
-
-        <p id="upscale-status" class="status">Listo</p>
-        <div id="upscale-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="upscale-progress-fill" class="progress-fill"></div>
-          </div>
-          <p id="upscale-progress-text" class="progress-text">paso -/-</p>
-        </div>
       </aside>
 
       <section class="gallery-panel">

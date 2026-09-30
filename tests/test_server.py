@@ -3755,6 +3755,9 @@ class EditorUiStaticTests(ServerTestCase):
             'id="editor-edit-hint"',
             'id="editor-refs-field"',
             'id="editor-refs-hint"',
+            'id="editor-preview"',
+            'id="editor-preview-img"',
+            'id="editor-preview-empty"',
             'id="editor-result"',
             'id="btn-editor-open-gallery"',
             'id="btn-editor-generate"',
@@ -3789,6 +3792,8 @@ class EditorUiStaticTests(ServerTestCase):
             "updateEditorMode",
             "syncEditorEditSource",
             "setEditorEditSource",
+            "updateEditorPreview",
+            "applyEditorMetadata",
             "pollJob(",
             "reloadImageViewerFirstPage",
         ):

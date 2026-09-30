@@ -1321,21 +1321,10 @@ input[type="checkbox"] {
 }
 
 .editor-result {
-  margin: 0 0 0.6rem;
-  padding: 0.6rem;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.editor-result img {
-  display: block;
-  margin: 0 auto;
-  width: auto;
-  max-width: 100%;
-  max-height: min(62vh, 720px);
-  object-fit: contain;
-  border-radius: 6px;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
 .editor-result-actions {
@@ -1348,6 +1337,7 @@ input[type="checkbox"] {
 
 .editor-gallery {
   margin-top: 0.6rem;
+  flex: 0 0 auto;
 }
 
 .editor-gallery h3 {
