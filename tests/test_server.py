@@ -29,7 +29,7 @@ from app.params import (
     SCHEDULER_NAMES,
 )
 from app.prompt_zones import CAMERA_TAGS, canonical_order
-from app.registry import DEFAULT_PATH, ModelRegistry
+from app.registry import ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
 from app.tags import list_groups
@@ -38,6 +38,7 @@ from app.vision import VisionUnavailable
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-fake-png"
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
 MODEL_ID = "anima-2.9b-preview"
+REGISTRY_FIXTURE = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "models.json"
 
 
 def make_config(root: Path) -> EngineConfig:
@@ -134,7 +135,7 @@ class ServerTestCase(unittest.TestCase):
         self.config = make_config(self.root)
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
-        self.registry = ModelRegistry.load(DEFAULT_PATH)
+        self.registry = ModelRegistry.load(REGISTRY_FIXTURE)
         server_module._JOBS.clear()
         self.addCleanup(server_module._JOBS.clear)
 
@@ -324,6 +325,11 @@ class LoraCrudRouteTests(ServerTestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        user = mock.patch.object(
+            loras_module, "user_registry_path", lambda: self.loras_path
+        )
+        user.start()
+        self.addCleanup(user.stop)
 
     def entry(self, lora_id: str, stem: str, **overrides) -> dict:
         data = {
@@ -1874,6 +1880,11 @@ class CancelRouteTests(ServerTestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        registry_dir = self.config.data_dir / "registry"
+        registry_dir.mkdir(parents=True, exist_ok=True)
+        (registry_dir / "models.json").write_text(
+            REGISTRY_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+        )
         app = create_app(start_worker=False)
         client = TestClient(app)
         self.addCleanup(client.close)

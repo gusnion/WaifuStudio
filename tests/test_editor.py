@@ -30,7 +30,7 @@ from app.editor import (
 )
 from app.engine import ComfyEngine, EngineError, load_graph
 from app.jobs import JobQueue
-from app.registry import DEFAULT_PATH, ModelRegistry
+from app.registry import ModelRegistry
 from app.server import create_app
 from app.store import Store
 
@@ -457,7 +457,9 @@ class EditorQueueIntegrationTests(unittest.TestCase):
         self.config = make_config(self.root)
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
-        self.registry = ModelRegistry.load(DEFAULT_PATH)
+        self.registry = ModelRegistry.load(
+            Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "models.json"
+        )
         server_module._JOBS.clear()
         self.addCleanup(server_module._JOBS.clear)
 

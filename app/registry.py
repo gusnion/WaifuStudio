@@ -8,6 +8,7 @@ CLI: ``python -m app.registry`` imprime ``id | family | unet | preprompt``.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -16,6 +17,17 @@ from app.engine import EngineError
 
 REGISTRY_VERSION = 1
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "registry" / "models.json"
+
+
+def user_registry_path() -> Path:
+    """Capa de usuario del registro: `data/registry/models.json`.
+
+    Se deriva de la raiz de `DEFAULT_PATH` (asi los tests que lo parchean a un
+    temporal quedan aislados); `WAIFU_DATA_DIR` la mueve si esta definida.
+    """
+    root = DEFAULT_PATH.parents[1] if len(DEFAULT_PATH.parents) > 1 else DEFAULT_PATH.parent
+    base = Path(os.environ.get("WAIFU_DATA_DIR") or root / "data")
+    return base / "registry" / DEFAULT_PATH.name
 
 _ID_RE = re.compile(r"[a-z0-9._-]+")
 _REQUIRED_FIELDS = ("id", "family", "display_name", "profile", "source", "license")
@@ -149,6 +161,15 @@ class ModelRegistry:
         self._models.append(validated)
         return validated
 
+    def _replace(self, entry: ModelEntry) -> None:
+        """Valida `entry` y sustituye la entrada con su id (o la anade)."""
+        validated = _validate_entry(entry)
+        for index, existing in enumerate(self._models):
+            if existing.id == validated.id:
+                self._models[index] = validated
+                return
+        self._models.append(validated)
+
     def to_dict(self) -> dict:
         return {
             "version": REGISTRY_VERSION,
@@ -176,14 +197,35 @@ class ModelRegistry:
 
     @classmethod
     def load(cls, path: str | Path) -> "ModelRegistry":
-        """Carga el JSON UTF-8 de path; EngineError si es ilegible o invalido."""
+        """Carga el JSON UTF-8 de path; EngineError si es ilegible o invalido.
+
+        Con `DEFAULT_PATH` (registro del repo, vacio a proposito) se fusiona la
+        capa de usuario `data/registry/models.json` si existe: misma id -> gana
+        la de usuario. Con rutas explicitas (fixtures/tests) no hay overlay.
+        """
+        target = Path(path)
         try:
-            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            payload = json.loads(target.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise EngineError(
                 f"registro ilegible {path}: {type(exc).__name__}: {exc}"
             ) from exc
-        return cls.from_dict(payload)
+        registry = cls.from_dict(payload)
+        overlay = user_registry_path()
+        if (
+            target.resolve() == DEFAULT_PATH.resolve()
+            and overlay.is_file()
+            and overlay.resolve() != target.resolve()
+        ):
+            registry = _merge(registry, cls.load(overlay))
+        return registry
+
+    @classmethod
+    def load_or_empty(cls, path: str | Path) -> "ModelRegistry":
+        """Como `load`, pero un fichero ausente devuelve un registro vacio."""
+        if not Path(path).is_file():
+            return cls()
+        return cls.load(path)
 
     def save(self, path: str | Path) -> Path:
         """Escribe el registro como JSON UTF-8 con indent de 2."""
@@ -192,6 +234,16 @@ class ModelRegistry:
         text = json.dumps(self.to_dict(), indent=2, ensure_ascii=False) + "\n"
         target.write_text(text, encoding="utf-8")
         return target
+
+
+def _merge(base: "ModelRegistry", extra: "ModelRegistry") -> "ModelRegistry":
+    """Fusiona dos registros: las entradas de `extra` ganan por id."""
+    merged = ModelRegistry()
+    for entry in base.models:
+        merged.add(entry)
+    for entry in extra.models:
+        merged._replace(entry)
+    return merged
 
 
 def main() -> int:
@@ -214,5 +266,7 @@ __all__ = [
     "ModelEntry",
     "ModelProfile",
     "ModelRegistry",
+    "load_or_empty",
     "main",
+    "user_registry_path",
 ]

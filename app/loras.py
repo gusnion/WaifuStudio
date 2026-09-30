@@ -83,29 +83,60 @@ def _entry_from_dict(data: object) -> dict:
     }
 
 
-def _payload(path: str | Path | None) -> dict:
-    target = Path(path) if path is not None else DEFAULT_PATH
+def user_registry_path() -> Path:
+    """Capa de usuario del registro de LoRAs: `data/registry/loras.json`.
+
+    Se deriva de la raiz de `DEFAULT_PATH` (aisla a los tests que lo parchean
+    a un temporal); `WAIFU_DATA_DIR` la mueve si esta definida. Las escrituras
+    van aqui.
+    """
+    root = DEFAULT_PATH.parents[1] if len(DEFAULT_PATH.parents) > 1 else DEFAULT_PATH.parent
+    base = Path(os.environ.get("WAIFU_DATA_DIR") or root / "data")
+    return base / "registry" / DEFAULT_PATH.name
+
+
+def _read_payload(target: Path, *, tolerate_missing: bool) -> dict:
     try:
-        data = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except OSError as exc:
+        if tolerate_missing:
+            return {"version": REGISTRY_VERSION, "loras": []}
         raise EngineError(
             f"registro de loras ilegible {target}: {type(exc).__name__}: {exc}"
         ) from exc
-    if not isinstance(data, dict):
+    except ValueError as exc:
         raise EngineError(
-            f"registro de loras invalido: se esperaba objeto JSON, "
-            f"recibido {type(data).__name__}"
-        )
-    version = data.get("version")
-    if version != REGISTRY_VERSION:
-        raise EngineError(
-            f"version de registro no soportada: {version!r} "
-            f"(esperada {REGISTRY_VERSION})"
-        )
-    loras = data.get("loras")
-    if not isinstance(loras, list):
-        raise EngineError("registro de loras invalido: falta la lista 'loras'")
-    return data
+            f"registro de loras ilegible {target}: {type(exc).__name__}: {exc}"
+        ) from exc
+
+
+def _payload(path: str | Path | None) -> dict:
+    if path is not None:
+        return _read_payload(Path(path), tolerate_missing=False)
+    base = _read_payload(DEFAULT_PATH, tolerate_missing=True)
+    overlay = user_registry_path()
+    if overlay.is_file() and overlay.resolve() != DEFAULT_PATH.resolve():
+        user = _read_payload(overlay, tolerate_missing=False)
+        extra = user.get("loras")
+        if isinstance(extra, list):
+            order: list[str] = []
+            merged: dict[str, dict] = {}
+            for item in base.get("loras", []):
+                if isinstance(item, dict):
+                    key = str(item.get("id"))
+                    if key not in merged:
+                        order.append(key)
+                    merged[key] = item
+            for item in extra:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get("id"))
+                if key not in merged:
+                    order.append(key)
+                merged[key] = item
+            base = dict(base)
+            base["loras"] = [merged[key] for key in order]
+    return base
 
 
 def _canonical(data: object) -> dict:
@@ -155,7 +186,7 @@ def save_registry(payload: dict, *, path: str | Path | None = None) -> Path:
     es un registro valido o la escritura falla.
     """
     canonical = _canonical(payload)
-    target = Path(path) if path is not None else DEFAULT_PATH
+    target = Path(path) if path is not None else user_registry_path()
     tmp = target.with_name(f"{target.name}.{uuid.uuid4().hex}.tmp")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -314,5 +345,6 @@ __all__ = [
     "load_registry",
     "save_registry",
     "update_entry",
+    "user_registry_path",
     "validate_selection",
 ]

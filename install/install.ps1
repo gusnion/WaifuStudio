@@ -6,10 +6,13 @@
     Preflight (Windows 10/11 x64 + GPU NVIDIA + >=140 GB libres) -> uv +
     CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.37.4 pineado +
     dependencias del engine -> custom nodes pineados + ckpts RIFE +
-    wheel SageAttention -> descarga y verificacion sha256 de los modelos de
-    install\manifest\manifest.models.json (los assets sin URL publica verificada
-    quedan como aporte manual) -> variables WAIFU_COMFY_ROOT / WAIFU_COMFY_URL
-    -> verificacion final (suite de tests + app.health).
+    wheel SageAttention -> PREGUNTA "instalar modelos recomendados" con el
+    espacio estimado (se omite la pregunta con -SkipModels o -Yes) -> descarga
+    y verificacion sha256 de install\manifest\manifest.models.json (los assets
+    sin URL publica verificada quedan como aporte manual) -> registra en la
+    capa de usuario data\registry\models.json los modelos recomendados que ya
+    esten en disco -> variables WAIFU_COMFY_ROOT / WAIFU_COMFY_URL -> verificacion
+    final (suite de tests + app.health).
 
     No contiene secretos. Volver a
     ejecutarlo es seguro: omite lo ya hecho, verifica lo existente y solo
@@ -21,7 +24,9 @@
 .PARAMETER SkipEngine
     No instala ComfyUI, custom nodes, torch, triton ni SageAttention.
 .PARAMETER SkipModels
-    No descarga modelos (si ya existen, los verifica).
+    No descarga modelos (si ya existen, los verifica) y omite la pregunta.
+.PARAMETER Yes
+    Modo desatendido: instala los modelos recomendados sin preguntar.
 .PARAMETER IncludeOptional
     Descarga tambien entradas required=false no obsoletas (R2V, stock del Editor).
 .PARAMETER SkipVerify
@@ -34,6 +39,7 @@ param(
     [string]$Root = '',
     [switch]$SkipEngine,
     [switch]$SkipModels,
+    [switch]$Yes,
     [switch]$IncludeOptional,
     [switch]$SkipVerify,
     [switch]$NoUserEnv
@@ -382,8 +388,72 @@ function Invoke-FinalVerification {
     }
 }
 
+function Get-RecommendedSummary {
+    $manifest = Read-JsonFile $ModelsManifestPath
+    $targets = @(
+        $manifest.models | Where-Object { $_.obsolete -ne $true -and $_.required -ne $false }
+    )
+    $bytes = 0
+    foreach ($item in $targets) { $bytes += [long]$item.bytes }
+    return [pscustomobject]@{
+        Count = $targets.Count
+        Gb    = [math]::Round($bytes / 1e9, 1)
+    }
+}
+
+function Confirm-RecommendedModels {
+    if ($SkipModels) { return $false }
+    if ($Yes) { return $true }
+    $summary = Get-RecommendedSummary
+    Write-Host ''
+    Write-Host 'Modelos recomendados (Anima + MiniMax H3 + Qwen-Image 2.1 + Upscaler/RIFE)' -ForegroundColor Cyan
+    Write-Host ("  {0} archivos, ~{1} GB de descarga (SSD SATA recomendado)." -f $summary.Count, $summary.Gb)
+    $answer = Read-Host '¿Instalar modelos recomendados? [S/n]'
+    if ($answer -match '^(n|no)$') {
+        Write-Warn 'Sin modelos: la app arrancara sin modelos registrados; ejecuta INSTALAR.bat cuando quieras.'
+        return $false
+    }
+    return $true
+}
+
+function Register-RecommendedModels {
+    $recommendedPath = Join-Path $Root 'registry\recommended-v1.json'
+    if (-not (Test-Path -LiteralPath $recommendedPath)) { return }
+    $recommended = Read-JsonFile $recommendedPath
+    $outDir = Join-Path $Root 'data\registry'
+    $target = Join-Path $outDir 'models.json'
+    $entries = @()
+    if (Test-Path -LiteralPath $target) {
+        $existing = Read-JsonFile $target
+        if ($existing.models) { $entries = @($existing.models) }
+    }
+    $added = 0
+    foreach ($model in @($recommended.models)) {
+        if (@($entries | Where-Object { $_.id -eq $model.id }).Count -gt 0) { continue }
+        $unet = $model.profile.unet_name
+        $candidates = @(
+            (Join-Path $ComfyModelsRoot ("diffusion_models\{0}" -f $unet)),
+            (Join-Path $ComfyModelsRoot ("unet\{0}" -f $unet))
+        )
+        if (-not (@($candidates | Where-Object { Test-Path -LiteralPath $_ }).Count)) { continue }
+        $entries += $model
+        $added++
+    }
+    if ($added -eq 0) { return }
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+    $payload = [ordered]@{
+        version  = 1
+        models   = $entries
+        _comment = 'Capa de usuario: modelos locales. Editable a mano; INSTALAR.bat anade los recomendados presentes en disco.'
+    }
+    $json = $payload | ConvertTo-Json -Depth 12
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($target, $json, $utf8)
+    Write-Ok ("data\registry\models.json: {0} modelo(s) recomendado(s) registrados" -f $added)
+}
+
 Write-Host ''
-Write-Host 'WAIFU installer (F3b / M10-6b)' -ForegroundColor Cyan
+Write-Host 'WAIFU installer' -ForegroundColor Cyan
 Write-Host ("Raiz: {0}" -f $Root)
 
 Invoke-Preflight
@@ -394,18 +464,21 @@ Install-Uv
 Install-Python
 Install-Venv
 Install-Engine
+$installRecommended = Confirm-RecommendedModels
+if (-not $installRecommended) { $SkipModels = $true }
 Install-Models
+Register-RecommendedModels
 Write-Environment
 Invoke-FinalVerification
 
 Write-Host ''
 if ($script:Pending.Count -gt 0) {
-    Write-Warn ("Entradas pendientes de aporte manual: {0}" -f ($script:Pending -join ', '))
-    Write-Warn 'Si alguna es required, el producto no queda completo: aporta el archivo o el token y re-ejecuta.'
+    Write-Warn ("Pendientes de aporte manual: {0}" -f ($script:Pending -join ', '))
+    Write-Warn 'El set recomendado incluye 2 modelos Anima de Civitai (age-gate): descargalos a mano, dejando cada archivo en su ruta exacta (ver registry\recommended-v1.json), y re-ejecuta INSTALAR.bat.'
 }
 Write-Host 'Instalacion terminada. Siguientes pasos:' -ForegroundColor Green
-Write-Host '  1) .\scripts\start_engine.ps1'
-Write-Host '  2) .\.venv\Scripts\python.exe -m app.health --require-engine'
-Write-Host '  3) .\scripts\start_app.ps1  (o INICIAR_WAIFU.bat)'
+Write-Host '  1) INICIAR_ENGINE.bat  (dejalo abierto)'
+Write-Host '  2) INICIAR_WAIFU.bat   (abre http://127.0.0.1:8765)'
+Write-Host '  3) LoRAs propias: pestana Imagen > Elegir LoRAs > Gestionar biblioteca'
 if ($script:Pending.Count -gt 0) { exit 2 }
 exit 0

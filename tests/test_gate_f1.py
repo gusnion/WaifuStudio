@@ -14,7 +14,7 @@ from app.gate_f1 import build_graph_for, run
 from app.registry import ModelEntry, ModelProfile, ModelRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
-REGISTRY_PATH = ROOT / "registry" / "models.json"
+REGISTRY_PATH = ROOT / "tests" / "fixtures" / "models.json"
 
 GRAPH_DEFAULTS = {
     "steps": 20,

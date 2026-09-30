@@ -17,7 +17,7 @@ from app.h3_prompt import SYS_PROMPT_H3
 from app.h3_presets import h3_template_path, resolve_h3_profile
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, SYS_PROMPT_MOTION
-from app.registry import DEFAULT_PATH, ModelRegistry
+from app.registry import ModelRegistry
 from app.server import create_app
 from app.store import Store
 from app.video import (
@@ -138,7 +138,9 @@ class ServerVideoTestCase(unittest.TestCase):
         )
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
-        self.registry = ModelRegistry.load(DEFAULT_PATH)
+        self.registry = ModelRegistry.load(
+            Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "models.json"
+        )
         server_module._JOBS.clear()
         self.addCleanup(server_module._JOBS.clear)
 

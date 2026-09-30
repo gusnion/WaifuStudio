@@ -7,13 +7,16 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from app import loras as loras_module
 from app.engine import EngineError
 from app.loras import DEFAULT_PATH, add_entry, delete_entry, families, get
 from app.loras import list_loras, load_registry, save_registry, update_entry
 from app.loras import validate_selection
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURE = ROOT / "tests" / "fixtures" / "loras.json"
 LORAS_DIR = ROOT / "ComfyUI" / "models" / "loras"
 TEST_ASSETS_ENV = "WAIFU_TEST_ASSETS"
 REAL_IDS = [
@@ -57,6 +60,18 @@ def entry(**overrides) -> dict:
 
 
 class RealRegistryTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(loras_module, "DEFAULT_PATH", FIXTURE)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        user = mock.patch.object(
+            loras_module,
+            "user_registry_path",
+            lambda: ROOT / "tests" / "fixtures" / "sin-capa-usuario.json",
+        )
+        user.start()
+        self.addCleanup(user.stop)
+
     def require_disk(self, name: str) -> Path:
         """Ruta del LoRA en disco; skip si falta y el clon no trae assets (F3b).
 
@@ -72,9 +87,15 @@ class RealRegistryTests(unittest.TestCase):
             )
         return path
 
-    def test_default_path_apunta_al_registro_del_repo(self):
-        self.assertEqual(DEFAULT_PATH, ROOT / "registry" / "loras.json")
-        self.assertTrue(DEFAULT_PATH.is_file())
+    def test_fixture_es_el_registro_efectivo_de_estos_tests(self):
+        self.assertEqual(loras_module.DEFAULT_PATH, FIXTURE)
+        self.assertTrue(FIXTURE.is_file())
+
+    def test_registro_del_repo_publico_esta_vacio(self):
+        payload = json.loads(
+            (ROOT / "registry" / "loras.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(payload["loras"], [])
 
     def test_seis_entradas_en_orden_del_json(self):
         self.assertEqual([item["id"] for item in list_loras()], REAL_IDS)

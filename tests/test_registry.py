@@ -12,7 +12,7 @@ from app.engine import EngineError
 from app.registry import ModelEntry, ModelProfile, ModelRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
-REGISTRY_PATH = ROOT / "registry" / "models.json"
+REGISTRY_PATH = ROOT / "tests" / "fixtures" / "models.json"
 GRAPH_PATH = ROOT / "workflows" / "anima_base.json"
 
 GRAPH_DEFAULTS = {

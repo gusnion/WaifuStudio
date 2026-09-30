@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "note": "Recomendado para empezar (el repo NO incluye pesos ni LoRAs): Anima para imagen, MiniMax H3 para video, Qwen-Image 2.1 UC para el Editor y RealESRGAN x2/RIFE para el Upscaler. El instalador descarga el set automatico (~106 GB) y deja anotados los 2 modelos Anima de Civitai como aporte manual.",
+  "engines": {
+    "image": ["anima-official-aesthetic-v11", "one-obsession-anima-v40"],
+    "video": ["h3 (perfiles Referencia/Calidad/Ligero; turbo LoRA incluida)"],
+    "editor": ["qwen-image-2.1 UC (GGUF Q4_K_M + encoder int8 ConvRot + VAE bf16)"],
+    "upscaler": ["real-esrgan-x2 (imagen)", "rife (FPS)"]
+  },
+  "models": [
+    {
+      "id": "anima-official-aesthetic-v11",
+      "family": "anima",
+      "display_name": "Anima [Official] aesthetic v1.1",
+      "profile": {
+        "unet_name": "anima_aestheticV11.safetensors",
+        "clip_name": "qwen_3_06b_base.safetensors",
+        "clip_type": "stable_diffusion",
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "source": "civitai.com/models/2458426 v3126581 (aporte manual)",
+      "license": "Anima License (CircleStone Labs LLC) - no comercial",
+      "preprompt": "glossy",
+      "defaults": {
+        "steps": 20,
+        "cfg": 4.0,
+        "sampler_name": "euler",
+        "scheduler": "sgm_uniform",
+        "width": 320,
+        "height": 576
+      },
+      "notes": "Recomendado (28 bloques). sha256=3C1868387A3A1FF504BBB87C33678321965EAD381FCF87AFBD0264DAA600C082 | 4182230656 bytes | dest: ComfyUI/models/diffusion_models/anima_aestheticV11.safetensors"
+    },
+    {
+      "id": "one-obsession-anima-v40",
+      "family": "anima",
+      "display_name": "One obsession_Anima v4.0",
+      "profile": {
+        "unet_name": "oneObsessionAnima_v40.safetensors",
+        "clip_name": "qwen_3_06b_base.safetensors",
+        "clip_type": "stable_diffusion",
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "source": "civitai.com/models/2695493 v3301424 (aporte manual)",
+      "license": "Anima License (CircleStone Labs LLC) - no comercial",
+      "preprompt": "glossy",
+      "defaults": {
+        "steps": 20,
+        "cfg": 4.0,
+        "sampler_name": "euler",
+        "scheduler": "sgm_uniform",
+        "width": 320,
+        "height": 576
+      },
+      "notes": "Recomendado (40 bloques, mas detalle; los LoRA de Anima base de 28 bloques rinden mejor en el modelo de 28). sha256=2ACBD9F1D53845833FC8D5093FC11CC32C3E613A476097B8FAE9BA2B59ED677B | 4182229969 bytes | dest: ComfyUI/models/diffusion_models/oneObsessionAnima_v40.safetensors"
+    }
+  ],
+  "manual_downloads": [
+    {
+      "id": "anima-official-aesthetic-v11",
+      "where": "Civitai models/2458426 v3126581",
+      "dest": "ComfyUI/models/diffusion_models/anima_aestheticV11.safetensors",
+      "sha256": "3C1868387A3A1FF504BBB87C33678321965EAD381FCF87AFBD0264DAA600C082",
+      "bytes": 4182230656
+    },
+    {
+      "id": "one-obsession-anima-v40",
+      "where": "Civitai models/2695493 v3301424",
+      "dest": "ComfyUI/models/diffusion_models/oneObsessionAnima_v40.safetensors",
+      "sha256": "2ACBD9F1D53845833FC8D5093FC11CC32C3E613A476097B8FAE9BA2B59ED677B",
+      "bytes": 4182229969
+    }
+  ],
+  "starter_loras": {
+    "note": "El repo no incluye LoRAs de terceros. Anade las tuyas desde Imagen > Elegir LoRAs > Gestionar biblioteca (nombre, archivo en ComfyUI/models/loras, trigger y peso). Para Anima busca LoRAs con base 'Anima' en Civitai/HuggingFace; para video H3 la turbo LoRA ya viene en el set recomendado.",
+    "entries": []
+  }
+}
