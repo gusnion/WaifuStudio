@@ -7,11 +7,11 @@
     CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.37.4 pineado +
     dependencias del engine -> custom nodes pineados + ckpts RIFE +
     wheel SageAttention -> descarga y verificacion sha256 de los modelos de
-    install\manifest\manifest.models.json (Civitai via $env:WAIFU_CIVITAI_TOKEN)
-    -> variables WAIFU_COMFY_ROOT / WAIFU_COMFY_URL -> verificacion final
-    (suite de tests + app.health).
+    install\manifest\manifest.models.json (los assets sin URL publica verificada
+    quedan como aporte manual) -> variables WAIFU_COMFY_ROOT / WAIFU_COMFY_URL
+    -> verificacion final (suite de tests + app.health).
 
-    No contiene secretos: el token de Civitai solo se lee del entorno. Volver a
+    No contiene secretos. Volver a
     ejecutarlo es seguro: omite lo ya hecho, verifica lo existente y solo
     descarga lo que falta. No descarga entradas obsolete ni las LoRAs de
     usuario (no redistribuibles); ver install\README_INSTALL.md.
@@ -54,7 +54,6 @@ $ComfyModelsRoot    = Join-Path $ComfyRoot 'models'
 $VenvPython         = Join-Path $Root '.venv\Scripts\python.exe'
 $MinFreeBytes       = [long]140000000000
 $ComfyUrl           = 'http://127.0.0.1:8288'
-$CivitaiApiBase     = 'https://civitai.com/api/download/models/'
 $Cu130Index         = 'https://download.pytorch.org/whl/cu130'
 $script:Pending     = New-Object System.Collections.Generic.List[string]
 
@@ -286,7 +285,6 @@ function Install-CustomNodes {
 function Install-Models {
     Write-Step 'modelos (install\manifest\manifest.models.json)'
     $manifest = Read-JsonFile $ModelsManifestPath
-    $token = $env:WAIFU_CIVITAI_TOKEN
     $done = 0
     $skipped = 0
     foreach ($entry in $manifest.models) {
@@ -320,13 +318,9 @@ function Install-Models {
         }
         $url = $entry.url
         if ($url -eq 'URL_VERIFICAR') {
-            if ($entry.civitai_version_id -and $token) {
-                $url = "{0}{1}?token={2}" -f $CivitaiApiBase, $entry.civitai_version_id, $token
-            } else {
-                Write-Warn ("sin URL publica verificada; aportar manualmente: {0}" -f $entry.id)
-                $script:Pending.Add($entry.id) | Out-Null
-                continue
-            }
+            Write-Warn ("sin URL publica verificada; aporte manual (ver README_INSTALL): {0}" -f $entry.id)
+            $script:Pending.Add($entry.id) | Out-Null
+            continue
         }
         if (-not $url) {
             Write-Warn ("sin URL (archivo del usuario, no redistribuible): {0}" -f $entry.id)
@@ -343,7 +337,7 @@ function Install-Models {
     Write-Ok ("modelos listos: {0} (opcionales omitidos: {1})" -f $done, $skipped)
     if ($script:Pending.Count -gt 0) {
         Write-Warn ("pendientes de aporte manual: {0}" -f ($script:Pending -join ', '))
-        Write-Warn 'Civitai: define $env:WAIFU_CIVITAI_TOKEN y re-ejecuta; el resto, copia el archivo con nombre/subdir exactos del manifiesto.'
+        Write-Warn 'Copia los archivos pendientes con nombre y subdir exactos del manifiesto (ver install\README_INSTALL.md).'
     }
 }
 

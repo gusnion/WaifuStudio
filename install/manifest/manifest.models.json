@@ -5,7 +5,7 @@
   "task": "F3b (M10-6b) installer + manifiestos",
   "destination_root": "ComfyUI/models",
   "sha256_convention": "64 hex = sha256 completo (verificado en origen/descarga o calculado del archivo instalado, siempre contra el prefijo documentado en REPO_ASSETS_Y_INSTALLER.md); null = no consta (ver notes). El instalador compara el sha256 completo.",
-  "url_convention": "URL_VERIFICAR se conserva tal cual: no hay URL publica verificada en las fuentes. Para Civitai, el instalador construye https://civitai.com/api/download/models/<civitai_version_id>?token=$env:WAIFU_CIVITAI_TOKEN solo si hay token; si no, la entrada queda pendiente de aporte manual.",
+  "url_convention": "URL_VERIFICAR se conserva tal cual: no hay URL publica verificada en las fuentes y la entrada queda pendiente de aporte manual (subdir/filename/sha256 exactos del manifiesto).",
   "notes": [
     "Fuente de bytes/sha/revisiones: REPO_ASSETS_Y_INSTALLER.md (2026-09-25) y PLAN_LIMPIEZA_Y_REPO.md §5.2 (2026-09-26). Los sha completos se verificaron contra el prefijo de 12 digitos del informe y/o contra los lfs oid de Hugging Face (2026-09-26).",
     "required=true = parte del flujo en uso (imagen, Wan, H3 y post-proceso); obsolete=true = retirado del flujo en F2, NO lo descarga el instalador; required=false sin obsolete = opcional/aporte del usuario.",
@@ -72,7 +72,7 @@
       "civitai_version_id": 3126581,
       "license": "Anima License (CircleStone Labs LLC) - no comercial",
       "required": true,
-      "notes": "Civitai models/2458426 v3126581; requiere WAIFU_CIVITAI_TOKEN; sha256 del registro local (verificado en la descarga de 2026-09-21)."
+      "notes": "Civitai models/2458426 v3126581; descarga manual (age-gate); sha256 del registro local (verificado en la descarga de 2026-09-21)."
     },
     {
       "id": "one-obsession-anima-v40",
@@ -84,7 +84,7 @@
       "civitai_version_id": 3301424,
       "license": "Anima License (CircleStone Labs LLC) - no comercial",
       "required": true,
-      "notes": "Civitai models/2695493 v3301424; requiere WAIFU_CIVITAI_TOKEN; sha256 del registro local (verificado en la descarga de 2026-09-21)."
+      "notes": "Civitai models/2695493 v3301424; descarga manual (age-gate); sha256 del registro local (verificado en la descarga de 2026-09-21)."
     },
     {
       "id": "anima-text-encoder-qwen3-06b",
