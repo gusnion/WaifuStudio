@@ -179,7 +179,10 @@ original no lo carga.
    Toma `registry/recommended-v1.json` como ejemplo real. Los nombres de `profile` deben existir
    bajo `ComfyUI/models/`; `id` solo admite `[a-z0-9._-]`. Reinicia la app para verlo.
 3. **Añadir LoRAs**: desde la UI (Imagen → «Elegir LoRAs» → «Gestionar biblioteca») o editando
-   `data/registry/loras.json`. Campos: `id`, `family`, `file` (relativo a
+   `data/registry/loras.json`. La biblioteca permite **subir un `.safetensors` desde disco**
+   («Cargar desde disco»): se copia a `ComfyUI/models/loras/<family>/` y se registra infiriendo
+   trigger/dim/alpha/base del propio safetensors; además se puede **borrar la entrada con o sin
+   el archivo** (`DELETE /api/loras/{id}?file=1`). Campos: `id`, `family`, `file` (relativo a
    `ComfyUI\models\loras`), `display_name`, `trigger`, `default_weight` (0-2), `source`,
    `license`, `notes`.
 4. **Cambiar puertos**: app → `WAIFU_APP_PORT`; engine → edita el `--port` en

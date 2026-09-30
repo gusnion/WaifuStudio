@@ -12,7 +12,7 @@ filtros NSFW/SFW.
 - Modelos de la familia Anima con perfil propio (encoder, VAE, sampler y resolución).
 - Editor de prompt por zonas (calidad, safety, sujeto, personaje, general) con subcategorías.
 - Catálogo de tags Danbooru (3249 etiquetas, con ranking) para buscar e insertar por zona.
-- LoRAs con biblioteca gestionable desde la app (archivo, trigger y peso).
+- LoRAs con biblioteca gestionable: **subida desde disco con registro automático**, edición y borrado con o sin archivo.
 - Preprompts de calidad incluidos y propios, negativo avanzado y semilla con dado.
 - 15 presets de tamaño que incluyen los formatos vertical/horizontal de vídeo (XL).
 - «Generar prompt»: convierte una descripción en lenguaje natural en tags por zona y respeta
