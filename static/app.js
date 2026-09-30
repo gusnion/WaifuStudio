@@ -2759,6 +2759,53 @@ async function addEditorRefFromUrl(url, name) {
   setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
 }
 
+async function setEditorEditSource(url) {
+  const source = String(url || "");
+  if (!source) {
+    return;
+  }
+  for (const ref of state.editorRefs) {
+    if (ref.url) {
+      URL.revokeObjectURL(ref.url);
+    }
+  }
+  state.editorRefs = [];
+  await addEditorRefFromUrl(source, "visor");
+  setEditorStatus("Imagen del visor cargada para editar");
+}
+
+function syncEditorEditSource() {
+  const item = selectedImageView();
+  const url = item ? imageViewUrl(item) : null;
+  if (!url) {
+    if (!state.editorRefs.length) {
+      setEditorStatus(
+        "Editar usa la imagen seleccionada en el visor de Imagen",
+        true
+      );
+    }
+    return;
+  }
+  setEditorEditSource(url).catch((error) => setEditorStatus(error.message, true));
+}
+
+function updateEditorMode(options = {}) {
+  const edit = $("editor-mode").value === "edit";
+  const field = $("editor-refs-field");
+  if (field) {
+    field.style.display = edit ? "none" : "";
+  }
+  const hint = $("editor-refs-hint");
+  if (hint) {
+    hint.textContent = edit
+      ? "En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio."
+      : "Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.";
+  }
+  if (edit && options.sync !== false) {
+    syncEditorEditSource();
+  }
+}
+
 function validEditorSize(value) {
   return (
     Number.isInteger(value) &&
@@ -2834,7 +2881,15 @@ function renderEditorGallery() {
       img.loading = "lazy";
       button.appendChild(img);
       button.addEventListener("click", () => {
-        addEditorRefFromUrl(url).catch((error) => setEditorStatus(error.message, true));
+        if ($("editor-mode").value === "edit") {
+          setEditorEditSource(url).catch((error) =>
+            setEditorStatus(error.message, true)
+          );
+        } else {
+          addEditorRefFromUrl(url).catch((error) =>
+            setEditorStatus(error.message, true)
+          );
+        }
       });
     } else {
       const missing = document.createElement("span");
@@ -2907,6 +2962,7 @@ async function editEditorResult() {
   $("editor-mode").value = "edit";
   setSelectValue($("editor-size"), "original");
   applyEditorSizeSelection();
+  updateEditorMode({ sync: false });
   setEditorStatus("Resultado cargado como referencia; describe el cambio");
   $("editor-prompt").focus();
 }
@@ -2927,6 +2983,13 @@ async function generateEditor() {
   const prompt = $("editor-prompt").value.trim();
   if (!prompt) {
     setEditorStatus("El prompt no puede estar vacío", true);
+    return;
+  }
+  if ($("editor-mode").value === "edit" && !state.editorRefs.length) {
+    setEditorStatus(
+      "Editar necesita una imagen: selecciónala en el visor de Imagen o en la galería",
+      true
+    );
     return;
   }
   const sizeSelect = $("editor-size");
@@ -5330,6 +5393,8 @@ const REQUIRED_IDS = [
   "btn-new-video",
   "editor-prompt",
   "editor-refs",
+  "editor-refs-field",
+  "editor-refs-hint",
   "editor-size",
   "editor-manual-size",
   "editor-result",
@@ -5465,7 +5530,11 @@ function bind() {
   }
   on("tab-image", "click", () => switchTab("image"));
   on("tab-video", "click", () => switchTab("video"));
-  on("tab-editor", "click", () => switchTab("editor"));
+  on("tab-editor", "click", () => {
+    switchTab("editor");
+    updateEditorMode();
+  });
+  on("editor-mode", "change", () => updateEditorMode());
   on("tab-upscaler", "click", () => switchTab("upscaler"));
   on("btn-enhance", "click", enhancePrompt);
   on("btn-generate", "click", generate);
@@ -5781,7 +5850,10 @@ async function init() {
       applyVideoEngine();
       updateVideoDurationInfo();
     });
-    await settle("editor", updateEditorControls);
+    await settle("editor", () => {
+      updateEditorControls();
+      updateEditorMode();
+    });
     await settle("parámetros", loadParams);
     await settle("formatos", loadFormats);
     await settle("modelos", loadModels);

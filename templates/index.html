@@ -415,13 +415,13 @@ non_diegetic_music: &lt;música o None&gt;</pre>
             <option value="edit">Editar</option>
           </select>
         </label>
-        <p id="editor-edit-hint" class="field-hint">En «Editar», las referencias son las imágenes de entrada que se editan: describe en el prompt qué quieres cambiar (p. ej. «cambia el fondo a una playa»).</p>
-        <label class="field">
+        <p id="editor-edit-hint" class="field-hint">En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio.</p>
+        <label class="field" id="editor-refs-field">
           <span>Imágenes de referencia (hasta 10)</span>
           <input id="editor-refs" type="file" accept="image/*" multiple>
         </label>
         <div id="editor-refs-preview" class="editor-refs"></div>
-        <p class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; en «Editar» son las imágenes que se editan.</p>
+        <p id="editor-refs-hint" class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.</p>
         <label class="field">
           <span>Tamaño</span>
           <select id="editor-size"></select>

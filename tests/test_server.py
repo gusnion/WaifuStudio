@@ -3575,6 +3575,14 @@ class EditorGenerateValidationTests(ServerTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
 
+    def test_edit_sin_referencias_400(self):
+        self.install_editor()
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "edit", "mode": "edit"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
     def test_prompt_vacio_o_no_str_400(self):
         client = self.make_client()
         for payload in ({}, {"prompt": ""}, {"prompt": "   "}, {"prompt": 7}):
@@ -3745,6 +3753,8 @@ class EditorUiStaticTests(ServerTestCase):
             'id="editor-height"',
             'id="editor-seed"',
             'id="editor-edit-hint"',
+            'id="editor-refs-field"',
+            'id="editor-refs-hint"',
             'id="editor-result"',
             'id="btn-editor-open-gallery"',
             'id="btn-editor-generate"',
@@ -3776,6 +3786,9 @@ class EditorUiStaticTests(ServerTestCase):
             "fillEditorSizes",
             "applyEditorSizeSelection",
             "showEditorResult",
+            "updateEditorMode",
+            "syncEditorEditSource",
+            "setEditorEditSource",
             "pollJob(",
             "reloadImageViewerFirstPage",
         ):

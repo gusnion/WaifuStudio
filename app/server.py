@@ -2047,6 +2047,11 @@ def create_app(
                 )
             for index, ref in enumerate(refs):
                 raw_refs.append(_decode_image_b64(ref, f"ref_images_b64[{index}]"))
+        if mode == "edit" and not raw_refs:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "modo editar requiere una imagen de referencia"},
+            )
         width = None
         height = None
         original_size = False
