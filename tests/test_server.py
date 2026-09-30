@@ -4898,6 +4898,19 @@ class GalleryTabUiStaticTests(ServerTestCase):
             text.index('id="panel-upscaler"'), text.index('id="panel-gallery"')
         )
 
+    def test_galeria_tiene_refresh_interno(self):
+        index = self.make_client().get("/").text
+        self.assertIn(
+            '<button id="btn-gallery-refresh" type="button" '
+            'title="Refrescar la galería">Refrescar</button>',
+            index,
+        )
+        self.assertLess(
+            index.index('id="gallery-filter"'), index.index('id="btn-gallery-refresh"')
+        )
+        script = self.make_client().get("/static/app.js").text
+        self.assertIn('on("btn-gallery-refresh", "click"', script)
+
     def test_app_js_incluye_pestana_galeria(self):
         text = self.make_client().get("/static/app.js").text
         for marker in (

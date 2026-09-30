@@ -5896,6 +5896,7 @@ const REQUIRED_IDS = [
   "tab-gallery",
   "panel-gallery",
   "gallery-filter",
+  "btn-gallery-refresh",
   "gallery-grid",
   "gallery-empty",
   "gallery-prev",
@@ -6021,6 +6022,11 @@ function bind() {
   });
   on("gallery-next", "click", () => {
     loadGalleryTab(state.galleryTab.page + 1).catch((error) =>
+      setStatus(error.message, true)
+    );
+  });
+  on("btn-gallery-refresh", "click", () => {
+    loadGalleryTab(state.galleryTab.page).catch((error) =>
       setStatus(error.message, true)
     );
   });
