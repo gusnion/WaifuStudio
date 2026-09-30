@@ -1655,12 +1655,16 @@ function renderVisionResult(data) {
   setVisionStatus(`Listo${modelNote}`);
 }
 
-async function openVisionModal() {
-  const item = selectedImageView();
-  const genId = visionGenId(item);
-  if (genId == null) {
-    setStatus("Selecciona una imagen para describir", true);
-    return;
+async function openVisionModal(source) {
+  let payload = source && typeof source === "object" ? source : null;
+  if (!payload) {
+    const item = selectedImageView();
+    const genId = visionGenId(item);
+    if (genId == null) {
+      setStatus("Selecciona una imagen para describir", true);
+      return;
+    }
+    payload = { gen_id: genId };
   }
   const modal = $("vision-modal");
   if (!modal) {
@@ -1672,7 +1676,7 @@ async function openVisionModal() {
   const seq = ++visionRequestSeq;
   try {
     const data = await postJson("/api/vision/image_to_prompt", {
-      gen_id: genId,
+      ...payload,
       use_tags: true,
       use_caption: true,
     });
@@ -1685,6 +1689,29 @@ async function openVisionModal() {
       return;
     }
     showVisionError(error.message);
+  }
+}
+
+function describeRefFromDisk() {
+  const input = $("describe-file");
+  if (!input) {
+    return;
+  }
+  input.value = "";
+  input.click();
+}
+
+async function describeSelectedRefFile() {
+  const input = $("describe-file");
+  const file = input && input.files ? input.files[0] : null;
+  if (!file) {
+    return;
+  }
+  try {
+    const b64 = await readFileBase64(file);
+    await openVisionModal({ image_b64: b64 });
+  } catch (error) {
+    setStatus(error.message, true);
   }
 }
 
@@ -5169,6 +5196,8 @@ const REQUIRED_IDS = [
   "lightbox",
   "btn-new-generation",
   "btn-describe-image",
+  "btn-describe-ref",
+  "describe-file",
   "btn-download-image",
   "btn-save-to-oc",
   "image-preview",
@@ -5372,6 +5401,10 @@ function bind() {
   });
   on("btn-negative-restore", "click", restoreNegative);
   on("btn-ref-clear", "click", clearReference);
+  on("btn-describe-ref", "click", describeRefFromDisk);
+  on("describe-file", "change", () => {
+    describeSelectedRefFile().catch((error) => setStatus(error.message, true));
+  });
   on("btn-lightbox-close", "click", closeLightbox);
   on("btn-describe-image", "click", () => {
     openVisionModal().catch((error) => setStatus(error.message, true));

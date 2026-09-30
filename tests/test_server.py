@@ -3432,6 +3432,25 @@ class EditorUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class DescribeRefUiStaticTests(ServerTestCase):
+    def test_index_boton_describir_referencia(self):
+        text = self.make_client().get("/").text
+        for marker in ('id="btn-describe-ref"', 'id="describe-file"'):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_flujo_describir_referencia(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "describeRefFromDisk",
+            "describeSelectedRefFile",
+            "image_b64: b64",
+            'on("btn-describe-ref", "click", describeRefFromDisk)',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class UpscaleRouteTests(ServerTestCase):
     MODEL = "real-esrgan-x2"
 
