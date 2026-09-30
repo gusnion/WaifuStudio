@@ -10,7 +10,7 @@
       "default_weight": 1.0,
       "source": "lightx2v (Apache-2.0)",
       "license": "Apache-2.0",
-      "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado)"
+      "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado). Archivo retirado del disco 2026-09-27 (Wan parking; re-descargable del manifiesto)."
     },
     {
       "id": "lightx2v-wan-low",
@@ -21,7 +21,7 @@
       "default_weight": 1.0,
       "source": "lightx2v (Apache-2.0)",
       "license": "Apache-2.0",
-      "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado)"
+      "notes": "acelerador 4 pasos (perfil turbo, fuera del grafo certificado). Archivo retirado del disco 2026-09-27 (Wan parking; re-descargable del manifiesto)."
     },
     {
       "id": "minimax-h3-fl2v-turbo-4step",

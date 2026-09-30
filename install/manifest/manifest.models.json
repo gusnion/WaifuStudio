@@ -119,8 +119,9 @@
       "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/6c6717459277b9cd1f72579d78a0fd62a79e57dc/HighNoise/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf",
       "revision": "6c6717459277b9cd1f72579d78a0fd62a79e57dc",
       "license": "Apache-2.0 (heredada; verificar y archivar LICENSE de QuantStack)",
-      "required": true,
-      "notes": "Wan 2.2 I2V A14B high noise (I2V/FLF2V certificado); se carga con UnetLoaderGGUF (ComfyUI-GGUF)."
+      "required": false,
+      "notes": "Wan 2.2 I2V A14B high noise (I2V/FLF2V certificado); se carga con UnetLoaderGGUF (ComfyUI-GGUF). [retirado del disco 2026-09-27: Wan parking; ver data/gates/m10/wan_retirado_20260927.md]",
+      "obsolete": true
     },
     {
       "id": "wan-low-gguf",
@@ -131,8 +132,9 @@
       "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/6c6717459277b9cd1f72579d78a0fd62a79e57dc/LowNoise/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf",
       "revision": "6c6717459277b9cd1f72579d78a0fd62a79e57dc",
       "license": "Apache-2.0 (heredada; verificar y archivar LICENSE de QuantStack)",
-      "required": true,
-      "notes": "Wan 2.2 I2V A14B low noise (I2V/FLF2V certificado); se carga con UnetLoaderGGUF (ComfyUI-GGUF)."
+      "required": false,
+      "notes": "Wan 2.2 I2V A14B low noise (I2V/FLF2V certificado); se carga con UnetLoaderGGUF (ComfyUI-GGUF). [retirado del disco 2026-09-27: Wan parking; ver data/gates/m10/wan_retirado_20260927.md]",
+      "obsolete": true
     },
     {
       "id": "wan-text-encoder-umt5",
@@ -143,8 +145,9 @@
       "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/617a7633e636506f850e043bc4605f290a466a8e/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
       "revision": "617a7633e636506f850e043bc4605f290a466a8e",
       "license": "Apache-2.0 (heredada; verificar y archivar LICENSE de Comfy-Org)",
-      "required": true,
-      "notes": "Text encoder de Wan 2.2."
+      "required": false,
+      "notes": "Text encoder de Wan 2.2. [retirado del disco 2026-09-27: Wan parking; ver data/gates/m10/wan_retirado_20260927.md]",
+      "obsolete": true
     },
     {
       "id": "wan-vae-21",
@@ -155,8 +158,9 @@
       "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/617a7633e636506f850e043bc4605f290a466a8e/split_files/vae/wan_2.1_vae.safetensors",
       "revision": "617a7633e636506f850e043bc4605f290a466a8e",
       "license": "Apache-2.0 (heredada; verificar y archivar LICENSE de Comfy-Org)",
-      "required": true,
-      "notes": "VAE de Wan 2.2."
+      "required": false,
+      "notes": "VAE de Wan 2.2. [retirado del disco 2026-09-27: Wan parking; ver data/gates/m10/wan_retirado_20260927.md]",
+      "obsolete": true
     },
     {
       "id": "lightx2v-wan-high",
@@ -167,8 +171,9 @@
       "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/570044187a5219776ef30a5c60c6f76428a3a10a/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "revision": "570044187a5219776ef30a5c60c6f76428a3a10a",
       "license": "Apache-2.0",
-      "required": true,
-      "notes": "Acelerador 4 pasos (perfil turbo, fuera del grafo certificado)."
+      "required": false,
+      "notes": "Acelerador 4 pasos (perfil turbo, fuera del grafo certificado). [retirado del disco 2026-09-27: Wan parking; ver data/gates/m10/wan_retirado_20260927.md]",
+      "obsolete": true
     },
     {
       "id": "lightx2v-wan-low",
@@ -179,8 +184,9 @@
       "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/570044187a5219776ef30a5c60c6f76428a3a10a/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "revision": "570044187a5219776ef30a5c60c6f76428a3a10a",
       "license": "Apache-2.0",
-      "required": true,
-      "notes": "Acelerador 4 pasos (perfil turbo, fuera del grafo certificado)."
+      "required": false,
+      "notes": "Acelerador 4 pasos (perfil turbo, fuera del grafo certificado). [retirado del disco 2026-09-27: Wan parking; ver data/gates/m10/wan_retirado_20260927.md]",
+      "obsolete": true
     },
     {
       "id": "h3-encoder-32b",
