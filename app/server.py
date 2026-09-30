@@ -120,6 +120,7 @@ from app.upscale import (
     list_upscalers,
     parse_fps,
     parse_passes,
+    parse_sharpen,
     run_fps,
     run_upscale,
     run_video_upscale,
@@ -1172,11 +1173,13 @@ def create_app(
         """Encola el escalado de una generacion de imagen (U1), de video (U2)
         o la interpolacion de fotogramas de un video (U3).
 
-        Body: ``{source_gen, model, file?, kind?, passes?}`` con ``kind``
-        ``"image"`` (default) o ``"video"``. Para ``kind="image"`` se admite
-        ``image_b64`` (data URI/base64 de un archivo local; exclusivo con
-        ``source_gen``) y ``passes`` 1|2 (default 1: ×2; 2: ×4 con dos
-        ampliaciones encadenadas). Para ``kind="fps"`` el body es
+        Body: ``{source_gen, model, file?, kind?, passes?, sharpen?}`` con
+        ``kind`` ``"image"`` (default) o ``"video"``. Para ``kind="image"`` se
+        admite ``image_b64`` (data URI/base64 de un archivo local; exclusivo
+        con ``source_gen``), ``passes`` 1|2 (default 1: ×2; 2: ×4 con dos
+        ampliaciones encadenadas) y ``sharpen`` 0|1|2 (default 0: sin mejora
+        de detalle; 1 suave y 2 fuerte con el nodo core ``ImageSharpen`` tras
+        la ultima ampliacion). Para ``kind="fps"`` el body es
         ``{source_gen, ckpt?, multiplier, file?, fps_in?}``: valida que el
         origen sea un video, que ``ckpt`` este en la seccion
         ``frame_interpolation`` del catalogo y que ``multiplier`` sea 2|4.
@@ -1209,6 +1212,15 @@ def create_app(
             and raw_passes == 1
         ):
             raise EngineError("passes solo aplica a imagen")
+        raw_sharpen = payload.get("sharpen")
+        if source_kind == "image":
+            sharpen = parse_sharpen(raw_sharpen)
+        elif raw_sharpen is not None and not (
+            isinstance(raw_sharpen, int)
+            and not isinstance(raw_sharpen, bool)
+            and raw_sharpen == 0
+        ):
+            raise EngineError("sharpen solo aplica a imagen")
         if source_kind == "image" and image_b64 is not None:
             if payload.get("source_gen") is not None:
                 raise EngineError(
@@ -1225,6 +1237,7 @@ def create_app(
                 "model": entry["id"],
                 "scale": entry["scale"],
                 "passes": passes,
+                "sharpen": sharpen,
             }
             gen_id = st.add(
                 "upscale", "upscale archivo local", "", params, kind="image"
@@ -1239,6 +1252,7 @@ def create_app(
                 "model_file": entry["file"],
                 "scale": entry["scale"],
                 "passes": passes,
+                "sharpen": sharpen,
                 "params": dict(params),
             }
             _JOBS[gen_id] = {
@@ -1379,6 +1393,7 @@ def create_app(
                 "model": entry["id"],
                 "scale": entry["scale"],
                 "passes": passes,
+                "sharpen": sharpen,
             }
             gen_id = st.add(
                 "upscale",
@@ -1397,6 +1412,7 @@ def create_app(
                 "model_file": entry["file"],
                 "scale": entry["scale"],
                 "passes": passes,
+                "sharpen": sharpen,
                 "params": dict(params),
             }
         _JOBS[gen_id] = {

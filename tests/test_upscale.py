@@ -40,9 +40,13 @@ from app.upscale import (
     RIFE_DEFAULTS,
     SAVE_VIDEO_FORMAT,
     SAVE_VIDEO_ID,
+    SHARPEN_CLASS,
+    SHARPEN_ID,
+    SHARPEN_PRESETS,
     UPSCALE2_ID,
     UPSCALERS_PATH,
     UPSCALE_PASSES,
+    UPSCALE_SHARPEN,
     VIDEO_COMPONENTS_ID,
     VIDEO_EXT,
     VIDEO_MODEL_LOADER_ID,
@@ -59,6 +63,7 @@ from app.upscale import (
     load_upscalers,
     parse_fps,
     parse_passes,
+    parse_sharpen,
     run_fps,
     run_upscale,
     run_video_upscale,
@@ -374,6 +379,32 @@ class ParsePassesTests(unittest.TestCase):
                     parse_passes(value)
 
 
+class ParseSharpenTests(unittest.TestCase):
+    def test_presets_fijados(self):
+        self.assertEqual(UPSCALE_SHARPEN, (0, 1, 2))
+        self.assertEqual(
+            SHARPEN_PRESETS,
+            {
+                1: {"sharpen_radius": 1, "sigma": 0.8, "alpha": 0.6},
+                2: {"sharpen_radius": 2, "sigma": 1.0, "alpha": 1.2},
+            },
+        )
+        self.assertEqual(SHARPEN_CLASS, "ImageSharpen")
+        self.assertEqual(SHARPEN_ID, "6")
+
+    def test_validos(self):
+        self.assertEqual(parse_sharpen(None), 0)
+        self.assertEqual(parse_sharpen(0), 0)
+        self.assertEqual(parse_sharpen(1), 1)
+        self.assertEqual(parse_sharpen(2), 2)
+
+    def test_invalidos(self):
+        for value in (3, -1, "x", True, False, "1", "2", 1.0, 2.0, [], {}):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    parse_sharpen(value)
+
+
 class BuildUpscaleGraphTests(unittest.TestCase):
     def test_grafo_minimo_por_defecto(self):
         graph = build_upscale_graph("src.png", "RealESRGAN_x2.pth")
@@ -428,6 +459,48 @@ class BuildUpscaleGraphTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(EngineError):
                     build_upscale_graph("a.png", "m.pth", passes=value)
+
+    def test_sharpen_off_no_anade_nodo(self):
+        graph = build_upscale_graph("a.png", "m.pth", sharpen=0)
+        self.assertEqual(set(graph), {"1", "2", "3", "4"})
+        self.assertEqual(graph["4"]["inputs"]["images"], ["3", 0])
+        graph2 = build_upscale_graph("a.png", "m.pth", passes=2, sharpen=0)
+        self.assertEqual(set(graph2), {"1", "2", "3", "4", UPSCALE2_ID})
+        self.assertEqual(graph2["4"]["inputs"]["images"], [UPSCALE2_ID, 0])
+
+    def test_sharpen_suave_encadena_tras_una_pasada(self):
+        graph = build_upscale_graph("a.png", "m.pth", sharpen=1)
+        self.assertEqual(set(graph), {"1", "2", "3", "4", SHARPEN_ID})
+        self.assertEqual(
+            graph[SHARPEN_ID],
+            {
+                "class_type": "ImageSharpen",
+                "inputs": {
+                    "image": ["3", 0],
+                    "sharpen_radius": 1,
+                    "sigma": 0.8,
+                    "alpha": 0.6,
+                },
+            },
+        )
+        self.assertEqual(graph["4"]["class_type"], "SaveImage")
+        self.assertEqual(graph["4"]["inputs"]["images"], [SHARPEN_ID, 0])
+
+    def test_sharpen_fuerte_encadena_tras_dos_pasadas(self):
+        graph = build_upscale_graph("a.png", "m.pth", passes=2, sharpen=2)
+        self.assertEqual(graph[UPSCALE2_ID]["inputs"]["image"], ["3", 0])
+        self.assertEqual(graph[SHARPEN_ID]["class_type"], "ImageSharpen")
+        self.assertEqual(graph[SHARPEN_ID]["inputs"]["image"], [UPSCALE2_ID, 0])
+        self.assertEqual(graph[SHARPEN_ID]["inputs"]["sharpen_radius"], 2)
+        self.assertEqual(graph[SHARPEN_ID]["inputs"]["sigma"], 1.0)
+        self.assertEqual(graph[SHARPEN_ID]["inputs"]["alpha"], 1.2)
+        self.assertEqual(graph["4"]["inputs"]["images"], [SHARPEN_ID, 0])
+
+    def test_sharpen_invalidos(self):
+        for value in (3, -1, True, "1", 1.0, [], {}):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    build_upscale_graph("a.png", "m.pth", sharpen=value)
 
     def test_prefijos_personalizados(self):
         graph = build_upscale_graph(
@@ -884,6 +957,7 @@ class RunUpscaleTests(UpscaleTestCase):
                 "model": "real-esrgan-x2",
                 "scale": 2,
                 "passes": 1,
+                "sharpen": 0,
             },
         )
         graph = transport.submits[0]["prompt"]
@@ -1018,6 +1092,52 @@ class RunUpscaleTests(UpscaleTestCase):
         self.assertIn("passes", row["error"])
         self.assertEqual(transport.submits, [])
         self.assertEqual(job["outputs"], [])
+
+    def test_sharpen_dos_envia_grafo_con_nodo_sharpen(self):
+        transport = FakeUpscaleTransport(self.config)
+        job = self.make_job(sharpen=2)
+        run_upscale(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+        )
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(job["params"]["sharpen"], 2)
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph[SHARPEN_ID]["class_type"], "ImageSharpen")
+        self.assertEqual(graph[SHARPEN_ID]["inputs"]["image"], ["3", 0])
+        self.assertEqual(graph[SHARPEN_ID]["inputs"]["alpha"], 1.2)
+        self.assertEqual(graph["4"]["inputs"]["images"], [SHARPEN_ID, 0])
+
+    def test_sharpen_ausente_es_cero(self):
+        transport = FakeUpscaleTransport(self.config)
+        job = self.make_job()
+        run_upscale(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+        )
+        self.assertEqual(job["sharpen"], 0)
+        self.assertEqual(job["params"]["sharpen"], 0)
+        graph = transport.submits[0]["prompt"]
+        self.assertNotIn(SHARPEN_ID, graph)
+
+    def test_sharpen_invalido_marca_error_sin_submit(self):
+        transport = FakeUpscaleTransport(self.config)
+        job = self.make_job(sharpen=3)
+        run_upscale(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+        )
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "error")
+        self.assertIn("sharpen", row["error"])
+        self.assertEqual(transport.submits, [])
 
 
 class RunVideoUpscaleTests(UpscaleTestCase):

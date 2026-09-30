@@ -51,6 +51,13 @@ FRAME_INTERPOLATION_KEY = "frame_interpolation"
 RIFE_CLASS = "RIFE VFI"
 FPS_MULTIPLIERS = (2, 4)
 UPSCALE_PASSES = (1, 2)
+UPSCALE_SHARPEN = (0, 1, 2)
+SHARPEN_CLASS = "ImageSharpen"
+SHARPEN_ID = "6"
+SHARPEN_PRESETS = {
+    1: {"sharpen_radius": 1, "sigma": 0.8, "alpha": 0.6},
+    2: {"sharpen_radius": 2, "sigma": 1.0, "alpha": 1.2},
+}
 
 # Defaults exactos del nodo RIFE VFI (custom node ComfyUI-Frame-Interpolation);
 # el ckpt y el multiplier los fija el job.
@@ -323,6 +330,19 @@ def parse_passes(value: Any) -> int:
     return value
 
 
+def parse_sharpen(value: Any) -> int:
+    """Mejora de detalle de imagen (0|1|2); ``None`` usa 0; EngineError si no."""
+    if value is None:
+        return 0
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value not in UPSCALE_SHARPEN
+    ):
+        raise EngineError(f"sharpen invalido (usar 0|1|2): {value!r}")
+    return value
+
+
 def _require_plain_name(value: Any, label: str) -> str:
     """Nombre de archivo simple (sin rutas ni ``..``): image/model del grafo."""
     if not isinstance(value, str) or not value.strip():
@@ -359,6 +379,7 @@ def build_upscale_graph(
     model_file: str,
     *,
     passes: int = 1,
+    sharpen: int = 0,
     prefix: str = DEFAULT_PREFIX,
     filename_prefix: str = DEFAULT_FILENAME_PREFIX,
 ) -> dict:
@@ -367,14 +388,18 @@ def build_upscale_graph(
     Nodos: LoadImage (``image_name``), UpscaleModelLoader (``model_file``),
     ImageUpscaleWithModel y SaveImage. Con ``passes=2`` la salida de la primera
     ampliacion entra en una segunda ``ImageUpscaleWithModel`` con el mismo
-    modelo (×2 × ×2 = ×4) y SaveImage guarda esa cadena. El prefijo de guardado
-    final es ``prefix/filename_prefix`` (o solo ``filename_prefix`` si
-    ``prefix`` va vacio). EngineError si un nombre no es un archivo simple, un
-    prefijo escapa del arbol de output o ``passes`` no es 1|2.
+    modelo (×2 × ×2 = ×4) y SaveImage guarda esa cadena. Con ``sharpen`` 1|2 se
+    anade una mejora de detalle ``ImageSharpen`` (presets suave/fuerte) tras la
+    ultima ampliacion, antes de SaveImage; ``sharpen=0`` no anade nodo. El
+    prefijo de guardado final es ``prefix/filename_prefix`` (o solo
+    ``filename_prefix`` si ``prefix`` va vacio). EngineError si un nombre no es
+    un archivo simple, un prefijo escapa del arbol de output, ``passes`` no es
+    1|2 o ``sharpen`` no es 0|1|2.
     """
     image_name = _require_plain_name(image_name, "upscale: image_name")
     model_file = _require_plain_name(model_file, "upscale: model_file")
     passes = parse_passes(passes)
+    sharpen = parse_sharpen(sharpen)
     prefix = _require_prefix(prefix, "upscale: prefix", allow_empty=True)
     filename_prefix = _require_prefix(filename_prefix, "upscale: filename_prefix")
     save_prefix = f"{prefix}/{filename_prefix}" if prefix else filename_prefix
@@ -408,6 +433,13 @@ def build_upscale_graph(
             },
         }
         graph[SAVE_IMAGE_ID]["inputs"]["images"] = [UPSCALE2_ID, 0]
+    if sharpen != 0:
+        last_id = UPSCALE2_ID if passes == 2 else UPSCALE_ID
+        graph[SHARPEN_ID] = {
+            "class_type": SHARPEN_CLASS,
+            "inputs": {"image": [last_id, 0], **SHARPEN_PRESETS[sharpen]},
+        }
+        graph[SAVE_IMAGE_ID]["inputs"]["images"] = [SHARPEN_ID, 0]
     return graph
 
 
@@ -559,6 +591,7 @@ def _upscale_params(job: dict) -> dict:
         "model": job.get("model"),
         "scale": job.get("scale"),
         "passes": job.get("passes"),
+        "sharpen": job.get("sharpen"),
     }
 
 
@@ -578,8 +611,8 @@ def run_upscale(
     done/error/cancelled) como en imagen/video; el `ProgressTracker` se crea
     antes del submit (con `ws_factory` inyectable) y se para en el `finally`.
     Deja en ``job["params"]`` ``{task, source_gen, source_file, model, scale,
-    passes}`` (``passes`` normalizado a 1|2). No propaga errores: el fallo se
-    guarda en el store y en ``job["error"]``.
+    passes, sharpen}`` (``passes`` normalizado a 1|2 y ``sharpen`` a 0|1|2).
+    No propaga errores: el fallo se guarda en el store y en ``job["error"]``.
     """
     gen_id = job["gen_id"]
     job["params"] = _upscale_params(job)
@@ -591,11 +624,14 @@ def run_upscale(
     try:
         passes = parse_passes(job.get("passes"))
         job["passes"] = passes
+        sharpen = parse_sharpen(job.get("sharpen"))
+        job["sharpen"] = sharpen
         job["params"] = _upscale_params(job)
         graph = build_upscale_graph(
             job.get("image_name"),
             job.get("model_file"),
             passes=passes,
+            sharpen=sharpen,
             prefix=job.get("prefix") or DEFAULT_PREFIX,
             filename_prefix=job.get("filename_prefix") or DEFAULT_FILENAME_PREFIX,
         )
@@ -913,10 +949,14 @@ __all__ = [
     "SAVE_IMAGE_ID",
     "SAVE_VIDEO_FORMAT",
     "SAVE_VIDEO_ID",
+    "SHARPEN_CLASS",
+    "SHARPEN_ID",
+    "SHARPEN_PRESETS",
     "UPSCALE2_ID",
     "UPSCALERS_PATH",
     "UPSCALE_ID",
     "UPSCALE_PASSES",
+    "UPSCALE_SHARPEN",
     "VIDEO_COMPONENTS_ID",
     "VIDEO_EXT",
     "VIDEO_HISTORY_TIMEOUT_S",
@@ -934,6 +974,7 @@ __all__ = [
     "load_upscalers",
     "parse_fps",
     "parse_passes",
+    "parse_sharpen",
     "run_fps",
     "run_upscale",
     "run_video_upscale",

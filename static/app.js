@@ -3596,6 +3596,7 @@ function applyUpscaleKind() {
   $("upscale-multiplier-field").classList.toggle("hidden", !isFps);
   $("upscale-file-field").classList.toggle("hidden", isVideo);
   $("upscale-passes-field").classList.toggle("hidden", isVideo);
+  $("upscale-sharpen-field").classList.toggle("hidden", isVideo);
   $("btn-upscale").textContent = isFps ? "Interpolar" : "Escalar";
   updateUpscaleSourceView();
 }
@@ -3667,8 +3668,14 @@ async function generateUpscale() {
       setUpscaleStatus("Escalado inválido; usa ×2 o ×4", true);
       return;
     }
+    const sharpen = Number($("upscale-sharpen").value);
+    if (![0, 1, 2].includes(sharpen)) {
+      setUpscaleStatus("Mejora de detalle inválida", true);
+      return;
+    }
     payload.model = model;
     payload.passes = passes;
+    payload.sharpen = sharpen;
     if (local) {
       payload.image_b64 = local.b64;
     } else {
@@ -5913,6 +5920,8 @@ const REQUIRED_IDS = [
   "upscale-file",
   "upscale-passes-field",
   "upscale-passes",
+  "upscale-sharpen-field",
+  "upscale-sharpen",
   "upscale-gallery-thumbs",
   "upscale-gallery-prev",
   "upscale-gallery-next",

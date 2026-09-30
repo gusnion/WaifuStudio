@@ -4001,6 +4001,7 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(job["model_file"], "RealESRGAN_x2.pth")
         self.assertEqual(job["scale"], 2)
         self.assertEqual(job["passes"], 1)
+        self.assertEqual(job["sharpen"], 0)
         self.assertEqual(job["params"]["task"], "upscale")
         files = sorted((self.config.comfy_root / "input").glob("*.png"))
         self.assertEqual(len(files), 1)
@@ -4018,6 +4019,7 @@ class UpscaleRouteTests(ServerTestCase):
                 "model": self.MODEL,
                 "scale": 2,
                 "passes": 1,
+                "sharpen": 0,
             },
         )
         self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
@@ -4057,6 +4059,7 @@ class UpscaleRouteTests(ServerTestCase):
                 "model": self.MODEL,
                 "scale": 2,
                 "passes": 1,
+                "sharpen": 0,
             },
         )
         self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
@@ -4216,6 +4219,96 @@ class UpscaleRouteTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("passes", queue.jobs[-1]["params"])
+
+    def test_sharpen_invalido_en_imagen_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source()
+        client = self.make_client(queue=queue)
+        for sharpen in (3, "x", True, 25.5, -1, [], {}):
+            with self.subTest(sharpen=sharpen):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "source_gen": gen_id,
+                        "model": self.MODEL,
+                        "sharpen": sharpen,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_sharpen_con_video_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client(queue=queue)
+        for sharpen in (1, 2, "x", True, 25.5):
+            with self.subTest(sharpen=sharpen):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "video",
+                        "source_gen": gen_id,
+                        "model": self.MODEL,
+                        "sharpen": sharpen,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("sharpen", response.json()["error"])
+        self.assertEqual(queue.jobs, [])
+        response = client.post(
+            "/api/upscale",
+            json={
+                "kind": "video",
+                "source_gen": gen_id,
+                "model": self.MODEL,
+                "sharpen": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("sharpen", queue.jobs[-1]["params"])
+
+    def test_sharpen_dos_en_flujo_completo_con_worker(self):
+        transport = FakeTransport(self.config, output_name="upscaled_00001_.png")
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+            start_worker=True,
+        )
+        image_b64 = base64.b64encode(PNG_BYTES).decode("ascii")
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/upscale",
+                json={"image_b64": image_b64, "model": self.MODEL, "sharpen": 2},
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 10)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            gallery = client.get("/api/gallery?kind=image").json()
+            self.assertEqual(gallery["count"], 1)
+            newest = gallery["items"][0]
+            self.assertEqual(newest["kind"], "image")
+            self.assertEqual(newest["params"]["task"], "upscale")
+            self.assertEqual(newest["params"]["sharpen"], 2)
+            self.assertEqual(newest["params"]["passes"], 1)
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["6"]["class_type"], "ImageSharpen")
+        self.assertEqual(graph["6"]["inputs"]["image"], ["3", 0])
+        self.assertEqual(
+            graph["6"]["inputs"],
+            {
+                "image": ["3", 0],
+                "sharpen_radius": 2,
+                "sigma": 1.0,
+                "alpha": 1.2,
+            },
+        )
+        self.assertEqual(graph["4"]["inputs"]["images"], ["6", 0])
 
     def test_file_explicito_se_usa(self):
         queue = RecordingQueue()
@@ -4812,6 +4905,12 @@ class UpscaleUiStaticTests(ServerTestCase):
             'id="upscale-passes"',
             "×2 (1 pasada)",
             "×4 (2 pasadas)",
+            'id="upscale-sharpen-field"',
+            'id="upscale-sharpen"',
+            ">OFF<",
+            ">Suave<",
+            ">Fuerte<",
+            "Mejora de detalle",
             'id="upscale-gallery-thumbs"',
             'id="upscale-gallery-prev"',
             'id="upscale-gallery-next"',
@@ -4869,6 +4968,9 @@ class UpscaleUiStaticTests(ServerTestCase):
             "upscale-kind",
             "upscale-file",
             "upscale-passes",
+            "upscale-sharpen",
+            '$("upscale-sharpen")',
+            "payload.sharpen",
             "upscale-gallery-thumbs",
             "upscale-gallery-prev",
             "upscale-gallery-next",
