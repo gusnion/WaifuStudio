@@ -3801,6 +3801,35 @@ class EditorUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class LightboxUiStaticTests(ServerTestCase):
+    def test_index_lightbox_sin_ids_duplicados(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="lightbox"',
+            'id="lightbox-img"',
+            'id="btn-lightbox-close"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertEqual(text.count('id="lightbox"'), 1)
+        self.assertEqual(text.count('id="lightbox-img"'), 1)
+
+    def test_app_js_expansion_y_zoom_del_lightbox(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "function openLightbox",
+            "function zoomLightbox",
+            "function resetLightboxView",
+            "startLightboxPan",
+            '"wheel"',
+            "{ passive: false }",
+            'on("editor-preview", "click"',
+            'on("gallery-modal-media", "click"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class SeedDiceUiStaticTests(ServerTestCase):
     def test_index_dado_en_imagen_video_y_editor(self):
         text = self.make_client().get("/").text
