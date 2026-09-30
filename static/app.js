@@ -1951,7 +1951,7 @@ async function applyVideoSavedFrames(params) {
 async function reuseVideoGeneration(item) {
   const params = item.params || {};
   const engine = (params.engine || item.model_id) === "h3" ? "h3" : "wan";
-  $("video-engine").value = engine;
+  $("video-engine").value = "h3";
   $("video-mode").value = params.mode === "flf2v" ? "flf2v" : "i2v";
   setSelectValue($("video-aspect"), params.aspect);
   const preset = typeof params.preset === "string" ? params.preset : "manual";
