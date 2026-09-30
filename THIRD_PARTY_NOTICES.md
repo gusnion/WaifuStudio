@@ -6,9 +6,9 @@ aun no estan archivados en el repo (carpeta prevista: `install/manifest/licenses
 por lo que cualquier fila marcada como **PENDIENTE/VERIFICAR** debe contrastarse
 contra el origen antes de espejar, re-empaquetar o redistribuir.
 
-> **Licencia del codigo**: este repositorio **no incluye `LICENSE`**. La licencia
-> del codigo fuente de WAIFU la decidira el usuario antes de publicar; hasta
-> entonces no se concede licencia alguna sobre el codigo propio.
+> **Licencia del codigo**: MIT (ver `LICENSE`, © gusnion 2026). Los pesos,
+> LoRAs y componentes de terceros conservan sus propias licencias (tablas
+> siguientes y campo `license` de los manifiestos).
 
 ## Regla general
 

@@ -527,6 +527,58 @@
       "license": "legacy no verificada (archivo local del usuario; no redistribuir)",
       "required": false,
       "notes": "LoRA legacy de la familia animagine (retirado de registry/loras.json el 2026-09-26 al desaparecer el modelo base); aportar aparte solo si el usuario decide registrarlo; sha256 calculado del archivo local y verificado contra el prefijo 08B00D135D3E."
+    },
+    {
+      "id": "wd14-tagger-convnext",
+      "filename": "wd-v1-4-convnext-tagger-v2.onnx",
+      "subdir": "wd14",
+      "bytes": 387820405,
+      "sha256": "71f06ecb7b9df81d8f271da4d43997ea2ed363cdac29aa64fcb256c9631e656a",
+      "url": "https://huggingface.co/SmilingWolf/wd-v1-4-convnext-tagger-v2/resolve/main/model.onnx",
+      "revision": "main",
+      "required": false,
+      "obsolete": false,
+      "license": "ver ficha del autor en HuggingFace (uso local; no re-empaquetar)",
+      "notes": "WD14 tagger del flujo imagen->prompt (vision, M10-4b); opcional (-IncludeOptional)."
+    },
+    {
+      "id": "wd14-tagger-convnext-csv",
+      "filename": "wd-v1-4-convnext-tagger-v2.csv",
+      "subdir": "wd14",
+      "bytes": 253906,
+      "sha256": "8c8750600db36233a1b274ac88bd46289e588b338218c2e4c62bbc9f2b516368",
+      "url": "https://huggingface.co/SmilingWolf/wd-v1-4-convnext-tagger-v2/resolve/main/selected_tags.csv",
+      "revision": "main",
+      "required": false,
+      "obsolete": false,
+      "license": "ver ficha del autor en HuggingFace (uso local; no re-empaquetar)",
+      "notes": "Etiquetas del tagger WD14 (misma raiz de nombre que el .onnx); opcional."
+    },
+    {
+      "id": "qwen25vl-7b-abliterated-q4",
+      "filename": "Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf",
+      "subdir": "llm/qwen25vl-7b-abliterated-gguf",
+      "bytes": 4683073952,
+      "sha256": "adc8b3a0478606fc1a5dd3b61bff9756f9f66ca9affd92e91ff4135e553621c9",
+      "url": "https://huggingface.co/mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf",
+      "revision": "main",
+      "required": false,
+      "obsolete": false,
+      "license": "Apache-2.0 (base Qwen2.5-VL) + abliterated por el autor; ver ficha HF",
+      "notes": "Caption VL del flujo imagen->prompt (vision, M10-4b); opcional (-IncludeOptional)."
+    },
+    {
+      "id": "qwen25vl-7b-abliterated-mmproj",
+      "filename": "Qwen2.5-VL-7B-Instruct-abliterated.mmproj-f16.gguf",
+      "subdir": "llm/qwen25vl-7b-abliterated-gguf",
+      "bytes": 1354162912,
+      "sha256": "7e109bb576519e2c3f8d14bad3d5402ad851fc5b149610dfee5063ccd28623e8",
+      "url": "https://huggingface.co/mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-abliterated.mmproj-f16.gguf",
+      "revision": "main",
+      "required": false,
+      "obsolete": false,
+      "license": "Apache-2.0 (base Qwen2.5-VL) + abliterated por el autor; ver ficha HF",
+      "notes": "Proyector visual (mmproj) del caption VL; opcional."
     }
   ]
 }
