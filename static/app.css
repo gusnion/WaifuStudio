@@ -1296,7 +1296,11 @@ input[type="checkbox"] {
 
 .editor-result img {
   display: block;
-  width: 100%;
+  margin: 0 auto;
+  width: auto;
+  max-width: 100%;
+  max-height: min(62vh, 720px);
+  object-fit: contain;
   border-radius: 6px;
 }
 
