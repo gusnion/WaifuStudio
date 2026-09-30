@@ -409,17 +409,22 @@ non_diegetic_music: &lt;música o None&gt;</pre>
             <option value="edit">Editar</option>
           </select>
         </label>
+        <p id="editor-edit-hint" class="field-hint">En «Editar», las referencias son las imágenes de entrada que se editan: describe en el prompt qué quieres cambiar (p. ej. «cambia el fondo a una playa»).</p>
         <label class="field">
           <span>Imágenes de referencia (hasta 10)</span>
           <input id="editor-refs" type="file" accept="image/*" multiple>
         </label>
         <div id="editor-refs-preview" class="editor-refs"></div>
-        <p class="field-hint">Referencias opcionales (modo Editar); máximo 10.</p>
-        <div class="grid-2">
+        <p class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; en «Editar» son las imágenes que se editan.</p>
+        <label class="field">
+          <span>Tamaño</span>
+          <select id="editor-size"></select>
+        </label>
+        <div id="editor-manual-size" class="grid-2 hidden">
           <label class="field"><span>Ancho</span><input id="editor-width" type="number" value="1024" step="16" min="512" max="2048"></label>
           <label class="field"><span>Alto</span><input id="editor-height" type="number" value="1024" step="16" min="512" max="2048"></label>
         </div>
-        <p class="field-hint">2K máx: 512-2048, múltiplos de 16.</p>
+        <p class="field-hint">Presets de la app (512-2048, múltiplos de 16) o Manual.</p>
         <label class="field">
           <span>Seed</span>
           <input id="editor-seed" type="number" value="42">
@@ -440,7 +445,13 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         <div class="gallery-header">
           <h2>Editor (Qwen-Image 2.1)</h2>
         </div>
-        <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» encola de verdad cuando los tres archivos están instalados y el resultado aparece en el visor de Imagen.</p>
+        <div id="editor-result" class="editor-result hidden">
+          <img id="editor-result-img" alt="Resultado del editor">
+          <div class="editor-result-actions">
+            <button id="btn-editor-open-gallery" type="button">Ver en la galería</button>
+          </div>
+        </div>
+        <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» encola de verdad cuando los tres archivos están instalados; el resultado aparece aquí y en la galería de Imagen.</p>
       </section>
     </section>
 

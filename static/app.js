@@ -340,6 +340,7 @@ async function loadFormats() {
     select.value = data.default;
   }
   applySizeSelection();
+  fillEditorSizes();
 }
 
 function applySizeSelection() {
@@ -1233,16 +1234,16 @@ async function pollJob(
       }
       if (job.status === "error") {
         statusFn(`Error: ${job.error || "desconocido"}`, true);
-        await onDone();
+        await onDone(job);
         return;
       }
       if (job.status === "cancelled") {
         statusFn("Cancelado");
-        await onDone();
+        await onDone(job);
         return;
       }
       statusFn("Listo");
-      await onDone();
+      await onDone(job);
       return;
     }
   } finally {
@@ -2611,6 +2612,56 @@ function setEditorProgress(progress) {
   setProgress(progress, "editor");
 }
 
+function fillEditorSizes() {
+  const select = $("editor-size");
+  if (!select) {
+    return;
+  }
+  const previous = select.value;
+  select.replaceChildren();
+  for (const format of state.formats || []) {
+    const { width, height } = format;
+    if (
+      width < EDITOR_SIZE_MIN ||
+      height < EDITOR_SIZE_MIN ||
+      width > EDITOR_SIZE_MAX ||
+      height > EDITOR_SIZE_MAX ||
+      width % EDITOR_SIZE_STEP !== 0 ||
+      height % EDITOR_SIZE_STEP !== 0
+    ) {
+      continue;
+    }
+    select.appendChild(option(format.id, format.label));
+  }
+  select.appendChild(option("manual", "Manual"));
+  if ([...select.options].some((item) => item.value === previous)) {
+    select.value = previous;
+  }
+  applyEditorSizeSelection();
+}
+
+function applyEditorSizeSelection() {
+  const select = $("editor-size");
+  const manual = !select || select.value === "manual";
+  $("editor-manual-size").classList.toggle("hidden", !manual);
+}
+
+function showEditorResult(job) {
+  const output = ((job && job.outputs) || [])[0];
+  const box = $("editor-result");
+  const image = $("editor-result-img");
+  if (!output || !output.url || !box || !image) {
+    return;
+  }
+  image.src = output.url;
+  box.classList.remove("hidden");
+}
+
+async function openEditorResultInGallery() {
+  switchTab("image");
+  await reloadImageViewerFirstPage();
+}
+
 async function generateEditor() {
   if (state.editorBusy) {
     return;
@@ -2620,8 +2671,16 @@ async function generateEditor() {
     setEditorStatus("El prompt no puede estar vacío", true);
     return;
   }
-  const width = Math.trunc(Number($("editor-width").value));
-  const height = Math.trunc(Number($("editor-height").value));
+  let width;
+  let height;
+  const preset = state.formatsById[$("editor-size") ? $("editor-size").value : ""];
+  if (preset) {
+    width = preset.width;
+    height = preset.height;
+  } else {
+    width = Math.trunc(Number($("editor-width").value));
+    height = Math.trunc(Number($("editor-height").value));
+  }
   if (!validEditorSize(width) || !validEditorSize(height)) {
     setEditorStatus(
       `Medidas fuera de [${EDITOR_SIZE_MIN}, ${EDITOR_SIZE_MAX}] o no múltiplos de ${EDITOR_SIZE_STEP}`,
@@ -2647,7 +2706,10 @@ async function generateEditor() {
     await pollJob(
       data.job_id,
       setEditorStatus,
-      reloadImageViewerFirstPage,
+      async (job) => {
+        showEditorResult(job);
+        await reloadImageViewerFirstPage();
+      },
       setEditorProgress,
       false
     );
@@ -4857,7 +4919,12 @@ const REQUIRED_IDS = [
   "btn-new-video",
   "editor-prompt",
   "editor-refs",
+  "editor-size",
+  "editor-manual-size",
+  "editor-result",
+  "editor-result-img",
   "btn-editor-generate",
+  "btn-editor-open-gallery",
   "panel-upscaler",
   "upscale-kind",
   "upscale-source",
@@ -5087,6 +5154,8 @@ function bind() {
     );
   });
   on("btn-editor-generate", "click", generateEditor);
+  on("editor-size", "change", applyEditorSizeSelection);
+  on("btn-editor-open-gallery", "click", openEditorResultInGallery);
   on("upscale-kind", "change", () => {
     applyUpscaleKind();
     loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
