@@ -987,6 +987,11 @@ grande». El fix se verificó además con `TestClient` sobre store temporal (3 i
 - **Referencia y tamaño**: con imagen de referencia el grafo pasa a img2img; la referencia se ajusta (**cover + recorte centrado**) al tamaño elegido antes de encolar, para que el selector de tamaño mande (antes heredaba las dimensiones de la referencia).
 - **Huérfanos por reinicio**: al arrancar la app, `Store.fail_stale()` cierra las filas `queued/running` («interrumpido por un reinicio de la app»).
 
+## Licencia
+
+- **Código: MIT** (ver `LICENSE`).
+- **Modelos**: cada uno conserva su licencia (Anima es **no comercial**); ver `THIRD_PARTY_NOTICES.md` y el campo `license` del manifiesto.
+
 ## Smoke
 
 ```
