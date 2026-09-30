@@ -4832,5 +4832,73 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
         self.assertNotEqual(negative, STARTUP_NEGATIVE_123)
 
 
+class GalleryTabUiStaticTests(ServerTestCase):
+    """Pestana Galeria: feed completo con filtro, pager y modal de detalle."""
+
+    def test_index_incluye_pestana_galeria(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="tab-gallery"',
+            ">Galería<",
+            'id="panel-gallery"',
+            'id="gallery-filter"',
+            '<option value="">Todo</option>',
+            '<option value="image">Imágenes</option>',
+            '<option value="video">Vídeos</option>',
+            'id="gallery-prev"',
+            'id="gallery-info"',
+            'id="gallery-next"',
+            'id="gallery-grid"',
+            'class="gallery-grid"',
+            'id="gallery-empty"',
+            'id="gallery-modal"',
+            'id="gallery-modal-media"',
+            'id="gallery-modal-info"',
+            'id="btn-gallery-download"',
+            'id="btn-gallery-close"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertLess(text.index('id="tab-upscaler"'), text.index('id="tab-gallery"'))
+        self.assertLess(
+            text.index('id="panel-upscaler"'), text.index('id="panel-gallery"')
+        )
+
+    def test_app_js_incluye_pestana_galeria(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "GALLERY_PAGE_SIZE",
+            "state.galleryTab",
+            "galleryTab: {",
+            "loadGalleryTab",
+            "renderGalleryTab",
+            "openGalleryModal",
+            "closeGalleryModal",
+            "downloadGalleryItem",
+            "galleryKindLabel",
+            "galleryStatusLabel",
+            "galleryPromptPreview",
+            'switchTab("gallery")',
+            'tab === "gallery"',
+            "/api/gallery?limit=",
+            "gallery-filter",
+            "gallery-prev",
+            "gallery-next",
+            "gallery-grid",
+            "gallery-empty",
+            "gallery-modal-media",
+            "gallery-modal-info",
+            "gallery-modal-prompt",
+            "btn-gallery-download",
+            "btn-gallery-close",
+            "downloadUrlFor",
+            "isVideoUrl",
+            '"tab-gallery",',
+            '"panel-gallery",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,6 +14,7 @@
       <button id="tab-video" class="tab" type="button">Video</button>
       <button id="tab-editor" class="tab" type="button">Editor</button>
       <button id="tab-upscaler" class="tab" type="button">Upscaler</button>
+      <button id="tab-gallery" class="tab" type="button">Galería</button>
     </nav>
     <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
   </header>
@@ -218,11 +219,6 @@
           </div>
         </div>
         <div id="image-thumbs" class="image-thumbs"></div>
-        <div class="pager hidden" hidden>
-          <button id="gallery-prev" type="button">‹ Anterior</button>
-          <span id="gallery-page">página 1 de 1</span>
-          <button id="gallery-next" type="button">Siguiente ›</button>
-        </div>
       </section>
     </section>
 
@@ -556,6 +552,26 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         </section>
       </section>
     </section>
+
+    <section id="panel-gallery" class="panel">
+      <div class="gallery-toolbar">
+        <label class="field gallery-filter-field">
+          <span>Filtro</span>
+          <select id="gallery-filter">
+            <option value="">Todo</option>
+            <option value="image">Imágenes</option>
+            <option value="video">Vídeos</option>
+          </select>
+        </label>
+        <div class="viewer-pager gallery-pager">
+          <button id="gallery-prev" type="button" aria-label="Página anterior" disabled>‹</button>
+          <span id="gallery-info">página 1 de 1</span>
+          <button id="gallery-next" type="button" aria-label="Página siguiente" disabled>›</button>
+        </div>
+      </div>
+      <div id="gallery-grid" class="gallery-grid"></div>
+      <p id="gallery-empty" class="empty hidden"></p>
+    </section>
   </main>
 
   <div id="oc-modal" class="modal hidden">
@@ -851,6 +867,21 @@ non_diegetic_music: &lt;música o None&gt;</pre>
       <div class="modal-footer">
         <button id="btn-vision-insert-caption" class="primary" type="button" disabled>Insertar caption</button>
         <button id="btn-vision-insert-tags" type="button" disabled>Insertar tags</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gallery-modal" class="modal hidden">
+    <div class="modal-box gallery-modal-box">
+      <div class="modal-header">
+        <h2>Galería</h2>
+        <span id="gallery-modal-info" class="oc-status"></span>
+        <button id="btn-gallery-close" type="button">Cerrar</button>
+      </div>
+      <div id="gallery-modal-media" class="gallery-modal-media"></div>
+      <p id="gallery-modal-prompt" class="gallery-modal-prompt"></p>
+      <div class="modal-footer">
+        <button id="btn-gallery-download" class="primary" type="button">Descargar</button>
       </div>
     </div>
   </div>

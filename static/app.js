@@ -84,6 +84,7 @@ const H3_GUIDE_TEXT = [
 const EDITOR_REF_LIMIT = 10;
 const EDITOR_GALLERY_PAGE_SIZE = 5;
 const UPSCALE_GALLERY_PAGE_SIZE = 5;
+const GALLERY_PAGE_SIZE = 24;
 const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
 const EDITOR_SIZE_STEP = 16;
@@ -176,6 +177,12 @@ const state = {
     total: 1,
     items: [],
   },
+  galleryTab: {
+    page: 1,
+    kind: "",
+    items: [],
+    total: 1,
+  },
   imageViewer: {
     page: 1,
     total: 1,
@@ -232,6 +239,7 @@ let zoneOcCharacter = null;
 let visionRequestSeq = 0;
 let visionInsertTimer = null;
 let visionResult = { tags: [], caption: "" };
+let galleryModalItem = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -5257,22 +5265,220 @@ function closeOcModal() {
   $("oc-modal").classList.add("hidden");
 }
 
+function galleryKindLabel(kind) {
+  if (kind === "image") {
+    return "Imagen";
+  }
+  if (kind === "video") {
+    return "Vídeo";
+  }
+  return kind || "Sin tipo";
+}
+
+function galleryStatusLabel(status) {
+  if (status === "queued") {
+    return "en cola";
+  }
+  if (status === "running") {
+    return "generando";
+  }
+  if (status === "error") {
+    return "error";
+  }
+  if (status === "cancelled") {
+    return "cancelado";
+  }
+  return status || "sin estado";
+}
+
+function galleryItemUrl(item) {
+  const urls = (item && item.urls) || [];
+  return urls.length ? urls[0] : null;
+}
+
+function galleryPromptPreview(prompt, max = 90) {
+  const text = String(prompt || "").trim();
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function renderGalleryTab() {
+  const grid = $("gallery-grid");
+  const empty = $("gallery-empty");
+  const gallery = state.galleryTab;
+  grid.replaceChildren();
+  if (!gallery.items.length) {
+    empty.textContent =
+      gallery.kind === "video"
+        ? "Sin vídeos."
+        : gallery.kind === "image"
+        ? "Sin imágenes."
+        : "Sin generaciones.";
+    empty.classList.remove("hidden");
+  } else {
+    empty.classList.add("hidden");
+  }
+  for (const item of gallery.items) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "gallery-card";
+    const title = item.prompt ? `#${item.id} ${item.prompt}` : `Generación #${item.id}`;
+    card.title = title;
+    card.setAttribute("aria-label", title);
+    const media = document.createElement("span");
+    media.className = "gallery-card-media";
+    const url = galleryItemUrl(item);
+    if (url && isVideoUrl(url)) {
+      const video = document.createElement("video");
+      video.src = url;
+      video.muted = true;
+      video.preload = "metadata";
+      video.playsInline = true;
+      media.appendChild(video);
+    } else if (url) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = item.prompt || `Generación #${item.id}`;
+      img.loading = "lazy";
+      media.appendChild(img);
+    } else {
+      const missing = document.createElement("span");
+      missing.className = "thumb-missing";
+      missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
+      media.appendChild(missing);
+    }
+    const badge = document.createElement("span");
+    badge.className = "gallery-badge";
+    badge.textContent = galleryKindLabel(item.kind);
+    media.appendChild(badge);
+    card.appendChild(media);
+    const preview = galleryPromptPreview(item.prompt);
+    if (preview) {
+      const text = document.createElement("span");
+      text.className = "gallery-card-prompt";
+      text.textContent = preview;
+      card.appendChild(text);
+    }
+    if (item.status !== "done") {
+      const status = document.createElement("span");
+      status.className = "gallery-card-status";
+      if (item.status === "error" || item.status === "cancelled") {
+        status.classList.add("error");
+      }
+      status.textContent = galleryStatusLabel(item.status);
+      card.appendChild(status);
+    }
+    card.addEventListener("click", () => openGalleryModal(item));
+    grid.appendChild(card);
+  }
+  $("gallery-info").textContent = `página ${gallery.page} de ${gallery.total}`;
+  $("gallery-prev").disabled = gallery.page <= 1;
+  $("gallery-next").disabled = gallery.page >= gallery.total;
+}
+
+async function loadGalleryTab(page = 1) {
+  const gallery = state.galleryTab;
+  const wanted = Math.max(1, Math.trunc(Number(page)) || 1);
+  const offset = (wanted - 1) * GALLERY_PAGE_SIZE;
+  const kind = gallery.kind ? `&kind=${encodeURIComponent(gallery.kind)}` : "";
+  const data = await api(
+    `/api/gallery?limit=${GALLERY_PAGE_SIZE}&offset=${offset}${kind}`
+  );
+  const items = data.items || [];
+  const count = Number(data.count);
+  const total = Number.isFinite(count) && count > 0 ? count : items.length;
+  gallery.total = Math.max(1, Math.ceil(total / GALLERY_PAGE_SIZE));
+  if (wanted > gallery.total) {
+    return await loadGalleryTab(gallery.total);
+  }
+  gallery.page = wanted;
+  gallery.items = items;
+  renderGalleryTab();
+}
+
+function openGalleryModal(item) {
+  const modal = $("gallery-modal");
+  const media = $("gallery-modal-media");
+  if (!modal || !item) {
+    return;
+  }
+  closeGalleryModal();
+  galleryModalItem = item;
+  const url = galleryItemUrl(item);
+  if (url && isVideoUrl(url)) {
+    const video = document.createElement("video");
+    video.src = url;
+    video.controls = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    media.appendChild(video);
+  } else if (url) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = item.prompt || `Generación #${item.id}`;
+    media.appendChild(img);
+  } else {
+    const missing = document.createElement("p");
+    missing.className = "empty";
+    missing.textContent =
+      item.status === "error" ? "Sin resultado (error)" : "Sin resultado";
+    media.appendChild(missing);
+  }
+  $("gallery-modal-info").textContent = `#${item.id} · ${galleryKindLabel(
+    item.kind
+  )} · ${formatGalleryDate(item.created_at)}`;
+  const prompt = $("gallery-modal-prompt");
+  prompt.textContent = item.prompt || "Sin prompt.";
+  prompt.classList.toggle("hidden", !item.prompt);
+  $("btn-gallery-download").disabled = !downloadUrlFor(url);
+  modal.classList.remove("hidden");
+}
+
+function closeGalleryModal() {
+  const modal = $("gallery-modal");
+  if (!modal) {
+    return;
+  }
+  const media = $("gallery-modal-media");
+  if (media) {
+    for (const video of media.querySelectorAll("video")) {
+      video.pause();
+    }
+    media.replaceChildren();
+  }
+  galleryModalItem = null;
+  modal.classList.add("hidden");
+}
+
+function downloadGalleryItem() {
+  const downloadUrl = downloadUrlFor(galleryItemUrl(galleryModalItem));
+  if (!downloadUrl) {
+    return;
+  }
+  window.location.href = downloadUrl;
+}
+
 function switchTab(tab) {
   const image = tab === "image";
   const video = tab === "video";
   const editor = tab === "editor";
   const upscaler = tab === "upscaler";
+  const gallery = tab === "gallery";
   $("tab-image").classList.toggle("active", image);
   $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
   $("tab-upscaler").classList.toggle("active", upscaler);
+  $("tab-gallery").classList.toggle("active", gallery);
   $("panel-image").classList.toggle("active", image);
   $("panel-video").classList.toggle("active", video);
   $("panel-editor").classList.toggle("active", editor);
   $("panel-upscaler").classList.toggle("active", upscaler);
+  $("panel-gallery").classList.toggle("active", gallery);
   if (upscaler) {
     applyUpscaleKind();
     loadUpscaleGallery(1).catch((error) => setUpscaleStatus(error.message, true));
+  }
+  if (gallery && !state.galleryTab.items.length) {
+    loadGalleryTab(1).catch((error) => setStatus(error.message, true));
   }
 }
 
@@ -5351,8 +5557,6 @@ const REQUIRED_IDS = [
   "image-next-page",
   "image-page-info",
   "image-thumbs",
-  "gallery-prev",
-  "gallery-next",
   "video-gallery-prev",
   "video-gallery-next",
   "btn-reload",
@@ -5438,6 +5642,20 @@ const REQUIRED_IDS = [
   "upscale-preview-img",
   "upscale-preview-video",
   "upscale-preview-empty",
+  "tab-gallery",
+  "panel-gallery",
+  "gallery-filter",
+  "gallery-grid",
+  "gallery-empty",
+  "gallery-prev",
+  "gallery-info",
+  "gallery-next",
+  "gallery-modal",
+  "gallery-modal-media",
+  "gallery-modal-info",
+  "gallery-modal-prompt",
+  "btn-gallery-download",
+  "btn-gallery-close",
   "size",
   "preprompt",
   "btn-preprompt-manage",
@@ -5536,6 +5754,28 @@ function bind() {
   });
   on("editor-mode", "change", () => updateEditorMode());
   on("tab-upscaler", "click", () => switchTab("upscaler"));
+  on("tab-gallery", "click", () => switchTab("gallery"));
+  on("gallery-filter", "change", () => {
+    state.galleryTab.kind = $("gallery-filter").value;
+    loadGalleryTab(1).catch((error) => setStatus(error.message, true));
+  });
+  on("gallery-prev", "click", () => {
+    loadGalleryTab(state.galleryTab.page - 1).catch((error) =>
+      setStatus(error.message, true)
+    );
+  });
+  on("gallery-next", "click", () => {
+    loadGalleryTab(state.galleryTab.page + 1).catch((error) =>
+      setStatus(error.message, true)
+    );
+  });
+  on("btn-gallery-close", "click", closeGalleryModal);
+  on("btn-gallery-download", "click", downloadGalleryItem);
+  on("gallery-modal", "click", (event) => {
+    if (event.target === $("gallery-modal")) {
+      closeGalleryModal();
+    }
+  });
   on("btn-enhance", "click", enhancePrompt);
   on("btn-generate", "click", generate);
   on("btn-cancel", "click", cancelJob);
@@ -5592,6 +5832,7 @@ function bind() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeLightbox();
+      closeGalleryModal();
       closeVisionModal();
       closePrepromptModal();
       closeLoraLibrary();
