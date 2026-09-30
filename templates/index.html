@@ -477,12 +477,15 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           </select>
         </label>
 
-        <label class="field">
+        <div class="field" id="upscale-source-field">
           <span id="upscale-source-label">Imagen de origen</span>
-          <select id="upscale-source"></select>
           <p id="upscale-source-info" class="field-hint">Cargando galería…</p>
+        </div>
+        <label class="field" id="upscale-file-field">
+          <span>Archivo local (solo imagen)</span>
+          <input id="upscale-file" type="file" accept="image/*">
         </label>
-        <p class="field-hint">Origen por defecto: la selección del visor (Imagen o Vídeo); si no hay, lo más reciente de la galería.</p>
+        <p class="field-hint">Elige una miniatura de la galería o, en imagen, un archivo local (el archivo sustituye a la selección).</p>
 
         <label class="field" id="upscale-model-field">
           <span>Modelo</span>
@@ -490,6 +493,15 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <p id="upscale-model-note" class="field-hint"></p>
         </label>
         <p class="field-hint">RealESRGAN x2 duplica el tamaño; aplica a la imagen o al vídeo (conservando fps y audio del origen).</p>
+
+        <label class="field" id="upscale-passes-field">
+          <span>Escalado</span>
+          <select id="upscale-passes">
+            <option value="1">×2 (1 pasada)</option>
+            <option value="2">×4 (2 pasadas)</option>
+          </select>
+          <p class="field-hint">×4 encadena dos ampliaciones del modelo de ×2.</p>
+        </label>
 
         <label class="field hidden" id="upscale-ckpt-field">
           <span>Ckpt RIFE</span>
@@ -520,13 +532,21 @@ non_diegetic_music: &lt;música o None&gt;</pre>
 
       <section class="gallery-panel">
         <div class="gallery-header">
-          <h2>Resultado</h2>
+          <h2>Origen</h2>
         </div>
         <div id="upscale-preview" class="image-preview" title="Ampliar imagen">
           <img id="upscale-preview-img" class="hidden" alt="Imagen seleccionada">
           <video id="upscale-preview-video" class="hidden" controls preload="metadata"></video>
           <span id="upscale-preview-empty" class="empty">Sin generaciones de imagen</span>
         </div>
+        <section class="upscaler-gallery">
+          <div id="upscale-gallery-thumbs" class="image-thumbs"></div>
+          <div class="viewer-pager upscaler-gallery-pager">
+            <button id="upscale-gallery-prev" type="button" aria-label="Página anterior" disabled>‹</button>
+            <span id="upscale-gallery-info">página 1 de 1</span>
+            <button id="upscale-gallery-next" type="button" aria-label="Página siguiente" disabled>›</button>
+          </div>
+        </section>
       </section>
     </section>
   </main>

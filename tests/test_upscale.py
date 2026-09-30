@@ -40,7 +40,9 @@ from app.upscale import (
     RIFE_DEFAULTS,
     SAVE_VIDEO_FORMAT,
     SAVE_VIDEO_ID,
+    UPSCALE2_ID,
     UPSCALERS_PATH,
+    UPSCALE_PASSES,
     VIDEO_COMPONENTS_ID,
     VIDEO_EXT,
     VIDEO_MODEL_LOADER_ID,
@@ -56,6 +58,7 @@ from app.upscale import (
     load_frame_interpolation,
     load_upscalers,
     parse_fps,
+    parse_passes,
     run_fps,
     run_upscale,
     run_video_upscale,
@@ -355,6 +358,22 @@ class LoadUpscalersTests(unittest.TestCase):
             load_upscalers(self.write(self.catalog([_entry(), _entry()])))
 
 
+class ParsePassesTests(unittest.TestCase):
+    def test_limites(self):
+        self.assertEqual(UPSCALE_PASSES, (1, 2))
+
+    def test_validos(self):
+        self.assertEqual(parse_passes(None), 1)
+        self.assertEqual(parse_passes(1), 1)
+        self.assertEqual(parse_passes(2), 2)
+
+    def test_invalidos(self):
+        for value in (0, 3, -1, True, False, "1", "2", 1.0, 2.0, [], {}):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    parse_passes(value)
+
+
 class BuildUpscaleGraphTests(unittest.TestCase):
     def test_grafo_minimo_por_defecto(self):
         graph = build_upscale_graph("src.png", "RealESRGAN_x2.pth")
@@ -382,6 +401,33 @@ class BuildUpscaleGraphTests(unittest.TestCase):
             graph["4"]["inputs"]["filename_prefix"],
             f"{DEFAULT_PREFIX}/{DEFAULT_FILENAME_PREFIX}",
         )
+
+    def test_passes_uno_es_el_grafo_por_defecto(self):
+        default = build_upscale_graph("a.png", "m.pth")
+        explicit = build_upscale_graph("a.png", "m.pth", passes=1)
+        self.assertEqual(explicit, default)
+        self.assertEqual(set(explicit), {"1", "2", "3", "4"})
+
+    def test_passes_dos_encadena_dos_ampliaciones(self):
+        graph = build_upscale_graph("a.png", "m.pth", passes=2)
+        self.assertEqual(set(graph), {"1", "2", "3", "4", UPSCALE2_ID})
+        self.assertEqual(graph["3"]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(graph["3"]["inputs"]["image"], ["1", 0])
+        self.assertEqual(graph[UPSCALE2_ID]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(graph[UPSCALE2_ID]["inputs"]["upscale_model"], ["2", 0])
+        self.assertEqual(graph[UPSCALE2_ID]["inputs"]["image"], ["3", 0])
+        self.assertEqual(graph["4"]["class_type"], "SaveImage")
+        self.assertEqual(graph["4"]["inputs"]["images"], [UPSCALE2_ID, 0])
+        self.assertEqual(
+            graph["4"]["inputs"]["filename_prefix"],
+            f"{DEFAULT_PREFIX}/{DEFAULT_FILENAME_PREFIX}",
+        )
+
+    def test_passes_invalidos(self):
+        for value in (0, 3, -1, True, "2", 2.0, [], {}):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError):
+                    build_upscale_graph("a.png", "m.pth", passes=value)
 
     def test_prefijos_personalizados(self):
         graph = build_upscale_graph(
@@ -837,6 +883,7 @@ class RunUpscaleTests(UpscaleTestCase):
                 "source_file": "ok.png",
                 "model": "real-esrgan-x2",
                 "scale": 2,
+                "passes": 1,
             },
         )
         graph = transport.submits[0]["prompt"]
@@ -938,6 +985,39 @@ class RunUpscaleTests(UpscaleTestCase):
         )
         graph = transport.submits[0]["prompt"]
         self.assertEqual(graph["4"]["inputs"]["filename_prefix"], "otro/sitio/grande")
+
+    def test_passes_dos_envia_grafo_encadenado(self):
+        transport = FakeUpscaleTransport(self.config)
+        job = self.make_job(passes=2)
+        run_upscale(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+        )
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(job["params"]["passes"], 2)
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph[UPSCALE2_ID]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(graph[UPSCALE2_ID]["inputs"]["upscale_model"], ["2", 0])
+        self.assertEqual(graph[UPSCALE2_ID]["inputs"]["image"], ["3", 0])
+        self.assertEqual(graph["4"]["inputs"]["images"], [UPSCALE2_ID, 0])
+
+    def test_passes_invalido_marca_error_sin_submit(self):
+        transport = FakeUpscaleTransport(self.config)
+        job = self.make_job(passes=3)
+        run_upscale(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=self.factory(transport),
+        )
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "error")
+        self.assertIn("passes", row["error"])
+        self.assertEqual(transport.submits, [])
+        self.assertEqual(job["outputs"], [])
 
 
 class RunVideoUpscaleTests(UpscaleTestCase):

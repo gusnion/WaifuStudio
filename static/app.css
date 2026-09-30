@@ -1315,6 +1315,19 @@ input[type="checkbox"] {
   margin-top: 0.5rem;
 }
 
+.upscaler-gallery {
+  margin-top: 0.6rem;
+}
+
+.upscaler-gallery .image-thumbs {
+  margin-top: 0;
+}
+
+.upscaler-gallery-pager {
+  justify-content: flex-start;
+  margin-top: 0.5rem;
+}
+
 .pager {
   display: flex;
   align-items: center;

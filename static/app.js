@@ -83,6 +83,7 @@ const H3_GUIDE_TEXT = [
 
 const EDITOR_REF_LIMIT = 10;
 const EDITOR_GALLERY_PAGE_SIZE = 5;
+const UPSCALE_GALLERY_PAGE_SIZE = 5;
 const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
 const EDITOR_SIZE_STEP = 16;
@@ -168,6 +169,13 @@ const state = {
   upscalers: [],
   frameInterpolation: null,
   upscaleSources: [],
+  upscaleSourceId: null,
+  upscaleLocalFile: null,
+  upscaleGallery: {
+    page: 1,
+    total: 1,
+    items: [],
+  },
   imageViewer: {
     page: 1,
     total: 1,
@@ -2944,18 +2952,158 @@ async function loadUpscaleModels() {
   loadUpscaleInterpolation(data.frame_interpolation);
 }
 
+function upscaleItemName(item) {
+  return ((item && item.outputs) || [])[0] || "";
+}
+
 function selectedUpscaleSource() {
+  if (state.upscaleSourceId == null) {
+    return null;
+  }
   return (
-    state.upscaleSources.find(
-      (item) => String(item.id) === $("upscale-source").value
-    ) || null
+    state.upscaleSources.find((item) => item.id === state.upscaleSourceId) || null
   );
+}
+
+function clearUpscaleLocalFile() {
+  if (state.upscaleLocalFile) {
+    URL.revokeObjectURL(state.upscaleLocalFile.url);
+    state.upscaleLocalFile = null;
+  }
+  const input = $("upscale-file");
+  if (input) {
+    input.value = "";
+  }
+}
+
+function clearUpscaleSelection() {
+  clearUpscaleLocalFile();
+  state.upscaleSources = [];
+  state.upscaleSourceId = null;
+  state.upscaleGallery.page = 1;
+  state.upscaleGallery.items = [];
+}
+
+function selectUpscaleSource(id) {
+  clearUpscaleLocalFile();
+  state.upscaleSourceId = id == null ? null : Number(id);
+  renderUpscaleGallery();
+  updateUpscaleSourceView();
+}
+
+function renderUpscaleGallery() {
+  const container = $("upscale-gallery-thumbs");
+  if (!container) {
+    return;
+  }
+  const gallery = state.upscaleGallery;
+  const isVideo = upscaleSourceKind() === "video";
+  container.replaceChildren();
+  if (!gallery.items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = isVideo
+      ? "Sin generaciones de vídeo."
+      : "Sin generaciones de imagen.";
+    container.appendChild(empty);
+  }
+  for (const item of gallery.items) {
+    const selected = item.id === state.upscaleSourceId;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = isVideo ? "video-thumb" : "image-thumb";
+    button.classList.toggle("selected", selected);
+    if (selected) {
+      button.setAttribute("aria-current", "true");
+    }
+    const name = upscaleItemName(item);
+    button.title = `Usar generación #${item.id}${name ? ` (${name})` : ""}`;
+    button.setAttribute("aria-label", button.title);
+    const url = isVideo ? videoViewUrl(item) : imageViewUrl(item);
+    if (url && isVideo) {
+      const thumb = document.createElement("video");
+      thumb.src = url;
+      thumb.muted = true;
+      thumb.preload = "metadata";
+      thumb.playsInline = true;
+      thumb.addEventListener(
+        "loadedmetadata",
+        () => {
+          thumb.currentTime = 0.01;
+        },
+        { once: true }
+      );
+      button.appendChild(thumb);
+    } else if (url) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = item.prompt || `Generación #${item.id}`;
+      img.loading = "lazy";
+      button.appendChild(img);
+    } else {
+      const missing = document.createElement("span");
+      missing.className = "thumb-missing";
+      missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
+      button.appendChild(missing);
+    }
+    button.addEventListener("click", () => selectUpscaleSource(item.id));
+    container.appendChild(button);
+  }
+  $("upscale-gallery-info").textContent = `página ${gallery.page} de ${gallery.total}`;
+  $("upscale-gallery-prev").disabled = gallery.page <= 1;
+  $("upscale-gallery-next").disabled = gallery.page >= gallery.total;
+}
+
+async function loadUpscaleGallery(page = 1) {
+  const kind = upscaleSourceKind();
+  const gallery = state.upscaleGallery;
+  const wanted = Math.max(1, Math.trunc(Number(page)) || 1);
+  const offset = (wanted - 1) * UPSCALE_GALLERY_PAGE_SIZE;
+  const data = await api(
+    `/api/gallery?kind=${kind}&limit=${UPSCALE_GALLERY_PAGE_SIZE}&offset=${offset}`
+  );
+  const items = data.items || [];
+  const count = Number(data.count);
+  const total = Number.isFinite(count) && count > 0 ? count : items.length;
+  gallery.total = Math.max(1, Math.ceil(total / UPSCALE_GALLERY_PAGE_SIZE));
+  if (wanted > gallery.total) {
+    return await loadUpscaleGallery(gallery.total);
+  }
+  gallery.page = wanted;
+  gallery.items = items;
+  const merged = new Map(state.upscaleSources.map((item) => [item.id, item]));
+  for (const item of items) {
+    merged.set(item.id, item);
+  }
+  state.upscaleSources = [...merged.values()].sort((a, b) => b.id - a.id);
+  renderUpscaleGallery();
+  updateUpscaleSourceView();
+}
+
+async function useUpscaleLocalFile(file) {
+  if (!file) {
+    return;
+  }
+  const b64 = await readFileBase64(file);
+  if (state.upscaleLocalFile) {
+    URL.revokeObjectURL(state.upscaleLocalFile.url);
+  }
+  state.upscaleLocalFile = {
+    name: file.name,
+    b64,
+    url: URL.createObjectURL(file),
+  };
+  state.upscaleSourceId = null;
+  renderUpscaleGallery();
+  updateUpscaleSourceView();
+  setUpscaleStatus(`Archivo local: ${file.name}`);
 }
 
 function updateUpscaleSourceView() {
   const isVideo = upscaleSourceKind() === "video";
-  const item = selectedUpscaleSource();
-  const url = isVideo ? videoViewUrl(item) : imageViewUrl(item);
+  const local = !isVideo ? state.upscaleLocalFile : null;
+  const item = local ? null : selectedUpscaleSource();
+  const url = local ? local.url : isVideo ? videoViewUrl(item) : imageViewUrl(item);
   const img = $("upscale-preview-img");
   const video = $("upscale-preview-video");
   const empty = $("upscale-preview-empty");
@@ -2972,7 +3120,11 @@ function updateUpscaleSourceView() {
     empty.classList.add("hidden");
   } else if (url) {
     img.src = url;
-    img.alt = item.prompt ? `#${item.id} ${item.prompt}` : `Generación #${item.id}`;
+    img.alt = local
+      ? local.name
+      : item.prompt
+      ? `#${item.id} ${item.prompt}`
+      : `Generación #${item.id}`;
     img.classList.remove("hidden");
     video.pause();
     video.removeAttribute("src");
@@ -2986,81 +3138,62 @@ function updateUpscaleSourceView() {
     video.removeAttribute("src");
     video.classList.add("hidden");
     empty.classList.remove("hidden");
-    if (!item) {
+    if (item) {
+      empty.textContent =
+        item.status === "error" ? "Origen sin resultado (error)" : "Origen sin resultado";
+    } else {
       empty.textContent = isVideo
         ? "Sin generaciones de vídeo"
         : "Sin generaciones de imagen";
-    } else {
-      empty.textContent =
-        item.status === "error" ? "Origen sin resultado (error)" : "Origen sin resultado";
     }
   }
   $("upscale-preview").classList.toggle("has-image", Boolean(url) && !isVideo);
   $("upscale-preview").title = isVideo ? "Origen de vídeo" : "Ampliar imagen";
-  $("upscale-source-info").textContent = item
+  const baseLabel = isVideo ? "Vídeo de origen" : "Imagen de origen";
+  if (local) {
+    $("upscale-source-label").textContent = `${baseLabel} — Archivo local: ${local.name}`;
+  } else if (item) {
+    const name = upscaleItemName(item);
+    $("upscale-source-label").textContent = `${baseLabel} — #${item.id}${
+      name ? ` ${name}` : ""
+    }`;
+  } else {
+    $("upscale-source-label").textContent = baseLabel;
+  }
+  $("upscale-source-info").textContent = local
+    ? `Archivo local · ${local.name}`
+    : item
     ? isVideo
-      ? `#${item.id} · ${videoEngineLabel(item)} · ${formatGalleryDate(item.created_at)}`
-      : `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
+      ? `#${item.id} · ${upscaleItemName(item)} · ${videoEngineLabel(item)} · ${formatGalleryDate(item.created_at)}`
+      : `#${item.id} · ${upscaleItemName(item)} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
     : isVideo
-    ? "Genera un vídeo en la pestaña Vídeo"
-    : "Genera una imagen en la pestaña Imagen";
-}
-
-async function loadUpscaleSources({ selectId = null } = {}) {
-  const kind = upscaleSourceKind();
-  const viewer = kind === "video" ? state.videoViewer : state.imageViewer;
-  const data = await api(`/api/gallery?kind=${kind}&limit=24&offset=0`);
-  const merged = new Map();
-  for (const item of [...(data.items || []), ...viewer.items]) {
-    merged.set(item.id, item);
-  }
-  state.upscaleSources = [...merged.values()].sort((a, b) => b.id - a.id);
-  const select = $("upscale-source");
-  const previous = select.value ? Number(select.value) : null;
-  select.replaceChildren();
-  for (const item of state.upscaleSources) {
-    select.appendChild(
-      option(String(item.id), `#${item.id} · ${formatGalleryDate(item.created_at)}`)
-    );
-  }
-  const wanted = selectId != null ? selectId : previous;
-  const fallback =
-    viewer.selectedId != null
-      ? viewer.selectedId
-      : state.upscaleSources.length
-      ? state.upscaleSources[0].id
-      : null;
-  const chosen = state.upscaleSources.some((item) => item.id === wanted)
-    ? wanted
-    : fallback;
-  if (chosen != null) {
-    select.value = String(chosen);
-  }
-  updateUpscaleSourceView();
+    ? "Elige una miniatura de la galería o genera un vídeo en la pestaña Vídeo"
+    : "Elige una miniatura o un archivo local";
 }
 
 function applyUpscaleKind() {
   const kind = upscaleKind();
   const isFps = kind === "fps";
   const isVideo = kind !== "image";
-  $("upscale-source-label").textContent = isVideo
-    ? "Vídeo de origen"
-    : "Imagen de origen";
   $("upscale-model-field").classList.toggle("hidden", isFps);
   $("upscale-ckpt-field").classList.toggle("hidden", !isFps);
   $("upscale-multiplier-field").classList.toggle("hidden", !isFps);
+  $("upscale-file-field").classList.toggle("hidden", isVideo);
+  $("upscale-passes-field").classList.toggle("hidden", isVideo);
   $("btn-upscale").textContent = isFps ? "Interpolar" : "Escalar";
   updateUpscaleSourceView();
 }
 
 async function finishUpscale() {
   await reloadImageViewerFirstPage();
-  await loadUpscaleSources({ selectId: state.imageViewer.selectedId });
+  state.upscaleSourceId = state.imageViewer.selectedId;
+  await loadUpscaleGallery(1);
 }
 
 async function finishVideoUpscale() {
   await reloadVideoViewerFirstPage();
-  await loadUpscaleSources({ selectId: state.videoViewer.selectedId });
+  state.upscaleSourceId = state.videoViewer.selectedId;
+  await loadUpscaleGallery(1);
   switchTab("video");
 }
 
@@ -3069,17 +3202,18 @@ async function generateUpscale() {
     return;
   }
   const kind = upscaleKind();
-  const source = selectedUpscaleSource();
-  if (!source) {
+  const local = kind === "image" ? state.upscaleLocalFile : null;
+  const source = local ? null : selectedUpscaleSource();
+  if (!local && !source) {
     setUpscaleStatus(
       kind !== "image"
         ? "No hay vídeo de origen; genera uno en Vídeo"
-        : "No hay imagen de origen; genera una en Imagen",
+        : "No hay imagen de origen; elige una miniatura o un archivo local",
       true
     );
     return;
   }
-  const payload = { kind, source_gen: source.id };
+  const payload = { kind };
   if (kind === "fps") {
     const ckpt = $("upscale-ckpt").value;
     if (!ckpt) {
@@ -3091,19 +3225,39 @@ async function generateUpscale() {
       setUpscaleStatus("Multiplicador inválido; usa ×2 o ×4", true);
       return;
     }
+    payload.source_gen = source.id;
     payload.ckpt = ckpt;
     payload.multiplier = multiplier;
     const fpsIn = Number(source.params && source.params.fps);
     if (Number.isFinite(fpsIn) && fpsIn > 0) {
       payload.fps_in = fpsIn;
     }
+  } else if (kind === "video") {
+    const model = $("upscale-model").value;
+    if (!model) {
+      setUpscaleStatus("Elige un modelo de escalado", true);
+      return;
+    }
+    payload.source_gen = source.id;
+    payload.model = model;
   } else {
     const model = $("upscale-model").value;
     if (!model) {
       setUpscaleStatus("Elige un modelo de escalado", true);
       return;
     }
+    const passes = Number($("upscale-passes").value);
+    if (passes !== 1 && passes !== 2) {
+      setUpscaleStatus("Escalado inválido; usa ×2 o ×4", true);
+      return;
+    }
     payload.model = model;
+    payload.passes = passes;
+    if (local) {
+      payload.image_b64 = local.b64;
+    } else {
+      payload.source_gen = source.id;
+    }
   }
   state.busy = true;
   $("btn-upscale").disabled = true;
@@ -4948,7 +5102,7 @@ function switchTab(tab) {
   $("panel-upscaler").classList.toggle("active", upscaler);
   if (upscaler) {
     applyUpscaleKind();
-    loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
+    loadUpscaleGallery(1).catch((error) => setUpscaleStatus(error.message, true));
   }
 }
 
@@ -5081,9 +5235,17 @@ const REQUIRED_IDS = [
   "editor-gallery-info",
   "panel-upscaler",
   "upscale-kind",
-  "upscale-source",
+  "upscale-source-field",
   "upscale-source-label",
   "upscale-source-info",
+  "upscale-file-field",
+  "upscale-file",
+  "upscale-passes-field",
+  "upscale-passes",
+  "upscale-gallery-thumbs",
+  "upscale-gallery-prev",
+  "upscale-gallery-next",
+  "upscale-gallery-info",
   "upscale-model-field",
   "upscale-model",
   "upscale-model-note",
@@ -5322,10 +5484,24 @@ function bind() {
     loadEditorGallery(state.editorGallery.page + 1);
   });
   on("upscale-kind", "change", () => {
+    clearUpscaleSelection();
     applyUpscaleKind();
-    loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
+    loadUpscaleGallery(1).catch((error) => setUpscaleStatus(error.message, true));
   });
-  on("upscale-source", "change", updateUpscaleSourceView);
+  on("upscale-file", "change", (event) => {
+    const file = (event.target.files || [])[0];
+    useUpscaleLocalFile(file).catch((error) => setUpscaleStatus(error.message, true));
+  });
+  on("upscale-gallery-prev", "click", () => {
+    loadUpscaleGallery(state.upscaleGallery.page - 1).catch((error) =>
+      setUpscaleStatus(error.message, true)
+    );
+  });
+  on("upscale-gallery-next", "click", () => {
+    loadUpscaleGallery(state.upscaleGallery.page + 1).catch((error) =>
+      setUpscaleStatus(error.message, true)
+    );
+  });
   on("upscale-model", "change", upscaleModelNote);
   on("upscale-ckpt", "change", upscaleCkptNote);
   on("btn-upscale", "click", generateUpscale);
@@ -5494,7 +5670,7 @@ async function init() {
     await settle("visor de video", () => loadVideoViewer());
     await settle("visor de imagen", () => loadImageViewer());
     await settle("galería del editor", () => loadEditorGallery(1));
-    await settle("upscaler", loadUpscaleSources);
+    await settle("upscaler", () => loadUpscaleGallery(1));
     await settle("modelos de upscaler", loadUpscaleModels);
     await settle("zonas", renderZoneEditor);
     await settle("estado del editor", loadEditorStatus);

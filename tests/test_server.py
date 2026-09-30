@@ -3477,6 +3477,7 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(job["model"], self.MODEL)
         self.assertEqual(job["model_file"], "RealESRGAN_x2.pth")
         self.assertEqual(job["scale"], 2)
+        self.assertEqual(job["passes"], 1)
         self.assertEqual(job["params"]["task"], "upscale")
         files = sorted((self.config.comfy_root / "input").glob("*.png"))
         self.assertEqual(len(files), 1)
@@ -3493,9 +3494,205 @@ class UpscaleRouteTests(ServerTestCase):
                 "source_file": "ok.png",
                 "model": self.MODEL,
                 "scale": 2,
+                "passes": 1,
             },
         )
         self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
+
+    def test_image_b64_encola_job_y_escribe_input(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        image_b64 = base64.b64encode(PNG_BYTES).decode("ascii")
+        response = client.post(
+            "/api/upscale",
+            json={"kind": "image", "image_b64": image_b64, "model": self.MODEL},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"job_id": "job-1"})
+        self.assertEqual(len(queue.jobs), 1)
+        job = queue.jobs[0]
+        self.assertEqual(job["kind"], "upscale")
+        self.assertIsNone(job["source_gen"])
+        self.assertIsNone(job["source_file"])
+        self.assertEqual(job["model"], self.MODEL)
+        self.assertEqual(job["model_file"], "RealESRGAN_x2.pth")
+        self.assertEqual(job["scale"], 2)
+        self.assertEqual(job["passes"], 1)
+        files = sorted((self.config.comfy_root / "input").glob("*.png"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_bytes(), PNG_BYTES)
+        self.assertEqual(job["image_name"], files[0].name)
+        new_gen = self.store.list()[0]
+        self.assertEqual(new_gen["kind"], "image")
+        self.assertEqual(new_gen["status"], "queued")
+        self.assertEqual(
+            new_gen["params"],
+            {
+                "task": "upscale",
+                "source_gen": None,
+                "source_file": None,
+                "model": self.MODEL,
+                "scale": 2,
+                "passes": 1,
+            },
+        )
+        self.assertEqual(server_module._JOBS[new_gen["id"]]["kind"], "upscale")
+
+    def test_image_b64_acepta_data_uri(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        data_uri = (
+            "data:image/png;base64," + base64.b64encode(PNG_BYTES).decode("ascii")
+        )
+        response = client.post(
+            "/api/upscale", json={"image_b64": data_uri, "model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 200)
+        files = sorted((self.config.comfy_root / "input").glob("*.png"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_bytes(), PNG_BYTES)
+
+    def test_image_b64_exclusivo_con_source_gen_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source()
+        client = self.make_client(queue=queue)
+        image_b64 = base64.b64encode(PNG_BYTES).decode("ascii")
+        response = client.post(
+            "/api/upscale",
+            json={
+                "source_gen": gen_id,
+                "image_b64": image_b64,
+                "model": self.MODEL,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertEqual(self.store.count(), 1)
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_image_sin_fuente_400(self):
+        response = self.make_client().post(
+            "/api/upscale", json={"model": self.MODEL}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_image_b64_invalido_400(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        for value in ("", "  ", "no-es-base64!!", 5, True, []):
+            with self.subTest(value=value):
+                response = client.post(
+                    "/api/upscale",
+                    json={"image_b64": value, "model": self.MODEL},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_image_b64_con_video_o_fps_400(self):
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client()
+        image_b64 = base64.b64encode(PNG_BYTES).decode("ascii")
+        for kind in ("video", "fps"):
+            with self.subTest(kind=kind):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": kind,
+                        "source_gen": gen_id,
+                        "image_b64": image_b64,
+                        "model": self.MODEL,
+                        "multiplier": 2,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("image_b64", response.json()["error"])
+
+    def test_passes_dos_en_flujo_completo_con_worker(self):
+        transport = FakeTransport(self.config, output_name="upscaled_00001_.png")
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            engine_factory=self.fake_factory(transport),
+            start_worker=True,
+        )
+        image_b64 = base64.b64encode(PNG_BYTES).decode("ascii")
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/upscale",
+                json={"image_b64": image_b64, "model": self.MODEL, "passes": 2},
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 10)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            gallery = client.get("/api/gallery?kind=image").json()
+            self.assertEqual(gallery["count"], 1)
+            newest = gallery["items"][0]
+            self.assertEqual(newest["kind"], "image")
+            self.assertEqual(newest["params"]["task"], "upscale")
+            self.assertEqual(newest["params"]["passes"], 2)
+            self.assertIsNone(newest["params"]["source_gen"])
+        graph = transport.submits[0]["prompt"]
+        self.assertEqual(graph["3"]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(graph["5"]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(graph["5"]["inputs"]["upscale_model"], ["2", 0])
+        self.assertEqual(graph["5"]["inputs"]["image"], ["3", 0])
+        self.assertEqual(graph["4"]["inputs"]["images"], ["5", 0])
+
+    def test_passes_invalido_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source()
+        client = self.make_client(queue=queue)
+        for passes in (0, 3, -1, "2", True, 2.0, []):
+            with self.subTest(passes=passes):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "source_gen": gen_id,
+                        "model": self.MODEL,
+                        "passes": passes,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(queue.jobs, [])
+        self.assertFalse((self.config.comfy_root / "input").exists())
+
+    def test_passes_con_video_o_fps_400(self):
+        queue = RecordingQueue()
+        gen_id = self.make_source(kind="video", outputs=("clip.mp4",))
+        client = self.make_client(queue=queue)
+        for passes in (0, 2, 3, True, "1", 1.0):
+            with self.subTest(passes=passes):
+                response = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "video",
+                        "source_gen": gen_id,
+                        "model": self.MODEL,
+                        "passes": passes,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("passes", response.json()["error"])
+        self.assertEqual(queue.jobs, [])
+        response = client.post(
+            "/api/upscale",
+            json={
+                "kind": "video",
+                "source_gen": gen_id,
+                "model": self.MODEL,
+                "passes": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("passes", queue.jobs[-1]["params"])
 
     def test_file_explicito_se_usa(self):
         queue = RecordingQueue()
@@ -4082,9 +4279,20 @@ class UpscaleUiStaticTests(ServerTestCase):
             ">Imagen<",
             ">Vídeo<",
             ">FPS<",
-            'id="upscale-source"',
+            'id="upscale-source-field"',
             'id="upscale-source-label"',
             'id="upscale-source-info"',
+            'id="upscale-file-field"',
+            'id="upscale-file"',
+            'accept="image/*"',
+            'id="upscale-passes-field"',
+            'id="upscale-passes"',
+            "×2 (1 pasada)",
+            "×4 (2 pasadas)",
+            'id="upscale-gallery-thumbs"',
+            'id="upscale-gallery-prev"',
+            'id="upscale-gallery-next"',
+            'id="upscale-gallery-info"',
             'id="upscale-model-field"',
             'id="upscale-model"',
             'id="upscale-model-note"',
@@ -4116,7 +4324,11 @@ class UpscaleUiStaticTests(ServerTestCase):
             "/api/upscale/models",
             'postJson("/api/upscale"',
             'switchTab("upscaler")',
-            "loadUpscaleSources",
+            "loadUpscaleGallery",
+            "renderUpscaleGallery",
+            "selectUpscaleSource",
+            "useUpscaleLocalFile",
+            "clearUpscaleSelection",
             "loadUpscaleModels",
             "loadUpscaleInterpolation",
             "frame_interpolation",
@@ -4132,6 +4344,14 @@ class UpscaleUiStaticTests(ServerTestCase):
             "setUpscaleProgress",
             "btn-upscale-cancel",
             "upscale-kind",
+            "upscale-file",
+            "upscale-passes",
+            "upscale-gallery-thumbs",
+            "upscale-gallery-prev",
+            "upscale-gallery-next",
+            "upscale-gallery-info",
+            "image_b64",
+            "readFileBase64",
             '"fps"',
             "upscale-preview-video",
             "reloadVideoViewerFirstPage",

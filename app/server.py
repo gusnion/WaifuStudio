@@ -109,6 +109,7 @@ from app.upscale import (
     get_upscaler,
     list_upscalers,
     parse_fps,
+    parse_passes,
     run_fps,
     run_upscale,
     run_video_upscale,
@@ -993,15 +994,18 @@ def create_app(
         """Encola el escalado de una generacion de imagen (U1), de video (U2)
         o la interpolacion de fotogramas de un video (U3).
 
-        Body: ``{source_gen, model, file?, kind?}`` con ``kind`` ``"image"``
-        (default) o ``"video"``. Para ``kind="fps"`` el body es
+        Body: ``{source_gen, model, file?, kind?, passes?}`` con ``kind``
+        ``"image"`` (default) o ``"video"``. Para ``kind="image"`` se admite
+        ``image_b64`` (data URI/base64 de un archivo local; exclusivo con
+        ``source_gen``) y ``passes`` 1|2 (default 1: ×2; 2: ×4 con dos
+        ampliaciones encadenadas). Para ``kind="fps"`` el body es
         ``{source_gen, ckpt?, multiplier, file?, fps_in?}``: valida que el
         origen sea un video, que ``ckpt`` este en la seccion
         ``frame_interpolation`` del catalogo y que ``multiplier`` sea 2|4.
-        Copia el origen a ``ComfyUI/input`` y encola un job ``kind="upscale"``
-        que produce una generacion nueva: imagen (``kind="image"``,
-        ``params.task="upscale"``), video con audio del origen
-        (``kind="video"``, ``params.task="upscale_video"``) o video
+        Copia el origen (o la imagen subida) a ``ComfyUI/input`` y encola un
+        job ``kind="upscale"`` que produce una generacion nueva: imagen
+        (``kind="image"``, ``params.task="upscale"``), video con audio del
+        origen (``kind="video"``, ``params.task="upscale_video"``) o video
         interpolado (``kind="video"``, ``params.task="rife"``).
         """
         source_kind = payload.get("kind")
@@ -1015,8 +1019,64 @@ def create_app(
             extensions = (".mp4", ".webm")
         else:
             raise EngineError("kind invalido; usar image|video|fps")
+        image_b64 = payload.get("image_b64")
+        if image_b64 is not None and source_kind != "image":
+            raise EngineError("image_b64 solo aplica a kind=image")
+        raw_passes = payload.get("passes")
+        if source_kind == "image":
+            passes = parse_passes(raw_passes)
+        elif raw_passes is not None and not (
+            isinstance(raw_passes, int)
+            and not isinstance(raw_passes, bool)
+            and raw_passes == 1
+        ):
+            raise EngineError("passes solo aplica a imagen")
+        if source_kind == "image" and image_b64 is not None:
+            if payload.get("source_gen") is not None:
+                raise EngineError(
+                    "source_gen y image_b64 son mutuamente excluyentes"
+                )
+            entry = get_upscaler(payload.get("model"))
+            media_name = _write_input_png(
+                cfg.comfy_root / "input", _decode_image_b64(image_b64, "image_b64")
+            )
+            params = {
+                "task": "upscale",
+                "source_gen": None,
+                "source_file": None,
+                "model": entry["id"],
+                "scale": entry["scale"],
+                "passes": passes,
+            }
+            gen_id = st.add(
+                "upscale", "upscale archivo local", "", params, kind="image"
+            )
+            job = {
+                "kind": "upscale",
+                "gen_id": gen_id,
+                "source_gen": None,
+                "source_file": None,
+                "image_name": media_name,
+                "model": entry["id"],
+                "model_file": entry["file"],
+                "scale": entry["scale"],
+                "passes": passes,
+                "params": dict(params),
+            }
+            _JOBS[gen_id] = {
+                "prompt_id": None,
+                "tracker": None,
+                "status": "queued",
+                "engine": None,
+                "kind": "upscale",
+            }
+            job_id = queue.submit(job)
+            app.state.jobs[job_id] = job
+            return {"job_id": job_id}
         source_gen = payload.get("source_gen")
         if isinstance(source_gen, bool) or not isinstance(source_gen, int):
+            if source_kind == "image":
+                raise EngineError("source_gen o image_b64 requerido para imagen")
             raise EngineError("source_gen requerido (entero)")
         row = st.get(source_gen)
         if row is None:
@@ -1140,6 +1200,7 @@ def create_app(
                 "source_file": file_name,
                 "model": entry["id"],
                 "scale": entry["scale"],
+                "passes": passes,
             }
             gen_id = st.add(
                 "upscale",
@@ -1157,6 +1218,7 @@ def create_app(
                 "model": entry["id"],
                 "model_file": entry["file"],
                 "scale": entry["scale"],
+                "passes": passes,
                 "params": dict(params),
             }
         _JOBS[gen_id] = {

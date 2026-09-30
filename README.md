@@ -33,7 +33,8 @@ filtros NSFW/SFW.
 - Preview del resultado y presets de tamaño de la app.
 
 ### Upscaler
-- Imágenes: RealESRGAN x2.
+- Imágenes: RealESRGAN x2 con galería visual de origen, archivo local y escalado ×2/×4
+  (doble pasada del mismo modelo).
 - Vídeo: upscale por fotogramas e interpolación de FPS con RIFE (x2/x4, conserva el audio).
 
 ### Galería y OCs

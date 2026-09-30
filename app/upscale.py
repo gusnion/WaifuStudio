@@ -4,10 +4,12 @@ catalogo y runners.
 Catalogo local estricto ``registry/upscalers-v1.json`` (mismo estilo que
 `app.video_presets`: solo stdlib, EngineError claro si falta o es invalido).
 `build_upscale_graph` arma el grafo API minimo LoadImage -> UpscaleModelLoader
--> ImageUpscaleWithModel -> SaveImage validando los nombres, y `run_upscale`
-encola en el engine, espera, copia el PNG a ``data/gallery/<gen_id>/``, refleja
-el estado en el store (``kind="image"``) y registra el tracker de progreso para
-que `GET /api/jobs/{id}` sirva `progress`. Sin GPU y sin red.
+-> ImageUpscaleWithModel -> SaveImage validando los nombres; con ``passes=2``
+encadena una segunda ampliacion (×2 × ×2 = ×4, la misma encima de si misma) y
+`run_upscale` encola en el engine, espera, copia el PNG a
+``data/gallery/<gen_id>/``, refleja el estado en el store (``kind="image"``) y
+registra el tracker de progreso para que `GET /api/jobs/{id}` sirva `progress`.
+Sin GPU y sin red.
 
 U2 (M10-2d) anade el video con nodos core: `build_video_upscale_graph` arma
 LoadVideo -> GetVideoComponents -> ImageUpscaleWithModel -> CreateVideo (fps y
@@ -48,6 +50,7 @@ SAVE_VIDEO_FORMAT = "mp4"
 FRAME_INTERPOLATION_KEY = "frame_interpolation"
 RIFE_CLASS = "RIFE VFI"
 FPS_MULTIPLIERS = (2, 4)
+UPSCALE_PASSES = (1, 2)
 
 # Defaults exactos del nodo RIFE VFI (custom node ComfyUI-Frame-Interpolation);
 # el ckpt y el multiplier los fija el job.
@@ -70,6 +73,8 @@ LOAD_IMAGE_ID = "1"
 MODEL_LOADER_ID = "2"
 UPSCALE_ID = "3"
 SAVE_IMAGE_ID = "4"
+# Segunda ampliacion encadenada (solo con passes=2); SaveImage sigue en "4".
+UPSCALE2_ID = "5"
 
 # Nodos del grafo API minimo de video (ids fijos).
 LOAD_VIDEO_ID = "1"
@@ -304,6 +309,20 @@ def fps_multiplier(value: object) -> int:
     return value
 
 
+def parse_passes(value: Any) -> int:
+    """Pasadas de escalado de imagen (1|2); ``None`` usa 1; EngineError si no."""
+    if value is None:
+        return 1
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value not in UPSCALE_PASSES
+    ):
+        allowed = "|".join(str(item) for item in UPSCALE_PASSES)
+        raise EngineError(f"passes invalido (usar {allowed}): {value!r}")
+    return value
+
+
 def _require_plain_name(value: Any, label: str) -> str:
     """Nombre de archivo simple (sin rutas ni ``..``): image/model del grafo."""
     if not isinstance(value, str) or not value.strip():
@@ -339,23 +358,27 @@ def build_upscale_graph(
     image_name: str,
     model_file: str,
     *,
+    passes: int = 1,
     prefix: str = DEFAULT_PREFIX,
     filename_prefix: str = DEFAULT_FILENAME_PREFIX,
 ) -> dict:
     """Grafo API minimo de escalado de una imagen.
 
     Nodos: LoadImage (``image_name``), UpscaleModelLoader (``model_file``),
-    ImageUpscaleWithModel y SaveImage. El prefijo de guardado final es
-    ``prefix/filename_prefix`` (o solo ``filename_prefix`` si ``prefix`` va
-    vacio). EngineError si un nombre no es un archivo simple o un prefijo
-    escapa del arbol de output.
+    ImageUpscaleWithModel y SaveImage. Con ``passes=2`` la salida de la primera
+    ampliacion entra en una segunda ``ImageUpscaleWithModel`` con el mismo
+    modelo (×2 × ×2 = ×4) y SaveImage guarda esa cadena. El prefijo de guardado
+    final es ``prefix/filename_prefix`` (o solo ``filename_prefix`` si
+    ``prefix`` va vacio). EngineError si un nombre no es un archivo simple, un
+    prefijo escapa del arbol de output o ``passes`` no es 1|2.
     """
     image_name = _require_plain_name(image_name, "upscale: image_name")
     model_file = _require_plain_name(model_file, "upscale: model_file")
+    passes = parse_passes(passes)
     prefix = _require_prefix(prefix, "upscale: prefix", allow_empty=True)
     filename_prefix = _require_prefix(filename_prefix, "upscale: filename_prefix")
     save_prefix = f"{prefix}/{filename_prefix}" if prefix else filename_prefix
-    return {
+    graph = {
         LOAD_IMAGE_ID: {
             "class_type": "LoadImage",
             "inputs": {"image": image_name, "upload": "image"},
@@ -376,6 +399,16 @@ def build_upscale_graph(
             "inputs": {"filename_prefix": save_prefix, "images": [UPSCALE_ID, 0]},
         },
     }
+    if passes == 2:
+        graph[UPSCALE2_ID] = {
+            "class_type": "ImageUpscaleWithModel",
+            "inputs": {
+                "upscale_model": [MODEL_LOADER_ID, 0],
+                "image": [UPSCALE_ID, 0],
+            },
+        }
+        graph[SAVE_IMAGE_ID]["inputs"]["images"] = [UPSCALE2_ID, 0]
+    return graph
 
 
 def build_video_upscale_graph(
@@ -525,6 +558,7 @@ def _upscale_params(job: dict) -> dict:
         "source_file": job.get("source_file"),
         "model": job.get("model"),
         "scale": job.get("scale"),
+        "passes": job.get("passes"),
     }
 
 
@@ -543,8 +577,9 @@ def run_upscale(
     registran engine, `prompt_id`, tracker y estado (queued -> running ->
     done/error/cancelled) como en imagen/video; el `ProgressTracker` se crea
     antes del submit (con `ws_factory` inyectable) y se para en el `finally`.
-    Deja en ``job["params"]`` ``{task, source_gen, source_file, model, scale}``.
-    No propaga errores: el fallo se guarda en el store y en ``job["error"]``.
+    Deja en ``job["params"]`` ``{task, source_gen, source_file, model, scale,
+    passes}`` (``passes`` normalizado a 1|2). No propaga errores: el fallo se
+    guarda en el store y en ``job["error"]``.
     """
     gen_id = job["gen_id"]
     job["params"] = _upscale_params(job)
@@ -554,9 +589,13 @@ def run_upscale(
         return
     tracker = None
     try:
+        passes = parse_passes(job.get("passes"))
+        job["passes"] = passes
+        job["params"] = _upscale_params(job)
         graph = build_upscale_graph(
             job.get("image_name"),
             job.get("model_file"),
+            passes=passes,
             prefix=job.get("prefix") or DEFAULT_PREFIX,
             filename_prefix=job.get("filename_prefix") or DEFAULT_FILENAME_PREFIX,
         )
@@ -874,8 +913,10 @@ __all__ = [
     "SAVE_IMAGE_ID",
     "SAVE_VIDEO_FORMAT",
     "SAVE_VIDEO_ID",
+    "UPSCALE2_ID",
     "UPSCALERS_PATH",
     "UPSCALE_ID",
+    "UPSCALE_PASSES",
     "VIDEO_COMPONENTS_ID",
     "VIDEO_EXT",
     "VIDEO_HISTORY_TIMEOUT_S",
@@ -892,6 +933,7 @@ __all__ = [
     "load_frame_interpolation",
     "load_upscalers",
     "parse_fps",
+    "parse_passes",
     "run_fps",
     "run_upscale",
     "run_video_upscale",

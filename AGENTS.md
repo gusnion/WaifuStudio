@@ -75,8 +75,8 @@ gestionado en `python\`) antes de arrancar o parar; no matan procesos ajenos.
 - `video_presets.py`: presets Wan de `registry/video_presets-v1.json`.
 - `editor.py`: grafo y runner del Editor Qwen-Image 2.1 UC (hasta 10 referencias).
 - `editor_models.py`: nombres reales del par UC (`registry/editor_models-v1.json`).
-- `upscale.py`: upscaler de imagen (RealESRGAN), de vídeo por fotogramas y RIFE
-  (`registry/upscalers-v1.json`).
+- `upscale.py`: upscaler de imagen (RealESRGAN ×2, y ×4 con doble pasada), de vídeo por
+  fotogramas y RIFE (`registry/upscalers-v1.json`).
 - `characters.py`: OCs en sqlite + referencias copiadas a `data/characters/<id>/`.
 - `trainer.py`: entrenador de LoRA; prepara dataset/config y lanza un comando externo
   (`WAIFU_TRAINER_CMD`). La instalación del fork kohya está pendiente: aquí solo se orquesta.
