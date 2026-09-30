@@ -463,12 +463,22 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         </div>
         <div id="editor-preview" class="image-preview">
           <img id="editor-preview-img" class="hidden" alt="Imagen del editor">
+          <div id="editor-compare" class="editor-compare hidden">
+            <div id="editor-compare-stage" class="editor-compare-stage">
+              <img id="editor-compare-before" class="editor-compare-img" alt="Antes" draggable="false">
+              <img id="editor-compare-after" class="editor-compare-img" alt="Después" draggable="false">
+            </div>
+            <div id="editor-compare-handle" class="editor-compare-handle" role="slider" tabindex="0" aria-label="Comparación antes/después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+              <span id="editor-compare-ratio" class="editor-compare-ratio">50%</span>
+            </div>
+          </div>
           <span id="editor-preview-empty" class="empty">Sin imagen</span>
         </div>
         <div id="editor-result" class="editor-result hidden">
           <div class="editor-result-actions">
             <button id="btn-editor-open-gallery" type="button">Ver en la galería</button>
             <button id="btn-editor-edit-result" type="button">Editar este resultado</button>
+            <button id="btn-editor-compare" type="button" aria-pressed="false" disabled>Comparar</button>
             <button id="btn-editor-download" type="button">Descargar</button>
           </div>
         </div>

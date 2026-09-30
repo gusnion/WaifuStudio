@@ -2958,10 +2958,16 @@ function updateEditorPreview() {
   const refUrl = state.editorRefs.length ? state.editorRefs[0].url : "";
   const url = refUrl || state.editorResultUrl || "";
   if (url) {
-    image.src = url;
-    image.classList.remove("hidden");
+    if (editorCompareActive) {
+      image.removeAttribute("src");
+      image.classList.add("hidden");
+    } else {
+      image.src = url;
+      image.classList.remove("hidden");
+    }
     empty.classList.add("hidden");
     box.classList.add("has-image");
+    updateEditorCompare();
     return;
   }
   image.removeAttribute("src");
@@ -2971,6 +2977,7 @@ function updateEditorPreview() {
     ? "Selecciona una imagen en el visor de Imagen o en la galería"
     : "Carga referencias (archivo local o clic en la galería)";
   empty.classList.remove("hidden");
+  updateEditorCompare();
 }
 
 function applyEditorMetadata(meta) {
@@ -3017,6 +3024,268 @@ function applyEditorMetadata(meta) {
     $("editor-height").value = String(height);
   }
   applyEditorSizeSelection();
+}
+
+let editorCompareActive = false;
+let editorCompareView = { scale: 1, x: 0, y: 0, ratio: 0.5, beforeUrl: "", afterUrl: "" };
+const EDITOR_COMPARE_MAX_SCALE = 8;
+const EDITOR_COMPARE_DRAG_THRESHOLD = 4;
+let editorComparePan = null;
+let editorCompareHandleDrag = false;
+
+function editorCompareUrls() {
+  return {
+    before: state.editorRefs.length ? state.editorRefs[0].url : "",
+    after: state.editorResultUrl || "",
+  };
+}
+
+function resetEditorCompareView() {
+  editorCompareView.scale = 1;
+  editorCompareView.x = 0;
+  editorCompareView.y = 0;
+  editorCompareView.ratio = 0.5;
+  endEditorComparePan();
+  applyEditorCompare();
+}
+
+function applyEditorCompare() {
+  const stage = $("editor-compare-stage");
+  const compare = $("editor-compare");
+  if (!stage || !compare) {
+    return;
+  }
+  stage.style.transform = `translate(${editorCompareView.x}px, ${editorCompareView.y}px) scale(${editorCompareView.scale})`;
+  const after = $("editor-compare-after");
+  if (after) {
+    after.style.clipPath = `inset(0 0 0 ${editorCompareView.ratio * 100}%)`;
+  }
+  compare.classList.toggle("zoomed", editorCompareView.scale > 1);
+  const rect = stage.getBoundingClientRect();
+  const wrap = compare.getBoundingClientRect();
+  const handle = $("editor-compare-handle");
+  if (handle) {
+    handle.style.left = `${rect.left - wrap.left + editorCompareView.ratio * rect.width}px`;
+  }
+  const percent = Math.round(editorCompareView.ratio * 100);
+  if (handle) {
+    handle.setAttribute("aria-valuenow", String(percent));
+  }
+  const label = $("editor-compare-ratio");
+  if (label) {
+    label.textContent = `${percent}%`;
+  }
+}
+
+function setEditorCompareEnabled(on) {
+  if (on) {
+    const { before, after } = editorCompareUrls();
+    if (!before || !after) {
+      return;
+    }
+    editorCompareActive = true;
+    $("editor-compare-before").src = before;
+    $("editor-compare-after").src = after;
+    editorCompareView.beforeUrl = before;
+    editorCompareView.afterUrl = after;
+    resetEditorCompareView();
+    $("editor-compare").classList.remove("hidden");
+  } else {
+    editorCompareActive = false;
+    editorCompareHandleDrag = false;
+    $("editor-compare").classList.add("hidden");
+    resetEditorCompareView();
+  }
+  updateEditorPreview();
+}
+
+function updateEditorCompare() {
+  const button = $("btn-editor-compare");
+  const { before, after } = editorCompareUrls();
+  if (button) {
+    button.disabled = !(before && after);
+    button.textContent = editorCompareActive ? "Cerrar comparación" : "Comparar";
+    button.setAttribute("aria-pressed", editorCompareActive ? "true" : "false");
+  }
+  if (!editorCompareActive) {
+    return;
+  }
+  if (!before || !after) {
+    setEditorCompareEnabled(false);
+    return;
+  }
+  if (
+    editorCompareView.beforeUrl !== before ||
+    editorCompareView.afterUrl !== after
+  ) {
+    editorCompareView.beforeUrl = before;
+    editorCompareView.afterUrl = after;
+    $("editor-compare-before").src = before;
+    $("editor-compare-after").src = after;
+    resetEditorCompareView();
+  }
+  applyEditorCompare();
+  const image = $("editor-preview-img");
+  const empty = $("editor-preview-empty");
+  const box = $("editor-preview");
+  if (image) {
+    image.classList.add("hidden");
+  }
+  if (empty) {
+    empty.classList.add("hidden");
+  }
+  if (box) {
+    box.classList.add("has-image");
+  }
+}
+
+function endEditorComparePan() {
+  editorComparePan = null;
+  const compare = $("editor-compare");
+  if (compare) {
+    compare.classList.remove("dragging");
+  }
+}
+
+function startEditorComparePan(event) {
+  if (event.button !== 0 || editorCompareView.scale <= 1) {
+    return;
+  }
+  event.preventDefault();
+  editorComparePan = {
+    startX: event.clientX,
+    startY: event.clientY,
+    x: editorCompareView.x,
+    y: editorCompareView.y,
+    moved: false,
+  };
+}
+
+function moveEditorComparePan(event) {
+  if (!editorComparePan) {
+    return;
+  }
+  const dx = event.clientX - editorComparePan.startX;
+  const dy = event.clientY - editorComparePan.startY;
+  if (!editorComparePan.moved) {
+    if (Math.abs(dx) + Math.abs(dy) <= EDITOR_COMPARE_DRAG_THRESHOLD) {
+      return;
+    }
+    editorComparePan.moved = true;
+    $("editor-compare").classList.add("dragging");
+  }
+  editorCompareView.x = editorComparePan.x + dx;
+  editorCompareView.y = editorComparePan.y + dy;
+  applyEditorCompare();
+}
+
+function zoomEditorCompare(event) {
+  if (!editorCompareActive) {
+    return;
+  }
+  const stage = $("editor-compare-stage");
+  if (!stage) {
+    return;
+  }
+  event.preventDefault();
+  const current = editorCompareView.scale;
+  const factor = Math.exp(-event.deltaY * 0.0015);
+  const next = Math.min(
+    EDITOR_COMPARE_MAX_SCALE,
+    Math.max(1, current * factor)
+  );
+  if (next === current) {
+    return;
+  }
+  const rect = stage.getBoundingClientRect();
+  const pointX = (event.clientX - rect.left) / current;
+  const pointY = (event.clientY - rect.top) / current;
+  const layoutLeft = rect.left - editorCompareView.x;
+  const layoutTop = rect.top - editorCompareView.y;
+  if (next <= 1) {
+    resetEditorCompareView();
+    return;
+  }
+  editorCompareView.scale = next;
+  editorCompareView.x = event.clientX - pointX * next - layoutLeft;
+  editorCompareView.y = event.clientY - pointY * next - layoutTop;
+  applyEditorCompare();
+}
+
+function startEditorCompareHandleDrag(event) {
+  if (event.button !== 0) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  editorCompareHandleDrag = true;
+  const handle = $("editor-compare-handle");
+  if (handle && handle.setPointerCapture) {
+    handle.setPointerCapture(event.pointerId);
+  }
+}
+
+function moveEditorCompareHandleDrag(event) {
+  if (!editorCompareHandleDrag) {
+    return;
+  }
+  const stage = $("editor-compare-stage");
+  if (!stage) {
+    return;
+  }
+  event.preventDefault();
+  const rect = stage.getBoundingClientRect();
+  if (!rect.width) {
+    return;
+  }
+  const ratio = (event.clientX - rect.left) / rect.width;
+  editorCompareView.ratio = Math.min(1, Math.max(0, ratio));
+  applyEditorCompare();
+}
+
+function endEditorCompareHandleDrag() {
+  editorCompareHandleDrag = false;
+}
+
+function onEditorCompareHandleKeydown(event) {
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    event.preventDefault();
+    const delta = event.key === "ArrowLeft" ? -0.02 : 0.02;
+    editorCompareView.ratio = Math.min(
+      1,
+      Math.max(0, editorCompareView.ratio + delta)
+    );
+    applyEditorCompare();
+    return;
+  }
+  if (event.key === "Home" || event.key === "End") {
+    event.preventDefault();
+    editorCompareView.ratio = event.key === "Home" ? 0 : 1;
+    applyEditorCompare();
+  }
+}
+
+function initEditorCompareInteractions() {
+  const stage = $("editor-compare-stage");
+  const handle = $("editor-compare-handle");
+  if (!stage || !handle) {
+    return;
+  }
+  stage.addEventListener("wheel", zoomEditorCompare, { passive: false });
+  stage.addEventListener("mousedown", startEditorComparePan);
+  stage.addEventListener("dblclick", () => resetEditorCompareView());
+  document.addEventListener("mousemove", moveEditorComparePan);
+  document.addEventListener("mouseup", endEditorComparePan);
+  handle.addEventListener("pointerdown", startEditorCompareHandleDrag);
+  handle.addEventListener("pointermove", moveEditorCompareHandleDrag);
+  handle.addEventListener("pointerup", endEditorCompareHandleDrag);
+  handle.addEventListener("pointercancel", endEditorCompareHandleDrag);
+  handle.addEventListener("keydown", onEditorCompareHandleKeydown);
+  window.addEventListener("resize", () => {
+    if (editorCompareActive) {
+      applyEditorCompare();
+    }
+  });
 }
 
 function updateEditorCfgNote() {
@@ -5903,6 +6172,13 @@ const REQUIRED_IDS = [
   "editor-preview",
   "editor-preview-img",
   "editor-preview-empty",
+  "btn-editor-compare",
+  "editor-compare",
+  "editor-compare-stage",
+  "editor-compare-before",
+  "editor-compare-after",
+  "editor-compare-handle",
+  "editor-compare-ratio",
   "btn-editor-generate",
   "btn-editor-open-gallery",
   "btn-editor-edit-result",
@@ -6193,6 +6469,7 @@ function bind() {
     }
   });
   initLightboxInteractions();
+  initEditorCompareInteractions();
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeLightbox();
@@ -6265,6 +6542,9 @@ function bind() {
   on("btn-editor-generate", "click", generateEditor);
   on("editor-size", "change", applyEditorSizeSelection);
   on("btn-editor-open-gallery", "click", openEditorResultInGallery);
+  on("btn-editor-compare", "click", () =>
+    setEditorCompareEnabled(!editorCompareActive)
+  );
   on("btn-editor-edit-result", "click", () => {
     editEditorResult().catch((error) => setEditorStatus(error.message, true));
   });

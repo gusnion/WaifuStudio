@@ -3881,6 +3881,38 @@ class EditorUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
 
+    def test_editor_comparador_ui(self):
+        html = self.make_client().get("/").text
+        for marker in (
+            'id="btn-editor-compare"',
+            'id="editor-compare"',
+            'id="editor-compare-stage"',
+            'id="editor-compare-before"',
+            'id="editor-compare-after"',
+            'id="editor-compare-handle"',
+            'id="editor-compare-ratio"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+        script = self.make_client().get("/static/app.js").text
+        for marker in (
+            "function setEditorCompareEnabled",
+            "function updateEditorCompare",
+            "function applyEditorCompare",
+            "function initEditorCompareInteractions",
+            'on("btn-editor-compare", "click"',
+            'stage.addEventListener("wheel", zoomEditorCompare, { passive: false })',
+            '"btn-editor-compare",',
+            '"editor-compare",',
+            '"editor-compare-stage",',
+            '"editor-compare-before",',
+            '"editor-compare-after",',
+            '"editor-compare-handle",',
+            '"editor-compare-ratio",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, script)
+
 
 class LightboxUiStaticTests(ServerTestCase):
     def test_index_lightbox_sin_ids_duplicados(self):

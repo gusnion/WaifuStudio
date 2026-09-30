@@ -1341,6 +1341,81 @@ input[type="checkbox"] {
   gap: 0.5rem;
 }
 
+#editor-preview {
+  position: relative;
+}
+
+.editor-compare {
+  position: absolute;
+  inset: 0;
+  cursor: default;
+}
+
+.editor-compare.hidden {
+  display: none;
+}
+
+.editor-compare-stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+.editor-compare-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.editor-compare-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.85);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.editor-compare-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(20, 20, 24, 0.85);
+  border: 2px solid #fff;
+  transform: translate(-50%, -50%);
+}
+
+.editor-compare-ratio {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.editor-compare.zoomed .editor-compare-stage {
+  cursor: grab;
+}
+
+.editor-compare.dragging .editor-compare-stage {
+  cursor: grabbing;
+}
+
 .editor-gallery {
   margin-top: 0.6rem;
   flex: 0 0 auto;
