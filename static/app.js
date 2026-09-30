@@ -2719,6 +2719,7 @@ function fillEditorSizes() {
     }
     select.appendChild(option(format.id, format.label));
   }
+  select.appendChild(option("original", "Original (1ª referencia)"));
   select.appendChild(option("manual", "Manual"));
   if ([...select.options].some((item) => item.value === previous)) {
     select.value = previous;
@@ -2830,6 +2831,8 @@ async function editEditorResult() {
   updateEditorRefs();
   await addEditorRefFromUrl(url);
   $("editor-mode").value = "edit";
+  setSelectValue($("editor-size"), "original");
+  applyEditorSizeSelection();
   setEditorStatus("Resultado cargado como referencia; describe el cambio");
   $("editor-prompt").focus();
 }
@@ -2852,28 +2855,30 @@ async function generateEditor() {
     setEditorStatus("El prompt no puede estar vacío", true);
     return;
   }
-  let width;
-  let height;
-  const preset = state.formatsById[$("editor-size") ? $("editor-size").value : ""];
-  if (preset) {
-    width = preset.width;
-    height = preset.height;
+  const sizeSelect = $("editor-size");
+  const sizeChoice = sizeSelect ? sizeSelect.value : "manual";
+  let sizePayload;
+  if (sizeChoice === "original") {
+    sizePayload = { original: true };
   } else {
-    width = Math.trunc(Number($("editor-width").value));
-    height = Math.trunc(Number($("editor-height").value));
-  }
-  if (!validEditorSize(width) || !validEditorSize(height)) {
-    setEditorStatus(
-      `Medidas fuera de [${EDITOR_SIZE_MIN}, ${EDITOR_SIZE_MAX}] o no múltiplos de ${EDITOR_SIZE_STEP}`,
-      true
-    );
-    return;
+    const preset =
+      sizeChoice && sizeChoice !== "manual" ? state.formatsById[sizeChoice] : null;
+    const width = preset ? preset.width : Math.trunc(Number($("editor-width").value));
+    const height = preset ? preset.height : Math.trunc(Number($("editor-height").value));
+    if (!validEditorSize(width) || !validEditorSize(height)) {
+      setEditorStatus(
+        `Medidas fuera de [${EDITOR_SIZE_MIN}, ${EDITOR_SIZE_MAX}] o no múltiplos de ${EDITOR_SIZE_STEP}`,
+        true
+      );
+      return;
+    }
+    sizePayload = { width, height };
   }
   const seedValue = Number($("editor-seed").value);
   const payload = {
     prompt,
     mode: $("editor-mode").value,
-    size: { width, height },
+    size: sizePayload,
     seed: Number.isFinite(seedValue) ? Math.trunc(seedValue) : 42,
   };
   if (state.editorRefs.length) {

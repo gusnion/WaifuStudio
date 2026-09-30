@@ -110,6 +110,39 @@ def _reference_resolution(width: int, height: int) -> int:
     return min(steps * REFERENCE_RESOLUTION_STEP, REFERENCE_RESOLUTION_MAX)
 
 
+def inherit_size_from_image(raw: bytes) -> tuple[int, int]:
+    """Tamano «Original» del editor: el de la primera referencia, encajado.
+
+    Escala el aspecto para caer en [512, 2048] y redondea cada lado al paso 16
+    del editor; EngineError si la imagen es ilegible o sin tamano. Pensado para
+    la edicion encadenada: la referencia es el resultado anterior y el tamano
+    se mantiene entre pasos.
+    """
+    from io import BytesIO
+
+    from PIL import Image
+
+    try:
+        with Image.open(BytesIO(raw)) as handle:
+            width, height = handle.size
+    except Exception as exc:
+        raise EngineError(f"original: referencia ilegible ({exc})") from exc
+    if width <= 0 or height <= 0:
+        raise EngineError("original: referencia sin tamano")
+    scale = 1.0
+    small, big = (width, height) if width <= height else (height, width)
+    if small < EDITOR_SIZE_MIN:
+        scale = EDITOR_SIZE_MIN / small
+    if big * scale > EDITOR_SIZE_MAX:
+        scale = EDITOR_SIZE_MAX / big
+
+    def _snap(value: float) -> int:
+        snapped = round(value / EDITOR_SIZE_STEP) * EDITOR_SIZE_STEP
+        return max(EDITOR_SIZE_MIN, min(EDITOR_SIZE_MAX, snapped))
+
+    return _snap(width * scale), _snap(height * scale)
+
+
 def _find_node(graph: dict, class_type: str) -> tuple[str, dict]:
     for node_id, node in graph.items():
         if isinstance(node, dict) and node.get("class_type") == class_type:

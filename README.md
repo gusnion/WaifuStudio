@@ -30,7 +30,7 @@ filtros NSFW/SFW.
 ### Editor
 - Qwen-Image 2.1 Uncensored (GGUF Q4_K_M + encoder Qwen3-VL-8B int8 + VAE propio).
 - Modos Generar y Editar con hasta 10 imágenes de referencia.
-- Preview del resultado y presets de tamaño de la app.
+- Preview del resultado y presets de tamaño de la app, incluida la opción **Original** (hereda el tamaño de la 1ª referencia, ideal para editar el resultado en cadena).
 
 ### Upscaler
 - Imágenes: RealESRGAN x2 con galería visual de origen, archivo local y escalado ×2/×4

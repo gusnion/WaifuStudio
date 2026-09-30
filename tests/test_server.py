@@ -3224,6 +3224,42 @@ class EditorStatusTests(ServerTestCase):
 
 
 class EditorGenerateValidationTests(ServerTestCase):
+    def install_editor(self):
+        for relative in server_module.EDITOR_MODEL_FILES:
+            path = self.config.comfy_root / "models" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake-model")
+
+    def test_size_original_hereda_la_primera_referencia(self):
+        self.install_editor()
+        source = Image.new("RGB", (640, 960), (5, 6, 7))
+        buffer = io.BytesIO()
+        source.save(buffer, format="PNG")
+        raw = base64.b64encode(buffer.getvalue()).decode("ascii")
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/editor/generate",
+            json={
+                "prompt": "edit",
+                "mode": "edit",
+                "size": {"original": True},
+                "ref_images_b64": [raw],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual((job["width"], job["height"]), (640, 960))
+        self.assertIs(job["params"]["original_size"], True)
+
+    def test_size_original_sin_referencias_400(self):
+        self.install_editor()
+        response = self.make_client().post(
+            "/api/editor/generate",
+            json={"prompt": "edit", "mode": "edit", "size": {"original": True}},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
     def test_prompt_vacio_o_no_str_400(self):
         client = self.make_client()
         for payload in ({}, {"prompt": ""}, {"prompt": "   "}, {"prompt": 7}):

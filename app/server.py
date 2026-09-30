@@ -33,6 +33,7 @@ from app.config import APP_ROOT, EngineConfig, load_config
 from app.editor import (
     EDITOR_DEFAULT_SIZE,
     EDITOR_SEED_MAX,
+    inherit_size_from_image,
     run_editor_generation,
 )
 from app.editor_models import editor_model
@@ -1877,40 +1878,44 @@ def create_app(
                 raw_refs.append(_decode_image_b64(ref, f"ref_images_b64[{index}]"))
         width = None
         height = None
+        original_size = False
         size = payload.get("size")
         if size not in (None, ""):
             if not isinstance(size, dict):
                 return JSONResponse(status_code=400, content={"error": "size invalido"})
-            for name in ("width", "height"):
-                value = size.get(name)
-                if value is None or isinstance(value, bool):
-                    return JSONResponse(
-                        status_code=400, content={"error": f"size.{name} invalido"}
-                    )
-                try:
-                    number = float(value)
-                except (TypeError, ValueError):
-                    return JSONResponse(
-                        status_code=400, content={"error": f"size.{name} invalido"}
-                    )
-                if (
-                    not number.is_integer()
-                    or not EDITOR_SIZE_MIN <= number <= EDITOR_SIZE_MAX
-                    or number % EDITOR_SIZE_STEP
-                ):
-                    return JSONResponse(
-                        status_code=400,
-                        content={
-                            "error": (
-                                f"size fuera de [{EDITOR_SIZE_MIN}, {EDITOR_SIZE_MAX}]"
-                                f" o no multiplo de {EDITOR_SIZE_STEP}"
-                            )
-                        },
-                    )
-                if name == "width":
-                    width = int(number)
-                else:
-                    height = int(number)
+            if size.get("original") is True:
+                original_size = True
+            else:
+                for name in ("width", "height"):
+                    value = size.get(name)
+                    if value is None or isinstance(value, bool):
+                        return JSONResponse(
+                            status_code=400, content={"error": f"size.{name} invalido"}
+                        )
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError):
+                        return JSONResponse(
+                            status_code=400, content={"error": f"size.{name} invalido"}
+                        )
+                    if (
+                        not number.is_integer()
+                        or not EDITOR_SIZE_MIN <= number <= EDITOR_SIZE_MAX
+                        or number % EDITOR_SIZE_STEP
+                    ):
+                        return JSONResponse(
+                            status_code=400,
+                            content={
+                                "error": (
+                                    f"size fuera de [{EDITOR_SIZE_MIN}, {EDITOR_SIZE_MAX}]"
+                                    f" o no multiplo de {EDITOR_SIZE_STEP}"
+                                )
+                            },
+                        )
+                    if name == "width":
+                        width = int(number)
+                    else:
+                        height = int(number)
         seed = payload.get("seed")
         if seed is None:
             seed = 42
@@ -1925,6 +1930,18 @@ def create_app(
                 status_code=400,
                 content={"error": f"seed fuera de 0..{EDITOR_SEED_MAX}"},
             )
+        if original_size:
+            if not raw_refs:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "size original requiere al menos una referencia"
+                    },
+                )
+            try:
+                width, height = inherit_size_from_image(raw_refs[0])
+            except EngineError as exc:
+                return JSONResponse(status_code=400, content={"error": str(exc)})
         if not editor_installed(cfg.comfy_root):
             return JSONResponse(
                 status_code=503, content={"error": "modelo no instalado (M10)"}
@@ -1943,6 +1960,8 @@ def create_app(
             "seed": seed,
             "ref_images": ref_images,
         }
+        if original_size:
+            params["original_size"] = True
         gen_id = st.add(
             EDITOR_MODEL, prompt.strip(), negative.strip(), params, kind="image"
         )

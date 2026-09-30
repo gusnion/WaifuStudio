@@ -569,5 +569,38 @@ class EditorQueueIntegrationTests(unittest.TestCase):
         self.assertEqual(params["ref_images"], [])
 
 
+class InheritSizeTests(unittest.TestCase):
+    @staticmethod
+    def _png(width: int, height: int) -> bytes:
+        from io import BytesIO
+
+        from PIL import Image
+
+        buffer = BytesIO()
+        Image.new("RGB", (width, height), (9, 9, 9)).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def test_tamano_valido_se_conserva(self):
+        from app.editor import inherit_size_from_image
+
+        self.assertEqual(inherit_size_from_image(self._png(640, 960)), (640, 960))
+
+    def test_pequeno_se_escala_al_minimo(self):
+        from app.editor import inherit_size_from_image
+
+        self.assertEqual(inherit_size_from_image(self._png(400, 600)), (512, 768))
+
+    def test_grande_se_encaja_al_maximo(self):
+        from app.editor import inherit_size_from_image
+
+        self.assertEqual(inherit_size_from_image(self._png(4096, 3072)), (2048, 1536))
+
+    def test_ilegible_lanza_engine_error(self):
+        from app.editor import inherit_size_from_image
+
+        with self.assertRaises(EngineError):
+            inherit_size_from_image(b"no-es-una-imagen")
+
+
 if __name__ == "__main__":
     unittest.main()
