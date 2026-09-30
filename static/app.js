@@ -2233,14 +2233,22 @@ async function generateVideo() {
   state.videoVramHint = "";
   try {
     payload.image_b64 = await readFileBase64(file);
+    const mode = $("video-mode").value;
+    payload.mode = mode;
+    if (mode === "flf2v") {
+      const last = $("video-last-image").files[0];
+      if (!last) {
+        setVideoStatus("FLF2V requiere la imagen final (last frame)", true);
+        return;
+      }
+      payload.last_image_b64 = await readFileBase64(last);
+    }
     if (engine === "wan") {
-      const mode = $("video-mode").value;
       const positive = $("video-motion").value.trim();
       if (!positive) {
         setVideoStatus("Escribe el movimiento del video", true);
         return;
       }
-      payload.mode = mode;
       payload.seconds = readVideoSeconds();
       payload.motion_positive = positive;
       payload.preset = $("video-preset").value;
@@ -2248,20 +2256,7 @@ async function generateVideo() {
       if (negative) {
         payload.motion_negative = negative;
       }
-      if (mode === "flf2v") {
-        const last = $("video-last-image").files[0];
-        if (!last) {
-          setVideoStatus("FLF2V requiere la imagen final (last frame)", true);
-          return;
-        }
-        payload.last_image_b64 = await readFileBase64(last);
-      }
     } else {
-      const last = $("video-last-image").files[0];
-      if (!last) {
-        setVideoStatus("H3 requiere la imagen final (last frame)", true);
-        return;
-      }
       const prompt = $("video-prompt").value.trim();
       if (!prompt) {
         setVideoStatus("H3 requiere el prompt", true);
@@ -2272,7 +2267,6 @@ async function generateVideo() {
         setVideoStatus("Resolución H3 inválida", true);
         return;
       }
-      payload.last_image_b64 = await readFileBase64(last);
       payload.prompt = prompt;
       payload.profile = $("video-h3-profile").value;
       payload.variant = $("video-h3-variant").value;
@@ -2469,8 +2463,8 @@ async function loadH3Profiles() {
 
 function applyVideoEngine() {
   const isWan = $("video-engine").value === "wan";
-  const showLast = !isWan || $("video-mode").value === "flf2v";
-  $("video-mode-field").style.display = isWan ? "" : "none";
+  const showLast = $("video-mode").value === "flf2v";
+  $("video-mode-field").style.display = "";
   $("video-aspect-field").style.display = isWan ? "" : "none";
   $("video-preset-field").style.display = isWan ? "" : "none";
   $("video-preset").disabled = !isWan;

@@ -21,7 +21,7 @@ filtros NSFW/SFW.
   visión opcionales en el instalador con `-IncludeOptional`; si faltan, la UI lo indica).
 
 ### Vídeo
-- Motor MiniMax H3 FL2VA con perfiles Referencia, Calidad y Ligero.
+- Motor MiniMax H3 con dos modos: **I2V** (solo frame inicial) y **FLF2V** (inicial + final); perfiles Referencia, Calidad y Ligero.
 - Variantes turbo4/turbo8 (LoRA + pasos), toggle SageAttention y audio nativo.
 - Duración de 5 a 15 s (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
 - «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM local.

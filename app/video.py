@@ -588,7 +588,7 @@ def prepare_h3_graph(
     graph: dict,
     *,
     first_image_name: str,
-    last_image_name: str,
+    last_image_name: str | None,
     prompt: str,
     seed: int,
     width: int = 576,
@@ -601,7 +601,9 @@ def prepare_h3_graph(
 
     Nodos del certificado: LoadImage ``140``/``141`` (first/last),
     ``MiniMaxH3ImageToVideo`` ``131`` (prompt, width/height/length) y
-    ``RandomNoise`` ``129``. El tamaño valida múltiplo de 32, área máxima
+    ``RandomNoise`` ``129``. Con `last_image_name=None` (modo I2V) se elimina
+    el LoadImage ``141`` y la entrada `last_frame`; con nombre (FLF2V) se fijan
+    ambos frames. El tamaño valida múltiplo de 32, área máxima
     (768x1344) y aspecto vertical/horizontal; `frames` opcional parchea
     `length` exigiendo el grid 5+17n del modelo (124..362).
 
@@ -612,7 +614,8 @@ def prepare_h3_graph(
     hay ninguno que rewirear. La plantilla original nunca se muta.
     """
     first_image_name = _require_text(first_image_name, "h3: first_image_name")
-    last_image_name = _require_text(last_image_name, "h3: last_image_name")
+    if last_image_name is not None:
+        last_image_name = _require_text(last_image_name, "h3: last_image_name")
     prompt = _require_text(prompt, "h3: prompt")
     seed = _require_seed(seed)
     if not isinstance(sage, bool):
@@ -626,10 +629,14 @@ def prepare_h3_graph(
     first = _node_inputs(prepared, "140", "LoadImage")
     _require_field(first, "image", "140")
     first["image"] = first_image_name
-    last = _node_inputs(prepared, "141", "LoadImage")
-    _require_field(last, "image", "141")
-    last["image"] = last_image_name
     to_video = _node_inputs(prepared, "131", "MiniMaxH3ImageToVideo")
+    if last_image_name is None:
+        prepared.pop("141", None)
+        to_video.pop("last_frame", None)
+    else:
+        last = _node_inputs(prepared, "141", "LoadImage")
+        _require_field(last, "image", "141")
+        last["image"] = last_image_name
     for field in ("prompt", "width", "height"):
         _require_field(to_video, field, "131")
     to_video["prompt"] = prompt

@@ -1585,8 +1585,6 @@ def create_app(
         mode = payload.get("mode") or "i2v"
         if mode not in ("i2v", "flf2v"):
             raise EngineError("mode invalido; usar i2v|flf2v")
-        if engine_kind == "h3" and mode != "i2v":
-            raise EngineError("mode flf2v solo aplica a engine wan")
         aspect = payload.get("aspect") or "vertical"
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
@@ -1646,7 +1644,7 @@ def create_app(
             hint = None
         first_raw = _decode_image_b64(payload.get("image_b64"), "image")
         last_raw = None
-        if engine_kind == "h3" or mode == "flf2v":
+        if mode == "flf2v":
             last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
         if engine_kind == "wan":
             motion_positive = payload.get("motion_positive")

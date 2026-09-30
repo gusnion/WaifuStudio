@@ -71,7 +71,7 @@ gestionado en `python\`) antes de arrancar o parar; no matan procesos ajenos.
   resoluciones de `registry/h3_presets-v1.json`.
 - `h3_prompt.py`: «Mejorar prompt (H3)»; escribe los tres bloques con el LLM.
 - `motion.py`: «Mejorar prompt (video)» para el motor Wan con el LLM.
-- `video.py`: grafos y runner de vídeo (H3; Wan conservado en código como legado, sin selector en la UI).
+- `video.py`: grafos y runner de vídeo (H3 con modos **I2V** y **FLF2V**; Wan conservado en código como legado, sin selector en la UI).
 - `video_presets.py`: presets Wan de `registry/video_presets-v1.json`.
 - `editor.py`: grafo y runner del Editor Qwen-Image 2.1 UC (hasta 10 referencias).
 - `editor_models.py`: nombres reales del par UC (`registry/editor_models-v1.json`).

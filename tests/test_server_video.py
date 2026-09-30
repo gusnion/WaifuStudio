@@ -300,14 +300,26 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
             )
         )
 
-    def test_h3_sin_last_image_400(self):
-        self.assert_400(
-            self.payload(engine="h3", last_image_b64=None, prompt="p descripcion")
+    def test_h3_i2v_sin_last_es_valido_y_un_solo_frame(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json=self.payload(
+                engine="h3", last_image_b64=None, prompt="p descripcion"
+            ),
         )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["mode"], "i2v")
+        self.assertIsNone(job["last_image_name"])
+        self.assertEqual(len(self.input_files()), 1)
+        self.assertEqual(self.store.list()[0]["params"]["mode"], "i2v")
 
-    def test_h3_last_image_b64_invalida_400(self):
+    def test_h3_flf2v_last_invalida_400(self):
         self.assert_400(
-            self.payload(engine="h3", last_image_b64="%%%mal%%%", prompt="p")
+            self.payload(
+                engine="h3", mode="flf2v", last_image_b64="%%%mal%%%", prompt="p"
+            )
         )
 
     def test_seed_invalida_400(self):
@@ -338,10 +350,20 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         self.assert_400(self.payload(mode="flf2v", last_image_b64=None))
         self.assert_400(self.payload(mode="flf2v", last_image_b64="%%%mal%%%"))
 
-    def test_mode_flf2v_con_h3_400(self):
-        self.assert_400(
-            self.payload(engine="h3", mode="flf2v", last_image_b64=PNG_B64, prompt="p")
+    def test_h3_flf2v_encola_dos_frames(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json=self.payload(
+                engine="h3", mode="flf2v", last_image_b64=PNG_B64, prompt="p"
+            ),
         )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["mode"], "flf2v")
+        self.assertIsNotNone(job["last_image_name"])
+        self.assertEqual(len(self.input_files()), 2)
+        self.assertNotEqual(job["image_name"], job["last_image_name"])
 
     def test_seconds_fuera_de_rango_o_invalidos_400(self):
         for value in (0, 0.5, 16, 20, -1, "abc", True):
@@ -794,6 +816,7 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
             "/api/video/generate",
             json={
                 "engine": "h3",
+                "mode": "flf2v",
                 "image_b64": PNG_B64,
                 "last_image_b64": PNG_B64,
                 "prompt": "integrated_multimodal_description: test",

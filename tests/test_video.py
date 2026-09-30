@@ -899,10 +899,23 @@ class PrepareH3Tests(unittest.TestCase):
             "prompt": "p",
             "seed": 1,
         }
-        for override in ({"first_image_name": ""}, {"last_image_name": None}, {"prompt": " "}):
+        for override in ({"first_image_name": ""}, {"last_image_name": "  "}, {"prompt": " "}):
             with self.subTest(override=override):
                 with self.assertRaises(EngineError):
                     prepare_h3_graph(self.graph, **(base | override))
+
+    def test_i2v_sin_last_quita_nodo_y_entrada(self):
+        patched = prepare_h3_graph(
+            self.graph,
+            first_image_name="a.png",
+            last_image_name=None,
+            prompt="p",
+            seed=1,
+        )
+        self.assertNotIn("141", patched)
+        self.assertNotIn("last_frame", patched["131"]["inputs"])
+        self.assertEqual(patched["140"]["inputs"]["image"], "a.png")
+        self.assertIn("141", self.graph)
 
     def test_tamano_y_frames_patch(self):
         patched = prepare_h3_graph(
