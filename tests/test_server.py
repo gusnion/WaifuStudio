@@ -2241,6 +2241,28 @@ class MediaTests(ServerTestCase):
         self.assertIn("error", response.json())
 
 
+class DownloadRouteTests(ServerTestCase):
+    def test_download_200_adjunto(self):
+        gen_id = self.store.add(MODEL_ID, "p", status="done")
+        self.add_gallery_png(gen_id, "ok.png")
+        response = self.make_client().get(f"/api/download/{gen_id}/ok.png")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "attachment", response.headers.get("content-disposition", "").lower()
+        )
+        self.assertIn("ok.png", response.headers.get("content-disposition", ""))
+        self.assertEqual(response.content, PNG_BYTES)
+
+    def test_download_404_y_confinamiento(self):
+        client = self.make_client()
+        missing = client.get("/api/download/999/ok.png")
+        self.assertEqual(missing.status_code, 404)
+        gen_id = self.store.add(MODEL_ID, "p", status="done")
+        self.add_gallery_png(gen_id, "ok.png")
+        outside = self.make_client().get(f"/api/download/{gen_id}/..%2F..%2Fescape.png")
+        self.assertIn(outside.status_code, (403, 404))
+
+
 class ApiRefsTests(ServerTestCase):
     def write_input(self, name: str, data: bytes = PNG_BYTES) -> Path:
         directory = self.config.comfy_root / "input"

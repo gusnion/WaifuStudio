@@ -443,7 +443,8 @@ input[type="checkbox"] {
 
 .viewer-toolbar #btn-new-generation,
 .viewer-toolbar #btn-describe-image,
-.viewer-toolbar #btn-save-to-oc {
+.viewer-toolbar #btn-save-to-oc,
+.viewer-toolbar #btn-download-image {
   flex: 0 0 auto;
 }
 
@@ -1291,7 +1292,27 @@ input[type="checkbox"] {
 .editor-result-actions {
   margin-top: 0.5rem;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.editor-gallery {
+  margin-top: 0.6rem;
+}
+
+.editor-gallery h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.editor-gallery .image-thumbs {
+  margin-top: 0;
+}
+
+.editor-gallery-pager {
+  justify-content: flex-start;
+  margin-top: 0.5rem;
 }
 
 .pager {

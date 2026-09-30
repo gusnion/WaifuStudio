@@ -2062,6 +2062,25 @@ def create_app(
             return JSONResponse(status_code=404, content={"error": "no encontrado"})
         return FileResponse(candidate, media_type=media_type)
 
+    @app.get("/api/download/{gen_id}/{name:path}")
+    async def api_download(gen_id: int, name: str) -> Any:
+        """Descarga directa de un archivo de la galeria (Content-Disposition adjunto).
+
+        Mismo confinamiento que `/media`; el navegador lo guarda en Descargas.
+        """
+        gen_root = (cfg.data_dir / "gallery" / str(gen_id)).resolve()
+        candidate = (gen_root / name).resolve()
+        if not candidate.is_relative_to(gen_root):
+            return JSONResponse(
+                status_code=403, content={"error": "ruta fuera de la galeria"}
+            )
+        if not candidate.is_file():
+            return JSONResponse(status_code=404, content={"error": "no encontrado"})
+        media_type = MEDIA_TYPES.get(candidate.suffix.lower()) or "application/octet-stream"
+        return FileResponse(
+            candidate, media_type=media_type, filename=candidate.name
+        )
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> Any:
         return templates.TemplateResponse(request, "index.html", {"title": "WAIFU"})

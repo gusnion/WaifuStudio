@@ -82,6 +82,7 @@ const H3_GUIDE_TEXT = [
 ].join("\n");
 
 const EDITOR_REF_LIMIT = 10;
+const EDITOR_GALLERY_PAGE_SIZE = 5;
 const EDITOR_SIZE_MIN = 512;
 const EDITOR_SIZE_MAX = 2048;
 const EDITOR_SIZE_STEP = 16;
@@ -158,6 +159,12 @@ const state = {
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
+  editorResultUrl: null,
+  editorGallery: {
+    page: 1,
+    total: 1,
+    items: [],
+  },
   upscalers: [],
   frameInterpolation: null,
   upscaleSources: [],
@@ -1367,6 +1374,11 @@ function imageViewUrl(item) {
   return urls.length && !isVideoUrl(urls[0]) ? urls[0] : null;
 }
 
+function downloadUrlFor(url) {
+  const text = String(url || "");
+  return text.startsWith("/media/") ? `/api/download/${text.slice("/media/".length)}` : null;
+}
+
 function updateImagePreview() {
   const item = selectedImageView();
   const url = imageViewUrl(item);
@@ -1394,10 +1406,24 @@ function updateImagePreview() {
   if (describeButton) {
     describeButton.disabled = !(item && item.kind === "image" && url);
   }
+  const downloadButton = $("btn-download-image");
+  if (downloadButton) {
+    downloadButton.disabled = !(item && item.kind === "image" && url);
+  }
   const info = $("image-preview-info");
   info.textContent = item
     ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
     : "Sin generaciones";
+}
+
+function downloadSelectedImage() {
+  const item = selectedImageView();
+  const downloadUrl = downloadUrlFor(imageViewUrl(item));
+  if (!downloadUrl) {
+    setStatus("No hay imagen seleccionada para descargar", true);
+    return;
+  }
+  window.location.href = downloadUrl;
 }
 
 function renderImageThumbs() {
@@ -2599,6 +2625,37 @@ async function addEditorRefs(fileList) {
   }
 }
 
+async function addEditorRefFromUrl(url, name) {
+  const source = String(url || "");
+  if (!source) {
+    return;
+  }
+  if (state.editorRefs.length >= EDITOR_REF_LIMIT) {
+    setEditorStatus(`Máximo ${EDITOR_REF_LIMIT} referencias (quita alguna)`, true);
+    return;
+  }
+  const response = await fetch(source);
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar la imagen (HTTP ${response.status})`);
+  }
+  const blob = await response.blob();
+  if (state.editorRefs.length >= EDITOR_REF_LIMIT) {
+    setEditorStatus(`Máximo ${EDITOR_REF_LIMIT} referencias (quita alguna)`, true);
+    return;
+  }
+  const refName = name || refFilename({ url: source });
+  const b64 = await readFileBase64(
+    new File([blob], refName, { type: blob.type || "image/png" })
+  );
+  state.editorRefs.push({
+    name: refName,
+    b64,
+    url: URL.createObjectURL(blob),
+  });
+  updateEditorRefs();
+  setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
+}
+
 function validEditorSize(value) {
   return (
     Number.isInteger(value) &&
@@ -2646,6 +2703,72 @@ function applyEditorSizeSelection() {
   $("editor-manual-size").classList.toggle("hidden", !manual);
 }
 
+function renderEditorGallery() {
+  const viewer = state.editorGallery;
+  const container = $("editor-gallery-thumbs");
+  if (!container) {
+    return;
+  }
+  container.replaceChildren();
+  if (!viewer.items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin generaciones.";
+    container.appendChild(empty);
+  }
+  for (const item of viewer.items) {
+    const url = imageViewUrl(item);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "image-thumb";
+    button.title = `Usar generación #${item.id} como referencia`;
+    button.setAttribute("aria-label", `Usar generación #${item.id} como referencia`);
+    if (url) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = item.prompt || `Generación #${item.id}`;
+      img.loading = "lazy";
+      button.appendChild(img);
+      button.addEventListener("click", () => {
+        addEditorRefFromUrl(url).catch((error) => setEditorStatus(error.message, true));
+      });
+    } else {
+      const missing = document.createElement("span");
+      missing.className = "thumb-missing";
+      missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
+      button.appendChild(missing);
+      button.disabled = true;
+    }
+    container.appendChild(button);
+  }
+  $("editor-gallery-info").textContent = `página ${viewer.page} de ${viewer.total}`;
+  $("editor-gallery-prev").disabled = viewer.page <= 1;
+  $("editor-gallery-next").disabled = viewer.page >= viewer.total;
+}
+
+async function loadEditorGallery(page = 1) {
+  const viewer = state.editorGallery;
+  const wanted = Math.max(1, Math.trunc(Number(page)) || 1);
+  const offset = (wanted - 1) * EDITOR_GALLERY_PAGE_SIZE;
+  try {
+    const data = await api(
+      `/api/gallery?kind=image&limit=${EDITOR_GALLERY_PAGE_SIZE}&offset=${offset}`
+    );
+    const items = data.items || [];
+    const count = Number(data.count);
+    const total = Number.isFinite(count) && count > 0 ? count : items.length;
+    viewer.total = Math.max(1, Math.ceil(total / EDITOR_GALLERY_PAGE_SIZE));
+    if (wanted > viewer.total) {
+      return await loadEditorGallery(viewer.total);
+    }
+    viewer.page = wanted;
+    viewer.items = items;
+    renderEditorGallery();
+  } catch (error) {
+    setEditorStatus(error.message, true);
+  }
+}
+
 function showEditorResult(job) {
   const output = ((job && job.outputs) || [])[0];
   const box = $("editor-result");
@@ -2653,6 +2776,7 @@ function showEditorResult(job) {
   if (!output || !output.url || !box || !image) {
     return;
   }
+  state.editorResultUrl = output.url;
   image.src = output.url;
   box.classList.remove("hidden");
 }
@@ -2660,6 +2784,34 @@ function showEditorResult(job) {
 async function openEditorResultInGallery() {
   switchTab("image");
   await reloadImageViewerFirstPage();
+}
+
+async function editEditorResult() {
+  const url = state.editorResultUrl;
+  if (!url) {
+    setEditorStatus("No hay resultado del editor para editar", true);
+    return;
+  }
+  for (const ref of state.editorRefs) {
+    if (ref.url) {
+      URL.revokeObjectURL(ref.url);
+    }
+  }
+  state.editorRefs = [];
+  updateEditorRefs();
+  await addEditorRefFromUrl(url);
+  $("editor-mode").value = "edit";
+  setEditorStatus("Resultado cargado como referencia; describe el cambio");
+  $("editor-prompt").focus();
+}
+
+function downloadEditorResult() {
+  const downloadUrl = downloadUrlFor(state.editorResultUrl);
+  if (!downloadUrl) {
+    setEditorStatus("No hay resultado para descargar", true);
+    return;
+  }
+  window.location.href = downloadUrl;
 }
 
 async function generateEditor() {
@@ -2709,6 +2861,7 @@ async function generateEditor() {
       async (job) => {
         showEditorResult(job);
         await reloadImageViewerFirstPage();
+        await loadEditorGallery(1);
       },
       setEditorProgress,
       false
@@ -4868,6 +5021,7 @@ const REQUIRED_IDS = [
   "lightbox",
   "btn-new-generation",
   "btn-describe-image",
+  "btn-download-image",
   "btn-save-to-oc",
   "image-preview",
   "image-preview-img",
@@ -4925,6 +5079,12 @@ const REQUIRED_IDS = [
   "editor-result-img",
   "btn-editor-generate",
   "btn-editor-open-gallery",
+  "btn-editor-edit-result",
+  "btn-editor-download",
+  "editor-gallery-thumbs",
+  "editor-gallery-prev",
+  "editor-gallery-next",
+  "editor-gallery-info",
   "panel-upscaler",
   "upscale-kind",
   "upscale-source",
@@ -5060,6 +5220,7 @@ function bind() {
   on("btn-describe-image", "click", () => {
     openVisionModal().catch((error) => setStatus(error.message, true));
   });
+  on("btn-download-image", "click", downloadSelectedImage);
   on("btn-vision-close", "click", closeVisionModal);
   on("vision-modal", "click", (event) => {
     if (event.target === $("vision-modal")) {
@@ -5156,6 +5317,16 @@ function bind() {
   on("btn-editor-generate", "click", generateEditor);
   on("editor-size", "change", applyEditorSizeSelection);
   on("btn-editor-open-gallery", "click", openEditorResultInGallery);
+  on("btn-editor-edit-result", "click", () => {
+    editEditorResult().catch((error) => setEditorStatus(error.message, true));
+  });
+  on("btn-editor-download", "click", downloadEditorResult);
+  on("editor-gallery-prev", "click", () => {
+    loadEditorGallery(state.editorGallery.page - 1);
+  });
+  on("editor-gallery-next", "click", () => {
+    loadEditorGallery(state.editorGallery.page + 1);
+  });
   on("upscale-kind", "change", () => {
     applyUpscaleKind();
     loadUpscaleSources().catch((error) => setUpscaleStatus(error.message, true));
@@ -5328,6 +5499,7 @@ async function init() {
     await settle("defaults de arranque", applyStartupDefaults);
     await settle("visor de video", () => loadVideoViewer());
     await settle("visor de imagen", () => loadImageViewer());
+    await settle("galería del editor", () => loadEditorGallery(1));
     await settle("upscaler", loadUpscaleSources);
     await settle("modelos de upscaler", loadUpscaleModels);
     await settle("zonas", renderZoneEditor);

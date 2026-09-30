@@ -204,6 +204,7 @@
           <button id="btn-new-generation" type="button">Generar nuevo</button>
           <button id="btn-describe-image" type="button" disabled>Describir</button>
           <button id="btn-save-to-oc" type="button" disabled>Guardar en OC</button>
+          <button id="btn-download-image" type="button" disabled>Descargar</button>
           <span id="image-preview-info" class="viewer-info">Sin generaciones</span>
           <div class="viewer-pager">
             <button id="image-prev-page" type="button" aria-label="Página anterior">‹</button>
@@ -448,9 +449,20 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <img id="editor-result-img" alt="Resultado del editor">
           <div class="editor-result-actions">
             <button id="btn-editor-open-gallery" type="button">Ver en la galería</button>
+            <button id="btn-editor-edit-result" type="button">Editar este resultado</button>
+            <button id="btn-editor-download" type="button">Descargar</button>
           </div>
         </div>
         <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» encola de verdad cuando los tres archivos están instalados; el resultado aparece aquí y en la galería de Imagen.</p>
+        <section class="editor-gallery">
+          <h3>Galería</h3>
+          <div id="editor-gallery-thumbs" class="image-thumbs"></div>
+          <div class="viewer-pager editor-gallery-pager">
+            <button id="editor-gallery-prev" type="button" aria-label="Página anterior" disabled>‹</button>
+            <span id="editor-gallery-info">página 1 de 1</span>
+            <button id="editor-gallery-next" type="button" aria-label="Página siguiente" disabled>›</button>
+          </div>
+        </section>
       </section>
     </section>
 
