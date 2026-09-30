@@ -101,6 +101,14 @@ Todo corre en tu PC: la app y ComfyUI escuchan solo en `127.0.0.1`. Tu galería,
 registros viven en `data/` (`data/waifu.db`, `data/gallery/`, `data/registry/`,
 `data/characters/`). La app no envía telemetría.
 
+## Apoyar el proyecto
+
+WAIFU es gratuito y de código abierto. Si te resulta útil y quieres apoyar su desarrollo:
+Patreon → https://www.patreon.com/gusnion
+
+El apoyo es para el desarrollo del código; no incluye ni da acceso a modelos, pesos o contenido
+de terceros.
+
 ## Licencia
 
 - Código: MIT (ver `LICENSE`).
