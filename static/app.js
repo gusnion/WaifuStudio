@@ -739,7 +739,16 @@ function loraLibraryRow(lora) {
       setLoraLibraryStatus(error.message, true)
     );
   });
-  actions.append(edit, remove);
+  const removeFile = document.createElement("button");
+  removeFile.type = "button";
+  removeFile.className = "danger btn-lora-delete-file";
+  removeFile.textContent = "Borrar + archivo";
+  removeFile.addEventListener("click", () => {
+    deleteLoraEntry(lora.id, { withFile: true }).catch((error) =>
+      setLoraLibraryStatus(error.message, true)
+    );
+  });
+  actions.append(edit, remove, removeFile);
   row.append(header, meta, file, actions);
   return row;
 }
@@ -861,23 +870,72 @@ async function saveLoraEntry(event) {
   }
 }
 
-async function deleteLoraEntry(loraId) {
+async function deleteLoraEntry(loraId, options = {}) {
+  const withFile = Boolean(options.withFile);
   const lora = loraLibraryEntry(loraId);
   const label = lora ? lora.display_name || lora.id : loraId;
-  if (
-    !window.confirm(
-      `¿Quitar «${label}» del registro? El archivo .safetensors NO se borra.`
-    )
-  ) {
+  const question = withFile
+    ? `¿Borrar «${label}» del registro y ELIMINAR su archivo .safetensors? Esta acción no se puede deshacer.`
+    : `¿Quitar «${label}» del registro? El archivo .safetensors NO se borra.`;
+  if (!window.confirm(question)) {
     return;
   }
-  await api(`/api/loras/${encodeURIComponent(loraId)}`, { method: "DELETE" });
+  const query = withFile ? "?file=1" : "";
+  const data = await api(
+    `/api/loras/${encodeURIComponent(loraId)}${query}`,
+    { method: "DELETE" }
+  );
   if (state.loraEditId === loraId) {
     resetLoraForm();
   }
   await loadLoraLibrary();
   await loadLoras();
-  setLoraLibraryStatus(`LoRA «${loraId}» quitada del registro (archivo intacto)`);
+  if (!withFile) {
+    setLoraLibraryStatus(`LoRA «${loraId}» quitada del registro (archivo intacto)`);
+    return;
+  }
+  setLoraLibraryStatus(
+    data.file_removed
+      ? `LoRA «${loraId}» y su archivo eliminados`
+      : `LoRA «${loraId}» quitada del registro (el archivo ya no existía)`
+  );
+}
+
+async function uploadLoraFile() {
+  const input = $("lora-upload");
+  const file = input && input.files ? input.files[0] : null;
+  if (!file) {
+    setLoraLibraryStatus("Elige un archivo .safetensors para cargar", true);
+    return;
+  }
+  setLoraLibraryStatus("Subiendo y registrando…");
+  try {
+    const payload = {
+      filename: file.name,
+      family: $("lora-form-family").value.trim() || "anima",
+      file_b64: await readFileBase64(file),
+    };
+    const displayName = $("lora-form-display").value.trim();
+    if (displayName) {
+      payload.display_name = displayName;
+    }
+    const trigger = $("lora-form-trigger").value.trim();
+    if (trigger) {
+      payload.trigger = trigger;
+    }
+    const data = await postJson("/api/loras/upload", payload);
+    if (input) {
+      input.value = "";
+    }
+    await loadLoraLibrary();
+    await loadLoras();
+    const inferred = data.trigger_inferido
+      ? ` · trigger: ${data.trigger_inferido}`
+      : "";
+    setLoraLibraryStatus(`Registrado ✓ («${data.item.id}»${inferred})`);
+  } catch (error) {
+    setLoraLibraryStatus(error.message, true);
+  }
 }
 
 function openLoraLibrary() {
@@ -5365,6 +5423,8 @@ const REQUIRED_IDS = [
   "lora-form-license",
   "lora-form-notes",
   "btn-lora-form-cancel",
+  "btn-lora-upload",
+  "lora-upload",
   "vision-modal",
   "btn-vision-close",
   "vision-status",
@@ -5607,6 +5667,12 @@ function bind() {
   on("btn-lora-manage-modal", "click", openLoraLibrary);
   on("btn-lora-library-close", "click", closeLoraLibrary);
   on("btn-lora-form-cancel", "click", resetLoraForm);
+  on("btn-lora-upload", "click", () => {
+    $("lora-upload").click();
+  });
+  on("lora-upload", "change", () => {
+    uploadLoraFile().catch((error) => setLoraLibraryStatus(error.message, true));
+  });
   on("lora-library-form", "submit", saveLoraEntry);
   on("lora-library-modal", "click", (event) => {
     if (event.target === $("lora-library-modal")) {

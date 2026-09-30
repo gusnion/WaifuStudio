@@ -7,6 +7,7 @@ import base64
 import io
 import json
 import os
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -488,6 +489,312 @@ class LoraCrudRouteTests(ServerTestCase):
         self.assertEqual(self.registry_ids(), ["lora-a", "lora-b"])
 
 
+def lora_safetensors_bytes(metadata=None, tensors=None) -> bytes:
+    header: dict = dict(tensors or {})
+    if metadata is not None:
+        header["__metadata__"] = metadata
+    encoded = json.dumps(header).encode("utf-8")
+    encoded += b" " * ((8 - len(encoded) % 8) % 8)
+    return struct.pack("<Q", len(encoded)) + encoded + b"\x00" * 64
+
+
+LORA_UPLOAD_METADATA = {
+    "ss_network_dim": "32",
+    "ss_network_alpha": "16",
+    "ss_sd_model_name": "anima_baseV10",
+    "modelspec.title": "Mi Lora Titulo",
+    "ss_tag_frequency": json.dumps({"dataset": {"mi trigger": 50, "otro": 3}}),
+}
+
+
+class LoraUploadRouteTests(ServerTestCase):
+    """Subida de .safetensors a models/loras (M10-5c): copia, registro y borrado."""
+
+    def setUp(self):
+        super().setUp()
+        self.loras_path = self.config.data_dir / "loras-upload-test.json"
+        self.loras_root = self.config.comfy_root / "models" / "loras"
+        self.loras_path.parent.mkdir(parents=True, exist_ok=True)
+        self.loras_path.write_text(
+            json.dumps({"version": 1, "loras": []}), encoding="utf-8"
+        )
+        patcher = mock.patch.object(
+            loras_module, "DEFAULT_PATH", self.loras_path
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        user = mock.patch.object(
+            loras_module, "user_registry_path", lambda: self.loras_path
+        )
+        user.start()
+        self.addCleanup(user.stop)
+
+    def payload(self, raw=None, **overrides) -> dict:
+        data = {
+            "filename": "Mi Lora.safetensors",
+            "family": "anima",
+            "file_b64": base64.b64encode(
+                raw if raw is not None else lora_safetensors_bytes(LORA_UPLOAD_METADATA)
+            ).decode("ascii"),
+        }
+        data.update(overrides)
+        return data
+
+    def registry_entries(self) -> list[dict]:
+        payload = json.loads(self.loras_path.read_text(encoding="utf-8"))
+        return payload["loras"]
+
+    def test_upload_200_copia_registra_e_infiere_metadata(self):
+        raw = lora_safetensors_bytes(LORA_UPLOAD_METADATA)
+        response = self.make_client().post(
+            "/api/loras/upload", json=self.payload(raw=raw)
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"item", "file", "trigger_inferido"})
+        item = data["item"]
+        self.assertEqual(item["id"], "mi-lora")
+        self.assertEqual(item["family"], "anima")
+        self.assertEqual(item["file"], "anima\\Mi Lora.safetensors")
+        self.assertEqual(item["display_name"], "Mi Lora Titulo")
+        self.assertEqual(item["trigger"], "mi trigger")
+        self.assertEqual(item["default_weight"], 1.0)
+        self.assertEqual(item["source"], "subido desde la app")
+        self.assertIn("no verificada", item["license"])
+        self.assertIn("dim 32 / alpha 16", item["notes"])
+        self.assertIn("base anima_baseV10", item["notes"])
+        self.assertIn("editable", item["notes"])
+        self.assertEqual(data["file"], "anima\\Mi Lora.safetensors")
+        self.assertEqual(data["trigger_inferido"], "mi trigger")
+        target = self.loras_root / "anima" / "Mi Lora.safetensors"
+        self.assertEqual(target.read_bytes(), raw)
+        self.assertEqual(
+            [entry["id"] for entry in self.registry_entries()], ["mi-lora"]
+        )
+
+    def test_upload_display_name_y_trigger_del_payload_ganan(self):
+        response = self.make_client().post(
+            "/api/loras/upload",
+            json=self.payload(display_name="Nombre manual", trigger="trigger manual"),
+        )
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["item"]
+        self.assertEqual(item["display_name"], "Nombre manual")
+        self.assertEqual(item["trigger"], "trigger manual")
+        self.assertEqual(response.json()["trigger_inferido"], "mi trigger")
+
+    def test_upload_sin_metadata_usa_stem_y_notes_minimas(self):
+        response = self.make_client().post(
+            "/api/loras/upload",
+            json=self.payload(raw=lora_safetensors_bytes({"otra": "x"})),
+        )
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["item"]
+        self.assertEqual(item["display_name"], "Mi Lora")
+        self.assertEqual(item["trigger"], "")
+        self.assertEqual(response.json()["trigger_inferido"], "")
+        self.assertEqual(
+            item["notes"], "trigger inferido del safetensors (editable)"
+        )
+
+    def test_upload_data_uri_aceptada(self):
+        raw = lora_safetensors_bytes(LORA_UPLOAD_METADATA)
+        encoded = base64.b64encode(raw).decode("ascii")
+        response = self.make_client().post(
+            "/api/loras/upload",
+            json=self.payload(
+                file_b64=f"data:application/octet-stream;base64,{encoded}"
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_upload_slug_duplicado_anade_sufijo(self):
+        client = self.make_client()
+        first = client.post("/api/loras/upload", json=self.payload())
+        second = client.post(
+            "/api/loras/upload",
+            json=self.payload(filename="Mi-Lora.safetensors", family="otra"),
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["item"]["id"], "mi-lora")
+        self.assertEqual(second.json()["item"]["id"], "mi-lora-2")
+        self.assertEqual(
+            [entry["id"] for entry in self.registry_entries()],
+            ["mi-lora", "mi-lora-2"],
+        )
+        self.assertTrue(
+            (self.loras_root / "otra" / "Mi-Lora.safetensors").is_file()
+        )
+
+    def test_upload_400_validaciones(self):
+        cases = (
+            ("extension", {"filename": "lora.bin"}),
+            ("ruta", {"filename": "anima/lora.safetensors"}),
+            ("ruta_win", {"filename": "anima\\lora.safetensors"}),
+            ("filename_vacio", {"filename": ""}),
+            ("family_mayus", {"family": "Anima"}),
+            ("family_vacia", {"family": ""}),
+            ("family_escape", {"family": ".."}),
+            ("b64_invalido", {"file_b64": "%%%"}),
+            ("b64_vacio", {"file_b64": ""}),
+            (
+                "cabecera_invalida",
+                {
+                    "file_b64": base64.b64encode(b"no-es-safetensors").decode(
+                        "ascii"
+                    )
+                },
+            ),
+            (
+                "cabecera_no_dict",
+                {
+                    "file_b64": base64.b64encode(
+                        struct.pack("<Q", 2) + b"[]"
+                    ).decode("ascii")
+                },
+            ),
+        )
+        client = self.make_client()
+        for label, overrides in cases:
+            with self.subTest(caso=label):
+                response = client.post(
+                    "/api/loras/upload", json=self.payload(**overrides)
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        for field in ("filename", "family", "file_b64"):
+            with self.subTest(campo=field):
+                payload = self.payload()
+                payload.pop(field)
+                self.assertEqual(
+                    client.post("/api/loras/upload", json=payload).status_code, 400
+                )
+        self.assertEqual(self.registry_entries(), [])
+        self.assertFalse(self.loras_root.exists())
+
+    def test_upload_409_si_el_destino_existe(self):
+        target = self.loras_root / "anima" / "Mi Lora.safetensors"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"ocupado")
+        response = self.make_client().post("/api/loras/upload", json=self.payload())
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["error"],
+            "ya existe ese archivo en loras/anima/Mi Lora.safetensors",
+        )
+        self.assertEqual(target.read_bytes(), b"ocupado")
+        self.assertEqual(self.registry_entries(), [])
+
+    def test_upload_sin_huerfano_si_el_registro_falla(self):
+        client = self.make_client()
+        with mock.patch.object(
+            server_module, "add_lora", side_effect=EngineError("registro roto")
+        ):
+            response = client.post("/api/loras/upload", json=self.payload())
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            (self.loras_root / "anima" / "Mi Lora.safetensors").exists()
+        )
+        self.assertEqual(self.registry_entries(), [])
+
+    def upload(self, client, filename="Mi Lora.safetensors", family="anima"):
+        response = client.post(
+            "/api/loras/upload", json=self.payload(filename=filename, family=family)
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_delete_con_file_borra_archivo_y_entrada(self):
+        client = self.make_client()
+        data = self.upload(client)
+        target = self.loras_root / "anima" / "Mi Lora.safetensors"
+        self.assertTrue(target.is_file())
+        response = client.delete(
+            f"/api/loras/{data['item']['id']}", params={"file": "1"}
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["deleted"], "mi-lora")
+        self.assertTrue(body["file_removed"])
+        self.assertFalse(target.exists())
+        self.assertEqual(self.registry_entries(), [])
+
+    def test_delete_sin_file_no_borra_el_archivo(self):
+        client = self.make_client()
+        data = self.upload(client)
+        target = self.loras_root / "anima" / "Mi Lora.safetensors"
+        response = client.delete(f"/api/loras/{data['item']['id']}")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["file_removed"])
+        self.assertTrue(target.is_file())
+        self.assertEqual(self.registry_entries(), [])
+
+    def test_delete_con_file_inexistente_no_es_error(self):
+        self.loras_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "loras": [
+                        {
+                            "id": "fantasma",
+                            "family": "anima",
+                            "file": "anima/fantasma.safetensors",
+                            "display_name": "Fantasma",
+                            "trigger": "",
+                            "default_weight": 1.0,
+                            "source": "test",
+                            "license": "test",
+                            "notes": "",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        response = self.make_client().delete(
+            "/api/loras/fantasma", params={"file": "1"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["file_removed"])
+        self.assertEqual(self.registry_entries(), [])
+
+    def test_delete_con_file_no_confinado_400_y_conserva_todo(self):
+        outside = self.config.comfy_root / "models" / "fuera.safetensors"
+        outside.parent.mkdir(parents=True, exist_ok=True)
+        outside.write_bytes(b"fuera")
+        self.loras_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "loras": [
+                        {
+                            "id": "fugada",
+                            "family": "anima",
+                            "file": "..\\fuera.safetensors",
+                            "display_name": "Fugada",
+                            "trigger": "",
+                            "default_weight": 1.0,
+                            "source": "test",
+                            "license": "test",
+                            "notes": "",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        response = self.make_client().delete(
+            "/api/loras/fugada", params={"file": "1"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+        self.assertTrue(outside.is_file())
+        self.assertEqual(
+            [entry["id"] for entry in self.registry_entries()], ["fugada"]
+        )
+
+
 class LoraLibraryUiStaticTests(ServerTestCase):
     def test_index_incluye_gestion_de_biblioteca(self):
         text = self.make_client().get("/").text
@@ -511,6 +818,9 @@ class LoraLibraryUiStaticTests(ServerTestCase):
             'id="lora-form-license"',
             'id="lora-form-notes"',
             'id="btn-lora-form-cancel"',
+            'id="btn-lora-upload"',
+            'id="lora-upload"',
+            "Cargar desde disco",
             "NO se borra",
             "models\\loras",
         ):
@@ -526,11 +836,16 @@ class LoraLibraryUiStaticTests(ServerTestCase):
             "editLoraEntry",
             "saveLoraEntry",
             "deleteLoraEntry",
+            "uploadLoraFile",
             "openLoraLibrary",
             "closeLoraLibrary",
             'postJson("/api/loras"',
+            'postJson("/api/loras/upload"',
             "/api/loras/${encodeURIComponent",
             '{ method: "DELETE" }',
+            "?file=1",
+            "btn-lora-delete-file",
+            "Registrado ✓",
             'on("btn-lora-manage", "click", openLoraLibrary);',
             'on("btn-lora-manage-modal", "click", openLoraLibrary);',
             '"lora-library-modal",',

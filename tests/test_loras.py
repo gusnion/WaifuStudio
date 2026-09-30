@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,7 +13,8 @@ from unittest import mock
 from app import loras as loras_module
 from app.engine import EngineError
 from app.loras import DEFAULT_PATH, add_entry, delete_entry, families, get
-from app.loras import list_loras, load_registry, save_registry, update_entry
+from app.loras import inspect_safetensors, list_loras, load_registry
+from app.loras import safetensors_header, save_registry, update_entry
 from app.loras import validate_selection
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -662,6 +664,111 @@ class UpdateDeleteEntryTests(unittest.TestCase):
     def test_delete_no_deja_tmp(self):
         delete_entry("lora-test", path=self.path)
         self.assertEqual(list(self.path.parent.glob("*.tmp")), [])
+
+
+def safetensors_blob(metadata=None, tensors=None) -> bytes:
+    header: dict = dict(tensors or {})
+    if metadata is not None:
+        header["__metadata__"] = metadata
+    encoded = json.dumps(header).encode("utf-8")
+    encoded += b" " * ((8 - len(encoded) % 8) % 8)
+    return struct.pack("<Q", len(encoded)) + encoded + b"\x00" * 64
+
+
+class InspectSafetensorsTests(unittest.TestCase):
+    def test_metadata_completa(self):
+        raw = safetensors_blob(
+            {
+                "ss_network_dim": "32",
+                "ss_network_alpha": "16",
+                "ss_sd_model_name": "anima_baseV10",
+                "modelspec.title": "Miku Nakano (Anima v0.7)",
+                "ss_tag_frequency": json.dumps(
+                    {"dataset": {" miku   nakano ": 42, "otro": 5}}
+                ),
+            }
+        )
+        self.assertEqual(
+            inspect_safetensors(raw),
+            {
+                "title": "Miku Nakano (Anima v0.7)",
+                "trigger": "miku nakano",
+                "dim": 32,
+                "alpha": 16,
+                "base": "anima_baseV10",
+            },
+        )
+
+    def test_trigger_titulo_cuando_frecuencia_baja(self):
+        raw = safetensors_blob(
+            {
+                "modelspec.title": "Mi Lora",
+                "ss_tag_frequency": json.dumps({"ds": {"casi": 9}}),
+            }
+        )
+        self.assertEqual(inspect_safetensors(raw)["trigger"], "Mi Lora")
+
+    def test_trigger_titulo_cuando_empate(self):
+        raw = safetensors_blob(
+            {
+                "modelspec.title": "Empatada",
+                "ss_tag_frequency": json.dumps({"ds": {"uno": 20, "dos": 20}}),
+            }
+        )
+        self.assertEqual(inspect_safetensors(raw)["trigger"], "Empatada")
+
+    def test_trigger_sin_frecuencia_y_titulo_largo(self):
+        raw = safetensors_blob({"modelspec.title": "x" * 49})
+        self.assertEqual(inspect_safetensors(raw)["trigger"], "")
+
+    def test_trigger_sin_titulo(self):
+        raw = safetensors_blob({})
+        self.assertEqual(inspect_safetensors(raw)["trigger"], "")
+
+    def test_base_model_version_como_fallback(self):
+        raw = safetensors_blob({"ss_base_model_version": "sdxl_base_v1-0"})
+        self.assertEqual(inspect_safetensors(raw)["base"], "sdxl_base_v1-0")
+
+    def test_dim_alpha_invalidos_son_none(self):
+        raw = safetensors_blob(
+            {
+                "ss_network_dim": "no-numero",
+                "ss_network_alpha": True,
+            }
+        )
+        result = inspect_safetensors(raw)
+        self.assertIsNone(result["dim"])
+        self.assertIsNone(result["alpha"])
+
+    def test_sin_metadata_devuelve_vacios(self):
+        raw = safetensors_blob(None, {"lora_a.weight": {"dtype": "F16"}})
+        self.assertEqual(
+            inspect_safetensors(raw),
+            {"title": "", "trigger": "", "dim": None, "alpha": None, "base": ""},
+        )
+
+    def test_datos_invalidos_no_lanzan(self):
+        for raw in (b"", b"\x00", b"garbage-safetensors", b"\xff" * 32):
+            with self.subTest(raw=raw):
+                self.assertEqual(
+                    inspect_safetensors(raw),
+                    {
+                        "title": "",
+                        "trigger": "",
+                        "dim": None,
+                        "alpha": None,
+                        "base": "",
+                    },
+                )
+
+    def test_cabecera_no_dict_o_truncada(self):
+        self.assertIsNone(safetensors_header(struct.pack("<Q", 2) + b"[]"))
+        self.assertIsNone(safetensors_header(struct.pack("<Q", 500) + b"{}"))
+        self.assertEqual(
+            safetensors_header(safetensors_blob({"modelspec.title": "t"})),
+            {"__metadata__": {"modelspec.title": "t"}},
+        )
+        self.assertEqual(safetensors_header(b"corto"), None)
 
 
 if __name__ == "__main__":

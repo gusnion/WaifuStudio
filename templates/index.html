@@ -812,6 +812,8 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           </label>
           <p class="train-note">Borrar una entrada solo la quita del registro: el archivo .safetensors NO se borra de ComfyUI\models\loras.</p>
           <div class="oc-form-actions">
+            <button id="btn-lora-upload" type="button">Cargar desde disco</button>
+            <input id="lora-upload" type="file" accept=".safetensors" class="hidden">
             <button id="btn-lora-form-save" class="primary" type="submit">Guardar</button>
             <button id="btn-lora-form-cancel" class="hidden" type="button">Cancelar edición</button>
           </div>

@@ -78,6 +78,11 @@ button.primary {
   font-weight: 600;
 }
 
+button.danger {
+  color: var(--error);
+  border-color: var(--error);
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: default;
@@ -1435,11 +1440,31 @@ input[type="checkbox"] {
 
 .lora-library-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.8rem;
   min-height: 0;
   overflow-y: auto;
   padding: 0.8rem 1rem;
+}
+
+.lora-library-body > section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+#lora-library-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.lora-library-body .oc-item {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .lora-options {

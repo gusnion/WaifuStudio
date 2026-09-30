@@ -12,6 +12,7 @@ import json
 import math
 import os
 import re
+import struct
 import uuid
 from pathlib import Path
 
@@ -25,6 +26,8 @@ _ID_RE = re.compile(r"[a-z0-9._-]+")
 _REQUIRED_TEXT_FIELDS = ("id", "family", "file", "display_name", "source", "license")
 _WEIGHT_MIN = 0.0
 _WEIGHT_MAX = 2.0
+_TAG_FREQUENCY_MIN = 10
+_TRIGGER_TITLE_MAX = 48
 
 
 def _require_text(value: object, label: str) -> str:
@@ -334,6 +337,112 @@ def validate_selection(
     return normalized
 
 
+def safetensors_header(raw: bytes) -> dict | None:
+    """Cabecera JSON de un ``.safetensors`` o ``None`` si no es valida.
+
+    Los primeros 8 bytes son la longitud little-endian del JSON de cabecera,
+    que debe ser un objeto (``__metadata__`` opcional). No usa torch ni lee
+    los tensores; no lanza con datos basura.
+    """
+    if isinstance(raw, bytes):
+        data = raw
+    elif isinstance(raw, (bytearray, memoryview)):
+        data = bytes(raw)
+    else:
+        return None
+    if len(data) < 8:
+        return None
+    (length,) = struct.unpack("<Q", data[:8])
+    if length == 0 or length > len(data) - 8:
+        return None
+    try:
+        header = json.loads(data[8 : 8 + length].decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(header, dict):
+        return None
+    return header
+
+
+def _metadata_text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def _metadata_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _infer_trigger(raw_frequency: object, title: str) -> str:
+    """Tag dominante de ``ss_tag_frequency`` o el titulo como fallback."""
+    counts: dict[str, int] = {}
+    if isinstance(raw_frequency, str) and raw_frequency.strip():
+        try:
+            data = json.loads(raw_frequency)
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            for dataset in data.values():
+                if not isinstance(dataset, dict):
+                    continue
+                for tag, count in dataset.items():
+                    if not isinstance(tag, str):
+                        continue
+                    value = _metadata_int(count)
+                    if value is None:
+                        continue
+                    normalized = " ".join(tag.split())
+                    if not normalized:
+                        continue
+                    counts[normalized] = counts.get(normalized, 0) + value
+    if counts:
+        best = max(counts.values())
+        winners = [tag for tag, count in counts.items() if count == best]
+        if best >= _TAG_FREQUENCY_MIN and len(winners) == 1:
+            return winners[0]
+    candidate = title.strip()
+    if candidate and len(candidate) <= _TRIGGER_TITLE_MAX:
+        return candidate
+    return ""
+
+
+def inspect_safetensors(raw: bytes) -> dict:
+    """Metadata inferida de un ``.safetensors`` (stdlib, sin torch).
+
+    Devuelve ``{"title", "trigger", "dim", "alpha", "base"}``: titulo de
+    ``modelspec.title``, trigger dominante de ``ss_tag_frequency`` (maximo
+    unico y >= 10) con fallback al titulo (<= 48 caracteres), dim/alpha de
+    ``ss_network_dim``/``ss_network_alpha`` (None si faltan) y base de
+    ``ss_sd_model_name`` o ``ss_base_model_version``. Con datos invalidos o
+    sin metadata devuelve los valores vacios, sin lanzar.
+    """
+    header = safetensors_header(raw)
+    metadata: dict = {}
+    if header is not None:
+        candidate = header.get("__metadata__")
+        if isinstance(candidate, dict):
+            metadata = candidate
+    title = _metadata_text(metadata.get("modelspec.title"))
+    base = _metadata_text(metadata.get("ss_sd_model_name")) or _metadata_text(
+        metadata.get("ss_base_model_version")
+    )
+    return {
+        "title": title,
+        "trigger": _infer_trigger(metadata.get("ss_tag_frequency"), title),
+        "dim": _metadata_int(metadata.get("ss_network_dim")),
+        "alpha": _metadata_int(metadata.get("ss_network_alpha")),
+        "base": base,
+    }
+
+
 __all__ = [
     "DEFAULT_PATH",
     "REGISTRY_VERSION",
@@ -341,8 +450,10 @@ __all__ = [
     "delete_entry",
     "families",
     "get",
+    "inspect_safetensors",
     "list_loras",
     "load_registry",
+    "safetensors_header",
     "save_registry",
     "update_entry",
     "user_registry_path",
