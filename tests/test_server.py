@@ -4933,6 +4933,46 @@ class GalleryTabUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
 
+    def test_index_incluye_acciones_modal_galeria(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="btn-gallery-use-ref"',
+            'id="btn-gallery-animate"',
+            'id="btn-gallery-edit"',
+            'id="btn-gallery-upscale"',
+            '<button id="btn-gallery-use-ref" type="button">Usar referencia</button>',
+            '<button id="btn-gallery-animate" type="button">Animar</button>',
+            '<button id="btn-gallery-edit" type="button">Editar</button>',
+            '<button id="btn-gallery-upscale" type="button">Upscale</button>',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+        self.assertLess(
+            text.index('id="btn-gallery-upscale"'),
+            text.index('id="btn-gallery-download"'),
+        )
+        self.assertIn(
+            '<button id="btn-gallery-download" class="primary" type="button">Descargar</button>',
+            text,
+        )
+
+    def test_app_js_incluye_acciones_modal_galeria(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "function useGalleryItemAsReference",
+            "function animateGalleryItem",
+            "function editGalleryItemInEditor",
+            "function upscaleGalleryItem",
+            'on("btn-gallery-use-ref", "click"',
+            'on("btn-gallery-animate", "click"',
+            'on("btn-gallery-edit", "click"',
+            'on("btn-gallery-upscale", "click"',
+            "function attachFileInputFromUrl",
+            'attachFileInputFromUrl("video-image", galleryItemUrl(item)',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2159,6 +2159,22 @@ async function reloadVideoViewerFirstPage() {
   await loadVideoViewer({ selectNewest: true });
 }
 
+async function attachFileInputFromUrl(inputId, url, name) {
+  const input = $(inputId);
+  const response = await fetch(url);
+  if (!response.ok) {
+    input.value = "";
+    throw new Error(`imagen no disponible (HTTP ${response.status})`);
+  }
+  const blob = await response.blob();
+  const file = new File([blob], name || "imagen.png", {
+    type: blob.type || "image/png",
+  });
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+}
+
 async function attachVideoFrameFromUrl(inputId, name) {
   const clean = typeof name === "string" ? name.trim() : "";
   const input = $(inputId);
@@ -2166,18 +2182,16 @@ async function attachVideoFrameFromUrl(inputId, name) {
     input.value = "";
     return;
   }
-  const response = await fetch(`/api/refs/${encodeURIComponent(clean)}`);
-  if (!response.ok) {
+  try {
+    await attachFileInputFromUrl(
+      inputId,
+      `/api/refs/${encodeURIComponent(clean)}`,
+      clean
+    );
+  } catch (error) {
     input.value = "";
-    throw new Error(`frame guardado no disponible (HTTP ${response.status})`);
+    throw new Error(`frame guardado no disponible (${error.message})`);
   }
-  const blob = await response.blob();
-  const file = new File([blob], clean, {
-    type: blob.type || "image/png",
-  });
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  input.files = transfer.files;
 }
 
 async function applyVideoSavedFrames(params) {
@@ -5616,6 +5630,13 @@ function openGalleryModal(item) {
   prompt.textContent = item.prompt || "Sin prompt.";
   prompt.classList.toggle("hidden", !item.prompt);
   $("btn-gallery-download").disabled = !downloadUrlFor(url);
+  const isImage = item.kind === "image";
+  const isVideo = item.kind === "video";
+  const hasUrl = Boolean(url);
+  $("btn-gallery-use-ref").disabled = !(isImage && hasUrl);
+  $("btn-gallery-animate").disabled = !(isImage && hasUrl);
+  $("btn-gallery-edit").disabled = !(isImage && hasUrl);
+  $("btn-gallery-upscale").disabled = !((isImage || isVideo) && hasUrl);
   modal.classList.remove("hidden");
 }
 
@@ -5641,6 +5662,48 @@ function downloadGalleryItem() {
     return;
   }
   window.location.href = downloadUrl;
+}
+
+async function useGalleryItemAsReference(item) {
+  closeGalleryModal();
+  switchTab("image");
+  await reuseGeneration(item);
+  const name =
+    ((item.outputs || [])[0]) || "galeria-" + item.id + ".png";
+  await attachReferenceFromUrl(galleryItemUrl(item), name);
+  setStatus(`#${item.id} cargada como referencia`);
+}
+
+async function animateGalleryItem(item) {
+  closeGalleryModal();
+  switchTab("video");
+  const name =
+    ((item.outputs || [])[0]) || "galeria-" + item.id + ".png";
+  await attachFileInputFromUrl("video-image", galleryItemUrl(item), name);
+  setVideoStatus(`#${item.id} como primer fotograma`);
+}
+
+async function editGalleryItemInEditor(item) {
+  closeGalleryModal();
+  switchTab("editor");
+  $("editor-mode").value = "edit";
+  await setEditorEditSource(galleryItemUrl(item), null);
+  updateEditorMode({ sync: false });
+  $("editor-prompt").focus();
+}
+
+async function upscaleGalleryItem(item) {
+  closeGalleryModal();
+  $("upscale-kind").value = item.kind === "video" ? "video" : "image";
+  clearUpscaleSelection();
+  switchTab("upscaler");
+  applyUpscaleKind();
+  await loadUpscaleGallery(1);
+  if (!state.upscaleSources.some((entry) => entry.id === item.id)) {
+    state.upscaleSources.push(item);
+  }
+  selectUpscaleSource(item.id);
+  setUpscaleStatus(`#${item.id} seleccionada como origen`);
 }
 
 function switchTab(tab) {
@@ -5842,6 +5905,10 @@ const REQUIRED_IDS = [
   "gallery-modal-media",
   "gallery-modal-info",
   "gallery-modal-prompt",
+  "btn-gallery-use-ref",
+  "btn-gallery-animate",
+  "btn-gallery-edit",
+  "btn-gallery-upscale",
   "btn-gallery-download",
   "btn-gallery-close",
   "size",
@@ -5959,6 +6026,38 @@ function bind() {
   });
   on("btn-gallery-close", "click", closeGalleryModal);
   on("btn-gallery-download", "click", downloadGalleryItem);
+  on("btn-gallery-use-ref", "click", () => {
+    if (!galleryModalItem) {
+      return;
+    }
+    useGalleryItemAsReference(galleryModalItem).catch((error) =>
+      setStatus(error.message, true)
+    );
+  });
+  on("btn-gallery-animate", "click", () => {
+    if (!galleryModalItem) {
+      return;
+    }
+    animateGalleryItem(galleryModalItem).catch((error) =>
+      setVideoStatus(error.message, true)
+    );
+  });
+  on("btn-gallery-edit", "click", () => {
+    if (!galleryModalItem) {
+      return;
+    }
+    editGalleryItemInEditor(galleryModalItem).catch((error) =>
+      setEditorStatus(error.message, true)
+    );
+  });
+  on("btn-gallery-upscale", "click", () => {
+    if (!galleryModalItem) {
+      return;
+    }
+    upscaleGalleryItem(galleryModalItem).catch((error) =>
+      setUpscaleStatus(error.message, true)
+    );
+  });
   on("gallery-modal", "click", (event) => {
     if (event.target === $("gallery-modal")) {
       closeGalleryModal();
