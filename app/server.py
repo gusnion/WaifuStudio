@@ -48,7 +48,7 @@ from app.engine import ComfyEngine, EngineError, load_graph
 from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
 from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
-from app.enhancer import load_local_llm
+from app.enhancer import LLM_URL_ENV, load_local_llm, load_server_llm
 from app.formats import DEFAULT_FORMAT, get_size, list_image_formats
 from app.graphs import (
     DEFAULT_STRENGTH,
@@ -2444,13 +2444,25 @@ def _lazy_llm() -> Callable[[str, str], str]:
     return llm
 
 
+def _live_llm() -> Callable[[str, str], str]:
+    """LLM de la app en vivo: servidor HTTP si hay `WAIFU_LLM_URL`; si no, llama-cpp.
+
+    Con `WAIFU_LLM_URL` definido y no vacio se usa `load_server_llm` (el
+    `llama-server` OpenAI-compatible); sin el, el `_lazy_llm` local de siempre.
+    """
+    url = os.environ.get(LLM_URL_ENV, "").strip()
+    if url:
+        return load_server_llm(url)
+    return _lazy_llm()
+
+
 def main() -> int:
     """`python -m app.server`: uvicorn en 127.0.0.1 y puerto de WAIFU_APP_PORT."""
     import uvicorn
 
     port_text = os.environ.get("WAIFU_APP_PORT", "").strip()
     port = int(port_text) if port_text else APP_PORT
-    uvicorn.run(create_app(llm=_lazy_llm()), host=APP_HOST, port=port, log_level="info")
+    uvicorn.run(create_app(llm=_live_llm()), host=APP_HOST, port=port, log_level="info")
     return 0
 
 

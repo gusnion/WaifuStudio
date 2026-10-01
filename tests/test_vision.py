@@ -2,20 +2,26 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from app.engine import EngineError
+from app.enhancer import DEFAULT_LLM_URL, LLM_URL_ENV
 from app.vision import (
     VL_MMPROJ_FILE,
     VL_MODEL_FILE,
+    VL_SYSTEM_PROMPT,
+    VL_USER_PROMPT,
     VisionService,
     VisionUnavailable,
     WD14_MODEL,
     _load_rows,
     _postprocess,
+    load_server_captioner,
 )
 
 
@@ -76,6 +82,13 @@ class VisionServiceTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
+        self._clear_llm_env()
+
+    def _clear_llm_env(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_URL_ENV, None)
 
     def test_status_sin_assets(self):
         status = VisionService(self.root).status()
@@ -153,6 +166,10 @@ class EnvOverrideTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_URL_ENV, None)
 
     def test_gpu_layers_env(self):
         with mock.patch.dict(os.environ, {"WAIFU_VL_GPU_LAYERS": "5"}):
@@ -170,6 +187,164 @@ class EnvOverrideTests(unittest.TestCase):
             service = VisionService(self.root)
         self.assertEqual(service.vl_model, model)
         self.assertEqual(service.vl_mmproj, mmproj)
+
+
+class RecordingTransport:
+    """Transporte falso: registra `(url, payload, timeout)` y devuelve o levanta."""
+
+    def __init__(self, response=None, error: Exception | None = None) -> None:
+        self.calls: list[tuple[str, dict | None, float]] = []
+        self.response = {} if response is None else response
+        self.error = error
+
+    def __call__(self, url, payload, timeout):
+        self.calls.append((url, payload, timeout))
+        if self.error is not None:
+            raise self.error
+        return self.response
+
+
+class ServerCaptionerTests(unittest.TestCase):
+    """Captioner contra `llama-server` OpenAI-compatible (M11-2F)."""
+
+    IMAGE = b"\x89PNG fake bytes"
+    RESPONSE = {"choices": [{"message": {"content": "  a   girl \n smiling "}}]}
+
+    def test_data_uri_prompts_y_payload_exactos(self):
+        transport = RecordingTransport(self.RESPONSE)
+        captioner = load_server_captioner("http://127.0.0.1:8290/", transport=transport)
+        self.assertEqual(captioner(self.IMAGE), "a girl smiling")
+        self.assertEqual(len(transport.calls), 1)
+        url, payload, timeout = transport.calls[0]
+        self.assertEqual(url, "http://127.0.0.1:8290/v1/chat/completions")
+        self.assertEqual(timeout, 120.0)
+        expected_uri = "data:image/png;base64," + base64.b64encode(self.IMAGE).decode(
+            "ascii"
+        )
+        self.assertEqual(
+            payload,
+            {
+                "model": "qwen38-27b-uncensored",
+                "messages": [
+                    {"role": "system", "content": VL_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": VL_USER_PROMPT},
+                            {"type": "image_url", "image_url": {"url": expected_uri}},
+                        ],
+                    },
+                ],
+                "max_tokens": 180,
+                "temperature": 0.4,
+                "stream": False,
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        )
+        self.assertTrue(
+            payload["messages"][1]["content"][1]["image_url"]["url"].startswith(
+                "data:image/png;base64,"
+            )
+        )
+
+    def test_caption_vacio_o_no_texto_lanza_engine_error(self):
+        for response in (
+            {},
+            {"choices": []},
+            {"choices": [{"message": {"content": None}}]},
+            {"choices": [{"message": {"content": "  "}}]},
+            "texto",
+        ):
+            with self.subTest(response=response):
+                transport = RecordingTransport(response)
+                captioner = load_server_captioner("http://x", transport=transport)
+                with self.assertRaises(EngineError) as ctx:
+                    captioner(b"img")
+                self.assertEqual(str(ctx.exception), "vision: caption vacio")
+
+    def test_base_por_parametro_manda_sobre_env(self):
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_captioner("http://param:2222", transport=transport)(b"img")
+        self.assertEqual(transport.calls[0][0], "http://param:2222/v1/chat/completions")
+
+    def test_env_y_default_de_base(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop(LLM_URL_ENV, None)
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_captioner(transport=transport)(b"img")
+            self.assertEqual(
+                transport.calls[0][0], f"{DEFAULT_LLM_URL}/v1/chat/completions"
+            )
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_captioner(transport=transport)(b"img")
+            self.assertEqual(
+                transport.calls[0][0], "http://env:1111/v1/chat/completions"
+            )
+
+
+class VisionServiceServerTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_URL_ENV, None)
+
+    def test_server_url_explicito_usa_load_server_captioner(self):
+        with mock.patch(
+            "app.vision.load_server_captioner", return_value=lambda raw: "cap srv"
+        ) as loader:
+            service = VisionService(self.root, server_url="http://127.0.0.1:8290")
+            self.assertTrue(service.vl_installed())
+            self.assertEqual(service.caption(b"img"), "cap srv")
+        loader.assert_called_once_with("http://127.0.0.1:8290")
+
+    def test_captioner_factory_inyectado_manda(self):
+        calls: list[tuple] = []
+
+        def factory(*args):
+            calls.append(args)
+            return lambda raw: "cap local"
+
+        service = VisionService(
+            self.root, server_url="http://x", captioner_factory=factory
+        )
+        self.assertEqual(service.caption(b"img"), "cap local")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(service.caption(b"img"), "cap local")
+        self.assertEqual(len(calls), 1)
+
+    def test_status_nota_de_servidor_con_url(self):
+        service = VisionService(self.root, server_url="http://127.0.0.1:8290/")
+        status = service.status()
+        self.assertTrue(status["vl"]["installed"])
+        self.assertIn("http://127.0.0.1:8290", status["note"])
+        self.assertIn("servidor HTTP", status["note"])
+
+    def test_env_activa_el_modo_servidor(self):
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            service = VisionService(self.root)
+            self.assertEqual(service.server_url, "http://env:1111")
+            self.assertTrue(service.vl_installed())
+
+    def test_server_url_vacio_fuerza_modo_local_con_env(self):
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            service = VisionService(self.root, server_url="")
+            self.assertIsNone(service.server_url)
+            self.assertFalse(service.vl_installed())
+            with self.assertRaises(VisionUnavailable):
+                service.caption(b"img")
+
+    def test_sin_env_ni_server_url_modo_local(self):
+        service = VisionService(self.root)
+        self.assertIsNone(service.server_url)
+        self.assertFalse(service.vl_installed())
+        status = service.status()
+        self.assertIn("llama.cpp", status["note"])
 
 
 if __name__ == "__main__":

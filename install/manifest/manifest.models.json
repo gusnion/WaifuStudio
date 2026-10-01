@@ -579,6 +579,32 @@
       "obsolete": false,
       "license": "Apache-2.0 (base Qwen2.5-VL) + abliterated por el autor; ver ficha HF",
       "notes": "Proyector visual (mmproj) del caption VL; opcional."
+    },
+    {
+      "id": "qwen38-27b-uncensored-3.69bpw",
+      "filename": "qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
+      "subdir": "llm/qwen38-27b-uncensored",
+      "bytes": 12599187808,
+      "sha256": "17ef7767533efd039d13594603bb0d9a787965759ec653b42f9221b50318e4d7",
+      "url": "https://huggingface.co/soyaakinohara/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf/resolve/8cf3088b8c1fdf1121fed4d52fbc46b71e3f7874/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
+      "revision": "8cf3088b8c1fdf1121fed4d52fbc46b71e3f7874",
+      "required": false,
+      "obsolete": false,
+      "license": "Apache-2.0 (heredada de AEON-7/Qwen3.8-27B; abliterado = uso personal bajo responsabilidad del usuario)",
+      "notes": "Modelo unico LLM/VL M11-2 (27B, qwen35, MTP embebido); opcional y pesado (~11,7 GiB). Requiere llama-server stock (tools/llama.cpp; manifest.llm.json) y el mmproj."
+    },
+    {
+      "id": "qwen38-27b-uncensored-mmproj-aeon",
+      "filename": "mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
+      "subdir": "llm/qwen38-27b-uncensored",
+      "bytes": 931146656,
+      "sha256": "1ff0cd30ecb0d70c30b0f92d73deb60eedf2f4a2969f64d3c711db2d2bc76305",
+      "url": "https://huggingface.co/chimingw/Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-GGUF/resolve/626a21111f6775302a07a4ea9e8f35f3eb93c0e7/AUX/mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
+      "revision": "626a21111f6775302a07a4ea9e8f35f3eb93c0e7",
+      "required": false,
+      "obsolete": false,
+      "license": "Apache-2.0 (mismo master AEON-7; sin cambios de alineamiento)",
+      "notes": "Proyector de vision BF16 de la misma revision AEON-7 que el quant 3,69 bpw; opcional."
     }
   ]
 }

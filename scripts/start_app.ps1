@@ -19,6 +19,17 @@ if ($listener) {
     exit 0
 }
 
+if (!"$env:WAIFU_LLM_URL".Trim()) {
+    $llamaExe = Join-Path $StackRoot 'tools\llama.cpp\llama-server.exe'
+    if (Test-Path -LiteralPath $llamaExe) {
+        $llmPort = 8290
+        $llmPortText = "$env:WAIFU_LLM_PORT".Trim()
+        if ($llmPortText) { $llmPort = [int]$llmPortText }
+        $env:WAIFU_LLM_URL = "http://127.0.0.1:$llmPort"
+        Write-Host "LLM server configurado en $env:WAIFU_LLM_URL; arrancalo con INICIAR_LLM.bat"
+    }
+}
+
 Set-Location $StackRoot
 & (Join-Path $StackRoot '.venv\Scripts\python.exe') -m app.server
 exit $LASTEXITCODE

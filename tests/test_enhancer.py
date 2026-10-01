@@ -2,24 +2,34 @@
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 import tempfile
 import types
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
 from app.engine import EngineError
 from app.enhancer import (
     BASE_NEGATIVE,
+    DEFAULT_LLM_TIMEOUT,
+    DEFAULT_LLM_URL,
     DEFAULT_STRENGTH_PRESET,
+    LLM_TIMEOUT_ENV,
+    LLM_URL_ENV,
     RAG_ENTRIES,
     STRENGTH_PRESETS,
     SYS_PROMPT,
+    _http_transport,
     apply_preprompt,
     enhance,
     load_local_llm,
+    load_server_llm,
     retrieve,
+    server_llm_status,
 )
 from app.prompt_zones import canonical_order
 
@@ -713,6 +723,255 @@ class LlmWrapperTests(unittest.TestCase):
                 with self.assertRaises(EngineError) as ctx:
                     llm("SYS", "USER")
                 self.assertEqual(str(ctx.exception), "LLM sin contenido")
+
+
+class RecordingTransport:
+    """Transporte falso: registra `(url, payload, timeout)` y devuelve o levanta."""
+
+    def __init__(self, response=None, error: Exception | None = None) -> None:
+        self.calls: list[tuple[str, dict | None, float]] = []
+        self.response = {} if response is None else response
+        self.error = error
+
+    def __call__(self, url, payload, timeout):
+        self.calls.append((url, payload, timeout))
+        if self.error is not None:
+            raise self.error
+        return self.response
+
+
+class FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def read(self, *args) -> bytes:
+        return self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args) -> bool:
+        return False
+
+
+class ServerLlmTests(unittest.TestCase):
+    """Adaptador HTTP OpenAI-compatible del `llama-server` (M11-2F)."""
+
+    RESPONSE = {"choices": [{"message": {"content": "1girl, smile"}}]}
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_TIMEOUT_ENV, None)
+
+    def test_endpoint_y_payload_exactos(self):
+        transport = RecordingTransport(self.RESPONSE)
+        llm = load_server_llm("http://127.0.0.1:8290/", transport=transport)
+        self.assertEqual(llm("SYS", "USER"), "1girl, smile")
+        self.assertEqual(len(transport.calls), 1)
+        url, payload, timeout = transport.calls[0]
+        self.assertEqual(url, "http://127.0.0.1:8290/v1/chat/completions")
+        self.assertEqual(timeout, 120.0)
+        self.assertEqual(
+            payload,
+            {
+                "model": "qwen38-27b-uncensored",
+                "messages": [
+                    {"role": "system", "content": "SYS"},
+                    {"role": "user", "content": "USER"},
+                ],
+                "max_tokens": 192,
+                "temperature": 0.7,
+                "stream": False,
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        )
+
+    def test_parametros_configurables(self):
+        transport = RecordingTransport(self.RESPONSE)
+        llm = load_server_llm(
+            "http://x",
+            transport=transport,
+            max_tokens=64,
+            temperature=0.2,
+            timeout=5.0,
+            model="otro-modelo",
+        )
+        llm("S", "U")
+        url, payload, timeout = transport.calls[0]
+        self.assertEqual(url, "http://x/v1/chat/completions")
+        self.assertEqual(timeout, 5.0)
+        self.assertEqual(payload["max_tokens"], 64)
+        self.assertEqual(payload["temperature"], 0.2)
+        self.assertEqual(payload["model"], "otro-modelo")
+
+    def test_timeout_por_env_cuando_el_parametro_no_se_pasa(self):
+        with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: "5"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_llm("http://x", transport=transport)("S", "U")
+        self.assertEqual(transport.calls[0][2], 5.0)
+
+    def test_timeout_explicito_manda_sobre_env(self):
+        with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: "5"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_llm("http://x", transport=transport, timeout=9.0)("S", "U")
+        self.assertEqual(transport.calls[0][2], 9.0)
+
+    def test_timeout_env_ausente_vacio_o_invalido_cae_al_default(self):
+        for value in (None, "", "  ", "abc"):
+            with self.subTest(value=value):
+                if value is None:
+                    transport = RecordingTransport(self.RESPONSE)
+                    load_server_llm("http://x", transport=transport)("S", "U")
+                else:
+                    with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: value}):
+                        transport = RecordingTransport(self.RESPONSE)
+                        load_server_llm("http://x", transport=transport)("S", "U")
+                self.assertEqual(transport.calls[0][2], DEFAULT_LLM_TIMEOUT)
+
+    def test_temperature_por_llamada_manda_sobre_el_default(self):
+        transport = RecordingTransport(self.RESPONSE)
+        llm = load_server_llm("http://x", transport=transport)
+        llm("S", "U")
+        llm("S", "U", temperature=1.0)
+        self.assertEqual(transport.calls[0][1]["temperature"], 0.7)
+        self.assertEqual(transport.calls[1][1]["temperature"], 1.0)
+
+    def test_base_url_por_parametro_manda_sobre_env(self):
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_llm("http://param:2222/", transport=transport)("S", "U")
+        self.assertEqual(
+            transport.calls[0][0], "http://param:2222/v1/chat/completions"
+        )
+
+    def test_env_y_default_de_base(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop(LLM_URL_ENV, None)
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_llm(transport=transport)("S", "U")
+            self.assertEqual(
+                transport.calls[0][0], f"{DEFAULT_LLM_URL}/v1/chat/completions"
+            )
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_llm(transport=transport)("S", "U")
+            self.assertEqual(
+                transport.calls[0][0], "http://env:1111/v1/chat/completions"
+            )
+
+    def test_respuesta_sin_contenido_texto_lanza_engine_error(self):
+        for response in (
+            {},
+            {"choices": []},
+            {"choices": [{"message": {"content": None}}]},
+            {"choices": [{"message": {"content": ""}}]},
+            {"choices": [{"message": {"content": "   "}}]},
+            "texto",
+        ):
+            with self.subTest(response=response):
+                transport = RecordingTransport(response)
+                llm = load_server_llm("http://x", transport=transport)
+                with self.assertRaises(EngineError) as ctx:
+                    llm("S", "U")
+                self.assertEqual(str(ctx.exception), "LLM sin contenido")
+
+    def test_error_del_transporte_se_propaga(self):
+        transport = RecordingTransport(error=EngineError("servidor caido"))
+        llm = load_server_llm("http://x", transport=transport)
+        with self.assertRaises(EngineError) as ctx:
+            llm("S", "U")
+        self.assertEqual(str(ctx.exception), "servidor caido")
+
+
+class HttpTransportTests(unittest.TestCase):
+    """Transporte por defecto: sin red real (urlopen parcheado)."""
+
+    def test_post_json_con_cabeceras_y_timeout(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout=None):
+            captured["request"] = request
+            captured["timeout"] = timeout
+            return FakeResponse(b'{"ok": true}')
+
+        with mock.patch("app.enhancer.urllib.request.urlopen", fake_urlopen):
+            result = _http_transport("http://x/v1/chat/completions", {"a": 1}, 3.5)
+        self.assertEqual(result, {"ok": True})
+        request = captured["request"]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(
+            request.get_header("Content-type"), "application/json; charset=utf-8"
+        )
+        self.assertTrue(request.get_header("User-agent"))
+        self.assertEqual(json.loads(request.data.decode("utf-8")), {"a": 1})
+        self.assertEqual(captured["timeout"], 3.5)
+
+    def test_get_sin_payload_y_2xx_sin_json_devuelve_vacio(self):
+        seen = {}
+
+        def fake_urlopen(request, timeout=None):
+            seen["method"] = request.get_method()
+            seen["data"] = request.data
+            return FakeResponse(b"")
+
+        with mock.patch("app.enhancer.urllib.request.urlopen", fake_urlopen):
+            self.assertEqual(_http_transport("http://x/health", None, 2.0), {})
+        self.assertEqual(seen["method"], "GET")
+        self.assertIsNone(seen["data"])
+
+        def fake_urlopen_no_json(request, timeout=None):
+            return FakeResponse(b"no-json")
+
+        with mock.patch("app.enhancer.urllib.request.urlopen", fake_urlopen_no_json):
+            self.assertEqual(_http_transport("http://x/health", None, 2.0), {})
+
+    def test_url_invalida_se_envuelve_en_engine_error(self):
+        with self.assertRaises(EngineError) as ctx:
+            _http_transport("no-es-url", None, 0.1)
+        self.assertIn("no-es-url", str(ctx.exception))
+
+    def test_http_error_se_envuelve_corto(self):
+        def fake_urlopen(request, timeout=None):
+            raise urllib.error.HTTPError("http://x", 500, "boom", None, None)
+
+        with mock.patch("app.enhancer.urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(EngineError) as ctx:
+                _http_transport("http://x", None, 1.0)
+        self.assertEqual(str(ctx.exception), "HTTP 500")
+
+
+class ServerLlmStatusTests(unittest.TestCase):
+    def test_ok_cuando_el_transporte_no_lanza(self):
+        transport = RecordingTransport({})
+        ok, reason = server_llm_status("http://127.0.0.1:8290/", transport=transport)
+        self.assertTrue(ok)
+        self.assertEqual(reason, "OK")
+        url, payload, timeout = transport.calls[0]
+        self.assertEqual(url, "http://127.0.0.1:8290/health")
+        self.assertIsNone(payload)
+        self.assertEqual(timeout, 2.0)
+
+    def test_ko_cuando_el_transporte_lanza(self):
+        for error in (EngineError("red: refused"), RuntimeError("boom")):
+            with self.subTest(error=type(error).__name__):
+                transport = RecordingTransport(error=error)
+                ok, reason = server_llm_status(
+                    "http://127.0.0.1:8290", transport=transport
+                )
+                self.assertFalse(ok)
+                self.assertIn(str(error), reason)
+                self.assertEqual(len(transport.calls), 1)
+
+    def test_url_invalida_sin_red(self):
+        transport = RecordingTransport({})
+        for base in ("no-es-url", "localhost:8290", "http://", "   ", "", "http://[::1"):
+            with self.subTest(base=base):
+                ok, reason = server_llm_status(base, transport=transport)
+                self.assertFalse(ok)
+                self.assertEqual(reason, "URL invalida")
+        self.assertEqual(transport.calls, [])
 
 
 if __name__ == "__main__":

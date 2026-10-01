@@ -2,9 +2,10 @@
 
 WD14 corre con onnxruntime en CPU sobre `ComfyUI/models/wd14`; el caption usa
 llama-cpp-python (`Qwen25VLChatHandler`) con el mmproj de
-`ComfyUI/models/llm/qwen25vl-7b-abliterated-gguf`. Las cargas son perezosas y
-las factorias inyectables para que los tests corran offline (sin onnxruntime ni
-llama_cpp reales).
+`ComfyUI/models/llm/qwen25vl-7b-abliterated-gguf`, o un `llama-server`
+OpenAI-compatible si hay `WAIFU_LLM_URL` (`load_server_captioner`). Las cargas
+son perezosas y las factorias inyectables para que los tests corran offline
+(sin onnxruntime ni llama_cpp reales).
 """
 
 from __future__ import annotations
@@ -156,6 +157,62 @@ def _default_captioner(
     return captioner
 
 
+def load_server_captioner(
+    base_url: str | None = None,
+    *,
+    transport: Callable[[str, dict | None, float], dict] | None = None,
+    max_tokens: int = 180,
+    temperature: float = 0.4,
+    timeout: float = 120.0,
+    model: str = "qwen38-27b-uncensored",
+) -> Callable[[bytes], str]:
+    """Captioner contra el `llama-server` OpenAI-compatible (VL con mmproj).
+
+    Base = `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final). Cada
+    llamada manda la imagen como data URI PNG base64 junto al `VL_USER_PROMPT`,
+    con `VL_SYSTEM_PROMPT`, thinking desactivado y `stream=False`; el caption
+    se normaliza a espacios simples y vacio -> `EngineError`. El transporte es
+    inyectable (por defecto el de `app.enhancer`) y la red jamas se toca en
+    tests.
+    """
+    from app.enhancer import _http_transport, _resolve_base_url
+
+    base = _resolve_base_url(base_url)
+    send = transport if transport is not None else _http_transport
+
+    def captioner(image_bytes: bytes) -> str:
+        data_uri = "data:image/png;base64," + base64.b64encode(image_bytes).decode(
+            "ascii"
+        )
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": VL_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": VL_USER_PROMPT},
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ],
+                },
+            ],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        response = send(f"{base}/v1/chat/completions", payload, timeout)
+        try:
+            content = response["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            content = None
+        if not isinstance(content, str) or not content.strip():
+            raise EngineError("vision: caption vacio")
+        return " ".join(content.split())
+
+    return captioner
+
+
 class VisionService:
     """WD14 + VL con cargas perezosas; estado y descripcion de imagenes."""
 
@@ -169,8 +226,15 @@ class VisionService:
         gpu_layers: int | None = None,
         tagger_factory: Callable[[Path, Path], Callable[[bytes], list[str]]] | None = None,
         captioner_factory: Callable[[Path, Path, int], Callable[[bytes], str]] | None = None,
+        server_url: str | None = None,
     ) -> None:
         self.comfy_root = Path(comfy_root)
+        if server_url is None:
+            from app.enhancer import LLM_URL_ENV
+
+            server_url = os.environ.get(LLM_URL_ENV, "")
+        normalized = str(server_url).strip().rstrip("/")
+        self.server_url = normalized or None
         self.wd14_dir = (
             Path(wd14_dir)
             if wd14_dir is not None
@@ -212,17 +276,23 @@ class VisionService:
         return self.wd14_model_path.is_file() and self.wd14_csv_path.is_file()
 
     def vl_installed(self) -> bool:
+        if self.server_url is not None:
+            return True
         return self.vl_model.is_file() and self.vl_mmproj.is_file()
 
     def status(self) -> dict[str, Any]:
         """Estado real de los dos componentes (sin cargar nada)."""
+        if self.server_url is not None:
+            caption = f"caption Qwen2.5-VL por servidor HTTP ({self.server_url})"
+        else:
+            caption = f"caption Qwen2.5-VL por llama.cpp (n_gpu_layers={self.gpu_layers})"
         return {
             "installed": self.wd14_installed() and self.vl_installed(),
             "wd14": {"installed": self.wd14_installed(), "model": WD14_MODEL},
             "vl": {"installed": self.vl_installed(), "model": self.vl_model.name},
             "note": (
-                "WD14 por onnxruntime (CPU); caption Qwen2.5-VL por llama.cpp "
-                f"(n_gpu_layers={self.gpu_layers}); usa POST /api/vision/image_to_prompt."
+                f"WD14 por onnxruntime (CPU); {caption}; "
+                "usa POST /api/vision/image_to_prompt."
             ),
         }
 
@@ -237,9 +307,15 @@ class VisionService:
         if not self.vl_installed():
             raise VisionUnavailable(f"VL no instalado: {self.vl_model.name}")
         if self._captioner is None:
-            self._captioner = self._captioner_factory(
-                self.vl_model, self.vl_mmproj, self.gpu_layers
-            )
+            if (
+                self.server_url is not None
+                and self._captioner_factory is _default_captioner
+            ):
+                self._captioner = load_server_captioner(self.server_url)
+            else:
+                self._captioner = self._captioner_factory(
+                    self.vl_model, self.vl_mmproj, self.gpu_layers
+                )
         return str(self._captioner(image_bytes))
 
     def describe(
@@ -265,4 +341,5 @@ __all__ = [
     "VisionUnavailable",
     "WD14_MODEL",
     "_postprocess",
+    "load_server_captioner",
 ]

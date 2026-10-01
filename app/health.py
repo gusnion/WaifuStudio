@@ -1,13 +1,15 @@
-"""Smoke CLI de salud: rutas configuradas y ping al engine ComfyUI."""
+"""Smoke CLI de salud: rutas configuradas, ping al engine ComfyUI y estado del LLM."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import urllib.error
 import urllib.request
 
 from app.config import describe, load_config
+from app.enhancer import LLM_URL_ENV, server_llm_status
 
 ENGINE_TIMEOUT = 2.0
 
@@ -41,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="falla (exit 1) si el engine no responde",
     )
+    parser.add_argument(
+        "--require-llm",
+        action="store_true",
+        help="falla (exit 1) si no hay WAIFU_LLM_URL o el servidor LLM no responde",
+    )
     args = parser.parse_args(argv)
 
     cfg = load_config()
@@ -59,11 +66,23 @@ def main(argv: list[str] | None = None) -> int:
     engine_ok, reason = _ping_engine(cfg.comfy_url)
     print(f"engine: {'OK' if engine_ok else f'UNREACHABLE ({reason})'}")
 
+    llm_url = os.environ.get(LLM_URL_ENV, "").strip()
+    llm_ok = False
+    if llm_url:
+        llm_ok, llm_reason = server_llm_status(llm_url)
+        status_text = "OK" if llm_ok else f"OFFLINE ({llm_reason})"
+        print(f"llm: {status_text}")
+    else:
+        print("llm: local (llama-cpp)")
+
     if not critical_ok:
         print("Resultado: FALLO (falta ruta critica)")
         return 1
     if args.require_engine and not engine_ok:
         print("Resultado: FALLO (engine requerido y no responde)")
+        return 1
+    if args.require_llm and not llm_ok:
+        print("Resultado: FALLO (LLM requerido y no responde)")
         return 1
     print("Resultado: OK")
     return 0

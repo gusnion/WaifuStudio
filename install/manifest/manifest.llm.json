@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "generated": "2026-09-30",
+  "app": "WAIFU",
+  "task": "M11-2 modelo unico LLM/VL (llama-server stock + Qwen3.8-27B uncensored 3,69 bpw)",
+  "destination_root": ".",
+  "sha256_convention": "64 hex = sha256 completo (LFS oid de Hugging Face / digest del asset de GitHub); lo compara el sha256 completo scripts/download_llm.py.",
+  "notes": [
+    "Opcional y pesado (~14,1 GB): no lo baja INSTALAR.bat por defecto; usar scripts/download_llm.py (o INSTALAR.bat -IncludeOptional tras registrar en manifest.models.json).",
+    "Modelo: quant mixto Ridge-style de AEON-7/Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16 (abliterado; vision tower y MTP intactos). Apache-2.0. Uso personal bajo responsabilidad del usuario.",
+    "mmproj: proyector BF16 de la MISMA revision fuente de AEON-7 usada por el quant (a6775a9a8ebb65cab3f707b4ab087fc7aa698634), del pack de chimingw.",
+    "Runtime: llama.cpp stock oficial ggml-org b11146 (CUDA 13.4 x64 + cudart; alternativa CUDA 12.4 en el mismo release si el driver no soporta 13.x).",
+    "Pardillo previsto: 12 GB de VRAM -> offload parcial probable; el bench del usuario decide -ngl/ctx/KV."
+  ],
+  "files": [
+    {
+      "id": "qwen38-27b-3.69bpw-12gb-mtp",
+      "kind": "model",
+      "filename": "qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
+      "target": "ComfyUI/models/llm/qwen38-27b-uncensored",
+      "bytes": 12599187808,
+      "sha256": "17ef7767533efd039d13594603bb0d9a787965759ec653b42f9221b50318e4d7",
+      "url": "https://huggingface.co/soyaakinohara/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf/resolve/8cf3088b8c1fdf1121fed4d52fbc46b71e3f7874/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
+      "revision": "8cf3088b8c1fdf1121fed4d52fbc46b71e3f7874",
+      "source": "soyaakinohara/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
+      "license": "Apache-2.0 (heredada; abliterado = uso personal bajo responsabilidad del usuario)",
+      "notes": "Quantum qwen35/mixed (F32+Q8_0+Q4_K+IQ2_S+IQ3_S+Q5_K+Q6_K); MTP en Q6_K; ctx 262144; sha256 contra SHA256SUMS del repo."
+    },
+    {
+      "id": "mmproj-aeon-ult-unc-bf16",
+      "kind": "mmproj",
+      "filename": "mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
+      "target": "ComfyUI/models/llm/qwen38-27b-uncensored",
+      "bytes": 931146656,
+      "sha256": "1ff0cd30ecb0d70c30b0f92d73deb60eedf2f4a2969f64d3c711db2d2bc76305",
+      "url": "https://huggingface.co/chimingw/Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-GGUF/resolve/626a21111f6775302a07a4ea9e8f35f3eb93c0e7/AUX/mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
+      "revision": "626a21111f6775302a07a4ea9e8f35f3eb93c0e7",
+      "source": "chimingw/Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-GGUF (AUX/)",
+      "license": "Apache-2.0 (mismo master AEON-7; sin cambios de alineamiento)",
+      "notes": "Proyector de vision BF16 de la revision pinnada de AEON-7; verificado con llama-mtmd-cli en su card."
+    },
+    {
+      "id": "llama-b11146-win-cuda-13.4",
+      "kind": "runtime",
+      "filename": "llama-b11146-bin-win-cuda-13.4-x64.zip",
+      "target": "tools/llama.cpp/dist",
+      "extract_to": "tools/llama.cpp",
+      "bytes": 149758833,
+      "sha256": "b1866c0ce76bc7bfb0c24b33e9a37e9669f1be18539b12c74ce361f81c41f047",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-cuda-13.4-x64.zip",
+      "revision": "b11146",
+      "source": "ggml-org/llama.cpp releases (nightly b11146)",
+      "license": "MIT (llama.cpp)",
+      "notes": "Binarios stock win-cuda-13.4-x64 (llama-server/llama-cli/llama-mtmd-cli/llama-bench...); requiere el cudart del mismo release o driver con runtime CUDA compatible."
+    },
+    {
+      "id": "cudart-b11146-win-cuda-13.4",
+      "kind": "runtime",
+      "filename": "cudart-llama-bin-win-cuda-13.4-x64.zip",
+      "target": "tools/llama.cpp/dist",
+      "extract_to": "tools/llama.cpp",
+      "bytes": 423535356,
+      "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/cudart-llama-bin-win-cuda-13.4-x64.zip",
+      "revision": "b11146",
+      "source": "ggml-org/llama.cpp releases (nightly b11146)",
+      "license": "NVIDIA CUDA redistributable (cudart)",
+      "notes": "DLLs del runtime CUDA 13.4 para los binarios; se extraen junto a los .exe."
+    }
+  ]
+}

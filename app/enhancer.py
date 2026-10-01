@@ -2,7 +2,9 @@
 
 Offline y sin GPU: el LLM se INYECTA (`llm(system, user) -> str`) para tests;
 `load_local_llm` es el unico camino que toca `llama_cpp` y jamas se ejecuta en
-tests. El SYS_PROMPT y `BASE_NEGATIVE` (negativo base: calidad + anti-menores +
+tests; `load_server_llm` habla con un `llama-server` OpenAI-compatible y su
+transporte es inyectable (`_http_transport` es el unico camino que abre
+sockets). El SYS_PROMPT y `BASE_NEGATIVE` (negativo base: calidad + anti-menores +
 anti-censura) son copias EXACTAS del planner legacy certificado (retirado el
 2026-09-26; archivado en ``data\\gates\\m10\\evidencia-legacy``, fuera de git);
 el RAG y el manual salen de las mismas fuentes (``docs/prompting_anima.md``). El negativo final es
@@ -11,7 +13,12 @@ SIEMPRE `BASE_NEGATIVE` + negativo del preprompt, con dedup case-insensitive.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
@@ -144,6 +151,16 @@ DEFAULT_LLM_RELATIVE = Path(
 )
 
 LlmFn = Callable[[str, str], str]
+
+# Servidor LLM opcional (M11-2F): `llama-server` OpenAI-compatible. Si
+# `WAIFU_LLM_URL` esta definido y no vacio, la app lo usa; si no, sigue el
+# camino local de `load_local_llm` (llama-cpp en CPU).
+LLM_URL_ENV = "WAIFU_LLM_URL"
+LLM_TIMEOUT_ENV = "WAIFU_LLM_TIMEOUT"
+DEFAULT_LLM_URL = "http://127.0.0.1:8290"
+DEFAULT_LLM_TIMEOUT = 120.0
+LLM_USER_AGENT = "WAIFU-LLM/1.0 (local)"
+Transport = Callable[[str, dict[str, Any] | None, float], dict[str, Any]]
 
 # Fuerzas del mejorador (M9-A1): temperatura del LLM, notas RAG (`k`) e
 # instruccion extra del mensaje de usuario. `balanceado` no anade instruccion.
@@ -513,15 +530,163 @@ def load_local_llm(
     return llm
 
 
+def _resolve_base_url(base_url: str | None = None) -> str:
+    """Base del servidor LLM: parametro, `WAIFU_LLM_URL` o default, sin '/' final."""
+    base = base_url or os.environ.get(LLM_URL_ENV, "").strip() or DEFAULT_LLM_URL
+    return str(base).strip().rstrip("/")
+
+
+def _resolve_timeout(timeout: float | None = None) -> float:
+    """Timeout del servidor en segundos: parametro, `WAIFU_LLM_TIMEOUT` o 120.0.
+
+    El parametro explicito siempre manda; sin el, `WAIFU_LLM_TIMEOUT` se parsea
+    como float y un valor vacio o no parseable cae al default.
+    """
+    if timeout is not None:
+        return timeout
+    text = os.environ.get(LLM_TIMEOUT_ENV, "").strip()
+    if text:
+        try:
+            return float(text)
+        except ValueError:
+            return DEFAULT_LLM_TIMEOUT
+    return DEFAULT_LLM_TIMEOUT
+
+
+def _http_transport(url: str, payload: dict | None, timeout: float) -> dict:
+    """Transporte HTTP por defecto (`urllib`): GET sin payload, POST JSON con el.
+
+    Devuelve el JSON parseado; una respuesta 2xx sin JSON valido devuelve `{}`.
+    Los errores HTTP, de red o de URL se envuelven en `EngineError` con detalle
+    corto. Es el unico camino que abre sockets; en tests se inyecta otro.
+    """
+    headers = {"User-Agent": LLM_USER_AGENT}
+    data = None
+    method = "GET"
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json; charset=utf-8"
+        method = "POST"
+    try:
+        request = urllib.request.Request(
+            url, data=data, headers=headers, method=method
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read()
+    except urllib.error.HTTPError as exc:
+        raise EngineError(f"HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise EngineError(f"red: {str(exc.reason)[:80]}") from exc
+    except (OSError, ValueError) as exc:
+        raise EngineError(f"url: {str(exc)[:80]}") from exc
+    if not body:
+        return {}
+    try:
+        parsed = json.loads(body.decode("utf-8", errors="replace"))
+    except ValueError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def load_server_llm(
+    base_url: str | None = None,
+    *,
+    transport: Transport | None = None,
+    max_tokens: int = 192,
+    temperature: float = 0.7,
+    timeout: float | None = None,
+    model: str = "qwen38-27b-uncensored",
+) -> LlmFn:
+    """Cliente del `llama-server` OpenAI-compatible: `llm(system, user, temperature=None) -> str`.
+
+    La base es `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final).
+    El `timeout` es el parametro explicito, `WAIFU_LLM_TIMEOUT` (float) o 120.0.
+    Cada llamada hace POST a `{base}/v1/chat/completions` con `stream=False` y
+    `chat_template_kwargs={"enable_thinking": False}`; la `temperature` por
+    llamada manda sobre el default del cierre. Exige contenido de texto no
+    vacio en `choices[0]["message"]["content"]` (si no,
+    `EngineError("LLM sin contenido")`). El transporte es inyectable y la red
+    jamas se toca en tests.
+    """
+    base = _resolve_base_url(base_url)
+    send = transport if transport is not None else _http_transport
+    effective_timeout = _resolve_timeout(timeout)
+    default_temperature = temperature
+
+    def llm(system: str, user: str, temperature: float | None = None) -> str:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": (
+                temperature if temperature is not None else default_temperature
+            ),
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        response = send(f"{base}/v1/chat/completions", payload, effective_timeout)
+        try:
+            content = response["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            content = None
+        if not isinstance(content, str) or not content.strip():
+            raise EngineError("LLM sin contenido")
+        return content
+
+    return llm
+
+
+def server_llm_status(
+    base_url: str | None = None,
+    *,
+    transport: Transport | None = None,
+    timeout: float = 2.0,
+) -> tuple[bool, str]:
+    """Estado del servidor LLM: GET `{base}/health` -> `(ok, mensaje corto)`.
+
+    El exito solo exige que el transporte no lance (se considera OK). Una base
+    HTTP(S) sin host o no parseable devuelve `(False, "URL invalida")` sin red;
+    sin `base_url` se resuelve como en `load_server_llm` (env o default).
+    """
+    if base_url is None:
+        base = _resolve_base_url(None)
+    else:
+        base = str(base_url).strip().rstrip("/")
+        if not base:
+            return False, "URL invalida"
+    try:
+        parts = urllib.parse.urlsplit(base)
+    except ValueError:
+        return False, "URL invalida"
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return False, "URL invalida"
+    send = transport if transport is not None else _http_transport
+    try:
+        send(f"{base}/health", None, timeout)
+    except Exception as exc:
+        return False, str(exc)[:80]
+    return True, "OK"
+
+
 __all__ = [
     "BASE_NEGATIVE",
     "DEFAULT_LLM_RELATIVE",
+    "DEFAULT_LLM_TIMEOUT",
+    "DEFAULT_LLM_URL",
     "DEFAULT_STRENGTH_PRESET",
+    "LLM_TIMEOUT_ENV",
+    "LLM_URL_ENV",
     "RAG_ENTRIES",
     "STRENGTH_PRESETS",
     "SYS_PROMPT",
+    "Transport",
     "apply_preprompt",
     "enhance",
     "load_local_llm",
+    "load_server_llm",
     "retrieve",
+    "server_llm_status",
 ]
