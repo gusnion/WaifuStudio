@@ -1493,7 +1493,11 @@ def create_app(
             strength=strength,
             llm=llm,
         )
-        return {"positive": result["positive"], "negative": result["negative"]}
+        return {
+            "positive": result["positive"],
+            "negative": result["negative"],
+            "dropped": result["dropped"],
+        }
 
     @app.post("/api/prompt/enhance_zones")
     async def api_prompt_enhance_zones(payload: dict = Body(...)) -> Any:
@@ -1562,6 +1566,7 @@ def create_app(
             "negative": result["negative"],
             "composed": compose_zones(zones),
             "zones": zones_payload(result["positive"]),
+            "dropped": result["dropped"],
         }
 
     @app.post("/api/motion")

@@ -1243,6 +1243,7 @@ class EnhanceRouteTests(ServerTestCase):
         self.assertLess(tags.index("sfw"), tags.index("1girl"))
         self.assertLess(tags.index("1girl"), tags.index("smile"))
         self.assertIn("worst quality", data["negative"])
+        self.assertEqual(data["dropped"], [])
 
     def test_sin_llm_503(self):
         response = self.make_client().post("/api/enhance", json={"text": "1girl"})
@@ -1414,8 +1415,9 @@ class EnhanceZonesRouteTests(ServerTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(
-            set(data), {"raw", "positive", "negative", "composed", "zones"}
+            set(data), {"raw", "positive", "negative", "composed", "zones", "dropped"}
         )
+        self.assertEqual(data["dropped"], [])
         self.assertEqual(data["raw"], "masterpiece, 1girl, long hair, school uniform, blue sky, sfw")
         zones = {item["id"]: item["tags"] for item in data["zones"]}
         self.assertIn("masterpiece", zones["quality"])
@@ -5218,6 +5220,26 @@ class ScrollbarUiStaticTests(ServerTestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
+
+
+class ZoneCatalogSearchUiStaticTests(ServerTestCase):
+    """Búsqueda del popover de zonas sobre el catálogo completo vía /api/tags."""
+
+    def test_app_js_busqueda_catalogo(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "/api/tags?q=",
+            "Catálogo completo",
+            "zoneCatalogSearchSeq",
+            "renderZoneCatalogSearch",
+            "makeZoneOptionRow",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_css_titulo_catalogo(self):
+        text = self.make_client().get("/static/app.css").text
+        self.assertIn(".zone-catalog-title", text)
 
 
 if __name__ == "__main__":

@@ -234,6 +234,7 @@ let zonePopoverOriginSubcat = null;
 let zonePopoverSelected = new Map();
 let zonePopoverSeq = 0;
 let zonePopoverAnchor = null;
+let zoneCatalogSearchSeq = 0;
 let zoneOcApplied = [];
 let zoneOcCharacter = null;
 let visionRequestSeq = 0;
@@ -4477,10 +4478,36 @@ function renderZonePopoverTabs() {
   }
 }
 
+function makeZoneOptionRow(item) {
+  const row = document.createElement("label");
+  row.className = "zone-option";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = zonePopoverSelected.has(item.tag.toLowerCase());
+  box.addEventListener("change", () => {
+    const folded = item.tag.toLowerCase();
+    if (box.checked) {
+      zonePopoverSelected.set(folded, item.tag);
+    } else {
+      zonePopoverSelected.delete(folded);
+    }
+    renderZonePopoverSelected();
+  });
+  const text = document.createElement("span");
+  text.className = "zone-option-text";
+  text.textContent = item.tag;
+  const label = document.createElement("span");
+  label.className = "zone-option-label";
+  label.textContent = item.label || item.tag;
+  row.append(box, text, label);
+  return row;
+}
+
 function renderZonePopoverGroups() {
   const container = $("zone-popover-groups");
   const note = $("zone-popover-note");
   container.replaceChildren();
+  const rawQuery = $("zone-popover-search").value.trim();
   const lockedNote =
     zoneInsertTarget === "general" && Boolean(state.activeCharacterId);
   note.classList.toggle("hidden", !lockedNote);
@@ -4497,9 +4524,12 @@ function renderZonePopoverGroups() {
         ? "Elige un OC en «Mis OCs» o añade el tag a mano."
         : "Sin opciones.";
     container.appendChild(empty);
+    if (rawQuery.length >= 2) {
+      renderZoneCatalogSearch(rawQuery, container, new Set());
+    }
     return;
   }
-  const query = $("zone-popover-search").value.trim().toLowerCase();
+  const query = rawQuery.toLowerCase();
   const tags = (group.tags || []).filter(
     (item) =>
       !query ||
@@ -4511,31 +4541,51 @@ function renderZonePopoverGroups() {
     empty.className = "empty";
     empty.textContent = "Sin resultados.";
     container.appendChild(empty);
+    if (rawQuery.length >= 2) {
+      renderZoneCatalogSearch(rawQuery, container, new Set());
+    }
     return;
   }
+  const shownTags = new Set();
   for (const item of tags) {
-    const row = document.createElement("label");
-    row.className = "zone-option";
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.checked = zonePopoverSelected.has(item.tag.toLowerCase());
-    box.addEventListener("change", () => {
-      const folded = item.tag.toLowerCase();
-      if (box.checked) {
-        zonePopoverSelected.set(folded, item.tag);
-      } else {
-        zonePopoverSelected.delete(folded);
-      }
-      renderZonePopoverSelected();
-    });
-    const text = document.createElement("span");
-    text.className = "zone-option-text";
-    text.textContent = item.tag;
-    const label = document.createElement("span");
-    label.className = "zone-option-label";
-    label.textContent = item.label || item.tag;
-    row.append(box, text, label);
-    container.appendChild(row);
+    container.appendChild(makeZoneOptionRow(item));
+    shownTags.add(item.tag.toLowerCase());
+  }
+  if (rawQuery.length >= 2) {
+    renderZoneCatalogSearch(rawQuery, container, shownTags);
+  }
+}
+
+async function renderZoneCatalogSearch(rawQuery, container, shownTags) {
+  const seq = ++zoneCatalogSearchSeq;
+  let items = [];
+  try {
+    const data = await api(
+      `/api/tags?q=${encodeURIComponent(rawQuery)}&limit=60`
+    );
+    items = (data && data.items) || [];
+  } catch (_error) {
+    return;
+  }
+  if (
+    seq !== zoneCatalogSearchSeq ||
+    $("zone-popover").classList.contains("hidden") ||
+    $("zone-popover-search").value.trim() !== rawQuery
+  ) {
+    return;
+  }
+  const results = items.filter(
+    (item) => !shownTags.has(String(item.tag || "").toLowerCase())
+  );
+  if (!results.length) {
+    return;
+  }
+  const title = document.createElement("p");
+  title.className = "zone-catalog-title";
+  title.textContent = `Catálogo completo (${results.length})`;
+  container.appendChild(title);
+  for (const item of results) {
+    container.appendChild(makeZoneOptionRow(item));
   }
 }
 
@@ -4757,6 +4807,7 @@ function closeZoneInsert() {
   zonePopoverSelected = new Map();
   zoneOcApplied = [];
   zoneOcCharacter = null;
+  zoneCatalogSearchSeq += 1;
   $("zone-popover").classList.add("hidden");
   $("zone-popover-search").value = "";
   $("zone-popover-tabs").replaceChildren();

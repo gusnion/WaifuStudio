@@ -15,10 +15,16 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from app import tags as tag_catalog
 from app.config import load_config
 from app.engine import EngineError
 from app.preprompts import get_preprompt
-from app.prompt_zones import canonical_order
+from app.prompt_zones import (
+    QUALITY_OPTIONS,
+    SAFETY_OPTIONS,
+    SUBJECT_OPTIONS,
+    canonical_order,
+)
 
 # Copia EXACTA (texto, sin reformatear) del SYS_PROMPT legacy (:69-80).
 SYS_PROMPT = (
@@ -163,6 +169,13 @@ STRENGTH_PRESETS: dict[str, dict[str, Any]] = {
 DEFAULT_STRENGTH_PRESET = "balanceado"
 
 SCORE_TAG_RE = re.compile(r"^score_\d+$", re.IGNORECASE)
+WEIGHTED_TAG_RE = re.compile(r"^\((.+):([0-9]*\.?[0-9]+)\)$")
+VOCAB_TAGS_K = 60
+_OPTION_VOCAB: dict[str, tuple[str, ...]] = {
+    "quality": QUALITY_OPTIONS,
+    "safety": SAFETY_OPTIONS,
+    "subject": SUBJECT_OPTIONS,
+}
 RATING_RULES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
     "nsfw": (("nsfw", "uncensored"), frozenset({"sfw"})),
     "sfw": (("sfw",), frozenset({"nsfw", "uncensored"})),
@@ -226,13 +239,73 @@ def _normalize_tags(text: str) -> str:
     )
 
 
+def _vocabulary(user_text: str, zone_hint: str | None) -> list[str]:
+    """Vocabulario restringido de la zona pedida: opciones curadas o retrieve FTS5.
+
+    `quality`/`safety`/`subject` devuelven las opciones curadas completas;
+    `character`/`general` recuperan del catalogo por la zona; `None`, vacio u
+    otro valor recuperan sin filtro de zona. `user_text` guia la recuperacion.
+    """
+    zone = zone_hint.strip() if isinstance(zone_hint, str) else None
+    options = _OPTION_VOCAB.get(zone) if zone else None
+    if options is not None:
+        return list(options)
+    if zone in ("character", "general"):
+        return tag_catalog.retrieve(user_text, zone=zone, k=VOCAB_TAGS_K)
+    return tag_catalog.retrieve(user_text, zone=None, k=VOCAB_TAGS_K)
+
+
+def _validate_tags(text: str) -> tuple[str, list[str]]:
+    """Valida fragmentos con `tag_catalog.resolve` y devuelve `(texto, dropped)`.
+
+    Cada fragmento (separado por coma) se resuelve a su forma canonica de
+    display; soporta pesos `(tag:1.2)` conservando envoltorio y peso. Si el
+    nucleo ya es canonico (case-insensitive) se conserva el fragmento original
+    tal cual; si es alias/forma distinta se sustituye el nucleo por el canonico.
+    Los fragmentos sin resolucion (`resolve` -> None) van a `dropped` con su
+    texto tal cual (strip) y no entran. Dedup case-insensitive del fragmento
+    final conservando la 1a aparicion; los fragmentos vacios se ignoran.
+    """
+    fragments: list[str] = []
+    dropped: list[str] = []
+    seen: set[str] = set()
+    for part in str(text).split(","):
+        fragment = part.strip()
+        if not fragment:
+            continue
+        match = WEIGHTED_TAG_RE.match(fragment)
+        if match is not None:
+            core, weight = match.group(1), match.group(2)
+        else:
+            core, weight = fragment, None
+        canonical = tag_catalog.resolve(core)
+        if canonical is None:
+            dropped.append(fragment)
+            continue
+        if core.strip().lower() == canonical.lower():
+            final = fragment
+        elif weight is not None:
+            final = f"({canonical}:{weight})"
+        else:
+            final = canonical
+        folded = final.lower()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        fragments.append(final)
+    return ", ".join(fragments), dropped
+
+
 def _enforce_rating(text: str, rating: str | None) -> str:
     """Fuerza el rating pedido sobre los tags, case-insensitive y sin duplicar.
 
     `nsfw` garantiza `nsfw` y `uncensored` y elimina `sfw`; `sfw` garantiza `sfw`
     y elimina `nsfw`/`uncensored`; cualquier otro valor (p. ej. `None`) no toca el
-    rating. Los tags repetidos del LLM se deduplican conservando la 1a aparicion y
-    los que faltan se anaden al final, en el orden de la regla.
+    rating. La eliminacion y la deteccion de requeridos miran el nucleo del
+    fragmento (soporta pesos `(tag:1.2)`): un `(sfw:0.9)` cae con `nsfw` y un
+    `(uncensored:1.1)` ya cuenta como presente. Los tags repetidos del LLM se
+    deduplican conservando la 1a aparicion, el texto conservado es el fragmento
+    original tal cual y los que faltan se anaden al final, en el orden de la regla.
     """
     rule = RATING_RULES.get(rating) if isinstance(rating, str) else None
     if rule is None:
@@ -240,15 +313,22 @@ def _enforce_rating(text: str, rating: str | None) -> str:
     required, removed = rule
     kept: list[str] = []
     seen: set[str] = set()
+    present: set[str] = set()
     for raw_tag in str(text).split(","):
         tag = raw_tag.strip()
-        if not tag or tag.lower() in removed or tag.lower() in seen:
+        if not tag:
+            continue
+        match = WEIGHTED_TAG_RE.match(tag)
+        core = match.group(1).strip().lower() if match is not None else tag.lower()
+        if core in removed or tag.lower() in seen:
             continue
         seen.add(tag.lower())
+        present.add(core)
         kept.append(tag)
     for tag in required:
-        if tag not in seen:
+        if tag not in present:
             kept.append(tag)
+            present.add(tag)
             seen.add(tag)
     return ", ".join(kept)
 
@@ -280,7 +360,7 @@ def enhance(
     strength: str = DEFAULT_STRENGTH_PRESET,
     zone_hint: str | None = None,
     context_tags: list[str] | None = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
 
     `strength` (``fiel|balanceado|creativo``, default ``balanceado``) elige la
@@ -300,8 +380,14 @@ def enhance(
     `app.prompt_zones.canonical_order` DESPUES de componer el preprompt
     (calidad/meta primero y general por subcategorias); el negativo devuelto es
     el compuesto de `apply_preprompt` (`BASE_NEGATIVE` + preprompt, dedup
-    case-insensitive) y no se reordena. Sin `llm` inyectado o con `strength`
-    desconocido lanza EngineError.
+    case-insensitive) y no se reordena. El mensaje de usuario incluye, si la
+    hay, una linea con el vocabulario restringido de la zona (`zone_hint`:
+    opciones curadas completas en quality/safety/subject y recuperacion del
+    catalogo en character/general/sin zona). Tras normalizar, los tags del LLM
+    pasan por `_validate_tags`: los no resolubles por el catalogo se descartan
+    y se devuelven en `dropped` (lista de str) sin entrar en `raw`; los alias
+    se sustituyen por su forma canonica y los pesos `(tag:1.2)` se conservan.
+    Sin `llm` inyectado o con `strength` desconocido lanza EngineError.
     """
     text = user_text.strip() if isinstance(user_text, str) else ""
     if not text:
@@ -346,6 +432,12 @@ def enhance(
         "cuando exista (p. ej. 'pelo largo al viento' -> long hair, wind); añade solo "
         "etiquetas nuevas, sin frases ni traducciones."
     )
+    vocabulary = _vocabulary(text, zone_hint)
+    if vocabulary:
+        lines.append(
+            "Vocabulario de etiquetas (usa SOLO etiquetas de esta lista cuando exista "
+            "una equivalente): " + ", ".join(vocabulary)
+        )
     if preset["instruction"]:
         lines.append(f"instruccion: {preset['instruction']}")
     notes = retrieve(text, k=preset["k"] if k is None else k)
@@ -359,10 +451,16 @@ def enhance(
         raw = llm(SYS_PROMPT, user)
     if not isinstance(raw, str):
         raise EngineError("enhance: el LLM no devolvio texto")
-    prepared = _enforce_rating(_normalize_tags(raw), rating)
+    validated, dropped = _validate_tags(_normalize_tags(raw))
+    prepared = _enforce_rating(validated, rating)
     positive, negative = apply_preprompt(prepared, family=family, name=preprompt)
     positive = canonical_order(positive)
-    return {"positive": positive, "negative": negative, "raw": prepared}
+    return {
+        "positive": positive,
+        "negative": negative,
+        "raw": prepared,
+        "dropped": dropped,
+    }
 
 
 def load_local_llm(

@@ -394,31 +394,137 @@ class RatingEnforcementTests(unittest.TestCase):
         result = enhance("1girl", llm=llm, k=0)
         self.assertEqual(result["raw"], "1girl, nsfw, uncensored, smile")
 
+    def test_sfw_elimina_rating_con_peso(self):
+        llm = FakeLLM("(nsfw:1.1), smile")
+        result = enhance("1girl", rating="sfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "smile, sfw")
+        raw_tags = [tag.strip().lower() for tag in result["raw"].split(",")]
+        self.assertNotIn("nsfw", raw_tags)
+        self.assertNotIn("(nsfw:1.1)", raw_tags)
+
+    def test_nsfw_no_duplica_uncensored_con_peso(self):
+        llm = FakeLLM("(uncensored:1.1), smile")
+        result = enhance("1girl", rating="nsfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "(uncensored:1.1), smile, nsfw")
+        raw_tags = [tag.strip().lower() for tag in result["raw"].split(",")]
+        self.assertNotIn("uncensored", raw_tags)
+
+    def test_nsfw_elimina_sfw_con_peso(self):
+        llm = FakeLLM("(sfw:0.9), smile")
+        result = enhance("1girl", rating="nsfw", llm=llm, k=0)
+        self.assertEqual(result["raw"], "smile, nsfw, uncensored")
+        raw_tags = [tag.strip().lower() for tag in result["raw"].split(",")]
+        self.assertNotIn("sfw", raw_tags)
+        self.assertNotIn("(sfw:0.9)", raw_tags)
+
 
 class TagNormalizationTests(unittest.TestCase):
     def test_underscore_a_espacio_salvo_score(self):
-        llm = FakeLLM("coastal_city, completely_nude, score_9, score_7, smile")
+        llm = FakeLLM("school_uniform, completely_nude, score_9, score_7, smile")
         result = enhance("1girl", llm=llm, k=0)
         self.assertEqual(
             result["raw"],
-            "coastal city, completely nude, score_9, score_7, smile",
+            "school uniform, completely nude, score_9, score_7, smile",
         )
+        self.assertEqual(result["dropped"], [])
 
     def test_normalizacion_antes_del_preprompt(self):
-        llm = FakeLLM("coastal_city, score_9")
+        llm = FakeLLM("school_uniform, score_9")
         result = enhance("1girl", preprompt="ninguno", llm=llm, k=0)
-        self.assertEqual(result["positive"], "score_9, coastal city")
+        self.assertEqual(result["positive"], "score_9, school uniform")
 
     def test_score_en_mayusculas_queda_intacto(self):
         llm = FakeLLM("SCORE_9, score_12")
         result = enhance("1girl", llm=llm, k=0)
-        self.assertEqual(result["raw"], "SCORE_9, score_12")
+        self.assertEqual(result["raw"], "SCORE_9")
+        self.assertEqual(result["dropped"], ["score_12"])
 
     def test_sin_cambios_no_muta_el_texto(self):
         raw = "1girl, smile, masterpiece"
         result = enhance("1girl", llm=FakeLLM(raw), k=0)
         self.assertEqual(result["raw"], raw)
+        self.assertEqual(result["dropped"], [])
         self.assertEqual(result["positive"], apply_preprompt(raw)[0])
+
+
+class TagValidationTests(unittest.TestCase):
+    """Validacion estricta contra el catalogo y reporte de descartes (M11-1c)."""
+
+    def test_alias_se_sustituye_por_el_canonico(self):
+        llm = FakeLLM("longhair, smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "long hair, smile")
+        self.assertEqual(result["dropped"], [])
+
+    def test_inventado_se_descarta_y_se_reporta_en_dropped(self):
+        llm = FakeLLM("1girl, glittery sparkle, smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "1girl, smile")
+        self.assertEqual(result["dropped"], ["glittery sparkle"])
+        self.assertNotIn("glittery sparkle", result["raw"])
+
+    def test_tag_solo_del_catalogo_se_conserva(self):
+        llm = FakeLLM("absurdly long hair")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "absurdly long hair")
+        self.assertEqual(result["dropped"], [])
+
+    def test_dedup_tras_alias(self):
+        llm = FakeLLM("longhair, long hair, smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "long hair, smile")
+        self.assertEqual(result["dropped"], [])
+
+    def test_peso_con_nucleo_valido_se_conserva(self):
+        llm = FakeLLM("(long hair:1.2), smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "(long hair:1.2), smile")
+        self.assertEqual(result["dropped"], [])
+
+    def test_peso_con_nucleo_inventado_se_descarta(self):
+        llm = FakeLLM("(inventado:1.1), smile")
+        result = enhance("1girl", llm=llm, k=0)
+        self.assertEqual(result["raw"], "smile")
+        self.assertEqual(result["dropped"], ["(inventado:1.1)"])
+
+
+class VocabularyTests(unittest.TestCase):
+    """Vocabulario restringido de la zona en el mensaje de usuario (M11-1c)."""
+
+    def _user(self, text, **kwargs):
+        llm = FakeLLM("1girl, smile")
+        enhance(text, llm=llm, k=0, **kwargs)
+        return llm.calls[0][1]
+
+    def test_query_con_matches_incluye_la_linea(self):
+        user = self._user("long hair")
+        self.assertIn("Vocabulario de etiquetas", user)
+        line = next(
+            item
+            for item in user.splitlines()
+            if item.startswith("Vocabulario de etiquetas")
+        )
+        self.assertIn("long hair", line)
+
+    def test_zone_hint_quality_lista_las_opciones_curadas(self):
+        user = self._user("1girl", zone_hint="quality")
+        self.assertIn("Vocabulario de etiquetas", user)
+        self.assertIn("masterpiece", user)
+        self.assertIn("score_9", user)
+
+    def test_sin_matches_no_aparece_la_linea(self):
+        user = self._user("xyzzy plugh quux")
+        self.assertNotIn("Vocabulario de etiquetas", user)
+
+    def test_la_linea_no_lleva_prefijo_de_nota_rag(self):
+        user = self._user("long hair")
+        line = next(
+            item
+            for item in user.splitlines()
+            if item.startswith("Vocabulario de etiquetas")
+        )
+        self.assertFalse(line.startswith("- "))
+        self.assertNotIn("\n- Vocabulario", user)
 
 
 class CanonicalPositiveTests(unittest.TestCase):
