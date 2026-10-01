@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from app.engine import EngineError
-from app.enhancer import DEFAULT_LLM_URL, LLM_URL_ENV
+from app.enhancer import DEFAULT_LLM_URL, LLM_TIMEOUT_ENV, LLM_URL_ENV
 from app.vision import (
     DESCRIBE_SYSTEM_PROMPT,
     DESCRIBE_USER_PROMPT,
@@ -311,6 +311,26 @@ class ServerCaptionerTests(unittest.TestCase):
     IMAGE = b"\x89PNG fake bytes"
     RESPONSE = {"choices": [{"message": {"content": "  a   girl \n smiling "}}]}
 
+    def setUp(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_TIMEOUT_ENV, None)
+
+    def test_timeout_por_env_cuando_el_parametro_no_se_pasa(self):
+        with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: "7"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_captioner("http://x", transport=transport)(self.IMAGE)
+        self.assertEqual(transport.calls[0][2], 7.0)
+
+    def test_timeout_explicito_manda_sobre_env(self):
+        with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: "7"}):
+            transport = RecordingTransport(self.RESPONSE)
+            load_server_captioner(
+                "http://x", transport=transport, timeout=3.0
+            )(self.IMAGE)
+        self.assertEqual(transport.calls[0][2], 3.0)
+
     def test_data_uri_prompts_y_payload_exactos(self):
         transport = RecordingTransport(self.RESPONSE)
         captioner = load_server_captioner("http://127.0.0.1:8290/", transport=transport)
@@ -445,6 +465,30 @@ class ServerDescriberTests(unittest.TestCase):
     """Descriptor unificado contra `llama-server` OpenAI-compatible (M11-3G)."""
 
     IMAGE = b"\x89PNG fake bytes"
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_TIMEOUT_ENV, None)
+
+    def test_timeout_por_env_cuando_el_parametro_no_se_pasa(self):
+        with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: "7"}):
+            transport = RecordingTransport(
+                {"choices": [{"message": {"content": "a girl"}}]}
+            )
+            load_server_describer("http://x", transport=transport)(self.IMAGE)
+        self.assertEqual(transport.calls[0][2], 7.0)
+
+    def test_timeout_explicito_manda_sobre_env(self):
+        with mock.patch.dict(os.environ, {LLM_TIMEOUT_ENV: "7"}):
+            transport = RecordingTransport(
+                {"choices": [{"message": {"content": "a girl"}}]}
+            )
+            load_server_describer(
+                "http://x", transport=transport, timeout=3.0
+            )(self.IMAGE)
+        self.assertEqual(transport.calls[0][2], 3.0)
 
     def _load(self, content, response=None):
         transport = RecordingTransport(

@@ -1,6 +1,6 @@
 # Avisos de terceros (THIRD_PARTY_NOTICES)
 
-Estado: 2026-09-30 (cierre V1.0.0).
+Estado: 2026-09-30 (M11: LLM único + catálogo v3).
 Ambito: pesos, LoRAs y componentes consumidos por WAIFU. Los textos de licencia
 aun no estan archivados en el repo (carpeta prevista: `install/manifest/licenses/`),
 por lo que cualquier fila marcada como **PENDIENTE/VERIFICAR** debe contrastarse
@@ -28,7 +28,11 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | RealESRGAN (upscaler) | BSD-3-Clause | Si, con avisos | Texto **PENDIENTE/VERIFICAR** (archivar) |
 | MiniMax H3 (pesos empaquetados por Comfy-Org) | Licencia community de MiniMax (sin texto archivado) | **PENDIENTE/VERIFICAR** antes de espejar | **PENDIENTE/VERIFICAR** |
 | Qwen-Image 2.1 (Editor M10, GGUF comunitario) | qwen-research (Qwen License) | **PENDIENTE/VERIFICAR**; revisar condiciones de uso/research | **PENDIENTE/VERIFICAR** |
-| LLM local (Josiefied / QuantFactory, base Qwen) | qwen-research (derivada de Qwen) | **PENDIENTE/VERIFICAR** | **PENDIENTE/VERIFICAR** |
+| LLM local de respaldo (Josiefied / QuantFactory, base Qwen) | qwen-research (derivada de Qwen) | **PENDIENTE/VERIFICAR** | **PENDIENTE/VERIFICAR** (solo si no hay servidor) |
+| LLM único M11: Qwen3.8-27B AEON-7 abliterated (base del quant) | Apache-2.0 (derivada de `Qwen/Qwen3.8-27B`; abliterado = uso personal bajo responsabilidad del usuario) | No se redistribuye (descarga opcional `scripts/download_llm.py`) | Identificada (Apache-2.0) |
+| Quant 3,69 bpw 12GB-MTP (soyaakinohara) | Apache-2.0 (heredada) | No se redistribuye (descarga opcional, SHA256) | Identificada (Apache-2.0); revision `8cf3088b…` pineada |
+| mmproj BF16 (chimingw, mismo master AEON-7) | Apache-2.0 (heredada) | No se redistribuye (descarga opcional, SHA256) | Identificada (Apache-2.0); revision `626a2111…` pineada |
+| llama.cpp stock b11146 (ggml-org) + cudart CUDA | MIT (llama.cpp) / runtime redistribuible de NVIDIA (cudart) | No se redistribuye (descarga opcional; `tools/llama.cpp/` ignorado) | Identificada |
 | ClipProj (NicoLab28) | MIT | Si, con avisos | Identificada como MIT; texto **PENDIENTE/VERIFICAR** (archivar) |
 | RIFE (interpolacion, custom node Fannovel16) | **PENDIENTE/VERIFICAR** | **PENDIENTE/VERIFICAR** | **PENDIENTE/VERIFICAR** |
 | xinsir ControlNet OpenPose SDXL (legacy) | Apache-2.0 | Si, con avisos | Texto **PENDIENTE/VERIFICAR** (archivar) |

@@ -11,20 +11,22 @@ filtros NSFW/SFW.
 ### Imagen
 - Modelos de la familia Anima con perfil propio (encoder, VAE, sampler y resolución).
 - Editor de prompt por zonas (calidad, safety, sujeto, personaje, general) con subcategorías.
-- Catálogo de tags Danbooru (3249 etiquetas, con ranking) para buscar e insertar por zona.
+- Catálogo de tags Danbooru (capa curada + catálogo v3 de **91.357 etiquetas** con ranking) para buscar e insertar por zona; el buscador del popover cubre el catálogo completo.
 - LoRAs con biblioteca gestionable: **subida desde disco con registro automático**, edición y borrado con o sin archivo.
 - Preprompts de calidad incluidos y propios, negativo avanzado y semilla con dado.
 - 15 presets de tamaño que incluyen los formatos vertical/horizontal de vídeo (XL).
 - «Generar prompt»: convierte una descripción en lenguaje natural en tags por zona y respeta
-  los tags ya aplicados.
-- «Describir»: extrae tags WD14 y un caption Qwen2.5-VL de una imagen de la galería (pesos de
-  visión opcionales en el instalador con `-IncludeOptional`; si faltan, la UI lo indica).
+  los tags ya aplicados; usa vocabulario restringido al catálogo (los tags inventados se
+  descartan y se indican en la respuesta).
+- «Describir»: **una sola llamada** al modelo de visión devuelve caption + tags validados y
+  repartidos por zonas; incluye «Solo tags (rápido)» con WD14 tras «Avanzado» (pesos de visión
+  opcionales; si faltan, la UI lo indica).
 
 ### Vídeo
 - Motor MiniMax H3 con dos modos: **I2V** (solo frame inicial) y **FLF2V** (inicial + final); perfiles Referencia, Calidad y Ligero.
 - Variantes turbo4/turbo8 (LoRA + pasos), toggle SageAttention y audio nativo.
 - Duración de 5 a 15 s (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
-- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM local.
+- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM (servidor único o modo local).
 - Guía H3 insertable en el prompt.
 
 ### Editor
@@ -54,7 +56,7 @@ filtros NSFW/SFW.
 |---|---|
 | Sistema | Windows 10/11 x64 |
 | GPU | NVIDIA. 8 GB de VRAM para imagen, Editor y Upscaler; 12 GB para vídeo (H3). Probado en RTX 3060 12 GB |
-| Disco | SSD SATA con ~150 GB libres (descarga completa ≈120 GB; ~106 GB son modelos) |
+| Disco | SSD SATA con ~150 GB libres (descarga completa ≈120 GB; ~106 GB son modelos). El paquete LLM opcional añade ~14 GB |
 | Programas | `git` para clonar; `curl.exe` ya viene con Windows |
 
 ## Instalar y usar
@@ -72,12 +74,14 @@ archivo con SHA256. Es repetible: si se corta, vuelve a ejecutarlo y continúa d
 Uso diario:
 
 ```
-1) INICIAR_ENGINE.bat     (déjalo abierto; escucha en 127.0.0.1:8288)
-2) INICIAR_WAIFU.bat      (abre la app en http://127.0.0.1:8765)
+1) INICIAR_LLM.bat        (opcional, recomendado: modelo único de texto/visión en 127.0.0.1:8290)
+2) INICIAR_ENGINE.bat     (déjalo abierto; escucha en 127.0.0.1:8288)
+3) INICIAR_WAIFU.bat      (abre la app en http://127.0.0.1:8765)
 ```
 
-- Para cerrar: `DETENER_WAIFU.bat` y `DETENER_ENGINE.bat`.
-- Comprobación rápida del entorno: `VERIFICAR_WAIFU.bat`.
+- Si no arrancas el servidor LLM, la app conserva el modo local (llama-cpp en CPU) de siempre.
+- Para cerrar: `DETENER_WAIFU.bat`, `DETENER_ENGINE.bat` y `DETENER_LLM.bat`.
+- Comprobación rápida del entorno: `VERIFICAR_WAIFU.bat` (con `--require-llm` no pasa si el servidor está parado).
 - Detalle del instalador y banderas avanzadas: `install/README_INSTALL.md`.
 
 ## Modelos
@@ -85,7 +89,23 @@ Uso diario:
 El instalador descarga y verifica la parte automática del set recomendado (~106 GB):
 
 - Anima 2.9B preview (imagen), MiniMax H3 (vídeo con audio), Qwen-Image 2.1 UC (Editor),
-  RealESRGAN x2 + RIFE (Upscaler) y el LLM local de «Mejorar prompt».
+  RealESRGAN x2 + RIFE (Upscaler) y el LLM de texto/visión.
+
+### LLM único (opcional y pesado, ~14 GB: pesos ~13,5 GB + runtime ~0,6 GB)
+
+WAIFU usa un solo modelo para todas las tareas de texto e imagen→texto:
+**Qwen3.8-27B uncensored (3,69 bpw 12GB-MTP) + mmproj**, servido por `llama-server` stock
+(CUDA, MTP y thinking OFF). Es opcional:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\download_llm.py
+```
+
+Descarga verificada (SHA256) del GGUF, el proyector de visión y el runtime `llama.cpp` CUDA
+en `tools/llama.cpp/` (no se versiona). Se arranca con `INICIAR_LLM.bat` (puerto 8290, solo la
+GPU indicada; `WAIFU_LLM_*` ajusta device/ctx/ngl/umbral si el bench lo pide). `INICIAR_WAIFU.bat`
+define `WAIFU_LLM_URL` automáticamente cuando el runtime está instalado; sin él, la app usa el
+modo local anterior (llama-cpp en CPU). Pines y hashes: `install/manifest/manifest.llm.json`.
 
 Dos modelos base de Anima no se pueden auto-descargar (age-gate en Civitai): hay que aportarlos
 a mano.

@@ -91,6 +91,27 @@ class StartLlmScriptTests(unittest.TestCase):
         self.assertIn("exit 0", self.text)
 
 
+class VerifyWaifuBatTests(unittest.TestCase):
+    def test_reenvia_argumentos_a_app_health(self):
+        text = (ROOT / "VERIFICAR_WAIFU.bat").read_text(encoding="utf-8")
+        self.assertIn("app.health", text)
+        self.assertIn("%*", text)
+
+
+class StartAppScriptTests(unittest.TestCase):
+    def test_llm_url_solo_con_exe_modelo_y_mmproj(self):
+        text = (ROOT / "scripts" / "start_app.ps1").read_text(encoding="utf-8")
+        for marker in (
+            "WAIFU_LLM_URL",
+            "llama-server.exe",
+            "ComfyUI\\models\\llm\\qwen38-27b-uncensored",
+            "qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
+            "mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 class StopLlmScriptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

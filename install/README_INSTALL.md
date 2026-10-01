@@ -8,7 +8,7 @@ Instalador por consola, de un solo comando. Descarga todo lo pesado (engine + mo
 |---|---|
 | Sistema | **Windows 10/11 x64** |
 | GPU | **NVIDIA**. **8 GB** de VRAM: imagen, Editor y Upscaler. **12 GB**: vídeo (H3). Probado en RTX 3060 12 GB |
-| Disco | **SSD SATA** (no HDD: los modelos se leen/cargan mucho mejor) con **~150 GB libres**; mínimo de descarga completa ≈ **120 GB** (106,3 GB de modelos + engine/.venv) |
+| Disco | **SSD SATA** (no HDD: los modelos se leen/cargan mucho mejor) con **~150 GB libres**; mínimo de descarga completa ≈ **120 GB** (106,3 GB de modelos + engine/.venv) + **~14 GB** si añades el LLM opcional |
 | Programas | `git` para clonar; `curl.exe` ya viene con Windows |
 
 ## 2) Instalar (3 pasos)
@@ -26,11 +26,30 @@ INSTALAR.bat
 ## 3) Usar
 
 ```
-1) INICIAR_ENGINE.bat      (déjalo abierto)
-2) INICIAR_WAIFU.bat       (abre http://127.0.0.1:8765)
+1) INICIAR_LLM.bat         (opcional, recomendado: modelo único de texto/visión en 127.0.0.1:8290)
+2) INICIAR_ENGINE.bat      (déjalo abierto)
+3) INICIAR_WAIFU.bat       (abre http://127.0.0.1:8765)
 ```
 
-Para cerrar: `DETENER_WAIFU.bat` y `DETENER_ENGINE.bat`. Comprobación rápida: `VERIFICAR_WAIFU.bat`.
+Para cerrar: `DETENER_WAIFU.bat`, `DETENER_ENGINE.bat` y `DETENER_LLM.bat`. Comprobación rápida:
+`VERIFICAR_WAIFU.bat` (con `--require-llm` exige el servidor arrancado). Sin el paso 1, la app usa
+el modo local (llama-cpp en CPU) como siempre.
+
+## 3b) LLM único (opcional y pesado, ~14 GB: pesos ~13,5 GB + runtime ~0,6 GB)
+
+El modelo de todas las tareas de texto e imagen→texto (Qwen3.8-27B uncensored 3,69 bpw + mmproj)
+y su runtime `llama.cpp` CUDA se bajan aparte, con verificación SHA256:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\download_llm.py
+```
+
+- Destinos: `ComfyUI/models/llm/qwen38-27b-uncensored/` y `tools/llama.cpp/` (no versionado).
+- Se arranca con `INICIAR_LLM.bat` (puerto 8290, `CUDA0` = solo la GPU principal, MTP y thinking
+  OFF). `WAIFU_LLM_DEVICE/CTX/NGL/DRAFT_NMAX/EXTRA_ARGS` ajustan el arranque.
+- Pines y hashes: `install/manifest/manifest.llm.json`. Los dos GGUF también están en
+  `manifest.models.json` como opcionales, así que `INSTALAR.bat -IncludeOptional` los baja; el
+  runtime CUDA solo lo baja `scripts/download_llm.py`.
 
 ## 4) Qué NO se incluye
 

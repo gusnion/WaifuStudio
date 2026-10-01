@@ -262,22 +262,24 @@ def load_server_captioner(
     transport: Callable[[str, dict | None, float], dict] | None = None,
     max_tokens: int = 180,
     temperature: float = 0.4,
-    timeout: float = 120.0,
+    timeout: float | None = None,
     model: str = "qwen38-27b-uncensored",
 ) -> Callable[[bytes], str]:
     """Captioner contra el `llama-server` OpenAI-compatible (VL con mmproj).
 
-    Base = `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final). Cada
-    llamada manda la imagen como data URI PNG base64 junto al `VL_USER_PROMPT`,
-    con `VL_SYSTEM_PROMPT`, thinking desactivado y `stream=False`; el caption
-    se normaliza a espacios simples y vacio -> `EngineError`. El transporte es
-    inyectable (por defecto el de `app.enhancer`) y la red jamas se toca en
-    tests.
+    Base = `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final). El
+    `timeout` es el parametro explicito, `WAIFU_LLM_TIMEOUT` (float) o 120.0
+    (mismo criterio que `load_server_llm`). Cada llamada manda la imagen como
+    data URI PNG base64 junto al `VL_USER_PROMPT`, con `VL_SYSTEM_PROMPT`,
+    thinking desactivado y `stream=False`; el caption se normaliza a espacios
+    simples y vacio -> `EngineError`. El transporte es inyectable (por defecto
+    el de `app.enhancer`) y la red jamas se toca en tests.
     """
-    from app.enhancer import _http_transport, _resolve_base_url
+    from app.enhancer import _http_transport, _resolve_base_url, _resolve_timeout
 
     base = _resolve_base_url(base_url)
     send = transport if transport is not None else _http_transport
+    effective_timeout = _resolve_timeout(timeout)
 
     def captioner(image_bytes: bytes) -> str:
         data_uri = "data:image/png;base64," + base64.b64encode(image_bytes).decode(
@@ -300,7 +302,7 @@ def load_server_captioner(
             "stream": False,
             "chat_template_kwargs": {"enable_thinking": False},
         }
-        response = send(f"{base}/v1/chat/completions", payload, timeout)
+        response = send(f"{base}/v1/chat/completions", payload, effective_timeout)
         try:
             content = response["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
@@ -318,23 +320,26 @@ def load_server_describer(
     transport: Callable[[str, dict | None, float], dict] | None = None,
     max_tokens: int = 512,
     temperature: float = 0.4,
-    timeout: float = 120.0,
+    timeout: float | None = None,
     model: str = "qwen38-27b-uncensored",
 ) -> Callable[[bytes], dict]:
     """Descriptor unificado contra el `llama-server` (caption + tags en 1 llamada).
 
-    Base = `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final). Cada
-    llamada manda la imagen como data URI PNG base64 con `DESCRIBE_USER_PROMPT`
-    y `DESCRIBE_SYSTEM_PROMPT`, thinking desactivado y `stream=False`; la
-    respuesta se parte con `_parse_describe` y los tags se validan con
-    `app.tags.validate_list` (canonicos + `dropped`). Sin caption ni tags
-    validos -> `EngineError`. El transporte es inyectable (por defecto el de
-    `app.enhancer`) y la red jamas se toca en tests.
+    Base = `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final). El
+    `timeout` es el parametro explicito, `WAIFU_LLM_TIMEOUT` (float) o 120.0
+    (mismo criterio que `load_server_llm`). Cada llamada manda la imagen como
+    data URI PNG base64 con `DESCRIBE_USER_PROMPT` y `DESCRIBE_SYSTEM_PROMPT`,
+    thinking desactivado y `stream=False`; la respuesta se parte con
+    `_parse_describe` y los tags se validan con `app.tags.validate_list`
+    (canonicos + `dropped`). Sin caption ni tags validos -> `EngineError`. El
+    transporte es inyectable (por defecto el de `app.enhancer`) y la red jamas
+    se toca en tests.
     """
-    from app.enhancer import _http_transport, _resolve_base_url
+    from app.enhancer import _http_transport, _resolve_base_url, _resolve_timeout
 
     base = _resolve_base_url(base_url)
     send = transport if transport is not None else _http_transport
+    effective_timeout = _resolve_timeout(timeout)
 
     def describer(image_bytes: bytes) -> dict[str, Any]:
         data_uri = "data:image/png;base64," + base64.b64encode(image_bytes).decode(
@@ -357,7 +362,7 @@ def load_server_describer(
             "stream": False,
             "chat_template_kwargs": {"enable_thinking": False},
         }
-        response = send(f"{base}/v1/chat/completions", payload, timeout)
+        response = send(f"{base}/v1/chat/completions", payload, effective_timeout)
         try:
             content = response["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
