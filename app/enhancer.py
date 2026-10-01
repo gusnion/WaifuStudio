@@ -595,7 +595,7 @@ def load_server_llm(
     max_tokens: int = 192,
     temperature: float = 0.7,
     timeout: float | None = None,
-    model: str = "qwen38-27b-uncensored",
+    model: str = "qwen35-9b-abliterated",
 ) -> LlmFn:
     """Cliente del `llama-server` OpenAI-compatible: `llm(system, user, temperature=None) -> str`.
 

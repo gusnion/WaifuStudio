@@ -20,12 +20,12 @@ Launchers (raíz del repo; PowerShell 5.1):
 
 ```
 INICIAR_ENGINE.bat   -> scripts\start_engine.ps1  -> ComfyUI: python -s main.py --listen 127.0.0.1 --port 8288 --disable-api-nodes --disable-auto-launch
-INICIAR_LLM.bat      -> scripts\start_llm.ps1     -> tools\llama.cpp\llama-server.exe (Qwen3.8-27B 3,69 bpw + mmproj; 127.0.0.1:8290; MTP/thinking OFF; opcional)
-INICIAR_WAIFU.bat    -> scripts\start_app.ps1     -> .venv\Scripts\python.exe -m app.server (define WAIFU_LLM_URL si el runtime LLM existe)
+INICIAR_WAIFU.bat    -> scripts\start_app.ps1     -> .venv\Scripts\python.exe -m app.server
+INICIAR_LLM.bat      -> scripts\start_llm.ps1     -> servidor LLM EXTERNO opcional (la app arranca el suyo sola; usar solo en modo externo con WAIFU_LLM_URL)
 DETENER_ENGINE.bat   -> scripts\stop_engine.ps1   (rechaza parar si hay jobs en la cola)
-DETENER_LLM.bat      -> scripts\stop_llm.ps1      (solo para procesos de tools\llama.cpp)
+DETENER_LLM.bat      -> scripts\stop_llm.ps1      (solo modo externo; procesos de tools\llama.cpp)
 DETENER_WAIFU.bat    -> scripts\stop_app.ps1
-VERIFICAR_WAIFU.bat  -> .venv\Scripts\python.exe -m app.health   (--require-llm exige el servidor LLM)
+VERIFICAR_WAIFU.bat  -> .venv\Scripts\python.exe -m app.health   (--require-llm exige el LLM listo)
 ```
 
 Comandos directos equivalentes (desde la raíz del repo):
@@ -34,7 +34,7 @@ Comandos directos equivalentes (desde la raíz del repo):
 & .\.venv\Scripts\python.exe -m app.server                 # app (uvicorn)
 & .\.venv\Scripts\python.exe -m app.health                 # rutas + ping al engine y estado del LLM
 & .\.venv\Scripts\python.exe -m app.health --require-engine
-& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1388 tests offline (CPU, mocks)
+& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1440 tests offline (CPU, mocks)
 ```
 
 Los scripts comprueban que el proceso del puerto sea realmente de WAIFU (`.venv` o el Python
@@ -56,17 +56,20 @@ gestionado en `python\`) antes de arrancar o parar; no matan procesos ajenos.
 - `graphs.py`: parcheo de grafos de imagen (loaders por `class_type`, sampler, parámetros,
   img2img) siempre sobre copias.
 - `jobs.py`: cola 1-GPU en serie (un hilo daemon); el engine no admite concurrencia.
+- `llm_server.py`: servidor LLM gestionado (M12). `LlamaServerManager` arranca/para
+  `llama-server` como proceso hijo en CPU (`-ngl 0`) con el GGUF + mmproj del manifiesto;
+  `probe`/`status` (ready/loading/foreign/offline) con spawn y probe inyectables en tests.
 - `store.py`: sqlite `data/waifu.db`, tabla `generations` (estados y `kind` image/video/train).
 - `registry.py`: registro versionado de modelos; carga `registry/models.json` y fusiona la capa
   de usuario `data/registry/models.json` (gana la de usuario por `id`).
 - `loras.py`: biblioteca de LoRAs; la capa de usuario es `data/registry/loras.json` y las
   escrituras van ahí. Pesos válidos: `[0, 2]`.
 - `enhancer.py`: «Mejorar prompt» (LLM + RAG + preprompts), validación estricta de tags
-  (alias→canónico, inventados a `dropped`), vocabulario restringido y los adaptadores
-  `load_local_llm` (llama-cpp CPU), `load_server_llm`/`server_llm_state` (`WAIFU_LLM_URL`).
-- `vision.py`: WD14 (onnxruntime, CPU), caption VL (llama-cpp) y **descripción unificada en 1
-  llamada** al servidor OpenAI-compatible (`load_server_describer`); `VisionService` con cargas
-  perezosas y `tagger_for(threshold)` para el auto-caption.
+  (alias→canónico, inventados a `dropped`), vocabulario restringido y el adaptador
+  `load_server_llm`/`server_llm_state`; `load_local_llm` (llama-cpp CPU) queda legado/solo gates.
+- `vision.py`: WD14 (onnxruntime, CPU) y **descripción unificada en 1 llamada** al servidor
+  OpenAI-compatible gestionado (`load_server_describer`); `VisionService` con cargas perezosas
+  y `tagger_for(threshold)` para el auto-caption.
 - `prompt_zones.py`: zonas del prompt, orden Anima, subcategorías y opciones.
 - `tags.py`: catálogo Danbooru v3 de `registry/tags_danbooru.json`: capa curada (3249 con rank) +
   catálogo completo (91.357 con `posts`/`aliases`), búsqueda FTS5 (`retrieve`) y validación
@@ -107,7 +110,7 @@ Resto del repo:
 - `static/` + `templates/`: UI de una página (pestañas Imagen, Vídeo, Editor, Upscaler, galerías y
   OC Maker).
 - `install/`: `install.ps1`, manifiestos con pines (`manifest.models.json`,
-  `manifest.nodes.json`, `manifest.llm.json` para el LLM opcional), `README_INSTALL.md` y
+  `manifest.nodes.json`, `manifest.llm.json` para el LLM), `README_INSTALL.md` y
   `manifest/licenses/` (aviso pendiente). Descargador del LLM: `scripts/download_llm.py`.
 - `tests/`: suite unittest offline (sin GPU ni red). `docs/`: `prompting_anima.md`.
 
@@ -132,33 +135,35 @@ Configuración por entorno (todas opcionales):
 | `WAIFU_COMFY_URL` | URL del engine (por defecto `http://127.0.0.1:8288`) |
 | `WAIFU_DATA_DIR` | Carpeta de datos (por defecto `data\` en el repo) |
 | `WAIFU_APP_PORT` | Puerto de la app (por defecto 8765) |
-| `WAIFU_LLM_URL` | URL OpenAI-compatible del servidor LLM (si se define, la app lo usa; `INICIAR_WAIFU.bat` la define cuando `tools\llama.cpp` existe) |
+| `WAIFU_LLM_URL` | URL OpenAI-compatible externa; si se define, la app no arranca el servidor gestionado |
 | `WAIFU_LLM_TIMEOUT` | Timeout en segundos del adaptador HTTP (default 120) |
-| `WAIFU_LLM_PORT`, `WAIFU_LLM_DEVICE`, `WAIFU_LLM_CTX`, `WAIFU_LLM_NGL`, `WAIFU_LLM_DRAFT_NMAX`, `WAIFU_LLM_MMPROJ_GPU`, `WAIFU_LLM_EXTRA_ARGS` | Ajustes de `INICIAR_LLM.bat` (puerto 8290, `CUDA0` = solo-3060, ctx 8192, MTP n-max 2, fit automático de VRAM) |
-| `WAIFU_LLM_MODEL` | GGUF del LLM local de respaldo (si no, el Q4_K_M hermano del default) |
-| `WAIFU_VL_MODEL`, `WAIFU_VL_MMPROJ`, `WAIFU_VL_GPU_LAYERS` | Modelo, mmproj y capas GPU del caption VL local |
+| `WAIFU_LLM_PORT` | Puerto del servidor gestionado (default 8290) |
+| `WAIFU_LLM_MODEL` | GGUF del servidor gestionado (default: el 9B del manifiesto) |
+| `WAIFU_LLM_MMPROJ` | mmproj del servidor gestionado (default: el F16 del manifiesto) |
+| `WAIFU_LLM_THREADS` | Hilos CPU del servidor gestionado (default: mitad de nucleos, acotado a 4-8) |
 | `WAIFU_TRAINER_CMD` | Comando del entrenador externo de LoRA |
 
-LLM (M11): modelo único **Qwen3.8-27B uncensored 3,69 bpw 12GB-MTP + mmproj** servido por
-`llama-server` stock CUDA (`INICIAR_LLM.bat`, 127.0.0.1:8290, thinking OFF, MTP) en
-`ComfyUI/models/llm/qwen38-27b-uncensored/` + `tools/llama.cpp/` (ver
-`install/manifest/manifest.llm.json`; descarga opcional `scripts/download_llm.py`). Con
-`WAIFU_LLM_URL` definido, todas las tareas de texto/visión usan ese servidor (OpenAI-compatible,
-`chat_template_kwargs.enable_thinking=false`); sin él, la app conserva el modo local
-`llama-cpp-python` en CPU (`n_gpu_layers=0`, `n_ctx=2048`, Qwen2.5-7B abliterado en
-`ComfyUI/models/llm/Qwen25-7B-abliterated/`). Consulta `GET /api/llm/status`. Nota: el vocabulario
-restringido del enhancer aporta cuando la consulta solapa con el catálogo (etiquetas en inglés);
-en consultas en español la garantía la da la validación estricta (`dropped`).
+LLM (M12): modelo único **Qwen3.5-9B-abliterated (Q4_K_M) + mmproj-F16** (~6,1 GiB) en
+`ComfyUI/models/llm/qwen35-9b-abliterated/`, servido por `llama-server` stock b11146
+(`tools/llama.cpp/`, ver `install/manifest/manifest.llm.json`) en **CPU** (`-ngl 0`, ctx 8192):
+0 VRAM, pensado para no pelear con ComfyUI. Ciclo de vida gestionado (`app/llm_server.py`): sin
+`WAIFU_LLM_URL`, la app arranca el proceso hijo en el primer uso (`/api/enhance`, `/api/motion`,
+visión) y lo para al cerrar; con `WAIFU_LLM_URL` definida queda el modo externo (ni arranca ni
+mata nada). Estado: `GET /api/llm/status` (ready/loading/stopped/offline/unavailable/foreign) y
+badge «LLM:» de la UI. El instalador baja GGUF+mmproj por defecto; `scripts/download_llm.py`
+completa/reverifica el paquete (runtime incluido) y `scripts/smoke_llm_cpu.py` mide en CPU
+(~5-7 t/s generación). Nota: el vocabulario restringido del enhancer aporta cuando la consulta
+solapa con el catálogo (etiquetas en inglés); en consultas en español la garantía la da la
+validación estricta (`dropped`).
 
 Visión: WD14 con onnxruntime en CPU sobre `ComfyUI/models/wd14` (roles: «Solo tags (rápido)»,
 grounding/validación y **auto-caption del dataset de entrenamiento**). «Describir» usa el modelo
-único en 1 llamada cuando hay servidor (caption + tags validados + zonas) y conserva el camino
-local de 2 pasos (WD14 + caption Qwen2.5-VL con mmproj) sin servidor. Consulta el estado con
-`GET /api/vision/status`; si faltan pesos, la UI lo indica. Los pesos de visión están en el
-manifiesto como **opcionales**: `INSTALAR.bat -IncludeOptional` los descarga (~6,4 GB); también
-se pueden aportar a mano o ajustar con `WAIFU_VL_*`. Nota: tras M11-2, `INSTALAR.bat
--IncludeOptional` también baja el GGUF+mmproj del LLM (~13,5 GB) por estar en
-`manifest.models.json` como opcionales (el runtime CUDA solo lo baja `scripts/download_llm.py`).
+único en 1 llamada (caption + tags validados + zonas): la ruta `/api/vision/image_to_prompt`
+llama antes a `LlamaServerManager.ensure()` para arrancar el servidor si aún no está. El mmproj
+F16 va **SIEMPRE aparte** (Qwen3.5): sin él no hay visión aunque el GGUF de texto cargue.
+Consulta `GET /api/vision/status`; si faltan pesos, la UI lo indica. Los pesos WD14 están en el
+manifiesto como **opcionales**: `INSTALAR.bat -IncludeOptional` los descarga; también se pueden
+aportar a mano.
 
 Engine: ComfyUI **v0.37.4** pinneado por commit, con nodos también pinneados en
 `install/manifest/manifest.nodes.json` (ComfyUI-GGUF del fork **leejet**, KJNodes para el toggle
@@ -171,7 +176,7 @@ original no lo carga.
 1. **Instalar**: `INSTALAR.bat` en consola (equivale a `install\install.ps1`). Preflight:
    Windows 10/11 x64, GPU NVIDIA, ≥140 GB libres. Instala uv + CPython 3.12.12, `.venv`,
    ComfyUI v0.37.4 + nodos + torch cu130 + SageAttention, pregunta por los modelos recomendados
-   (~106 GB) y verifica con SHA256. Es repetible. Banderas: `-SkipEngine`, `-SkipModels`,
+   (~106 GB + ~6,5 GB del LLM) y verifica con SHA256. Es repetible. Banderas: `-SkipEngine`, `-SkipModels`,
    `-IncludeOptional`, `-SkipVerify`, `-NoUserEnv`, `-Yes`.
 2. **Añadir modelos**: edita `data/registry/models.json` (o deja que `INSTALAR.bat` registre los
    recomendados presentes en disco). Esquema por entrada:
@@ -212,10 +217,10 @@ original no lo carga.
 4. **Cambiar puertos**: app → `WAIFU_APP_PORT`; engine → edita el `--port` en
    `scripts\start_engine.ps1` y apunta `WAIFU_COMFY_URL` al nuevo puerto.
 5. **Correr tests** antes de dar por bueno un cambio Python:
-   `& .\.venv\Scripts\python.exe -m unittest discover -s tests`. Son 1388 tests offline.
-6. **Ver logs**: la salida de la app, del engine y del LLM es el stdout de sus consolas
-   (`INICIAR_ENGINE.bat` / `INICIAR_WAIFU.bat` / `INICIAR_LLM.bat`); ComfyUI escribe resultados
-   en `ComfyUI\output`. El instalador deja marcadores en `.install-state\`.
+   `& .\.venv\Scripts\python.exe -m unittest discover -s tests`. Son 1440 tests offline.
+6. **Ver logs**: la app y el engine escriben en sus consolas (`INICIAR_ENGINE.bat` /
+   `INICIAR_WAIFU.bat`); el LLM gestionado escribe `data\llm-server.log`; ComfyUI escribe
+   resultados en `ComfyUI\output`. El instalador deja marcadores en `.install-state\`.
 
 ## Convenciones
 
@@ -246,17 +251,18 @@ original no lo carga.
 - **VRAM insuficiente en vídeo**: usa el perfil Ligero, menos segundos (5-8) o una resolución
   menor; la cola es 1-GPU y serializa los jobs, así que cierra otras apps que usen la GPU y no
   lances dos generaciones a la vez.
-- **El LLM no responde** («Generar prompt»/«Describir» fallan con error de red): arranca
-  `INICIAR_LLM.bat` y espera a que cargue (con `--fit on` ajusta el offload a la VRAM); mira el
-  badge «LLM:» de la UI o `GET /api/llm/status`. Si no quieres el servidor, borra `WAIFU_LLM_URL`
-  del entorno y reinicia la app (vuelve al modo local). El servidor y el engine compiten por
-  VRAM: para vídeo/ imagen pesada, para el servidor con `DETENER_LLM.bat`.
+- **El LLM no responde** («Generar prompt»/«Describir» fallan): mira el badge «LLM:» de la UI o
+  `GET /api/llm/status`. `en espera`/`parado`/`cargando`: la app lo arranca al primer uso
+  (unos segundos); si no levanta, revisa `data/llm-server.log`. `no instalado`: faltan pesos o
+  runtime, ejecuta `scripts/download_llm.py`. `puerto ocupado`: libera 8290 o cambia
+  `WAIFU_LLM_PORT`. `INICIAR_LLM.bat` es solo para el modo externo (define `WAIFU_LLM_URL`);
+  el servidor es CPU (0 VRAM) y ya no compite con el engine.
 
 ## Dónde mirar más
 
 - `install/README_INSTALL.md`: instalación, banderas y qué no se incluye.
 - `install/manifest/manifest.models.json` y `manifest.nodes.json`: pines, tamaños, hashes y URLs.
-- `install/manifest/manifest.llm.json`: pines del LLM único M11 (GGUF + mmproj + runtime CUDA).
+- `install/manifest/manifest.llm.json`: pines del LLM único M12 (GGUF 9B + mmproj + runtime llama.cpp en CPU).
 - `registry/recommended-v1.json`: set recomendado y los 2 Anima de aporte manual.
 - `THIRD_PARTY_NOTICES.md`: licencias de pesos y dependencias (Anima es no comercial).
 - `docs/prompting_anima.md`: manual de prompting Anima del proyecto.

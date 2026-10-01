@@ -26,7 +26,7 @@ filtros NSFW/SFW.
 - Motor MiniMax H3 con dos modos: **I2V** (solo frame inicial) y **FLF2V** (inicial + final); perfiles Referencia, Calidad y Ligero.
 - Variantes turbo4/turbo8 (LoRA + pasos), toggle SageAttention y audio nativo.
 - Duración de 5 a 15 s (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
-- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM (servidor único o modo local).
+- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM gestionado.
 - Guía H3 insertable en el prompt.
 
 ### Editor
@@ -56,7 +56,7 @@ filtros NSFW/SFW.
 |---|---|
 | Sistema | Windows 10/11 x64 |
 | GPU | NVIDIA. 8 GB de VRAM para imagen, Editor y Upscaler; 12 GB para vídeo (H3). Probado en RTX 3060 12 GB |
-| Disco | SSD SATA con ~150 GB libres (descarga completa ≈120 GB; ~106 GB son modelos). El paquete LLM opcional añade ~14 GB |
+| Disco | SSD SATA con ~150 GB libres (descarga completa ≈126 GB; ~106 GB son modelos). El paquete LLM incluido añade ~6,5 GB |
 | Programas | `git` para clonar; `curl.exe` ya viene con Windows |
 
 ## Instalar y usar
@@ -74,14 +74,14 @@ archivo con SHA256. Es repetible: si se corta, vuelve a ejecutarlo y continúa d
 Uso diario:
 
 ```
-1) INICIAR_LLM.bat        (opcional, recomendado: modelo único de texto/visión en 127.0.0.1:8290)
-2) INICIAR_ENGINE.bat     (déjalo abierto; escucha en 127.0.0.1:8288)
-3) INICIAR_WAIFU.bat      (abre la app en http://127.0.0.1:8765)
+1) INICIAR_ENGINE.bat     (déjalo abierto; escucha en 127.0.0.1:8288)
+2) INICIAR_WAIFU.bat      (abre la app en http://127.0.0.1:8765)
 ```
 
-- Si no arrancas el servidor LLM, la app conserva el modo local (llama-cpp en CPU) de siempre.
-- Para cerrar: `DETENER_WAIFU.bat`, `DETENER_ENGINE.bat` y `DETENER_LLM.bat`.
-- Comprobación rápida del entorno: `VERIFICAR_WAIFU.bat` (con `--require-llm` no pasa si el servidor está parado).
+- El LLM es automático: la app arranca y para sola su servidor de texto/visión (~5 s la primera
+  carga); no hay `.bat` que lanzar. Si prefieres un servidor externo, define `WAIFU_LLM_URL`.
+- Para cerrar: `DETENER_WAIFU.bat` y `DETENER_ENGINE.bat`.
+- Comprobación rápida del entorno: `VERIFICAR_WAIFU.bat` (con `--require-llm` no pasa si el LLM no está listo).
 - Detalle del instalador y banderas avanzadas: `install/README_INSTALL.md`.
 
 ## Modelos
@@ -91,21 +91,24 @@ El instalador descarga y verifica la parte automática del set recomendado (~106
 - Anima 2.9B preview (imagen), MiniMax H3 (vídeo con audio), Qwen-Image 2.1 UC (Editor),
   RealESRGAN x2 + RIFE (Upscaler) y el LLM de texto/visión.
 
-### LLM único (opcional y pesado, ~14 GB: pesos ~13,5 GB + runtime ~0,6 GB)
+### LLM único (incluido, ~6,5 GB)
 
 WAIFU usa un solo modelo para todas las tareas de texto e imagen→texto:
-**Qwen3.8-27B uncensored (3,69 bpw 12GB-MTP) + mmproj**, servido por `llama-server` stock
-(CUDA, MTP y thinking OFF). Es opcional:
+**Qwen3.5-9B-abliterated (Q4_K_M) + mmproj-F16**, servido por `llama-server` stock b11146 en
+**CPU** (~6,1 GiB, 0 VRAM: no compite con ComfyUI por la GPU). Sin `.bat`: la app arranca el
+servidor en el primer uso (~5 s de carga) y lo para al cerrar; el badge «LLM:» de la UI
+muestra el estado.
+
+El instalador baja el GGUF y el mmproj por defecto (entradas `required`). Para descargar o
+reverificar el paquete completo (incluido el runtime `llama.cpp` en `tools/llama.cpp/`, no
+versionado), o si la app indica «no instalado»:
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\download_llm.py
 ```
 
-Descarga verificada (SHA256) del GGUF, el proyector de visión y el runtime `llama.cpp` CUDA
-en `tools/llama.cpp/` (no se versiona). Se arranca con `INICIAR_LLM.bat` (puerto 8290, solo la
-GPU indicada; `WAIFU_LLM_*` ajusta device/ctx/ngl/umbral si el bench lo pide). `INICIAR_WAIFU.bat`
-define `WAIFU_LLM_URL` automáticamente cuando el runtime está instalado; sin él, la app usa el
-modo local anterior (llama-cpp en CPU). Pines y hashes: `install/manifest/manifest.llm.json`.
+`WAIFU_LLM_PORT/MODEL/MMPROJ/THREADS` ajustan el servidor gestionado y `WAIFU_LLM_URL` fuerza
+el modo externo. Pines y hashes: `install/manifest/manifest.llm.json`.
 
 Dos modelos base de Anima no se pueden auto-descargar (age-gate en Civitai): hay que aportarlos
 a mano.

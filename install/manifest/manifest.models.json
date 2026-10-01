@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-09-26",
+  "generated": "2026-09-30",
   "app": "WAIFU",
   "task": "F3b (M10-6b) installer + manifiestos",
   "destination_root": "ComfyUI/models",
@@ -11,7 +11,8 @@
     "required=true = parte del flujo en uso (imagen, Wan, H3 y post-proceso); obsolete=true = retirado del flujo en F2, NO lo descarga el instalador; required=false sin obsolete = opcional/aporte del usuario.",
     "Los pesos de Anima son de licencia no comercial: el instalador los descarga desde el origen y no se re-empaquetan.",
     "Las LoRAs de usuario (Reika Saimin, Shuuko) y la de Civitai (Miku) no son redistribuibles: el instalador no las descarga por defecto. Reika Kurashiki_2 (legacy animagine) queda como aporte opcional fuera del registro.",
-    "Editor M10: qwen-image-2.1-UC-* usa los nombres reales del par UC (registry/editor_models-v1.json). El VAE UC (vae/qwen_image_2.1_vae_bf16.safetensors) NO pisa el VAE de Anima (vae/qwen_image_vae.safetensors)."
+    "Editor M10: qwen-image-2.1-UC-* usa los nombres reales del par UC (registry/editor_models-v1.json). El VAE UC (vae/qwen_image_2.1_vae_bf16.safetensors) NO pisa el VAE de Anima (vae/qwen_image_vae.safetensors).",
+    "LLM M12: el modelo unico es Qwen3.5-9B-abliterated (texto Q4_K_M, lukey03) + mmproj-F16 (unsloth), servido por llama-server stock en CPU (-ngl 0); la app lo arranca y para sola. Los modelos M11 (Qwen3.8-27B) y legacy (Qwen2.5-7B/VL) se retiraron el 2026-09-30 (pesos borrados; detalle en .agents/CONTEXT)."
   ],
   "models": [
     {
@@ -298,26 +299,16 @@
       "notes": "Variante -mlp no referenciada; retirada el 2026-09-26 en F2 (sha256 completo del lfs oid de HF)."
     },
     {
-      "id": "llm-qwen25-7b-abliterated-q3-k-m",
-      "filename": "Josiefied-Qwen2.5-7B-Instruct-abliterated.Q3_K_M.gguf",
-      "subdir": "llm/Qwen25-7B-abliterated",
-      "bytes": 3808391808,
-      "sha256": "2917d8a4ae0dd744078181a81c58ae222c4f04f1c48d427b9c753995bc7dcb5c",
-      "url": "URL_VERIFICAR",
-      "license": "URL_VERIFICAR: licencia del repo QuantFactory/base Qwen2.5 sin verificar (revisar qwen-research)",
+      "id": "llm-qwen35-9b-abliterated-q4-k-m",
+      "filename": "Qwen3.5-9B-abliterated-Q4_K_M.gguf",
+      "subdir": "llm/qwen35-9b-abliterated",
+      "bytes": 5627044704,
+      "sha256": "dba64d0e5cce0739e27535ee0a6b75249eb8006ce8b2d6c060e20750035c4695",
+      "url": "https://huggingface.co/lukey03/Qwen3.5-9B-abliterated-GGUF/resolve/dac35c6385d79a6a9fe113d7a3b730348791d37f/Qwen3.5-9B-abliterated-Q4_K_M.gguf",
+      "revision": "dac35c6385d79a6a9fe113d7a3b730348791d37f",
+      "license": "Apache-2.0 (base Qwen/Qwen3.5-9B; abliterado = uso personal bajo responsabilidad del usuario)",
       "required": true,
-      "notes": "Default de 'Mejorar prompt' (app/enhancer.py); repo QuantFactory/Josiefied-Qwen2.5-7B-Instruct-abliterated-GGUF con revision sin pinear; sha256 calculado del archivo instalado y verificado contra el prefijo 2917d8a4ae0d."
-    },
-    {
-      "id": "llm-qwen25-7b-abliterated-q4-k-m",
-      "filename": "Josiefied-Qwen2.5-7B-Instruct-abliterated.Q4_K_M.gguf",
-      "subdir": "llm/Qwen25-7B-abliterated",
-      "bytes": 4683074176,
-      "sha256": "d7d626d96cc2d3567e8266101b4211b17634012dd99a0c9b28f475ce4eb620b6",
-      "url": "URL_VERIFICAR",
-      "license": "URL_VERIFICAR: licencia del repo QuantFactory/base Qwen2.5 sin verificar (revisar qwen-research)",
-      "required": true,
-      "notes": "Motion en vivo (app/server.py prefiere Q4 para evitar degeneracion CJK); mismo repo QuantFactory sin pinear; sha256 calculado del archivo instalado y verificado contra el prefijo d7d626d96cc2."
+      "notes": "Modelo unico LLM/VL M12 (texto abliterado qwen35, Q4_K_M, sin MTP); la app arranca llama-server en CPU (-ngl 0) sola. Definicion completa: install/manifest/manifest.llm.json."
     },
     {
       "id": "realesrgan-x2",
@@ -555,56 +546,16 @@
       "notes": "Etiquetas del tagger WD14 (misma raiz de nombre que el .onnx); opcional."
     },
     {
-      "id": "qwen25vl-7b-abliterated-q4",
-      "filename": "Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf",
-      "subdir": "llm/qwen25vl-7b-abliterated-gguf",
-      "bytes": 4683073952,
-      "sha256": "adc8b3a0478606fc1a5dd3b61bff9756f9f66ca9affd92e91ff4135e553621c9",
-      "url": "https://huggingface.co/mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf",
-      "revision": "main",
-      "required": false,
-      "obsolete": false,
-      "license": "Apache-2.0 (base Qwen2.5-VL) + abliterated por el autor; ver ficha HF",
-      "notes": "Caption VL del flujo imagen->prompt (vision, M10-4b); opcional (-IncludeOptional)."
-    },
-    {
-      "id": "qwen25vl-7b-abliterated-mmproj",
-      "filename": "Qwen2.5-VL-7B-Instruct-abliterated.mmproj-f16.gguf",
-      "subdir": "llm/qwen25vl-7b-abliterated-gguf",
-      "bytes": 1354162912,
-      "sha256": "7e109bb576519e2c3f8d14bad3d5402ad851fc5b149610dfee5063ccd28623e8",
-      "url": "https://huggingface.co/mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-abliterated.mmproj-f16.gguf",
-      "revision": "main",
-      "required": false,
-      "obsolete": false,
-      "license": "Apache-2.0 (base Qwen2.5-VL) + abliterated por el autor; ver ficha HF",
-      "notes": "Proyector visual (mmproj) del caption VL; opcional."
-    },
-    {
-      "id": "qwen38-27b-uncensored-3.69bpw",
-      "filename": "qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
-      "subdir": "llm/qwen38-27b-uncensored",
-      "bytes": 12599187808,
-      "sha256": "17ef7767533efd039d13594603bb0d9a787965759ec653b42f9221b50318e4d7",
-      "url": "https://huggingface.co/soyaakinohara/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf/resolve/8cf3088b8c1fdf1121fed4d52fbc46b71e3f7874/qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
-      "revision": "8cf3088b8c1fdf1121fed4d52fbc46b71e3f7874",
-      "required": false,
-      "obsolete": false,
-      "license": "Apache-2.0 (heredada de AEON-7/Qwen3.8-27B; abliterado = uso personal bajo responsabilidad del usuario)",
-      "notes": "Modelo unico LLM/VL M11-2 (27B, qwen35, MTP embebido); opcional y pesado (~11,7 GiB). Requiere llama-server stock (tools/llama.cpp; manifest.llm.json) y el mmproj."
-    },
-    {
-      "id": "qwen38-27b-uncensored-mmproj-aeon",
-      "filename": "mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
-      "subdir": "llm/qwen38-27b-uncensored",
-      "bytes": 931146656,
-      "sha256": "1ff0cd30ecb0d70c30b0f92d73deb60eedf2f4a2969f64d3c711db2d2bc76305",
-      "url": "https://huggingface.co/chimingw/Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-GGUF/resolve/626a21111f6775302a07a4ea9e8f35f3eb93c0e7/AUX/mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
-      "revision": "626a21111f6775302a07a4ea9e8f35f3eb93c0e7",
-      "required": false,
-      "obsolete": false,
-      "license": "Apache-2.0 (mismo master AEON-7; sin cambios de alineamiento)",
-      "notes": "Proyector de vision BF16 de la misma revision AEON-7 que el quant 3,69 bpw; opcional."
+      "id": "llm-qwen35-9b-abliterated-mmproj-f16",
+      "filename": "mmproj-F16.gguf",
+      "subdir": "llm/qwen35-9b-abliterated",
+      "bytes": 918166080,
+      "sha256": "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/mmproj-F16.gguf",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "required": true,
+      "license": "Apache-2.0 (mismo master Qwen3.5-9B; torre de vision intacta)",
+      "notes": "Proyector de vision F16 stock (unsloth); empareja con el texto abliterado (la abliteracion no toca la vision). Requerido para «Describir»."
     }
   ]
 }

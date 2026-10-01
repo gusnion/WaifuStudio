@@ -13,11 +13,13 @@ reiniciar la app y no se comparte entre workers.
 
 from __future__ import annotations
 
+import atexit
 import base64
 import binascii
 import os
 import re
 import shutil
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -45,10 +47,10 @@ from app.editor import (
 )
 from app.editor_models import editor_model
 from app.engine import ComfyEngine, EngineError, load_graph
-from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
+from app.enhancer import DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
 from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
-from app.enhancer import LLM_URL_ENV, load_local_llm, load_server_llm, server_llm_state
+from app.enhancer import load_server_llm
 from app.formats import DEFAULT_FORMAT, get_size, list_image_formats
 from app.graphs import (
     DEFAULT_STRENGTH,
@@ -78,6 +80,7 @@ from app.loras import list_loras
 from app.loras import safetensors_header
 from app.loras import update_entry as update_lora
 from app.loras import validate_selection
+from app.llm_server import LlamaServerManager
 from app.h3_prompt import write_h3_prompt
 from app.motion import MOTION_NEGATIVE, write_motion
 from app.oc_traits import build_prompt, list_traits
@@ -569,6 +572,34 @@ def run_training_job(
             pass
 
 
+_manager_lock = threading.Lock()
+_manager_instance: LlamaServerManager | None = None
+_atexit_registered = False
+
+
+def _manager() -> LlamaServerManager:
+    """Manager unico del `llama-server` gestionado (creado con `APP_ROOT`)."""
+    global _manager_instance
+    with _manager_lock:
+        if _manager_instance is None:
+            _manager_instance = LlamaServerManager(APP_ROOT)
+        return _manager_instance
+
+
+def _manager_llm() -> Callable[[str, str], str]:
+    """LLM perezoso contra el servidor gestionado (o externo si hay env).
+
+    El primer uso llama a `_manager().ensure()`, que arranca `llama-server`
+    si hace falta; el cliente HTTP acepta `temperature` por kwarg.
+    """
+
+    def llm(system: str, user: str, temperature: float | None = None) -> str:
+        client = load_server_llm(_manager().ensure())
+        return client(system, user, temperature=temperature)
+
+    return llm
+
+
 def create_app(
     config: EngineConfig | None = None,
     store: Store | None = None,
@@ -690,21 +721,42 @@ def create_app(
                 job, config=cfg, store=st, registry=reg, engine_factory=factory
             )
 
-    vision_service = vision if vision is not None else VisionService(cfg.comfy_root)
+    manager = _manager()
+    default_server_url = manager.external_url() or manager.base_url
+    vision_service = (
+        vision
+        if vision is not None
+        else VisionService(cfg.comfy_root, server_url=default_server_url)
+    )
+
+    def _ensure_vision_server() -> None:
+        """Arranca el `llama-server` antes de un caption que use servidor (M12-4).
+
+        Inocuo en modo externo (`ensure()` devuelve la URL sin arrancar nada) y
+        en vision local sin `server_url` (no se llama). Si falla, el EngineError
+        del manager se propaga con su mensaje.
+        """
+        if getattr(vision_service, "server_url", None):
+            _manager().ensure()
 
     if queue is None:
         queue = JobQueue(_dispatch)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        global _atexit_registered
         if start_worker:
             st.fail_stale()
             queue.start()
+            if not _atexit_registered:
+                _atexit_registered = True
+                atexit.register(_manager().stop)
         try:
             yield
         finally:
             if start_worker:
                 queue.stop()
+                _manager().stop()
 
     app = FastAPI(title="WAIFU", lifespan=lifespan)
     app.state.config = cfg
@@ -1626,17 +1678,8 @@ def create_app(
 
     @app.get("/api/llm/status")
     async def api_llm_status() -> dict:
-        """Estado del LLM: servidor si `WAIFU_LLM_URL` esta definido; si no, local."""
-        url = os.environ.get(LLM_URL_ENV, "").strip()
-        if not url:
-            return {
-                "mode": "local",
-                "state": "local",
-                "url": None,
-                "detail": "llama-cpp",
-            }
-        state, detail = server_llm_state(url)
-        return {"mode": "server", "state": state, "url": url, "detail": detail}
+        """Estado del LLM: externo si `WAIFU_LLM_URL`; si no, gestionado (M12-3)."""
+        return _manager().status()
 
     @app.post("/api/vision/image_to_prompt")
     async def api_vision_image_to_prompt(payload: dict = Body(...)) -> Any:
@@ -1721,6 +1764,8 @@ def create_app(
                 )
             raw = source.read_bytes()
         if mode is not None:
+            if mode != "tags":
+                _ensure_vision_server()
             try:
                 if mode == "unified":
                     result = vision_service.describe_unified(raw)
@@ -1745,6 +1790,8 @@ def create_app(
             if mode in ("unified", "tags") and tags:
                 response["zones"] = zones_payload(", ".join(tags))
             return response
+        if use_caption:
+            _ensure_vision_server()
         try:
             return vision_service.describe(
                 raw, use_tags=use_tags, use_caption=use_caption
@@ -2498,59 +2545,20 @@ def create_app(
     return app
 
 
-LIVE_LLM_ENV = "WAIFU_LLM_MODEL"
-
-
-def _live_llm_path() -> str | None:
-    """GGUF de la app en vivo: `WAIFU_LLM_MODEL`, si no el Q4_K_M hermano.
-
-    El Q3_K_M por defecto del enhancer degenera con el prompt de motion (spam
-    CJK tras la primera frase); el Q4_K_M del mismo directorio escribe ingles
-    limpio. `None` deja el default de `load_local_llm` (Q3_K_M).
-    """
-    override = os.environ.get(LIVE_LLM_ENV, "").strip()
-    if override:
-        return override
-    q3 = load_config().comfy_root / DEFAULT_LLM_RELATIVE
-    q4 = q3.with_name(q3.name.replace(".Q3_K_M.gguf", ".Q4_K_M.gguf"))
-    return str(q4) if q4 != q3 and q4.is_file() else None
-
-
-def _lazy_llm() -> Callable[[str, str], str]:
-    """LLM local perezoso: carga el GGUF en la primera llamada (CPU, sin GPU).
-
-    El servidor arranca al instante y el coste de carga lo paga la primera
-    peticion a `/api/enhance` o `/api/motion`.
-    """
-    loaded: list[Callable[..., str]] = []
-
-    def llm(system: str, user: str, temperature: float | None = None) -> str:
-        if not loaded:
-            loaded.append(load_local_llm(_live_llm_path()))
-        return loaded[0](system, user, temperature=temperature)
-
-    return llm
-
-
-def _live_llm() -> Callable[[str, str], str]:
-    """LLM de la app en vivo: servidor HTTP si hay `WAIFU_LLM_URL`; si no, llama-cpp.
-
-    Con `WAIFU_LLM_URL` definido y no vacio se usa `load_server_llm` (el
-    `llama-server` OpenAI-compatible); sin el, el `_lazy_llm` local de siempre.
-    """
-    url = os.environ.get(LLM_URL_ENV, "").strip()
-    if url:
-        return load_server_llm(url)
-    return _lazy_llm()
-
-
 def main() -> int:
-    """`python -m app.server`: uvicorn en 127.0.0.1 y puerto de WAIFU_APP_PORT."""
+    """`python -m app.server`: uvicorn en 127.0.0.1 y puerto de WAIFU_APP_PORT.
+
+    El LLM es el servidor gestionado con arranque perezoso (M12-3): la app
+    arranca `llama-server` en el primer uso y lo para al cerrar. Con
+    `WAIFU_LLM_URL` definida se usa ese servidor externo.
+    """
     import uvicorn
 
     port_text = os.environ.get("WAIFU_APP_PORT", "").strip()
     port = int(port_text) if port_text else APP_PORT
-    uvicorn.run(create_app(llm=_live_llm()), host=APP_HOST, port=port, log_level="info")
+    uvicorn.run(
+        create_app(llm=_manager_llm()), host=APP_HOST, port=port, log_level="info"
+    )
     return 0
 
 

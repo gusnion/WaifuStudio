@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\environment.ps1"
-try { $Host.UI.RawUI.WindowTitle = 'WAIFU LLM Server (llama-server)' } catch { }
+try { $Host.UI.RawUI.WindowTitle = 'WAIFU LLM Server (llama-server, modo externo)' } catch { }
 
 $port = 8290
 $portText = "$env:WAIFU_LLM_PORT".Trim()
@@ -10,14 +10,18 @@ $ctx = 8192
 $ctxText = "$env:WAIFU_LLM_CTX".Trim()
 if ($ctxText) { $ctx = [int]$ctxText }
 
-$draftMax = 2
-$draftText = "$env:WAIFU_LLM_DRAFT_NMAX".Trim()
-if ($draftText) { $draftMax = [int]$draftText }
+$threads = [math]::Max(4, [math]::Min(8, [int]([Environment]::ProcessorCount / 2)))
+$threadsText = "$env:WAIFU_LLM_THREADS".Trim()
+if ($threadsText) { $threads = [int]$threadsText }
+
+$ngl = 0
+$nglText = "$env:WAIFU_LLM_NGL".Trim()
+if ($nglText) { $ngl = [int]$nglText }
 
 $serverExe = Join-Path $StackRoot 'tools\llama.cpp\llama-server.exe'
-$modelDir = Join-Path $StackRoot 'ComfyUI\models\llm\qwen38-27b-uncensored'
-$modelPath = Join-Path $modelDir 'qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf'
-$mmprojPath = Join-Path $modelDir 'mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf'
+$modelDir = Join-Path $StackRoot 'ComfyUI\models\llm\qwen35-9b-abliterated'
+$modelPath = Join-Path $modelDir 'Qwen3.5-9B-abliterated-Q4_K_M.gguf'
+$mmprojPath = Join-Path $modelDir 'mmproj-F16.gguf'
 
 $missing = @()
 if (!(Test-Path -LiteralPath $serverExe)) { $missing += "llama-server.exe: $serverExe" }
@@ -46,33 +50,7 @@ $llamaArgs = @(
     '-m', $modelPath,
     '--mmproj', $mmprojPath
 )
-
-if (Test-Path Env:WAIFU_LLM_DEVICE) {
-    $deviceText = "$env:WAIFU_LLM_DEVICE".Trim()
-    if ($deviceText -and $deviceText -ne 'all') {
-        $llamaArgs += @('--device', $deviceText)
-        $deviceLabel = $deviceText
-    } else {
-        $deviceLabel = 'todas (WAIFU_LLM_DEVICE vacio/all)'
-    }
-} else {
-    $llamaArgs += @('--device', 'CUDA0')
-    $deviceLabel = 'CUDA0 (solo la 3060)'
-}
-
-$llamaArgs += "--host 127.0.0.1 --port $port --jinja -fa on -c $ctx -ctk q4_0 -ctv q4_0".Split(' ')
-$llamaArgs += "--spec-type draft-mtp --spec-draft-n-max $draftMax -np 1 --reasoning off".Split(' ')
-
-$nglText = "$env:WAIFU_LLM_NGL".Trim()
-if ($nglText) {
-    $llamaArgs += "-ngl $nglText --fit off".Split(' ')
-} else {
-    $llamaArgs += '--fit on'.Split(' ')
-}
-
-if ("$env:WAIFU_LLM_MMPROJ_GPU".Trim() -ne '1') {
-    $llamaArgs += '--no-mmproj-offload'
-}
+$llamaArgs += "--host 127.0.0.1 --port $port -ngl $ngl -c $ctx -t $threads --jinja --reasoning off --no-webui -np 1".Split(' ')
 
 $extraText = "$env:WAIFU_LLM_EXTRA_ARGS".Trim()
 if ($extraText) {
@@ -80,7 +58,7 @@ if ($extraText) {
 }
 
 Write-Host "Servidor LLM en http://127.0.0.1:$port (Ctrl+C para pararlo)"
-Write-Host "GPU del LLM: $deviceLabel. WAIFU_LLM_DEVICE la cambia (por defecto CUDA0 = 3060)."
+Write-Host 'Modo externo opcional: la app ya arranca su propio servidor; usa este launcher solo si quieres servirlo aparte.'
 Set-Location $StackRoot
 & $serverExe @llamaArgs
 exit $LASTEXITCODE

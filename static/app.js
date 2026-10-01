@@ -1084,7 +1084,10 @@ async function restoreNegative() {
 const LLM_STATUS_LABELS = {
   ready: ["LLM: listo", "is-ok"],
   loading: ["LLM: cargando…", "is-warn"],
+  stopped: ["LLM: en espera", "is-warn"],
   offline: ["LLM: parado", "is-off"],
+  unavailable: ["LLM: no instalado", "is-off"],
+  foreign: ["LLM: puerto ocupado", "is-off"],
   local: ["LLM: local", "is-warn"],
 };
 

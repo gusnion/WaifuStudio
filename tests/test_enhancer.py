@@ -777,7 +777,7 @@ class ServerLlmTests(unittest.TestCase):
         self.assertEqual(
             payload,
             {
-                "model": "qwen38-27b-uncensored",
+                "model": "qwen35-9b-abliterated",
                 "messages": [
                     {"role": "system", "content": "SYS"},
                     {"role": "user", "content": "USER"},

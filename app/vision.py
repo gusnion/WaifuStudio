@@ -1,11 +1,17 @@
-"""Vision local (M10-4b): tags WD14 y caption Qwen2.5-VL.
+"""Vision (M10-4b, M12): tags WD14 y caption/descripcion por el servidor LLM.
 
-WD14 corre con onnxruntime en CPU sobre `ComfyUI/models/wd14`; el caption usa
-llama-cpp-python (`Qwen25VLChatHandler`) con el mmproj de
-`ComfyUI/models/llm/qwen25vl-7b-abliterated-gguf`, o un `llama-server`
-OpenAI-compatible si hay `WAIFU_LLM_URL` (`load_server_captioner`). Las cargas
-son perezosas y las factorias inyectables para que los tests corran offline
-(sin onnxruntime ni llama_cpp reales).
+WD14 corre con onnxruntime en CPU sobre `ComfyUI/models/wd14`. El caption y la
+descripcion unificada usan el `llama-server` OpenAI-compatible gestionado por la
+app (M12-3; o el de `WAIFU_LLM_URL` si esta definida) con el modelo unico
+Qwen3.5-9B-abliterated + mmproj: `load_server_captioner` y
+`load_server_describer` hablan con ese endpoint.
+
+El camino LOCAL (`_default_captioner`, llama-cpp-python con
+`Qwen25VLChatHandler` y los pesos de
+`ComfyUI/models/llm/qwen25vl-7b-abliterated-gguf`) es LEGACY: sus pesos ya no
+los instala el instalador y solo funciona con aporte manual (`WAIFU_VL_MODEL` /
+`WAIFU_VL_MMPROJ`). Las cargas son perezosas y las factorias inyectables para
+que los tests corran offline (sin onnxruntime ni llama_cpp reales).
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ WD14_DIRNAME = "wd14"
 WD14_MODEL = "wd-v1-4-convnext-tagger-v2"
 WD14_THRESHOLD = 0.35
 WD14_CHARACTER_THRESHOLD = 0.85
+# Pesos del camino local LEGACY (ya no los instala el instalador; aporte manual).
 VL_DIRNAME = "llm"
 VL_SUBDIR = "qwen25vl-7b-abliterated-gguf"
 VL_MODEL_FILE = "Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf"
@@ -215,6 +222,7 @@ def _default_tagger(
 def _default_captioner(
     model_path: Path, mmproj_path: Path, gpu_layers: int
 ) -> Callable[[bytes], str]:
+    """Caption local LEGACY (Qwen2.5-VL + llama-cpp; pesos de aporte manual)."""
     from llama_cpp import Llama
     from llama_cpp.llama_chat_format import Qwen25VLChatHandler
 
@@ -263,7 +271,7 @@ def load_server_captioner(
     max_tokens: int = 180,
     temperature: float = 0.4,
     timeout: float | None = None,
-    model: str = "qwen38-27b-uncensored",
+    model: str = "qwen35-9b-abliterated",
 ) -> Callable[[bytes], str]:
     """Captioner contra el `llama-server` OpenAI-compatible (VL con mmproj).
 
@@ -321,7 +329,7 @@ def load_server_describer(
     max_tokens: int = 512,
     temperature: float = 0.4,
     timeout: float | None = None,
-    model: str = "qwen38-27b-uncensored",
+    model: str = "qwen35-9b-abliterated",
 ) -> Callable[[bytes], dict]:
     """Descriptor unificado contra el `llama-server` (caption + tags en 1 llamada).
 
@@ -380,7 +388,7 @@ def load_server_describer(
 
 
 class VisionService:
-    """WD14 + VL con cargas perezosas; estado y descripcion de imagenes."""
+    """WD14 + VL con cargas perezosas; caption por servidor (local legacy)."""
 
     def __init__(
         self,
@@ -452,9 +460,12 @@ class VisionService:
     def status(self) -> dict[str, Any]:
         """Estado real de los dos componentes (sin cargar nada)."""
         if self.server_url is not None:
-            caption = f"caption Qwen2.5-VL por servidor HTTP ({self.server_url})"
+            caption = f"caption por servidor HTTP ({self.server_url})"
         else:
-            caption = f"caption Qwen2.5-VL por llama.cpp (n_gpu_layers={self.gpu_layers})"
+            caption = (
+                "caption local legacy por llama.cpp "
+                f"(n_gpu_layers={self.gpu_layers})"
+            )
         return {
             "installed": self.wd14_installed() and self.vl_installed(),
             "wd14": {"installed": self.wd14_installed(), "model": WD14_MODEL},

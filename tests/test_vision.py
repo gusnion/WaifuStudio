@@ -345,7 +345,7 @@ class ServerCaptionerTests(unittest.TestCase):
         self.assertEqual(
             payload,
             {
-                "model": "qwen38-27b-uncensored",
+                "model": "qwen35-9b-abliterated",
                 "messages": [
                     {"role": "system", "content": VL_SYSTEM_PROMPT},
                     {
@@ -522,7 +522,7 @@ class ServerDescriberTests(unittest.TestCase):
         self.assertEqual(
             payload,
             {
-                "model": "qwen38-27b-uncensored",
+                "model": "qwen35-9b-abliterated",
                 "messages": [
                     {"role": "system", "content": DESCRIBE_SYSTEM_PROMPT},
                     {
@@ -671,12 +671,19 @@ class VisionServiceServerTests(unittest.TestCase):
         self.assertTrue(status["vl"]["installed"])
         self.assertIn("http://127.0.0.1:8290", status["note"])
         self.assertIn("servidor HTTP", status["note"])
+        self.assertNotIn("Qwen2.5-VL", status["note"])
 
     def test_env_activa_el_modo_servidor(self):
         with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
             service = VisionService(self.root)
             self.assertEqual(service.server_url, "http://env:1111")
             self.assertTrue(service.vl_installed())
+
+    def test_server_url_explicito_no_depende_de_env(self):
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
+            service = VisionService(self.root, server_url="http://x")
+        self.assertEqual(service.server_url, "http://x")
+        self.assertTrue(service.vl_installed())
 
     def test_server_url_vacio_fuerza_modo_local_con_env(self):
         with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://env:1111"}):
@@ -692,6 +699,7 @@ class VisionServiceServerTests(unittest.TestCase):
         self.assertFalse(service.vl_installed())
         status = service.status()
         self.assertIn("llama.cpp", status["note"])
+        self.assertIn("legacy", status["note"])
 
 
 if __name__ == "__main__":

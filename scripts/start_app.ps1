@@ -19,23 +19,6 @@ if ($listener) {
     exit 0
 }
 
-if (!"$env:WAIFU_LLM_URL".Trim()) {
-    $llamaExe = Join-Path $StackRoot 'tools\llama.cpp\llama-server.exe'
-    $llmDir = Join-Path $StackRoot 'ComfyUI\models\llm\qwen38-27b-uncensored'
-    $llmModel = Join-Path $llmDir 'qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf'
-    $llmMmproj = Join-Path $llmDir 'mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf'
-    $llmReady = (Test-Path -LiteralPath $llamaExe) -and (Test-Path -LiteralPath $llmModel) -and (Test-Path -LiteralPath $llmMmproj)
-    if ($llmReady) {
-        $llmPort = 8290
-        $llmPortText = "$env:WAIFU_LLM_PORT".Trim()
-        if ($llmPortText) { $llmPort = [int]$llmPortText }
-        $env:WAIFU_LLM_URL = "http://127.0.0.1:$llmPort"
-        Write-Host "LLM server configurado en $env:WAIFU_LLM_URL; arrancalo con INICIAR_LLM.bat"
-    } else {
-        Write-Host 'LLM local no configurado: falta llama-server.exe o algun GGUF; la app arranca igual (modo local).'
-    }
-}
-
 Set-Location $StackRoot
 & (Join-Path $StackRoot '.venv\Scripts\python.exe') -m app.server
 exit $LASTEXITCODE

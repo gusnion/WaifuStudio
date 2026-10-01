@@ -8,8 +8,10 @@ import sys
 import urllib.error
 import urllib.request
 
-from app.config import describe, load_config
+from app.config import APP_ROOT, describe, load_config
 from app.enhancer import LLM_URL_ENV, server_llm_state
+from app.llm_server import LlamaServerManager
+from app.llm_server import probe as llm_probe
 
 ENGINE_TIMEOUT = 2.0
 
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-llm",
         action="store_true",
-        help="falla (exit 1) si no hay WAIFU_LLM_URL o el servidor LLM no responde",
+        help="falla (exit 1) si el servidor LLM (externo o gestionado) no esta listo",
     )
     args = parser.parse_args(argv)
 
@@ -78,7 +80,21 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"llm: OFFLINE ({llm_detail})")
     else:
-        print("llm: local (llama-cpp)")
+        manager = LlamaServerManager(APP_ROOT)
+        llm_state = llm_probe(manager.base_url)
+        llm_ok = llm_state == "ready"
+        if llm_state == "ready":
+            print("llm: LISTO (gestionado)")
+        elif llm_state == "loading":
+            print("llm: CARGANDO (gestionado)")
+        elif llm_state == "foreign":
+            print(
+                f"llm: OFFLINE (puerto {manager.port} ocupado por otra aplicacion)"
+            )
+        elif manager.installed():
+            print("llm: GESTIONADO (instalado; lo arranca la app)")
+        else:
+            print("llm: NO INSTALADO (ver scripts/download_llm.py)")
 
     if not critical_ok:
         print("Resultado: FALLO (falta ruta critica)")

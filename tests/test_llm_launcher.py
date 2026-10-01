@@ -45,41 +45,51 @@ class StartLlmScriptTests(unittest.TestCase):
             "llama-server.exe",
             "--mmproj",
             "--jinja",
-            "-fa on",
-            "--spec-type draft-mtp",
-            "--spec-draft-n-max",
-            "--no-mmproj-offload",
-            "-np 1",
+            "-ngl",
             "--reasoning off",
-            "--fit on",
-            "draft-mtp",
-            "--device",
+            "--no-webui",
+            "-np 1",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.text)
 
-    def test_dispositivo_por_defecto_cuda0(self):
-        self.assertIn("CUDA0", self.text)
-        self.assertIn("WAIFU_LLM_DEVICE", self.text)
+    def test_modelo_y_mmproj_nuevos(self):
+        self.assertIn("qwen35-9b-abliterated", self.text)
+        self.assertIn("Qwen3.5-9B-abliterated-Q4_K_M.gguf", self.text)
+        self.assertIn("mmproj-F16.gguf", self.text)
 
-    def test_modelo_y_mmproj_del_manifiesto(self):
-        self.assertIn("qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf", self.text)
-        self.assertIn(
-            "mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf", self.text
-        )
+    def test_sin_restos_del_27b(self):
+        for marker in (
+            "qwen38-27b",
+            "3.69bpw",
+            "draft-mtp",
+            "CUDA0",
+            "--device",
+            "-fa on",
+            "--fit",
+            "-ctk",
+            "-ctv",
+            "WAIFU_LLM_DEVICE",
+            "WAIFU_LLM_DRAFT_NMAX",
+        ):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, self.text)
 
-    def test_puerto_por_defecto_y_entorno(self):
+    def test_puerto_cpu_y_entorno(self):
         for marker in (
             "8290",
             "WAIFU_LLM_PORT",
             "WAIFU_LLM_CTX",
-            "WAIFU_LLM_DRAFT_NMAX",
+            "WAIFU_LLM_THREADS",
             "WAIFU_LLM_NGL",
-            "WAIFU_LLM_MMPROJ_GPU",
             "WAIFU_LLM_EXTRA_ARGS",
+            "ProcessorCount",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.text)
+
+    def test_avisa_modo_externo_opcional(self):
+        self.assertIn("Modo externo opcional", self.text)
 
     def test_avisa_si_faltan_archivos_y_sugiere_descarga(self):
         self.assertIn("download_llm.py", self.text)
@@ -99,17 +109,23 @@ class VerifyWaifuBatTests(unittest.TestCase):
 
 
 class StartAppScriptTests(unittest.TestCase):
-    def test_llm_url_solo_con_exe_modelo_y_mmproj(self):
-        text = (ROOT / "scripts" / "start_app.ps1").read_text(encoding="utf-8")
+    """M12-3: la app gestiona `llama-server`; el launcher ya no toca la env."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = (ROOT / "scripts" / "start_app.ps1").read_text(encoding="utf-8")
+
+    def test_ya_no_define_waifu_llm_url(self):
+        self.assertNotIn("WAIFU_LLM_URL", self.text)
+
+    def test_mantiene_el_arranque_de_la_app(self):
         for marker in (
-            "WAIFU_LLM_URL",
-            "llama-server.exe",
-            "ComfyUI\\models\\llm\\qwen38-27b-uncensored",
-            "qwen3.8-27b-abliterated-3.69bpw-12GB-MTP.gguf",
-            "mmproj-Qwen3.8-27B-AEON-ULTIMATE-UNCENSORED-BF16.gguf",
+            "WAIFU_APP_PORT",
+            "app.server",
+            "Get-NetTCPConnection",
         ):
             with self.subTest(marker=marker):
-                self.assertIn(marker, text)
+                self.assertIn(marker, self.text)
 
 
 class StopLlmScriptTests(unittest.TestCase):

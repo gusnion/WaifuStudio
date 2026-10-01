@@ -8,7 +8,7 @@ Instalador por consola, de un solo comando. Descarga todo lo pesado (engine + mo
 |---|---|
 | Sistema | **Windows 10/11 x64** |
 | GPU | **NVIDIA**. **8 GB** de VRAM: imagen, Editor y Upscaler. **12 GB**: vídeo (H3). Probado en RTX 3060 12 GB |
-| Disco | **SSD SATA** (no HDD: los modelos se leen/cargan mucho mejor) con **~150 GB libres**; mínimo de descarga completa ≈ **120 GB** (106,3 GB de modelos + engine/.venv) + **~14 GB** si añades el LLM opcional |
+| Disco | **SSD SATA** (no HDD: los modelos se leen/cargan mucho mejor) con **~150 GB libres**; mínimo de descarga completa ≈ **126 GB** (106,3 GB de modelos + engine/.venv + **~6,5 GB del LLM incluido**) |
 | Programas | `git` para clonar; `curl.exe` ya viene con Windows |
 
 ## 2) Instalar (3 pasos)
@@ -19,37 +19,41 @@ cd WaifuStudio
 INSTALAR.bat
 ```
 
-- Descarga **~106 GB** de modelos + el engine: tarda bastante (según tu conexión).
+- Descarga **~112 GB** de modelos (incluye el LLM) + el engine: tarda bastante (según tu conexión).
 - Es **repetible**: si se corta, vuelve a ejecutar `INSTALAR.bat` y continúa donde quedó.
 - Verifica cada archivo con SHA256; los ya descargados no se bajan de nuevo.
 
 ## 3) Usar
 
 ```
-1) INICIAR_LLM.bat         (opcional, recomendado: modelo único de texto/visión en 127.0.0.1:8290)
-2) INICIAR_ENGINE.bat      (déjalo abierto)
-3) INICIAR_WAIFU.bat       (abre http://127.0.0.1:8765)
+1) INICIAR_ENGINE.bat      (déjalo abierto)
+2) INICIAR_WAIFU.bat       (abre http://127.0.0.1:8765)
 ```
 
-Para cerrar: `DETENER_WAIFU.bat`, `DETENER_ENGINE.bat` y `DETENER_LLM.bat`. Comprobación rápida:
-`VERIFICAR_WAIFU.bat` (con `--require-llm` exige el servidor arrancado). Sin el paso 1, la app usa
-el modo local (llama-cpp en CPU) como siempre.
+El LLM es automático: la app arranca y para sola su servidor de texto/visión (~5 s la primera
+carga; CPU, 0 VRAM). No hay que lanzar nada más. Para cerrar: `DETENER_WAIFU.bat` y
+`DETENER_ENGINE.bat`. Comprobación rápida: `VERIFICAR_WAIFU.bat` (con `--require-llm` exige el
+LLM listo).
 
-## 3b) LLM único (opcional y pesado, ~14 GB: pesos ~13,5 GB + runtime ~0,6 GB)
+## 3b) LLM único (incluido, ~6,5 GB)
 
-El modelo de todas las tareas de texto e imagen→texto (Qwen3.8-27B uncensored 3,69 bpw + mmproj)
-y su runtime `llama.cpp` CUDA se bajan aparte, con verificación SHA256:
+Todas las tareas de texto e imagen→texto usan **Qwen3.5-9B-abliterated (Q4_K_M) + mmproj-F16**
+(~6,1 GiB), servido por `llama.cpp` stock b11146 en **CPU** (`-ngl 0`: 0 VRAM, no compite con
+ComfyUI). El instalador baja el GGUF y el mmproj por defecto (entradas `required` de
+`manifest.models.json`); la app los usa solos, sin `.bat`.
+
+Como alternativa (o para completar/reverificar el paquete, incluido el runtime
+`tools/llama.cpp/`, que no se versiona) existe el descargador con verificación SHA256:
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\download_llm.py
 ```
 
-- Destinos: `ComfyUI/models/llm/qwen38-27b-uncensored/` y `tools/llama.cpp/` (no versionado).
-- Se arranca con `INICIAR_LLM.bat` (puerto 8290, `CUDA0` = solo la GPU principal, MTP y thinking
-  OFF). `WAIFU_LLM_DEVICE/CTX/NGL/DRAFT_NMAX/EXTRA_ARGS` ajustan el arranque.
-- Pines y hashes: `install/manifest/manifest.llm.json`. Los dos GGUF también están en
-  `manifest.models.json` como opcionales, así que `INSTALAR.bat -IncludeOptional` los baja; el
-  runtime CUDA solo lo baja `scripts/download_llm.py`.
+- Destinos: `ComfyUI/models/llm/qwen35-9b-abliterated/` y `tools/llama.cpp/`.
+- `WAIFU_LLM_PORT/MODEL/MMPROJ/THREADS` ajustan el servidor gestionado; `WAIFU_LLM_URL` fuerza
+  un servidor externo.
+- Estado en la UI (badge «LLM:») o `GET /api/llm/status`. Pines y hashes:
+  `install/manifest/manifest.llm.json`.
 
 ## 4) Qué NO se incluye
 

@@ -20,7 +20,7 @@ from app import loras as loras_module
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
-from app.enhancer import BASE_NEGATIVE, LLM_URL_ENV, apply_preprompt
+from app.enhancer import BASE_NEGATIVE, apply_preprompt
 from app.formats import DEFAULT_FORMAT, list_image_formats
 from app.jobs import JobQueue
 from app.params import (
@@ -1458,8 +1458,11 @@ class EnhanceZonesRouteTests(ServerTestCase):
 class FakeVision:
     """Vision inyectada: registra llamadas y devuelve resultados fijos."""
 
-    def __init__(self, *, available: bool = True) -> None:
+    def __init__(
+        self, *, available: bool = True, server_url: str | None = None
+    ) -> None:
         self.available = available
+        self.server_url = server_url
         self.calls: list[tuple[bytes, bool, bool]] = []
         self.unified_calls = 0
 
@@ -1673,43 +1676,200 @@ class VisionModeRouteTests(ServerTestCase):
         self.assertIn("error", response.json())
 
 
-class LlmStatusRouteTests(ServerTestCase):
-    """`GET /api/llm/status` (M11-3G): local o servidor, sin red real."""
+class FakeManager:
+    """Manager falso para las rutas: status fijo y URLs configurables."""
 
-    def test_local_cuando_no_hay_env(self):
-        with mock.patch.dict(os.environ):
-            os.environ.pop(LLM_URL_ENV, None)
+    def __init__(
+        self,
+        status: dict,
+        *,
+        base_url: str = "http://127.0.0.1:8290",
+        external_url: str | None = None,
+        ensure_error: Exception | None = None,
+    ):
+        self._status = status
+        self.base_url = base_url
+        self._external_url = external_url
+        self._ensure_error = ensure_error
+        self.status_calls = 0
+        self.ensure_calls = 0
+
+    def external_url(self):
+        return self._external_url
+
+    def ensure(self):
+        self.ensure_calls += 1
+        if self._ensure_error is not None:
+            raise self._ensure_error
+        return self._external_url or self.base_url
+
+    def status(self):
+        self.status_calls += 1
+        return self._status
+
+
+class LlmStatusRouteTests(ServerTestCase):
+    """`GET /api/llm/status` (M12-3): delega en el manager gestionado/externo."""
+
+    MANAGED = {
+        "mode": "managed",
+        "state": "stopped",
+        "url": "http://127.0.0.1:8290",
+        "detail": "lo arranca la app al primer uso",
+    }
+
+    def test_gestionado_delega_en_el_manager(self):
+        fake = FakeManager(dict(self.MANAGED))
+        with mock.patch.object(server_module, "_manager", return_value=fake):
             response = self.make_client().get("/api/llm/status")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {
-                "mode": "local",
-                "state": "local",
-                "url": None,
-                "detail": "llama-cpp",
-            },
-        )
+        self.assertEqual(response.json(), self.MANAGED)
+        self.assertEqual(fake.status_calls, 1)
 
-    def test_servidor_con_env_y_estado_inyectado(self):
-        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://127.0.0.1:9"}):
-            with mock.patch.object(
-                server_module,
-                "server_llm_state",
-                return_value=("loading", "HTTP 503: loading model"),
-            ) as state:
-                response = self.make_client().get("/api/llm/status")
+    def test_externo_delega_en_el_manager(self):
+        payload = {
+            "mode": "external",
+            "state": "loading",
+            "url": "http://externo:9000",
+            "detail": "HTTP 503: loading model",
+        }
+        fake = FakeManager(payload, external_url="http://externo:9000")
+        with mock.patch.object(server_module, "_manager", return_value=fake):
+            response = self.make_client().get("/api/llm/status")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {
-                "mode": "server",
-                "state": "loading",
-                "url": "http://127.0.0.1:9",
-                "detail": "HTTP 503: loading model",
-            },
+        self.assertEqual(response.json(), payload)
+
+
+class VisionManagedServerTests(ServerTestCase):
+    """El caption/unified arranca el `llama-server` gestionado (M12-4)."""
+
+    B64 = base64.b64encode(PNG_BYTES).decode("ascii")
+
+    def _post(self, vision, fake, payload):
+        with mock.patch.object(server_module, "_manager", return_value=fake):
+            return self.make_client(vision=vision).post(
+                "/api/vision/image_to_prompt", json=payload
+            )
+
+    def test_unified_arranca_el_servidor_antes_de_describir(self):
+        vision = FakeVision(server_url="http://127.0.0.1:8290")
+        fake = FakeManager(dict(LlmStatusRouteTests.MANAGED))
+        response = self._post(
+            vision, fake, {"image_b64": self.B64, "mode": "unified"}
         )
-        state.assert_called_once_with("http://127.0.0.1:9")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.ensure_calls, 1)
+        self.assertEqual(vision.unified_calls, 1)
+
+    def test_caption_arranca_el_servidor(self):
+        vision = FakeVision(server_url="http://127.0.0.1:8290")
+        fake = FakeManager(dict(LlmStatusRouteTests.MANAGED))
+        response = self._post(
+            vision, fake, {"image_b64": self.B64, "mode": "caption"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.ensure_calls, 1)
+
+    def test_tags_no_arranca_el_servidor(self):
+        vision = FakeVision(server_url="http://127.0.0.1:8290")
+        fake = FakeManager(dict(LlmStatusRouteTests.MANAGED))
+        response = self._post(
+            vision, fake, {"image_b64": self.B64, "mode": "tags"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.ensure_calls, 0)
+
+    def test_sin_caption_no_arranca_el_servidor(self):
+        vision = FakeVision(server_url="http://127.0.0.1:8290")
+        fake = FakeManager(dict(LlmStatusRouteTests.MANAGED))
+        response = self._post(
+            vision, fake, {"image_b64": self.B64, "use_caption": False}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.ensure_calls, 0)
+
+    def test_vision_local_no_arranca_el_servidor(self):
+        vision = FakeVision()
+        fake = FakeManager(dict(LlmStatusRouteTests.MANAGED))
+        response = self._post(
+            vision, fake, {"image_b64": self.B64, "mode": "unified"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.ensure_calls, 0)
+
+    def test_error_del_manager_llega_como_400(self):
+        vision = FakeVision(server_url="http://127.0.0.1:8290")
+        fake = FakeManager(
+            dict(LlmStatusRouteTests.MANAGED),
+            ensure_error=EngineError("faltan archivos del servidor LLM"),
+        )
+        response = self._post(
+            vision, fake, {"image_b64": self.B64, "mode": "unified"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("faltan archivos", response.json()["error"])
+
+
+class DefaultVisionWiringTests(ServerTestCase):
+    """`create_app` sin vision inyectada usa el servidor gestionado (M12-3)."""
+
+    def test_vision_usa_la_url_gestionada(self):
+        fake = FakeManager(
+            dict(LlmStatusRouteTests.MANAGED), base_url="http://127.0.0.1:9911"
+        )
+        with mock.patch.object(server_module, "_manager", return_value=fake):
+            response = self.make_client().get("/api/vision/status")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("http://127.0.0.1:9911", response.json()["note"])
+
+    def test_vision_respeta_la_url_externa(self):
+        fake = FakeManager(
+            dict(LlmStatusRouteTests.MANAGED),
+            base_url="http://127.0.0.1:9911",
+            external_url="http://externo:9000",
+        )
+        with mock.patch.object(server_module, "_manager", return_value=fake):
+            response = self.make_client().get("/api/vision/status")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("http://externo:9000", response.json()["note"])
+
+
+class ManagerLlmTests(ServerTestCase):
+    """`_manager_llm` (M12-3): ensure perezoso y temperature por kwarg."""
+
+    def test_ensure_y_temperature(self):
+        fake_manager = mock.Mock()
+        fake_manager.ensure.return_value = "http://127.0.0.1:9911"
+        captured: dict = {}
+
+        def fake_client(system, user, temperature=None):
+            captured["temperature"] = temperature
+            return "1girl"
+
+        with mock.patch.object(
+            server_module, "_manager", return_value=fake_manager
+        ), mock.patch.object(
+            server_module, "load_server_llm", return_value=fake_client
+        ) as loader:
+            llm = server_module._manager_llm()
+            self.assertEqual(llm("S", "U", temperature=0.4), "1girl")
+            self.assertEqual(llm("S", "U"), "1girl")
+        loader.assert_called_with("http://127.0.0.1:9911")
+        self.assertEqual(captured["temperature"], None)
+        fake_manager.ensure.assert_called_with()
+
+    def test_main_pasa_el_llm_gestionado(self):
+        sentinel = lambda system, user: "ok"  # noqa: E731
+        with mock.patch.object(
+            server_module, "_manager_llm", return_value=sentinel
+        ) as builder, mock.patch.object(
+            server_module, "create_app", return_value=object()
+        ) as create, mock.patch("uvicorn.run") as run:
+            server_module.main()
+        builder.assert_called_once_with()
+        create.assert_called_once_with(llm=sentinel)
+        run.assert_called_once()
+        self.assertEqual(run.call_args.kwargs["host"], server_module.APP_HOST)
 
 
 class PromptGeneralUiStaticTests(ServerTestCase):
@@ -5565,6 +5725,20 @@ class UnifiedDescribeUiStaticTests(ServerTestCase):
             '"/api/llm/status"',
             "performance.now()",
             "dropped",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_etiquetas_de_estado_llm(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            'ready: ["LLM: listo", "is-ok"]',
+            'loading: ["LLM: cargando…", "is-warn"]',
+            'stopped: ["LLM: en espera", "is-warn"]',
+            'offline: ["LLM: parado", "is-off"]',
+            'unavailable: ["LLM: no instalado", "is-off"]',
+            'foreign: ["LLM: puerto ocupado", "is-off"]',
+            'local: ["LLM: local", "is-warn"]',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
