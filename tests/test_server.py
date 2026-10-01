@@ -5202,5 +5202,23 @@ class GalleryTabUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class ScrollbarUiStaticTests(ServerTestCase):
+    """Barras de scroll ocultas en toda la app sin perder rueda/teclado."""
+
+    def test_app_css_oculta_barras_sin_desactivar_scroll(self):
+        text = self.make_client().get("/static/app.css").text
+        self.assertIn(
+            "* {\n  scrollbar-width: none;\n  -ms-overflow-style: none;\n}", text
+        )
+        for marker in (
+            "scrollbar-width: none",
+            "-ms-overflow-style: none",
+            "*::-webkit-scrollbar",
+            "display: none",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+
 if __name__ == "__main__":
     unittest.main()
