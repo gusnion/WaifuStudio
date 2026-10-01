@@ -79,7 +79,9 @@ gestionado en `python\`) antes de arrancar o parar; no matan procesos ajenos.
   fotogramas y RIFE (`registry/upscalers-v1.json`).
 - `characters.py`: OCs en sqlite + referencias copiadas a `data/characters/<id>/`.
 - `trainer.py`: entrenador de LoRA; prepara dataset/config y lanza un comando externo
-  (`WAIFU_TRAINER_CMD`). La instalación del fork kohya está pendiente: aquí solo se orquesta.
+  (`WAIFU_TRAINER_CMD`). El entrenador real vive en `tools/kohya/` (checkout de
+  `kohya-ss/sd-scripts` v0.12.0 con `networks.lora_anima`, venv propio y wrapper
+  `run_waifu_train.py`); aquí solo se orquesta.
 - `health.py`: smoke CLI (rutas críticas + ping al engine).
 - Otros: `params.py` (enums reales de sampler/scheduler), `progress.py` (progreso por WebSocket),
   `oc_traits.py` y `sheet.py` (OC Maker), `gate_f0/f1/f2.py` (gates GPU/CPU del proyecto).

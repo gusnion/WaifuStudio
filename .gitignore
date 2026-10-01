@@ -14,3 +14,7 @@ tmp/
 config.local.json
 .install-state/
 install/env.ps1
+
+# Entrenador kohya: checkout + venv locales (solo se versiona el wrapper)
+tools/kohya/sd-scripts/
+tools/kohya/venv/

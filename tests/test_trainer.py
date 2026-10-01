@@ -209,8 +209,8 @@ class WriteConfigTests(TrainerTestCase):
         self.assertIs(data["gradient_checkpointing"], True)
         self.assertEqual(data["optimizer"], "AdamW8bit")
         text = path.read_text(encoding="utf-8")
-        self.assertIn("M10", text)
-        self.assertIn("revisar claves contra el fork kohya de Anima", text)
+        self.assertIn("tools/kohya/run_waifu_train.py", text)
+        self.assertIn("networks.lora_anima", text)
 
     def test_defaults(self):
         path = write_config(self.root / "dataset" / "1", self.out_dir)

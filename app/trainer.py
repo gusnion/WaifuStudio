@@ -4,8 +4,10 @@ Pipeline CPU/testeable sin GPU ni red: `prepare_dataset` copia imagenes de la
 galeria con sus captions, `write_config` escribe el TOML del entrenador,
 `run_training` lanza el comando externo (`WAIFU_TRAINER_CMD`) volcando el log y
 `register_lora` copia el `.safetensors` a `ComfyUI\\models\\loras\\waifu` y lo
-registra en `registry\\loras.json`. La instalacion real del fork kohya de Anima
-llega en M10; aqui solo se orquesta (el servidor encola `kind="train"`).
+registra en `registry\\loras.json`. El entrenador real vive en `tools/kohya`
+(checkout de `kohya-ss/sd-scripts` v0.12.0 con `networks.lora_anima`, venv
+propio y wrapper `run_waifu_train.py` que consume este TOML); aqui solo se
+orquesta (el servidor encola `kind="train"`).
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ MAX_IMAGES = 50
 TRAINER_CMD_ENV = "WAIFU_TRAINER_CMD"
 DEFAULT_TIMEOUT_S = 4 * 3600
 CONFIG_FILENAME = "train_config.toml"
-CONFIG_COMMENT = "revisar claves contra el fork kohya de Anima al instalar (M10)"
+CONFIG_COMMENT = "consumida por tools/kohya/run_waifu_train.py (sd-scripts + networks.lora_anima)"
 LORAS_SUBDIR = "waifu"
 
 
@@ -224,8 +226,8 @@ def write_config(
 
     Incluye ``source_image_dir``, ``output_dir``, ``output_name``, ``rank``,
     ``epochs``, ``lr``, ``resolution=512``, ``batch_size=1``,
-    ``gradient_checkpointing=true`` y ``optimizer="AdamW8bit"``, con el aviso
-    de revisar las claves contra el fork kohya de Anima al instalarlo.
+    ``gradient_checkpointing=true`` y ``optimizer="AdamW8bit"``: las claves que
+    consume ``tools/kohya/run_waifu_train.py`` (sd-scripts + networks.lora_anima).
     """
     dataset_dir = Path(dataset_dir)
     out_dir = Path(out_dir)
