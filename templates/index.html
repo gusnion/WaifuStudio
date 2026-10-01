@@ -133,6 +133,7 @@
           <div class="zone-toolbar">
             <div class="enhance-row">
               <button id="btn-enhance" type="button">Generar prompt</button>
+              <span id="llm-status" class="llm-status" title="">LLM: …</span>
               <label class="inline-field">
                 <span>Fuerza</span>
                 <select id="enhance-strength">
@@ -901,6 +902,10 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         </section>
       </div>
       <div class="modal-footer">
+        <details id="vision-advanced" class="vision-advanced">
+          <summary>Avanzado</summary>
+          <button id="btn-vision-tags-only" type="button">Solo tags (rápido)</button>
+        </details>
         <button id="btn-vision-insert-caption" class="primary" type="button" disabled>Insertar caption</button>
         <button id="btn-vision-insert-tags" type="button" disabled>Insertar tags</button>
       </div>

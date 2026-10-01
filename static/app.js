@@ -240,6 +240,7 @@ let zoneOcCharacter = null;
 let visionRequestSeq = 0;
 let visionInsertTimer = null;
 let visionResult = { tags: [], caption: "" };
+let visionLastPayload = null;
 let galleryModalItem = null;
 
 const $ = (id) => document.getElementById(id);
@@ -1080,6 +1081,41 @@ async function restoreNegative() {
   }
 }
 
+const LLM_STATUS_LABELS = {
+  ready: ["LLM: listo", "is-ok"],
+  loading: ["LLM: cargando…", "is-warn"],
+  offline: ["LLM: parado", "is-off"],
+  local: ["LLM: local", "is-warn"],
+};
+
+async function refreshLlmStatus() {
+  const el = $("llm-status");
+  if (!el) {
+    return;
+  }
+  el.classList.remove("is-ok", "is-warn", "is-off");
+  let data = null;
+  try {
+    data = await api("/api/llm/status");
+  } catch (_error) {
+    data = null;
+  }
+  const state = data && typeof data.state === "string" ? data.state : "";
+  const entry = LLM_STATUS_LABELS[state];
+  el.textContent = entry ? entry[0] : "LLM: ?";
+  if (entry) {
+    el.classList.add(entry[1]);
+  }
+  const bits = [];
+  if (data && data.detail) {
+    bits.push(String(data.detail));
+  }
+  if (data && data.url) {
+    bits.push(String(data.url));
+  }
+  el.title = bits.join(" · ");
+}
+
 async function enhancePrompt() {
   if (state.pendingEnhance) {
     return;
@@ -1096,6 +1132,7 @@ async function enhancePrompt() {
   button.disabled = true;
   button.textContent = "Generando…";
   setStatus("Generando prompt...");
+  const startedAt = performance.now();
   try {
     const data = await postJson("/api/prompt/enhance_zones", {
       text,
@@ -1103,6 +1140,7 @@ async function enhancePrompt() {
       rating: $("rating").value,
       tags: collectPromptZoneTags(),
     });
+    const elapsedMs = performance.now() - startedAt;
     applyZonesPayload(data.zones || []);
     const negative = String(data.negative || "").trim();
     if (negative) {
@@ -1111,7 +1149,7 @@ async function enhancePrompt() {
     }
     renderZoneEditor();
     button.textContent = "Generado ✓";
-    setStatus("Prompt generado ✓");
+    setStatus(`Prompt generado ✓ · ${(elapsedMs / 1000).toFixed(1)} s`);
   } catch (error) {
     button.textContent = "Error";
     setStatus(error.message, true);
@@ -1126,6 +1164,7 @@ async function enhancePrompt() {
         button.textContent = "Generar prompt";
       }
     }, 1600);
+    refreshLlmStatus();
   }
 }
 
@@ -1784,7 +1823,7 @@ function showVisionError(message) {
   }
 }
 
-function renderVisionResult(data) {
+function renderVisionResult(data, elapsedMs) {
   const raw = data && typeof data === "object" ? data : {};
   const tags = Array.isArray(raw.tags)
     ? raw.tags.map((tag) => String(tag == null ? "" : tag).trim()).filter(Boolean)
@@ -1796,6 +1835,14 @@ function renderVisionResult(data) {
     (name) => typeof name === "string" && name
   );
   const modelNote = names.length ? ` · ${names.join(" + ")}` : "";
+  const dropped = Array.isArray(raw.dropped) ? raw.dropped.filter(Boolean) : [];
+  const droppedNote = dropped.length
+    ? ` · ${dropped.length} tag(s) fuera del catálogo`
+    : "";
+  const modeNote = raw.mode === "tags" ? " · WD14 (rápido)" : "";
+  const timeNote = Number.isFinite(elapsedMs)
+    ? ` · ${(elapsedMs / 1000).toFixed(1)} s`
+    : "";
   if (caption) {
     const captionEl = $("vision-caption");
     if (captionEl) {
@@ -1838,16 +1885,16 @@ function renderVisionResult(data) {
       empty.textContent = "El modelo no devolvió tags ni caption.";
       empty.classList.remove("hidden");
     }
-    setVisionStatus(`Sin resultados${modelNote}`);
+    setVisionStatus(`Sin resultados${modelNote}${modeNote}${droppedNote}${timeNote}`);
     return;
   }
   if (empty) {
     empty.classList.add("hidden");
   }
-  setVisionStatus(`Listo${modelNote}`);
+  setVisionStatus(`Listo${modelNote}${modeNote}${droppedNote}${timeNote}`);
 }
 
-async function openVisionModal(source) {
+async function openVisionModal(source, mode = "unified") {
   let payload = source && typeof source === "object" ? source : null;
   if (!payload) {
     const item = selectedImageView();
@@ -1862,25 +1909,29 @@ async function openVisionModal(source) {
   if (!modal) {
     return;
   }
+  visionLastPayload = payload;
   resetVisionModal();
   modal.classList.remove("hidden");
   setVisionStatus("Analizando…");
   const seq = ++visionRequestSeq;
+  const startedAt = performance.now();
   try {
     const data = await postJson("/api/vision/image_to_prompt", {
       ...payload,
-      use_tags: true,
-      use_caption: true,
+      mode,
     });
+    const elapsedMs = performance.now() - startedAt;
     if (seq !== visionRequestSeq) {
       return;
     }
-    renderVisionResult(data);
+    renderVisionResult(data, elapsedMs);
   } catch (error) {
     if (seq !== visionRequestSeq) {
       return;
     }
     showVisionError(error.message);
+  } finally {
+    refreshLlmStatus();
   }
 }
 
@@ -6149,6 +6200,7 @@ const REQUIRED_IDS = [
   "tab-editor",
   "tab-upscaler",
   "btn-enhance",
+  "llm-status",
   "prompt-general",
   "btn-generate",
   "btn-cancel",
@@ -6371,6 +6423,8 @@ const REQUIRED_IDS = [
   "btn-vision-copy-tags",
   "btn-vision-insert-caption",
   "btn-vision-insert-tags",
+  "vision-advanced",
+  "btn-vision-tags-only",
 ];
 
 function bind() {
@@ -6494,6 +6548,14 @@ function bind() {
   });
   on("btn-vision-insert-caption", "click", () => insertVisionFromModal("caption"));
   on("btn-vision-insert-tags", "click", () => insertVisionFromModal("tags"));
+  on("btn-vision-tags-only", "click", () => {
+    if (!visionLastPayload) {
+      return;
+    }
+    openVisionModal(visionLastPayload, "tags").catch((error) =>
+      setVisionStatus(error.message, true)
+    );
+  });
   on("image-preview", "click", () => {
     const item = selectedImageView();
     const url = imageViewUrl(item);
@@ -6806,6 +6868,8 @@ async function init() {
     await settle("modelos de upscaler", loadUpscaleModels);
     await settle("zonas", renderZoneEditor);
     await settle("estado del editor", loadEditorStatus);
+    await settle("estado del LLM", refreshLlmStatus);
+    setInterval(refreshLlmStatus, 15000);
   } catch (error) {
     console.error("init", error);
     setStatus(`Error al iniciar: ${error.message}`, true);

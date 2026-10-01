@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import tempfile
 import unittest
@@ -12,6 +13,8 @@ from unittest import mock
 from app.engine import EngineError
 from app.enhancer import DEFAULT_LLM_URL, LLM_URL_ENV
 from app.vision import (
+    DESCRIBE_SYSTEM_PROMPT,
+    DESCRIBE_USER_PROMPT,
     VL_MMPROJ_FILE,
     VL_MODEL_FILE,
     VL_SYSTEM_PROMPT,
@@ -20,8 +23,10 @@ from app.vision import (
     VisionUnavailable,
     WD14_MODEL,
     _load_rows,
+    _parse_describe,
     _postprocess,
     load_server_captioner,
+    load_server_describer,
 )
 
 
@@ -282,6 +287,208 @@ class ServerCaptionerTests(unittest.TestCase):
             self.assertEqual(
                 transport.calls[0][0], "http://env:1111/v1/chat/completions"
             )
+
+
+class ParseDescribeTests(unittest.TestCase):
+    """`_parse_describe` (M11-3G): JSON tolerante a fences y prosa."""
+
+    def test_json_puro(self):
+        self.assertEqual(
+            _parse_describe('{"caption": "a girl", "tags": "1girl, long hair"}'),
+            ("a girl", "1girl, long hair"),
+        )
+
+    def test_json_en_fences(self):
+        raw = '```json\n{"caption": "a girl", "tags": "1girl"}\n```'
+        self.assertEqual(_parse_describe(raw), ("a girl", "1girl"))
+
+    def test_prosa_alrededor(self):
+        raw = 'Aqui tienes: {"caption": "a girl", "tags": "1girl"} Espero que sirva.'
+        self.assertEqual(_parse_describe(raw), ("a girl", "1girl"))
+
+    def test_campos_no_str_o_ausentes_quedan_vacios(self):
+        self.assertEqual(
+            _parse_describe('{"caption": 3, "tags": ["1girl"]}'), ("", "")
+        )
+        self.assertEqual(_parse_describe('{"caption": "c"}'), ("c", ""))
+        self.assertEqual(_parse_describe('{"tags": "1girl"}'), ("", "1girl"))
+
+    def test_fallback_sin_json_limpia_fences(self):
+        self.assertEqual(_parse_describe("a girl smiling"), ("a girl smiling", ""))
+        self.assertEqual(_parse_describe("```\nsolo texto\n```"), ("solo texto", ""))
+        self.assertEqual(_parse_describe("  \n  "), ("", ""))
+        self.assertEqual(_parse_describe(None), ("", ""))
+
+    def test_llaves_desbalanceadas_caen_al_fallback(self):
+        self.assertEqual(_parse_describe("{no json"), ("{no json", ""))
+
+    def test_llaves_dentro_de_strings_no_rompen_el_conteo(self):
+        raw = '{"caption": "a } girl with {braces}", "tags": "1girl"}'
+        self.assertEqual(
+            _parse_describe(raw), ("a } girl with {braces}", "1girl")
+        )
+        self.assertEqual(
+            _parse_describe('{"caption": "a } girl", "tags": "smile"}'),
+            ("a } girl", "smile"),
+        )
+        self.assertEqual(
+            _parse_describe('{"caption": "a {girl}", "tags": "smile"}'),
+            ("a {girl}", "smile"),
+        )
+
+    def test_comillas_escapadas_dentro_de_strings(self):
+        raw = '{"caption": "say \\"hi\\" }", "tags": "smile"}'
+        self.assertEqual(_parse_describe(raw), ('say "hi" }', "smile"))
+
+    def test_candidato_invalido_prueba_el_siguiente(self):
+        raw = '{no json} {"caption": "ok", "tags": "smile"}'
+        self.assertEqual(_parse_describe(raw), ("ok", "smile"))
+
+
+class ServerDescriberTests(unittest.TestCase):
+    """Descriptor unificado contra `llama-server` OpenAI-compatible (M11-3G)."""
+
+    IMAGE = b"\x89PNG fake bytes"
+
+    def _load(self, content, response=None):
+        transport = RecordingTransport(
+            {"choices": [{"message": {"content": content}}]}
+            if response is None
+            else response
+        )
+        return load_server_describer("http://127.0.0.1:8290/", transport=transport), transport
+
+    def test_payload_exacto_y_validacion_de_tags(self):
+        content = json.dumps(
+            {"caption": " a girl ", "tags": "1girl, longhair, inventado, SCORE_9"}
+        )
+        describer, transport = self._load(content)
+        self.assertEqual(
+            describer(self.IMAGE),
+            {
+                "caption": "a girl",
+                "tags": ["1girl", "long hair", "SCORE_9"],
+                "dropped": ["inventado"],
+                "mode": "server",
+            },
+        )
+        self.assertEqual(len(transport.calls), 1)
+        url, payload, timeout = transport.calls[0]
+        self.assertEqual(url, "http://127.0.0.1:8290/v1/chat/completions")
+        self.assertEqual(timeout, 120.0)
+        expected_uri = "data:image/png;base64," + base64.b64encode(self.IMAGE).decode(
+            "ascii"
+        )
+        self.assertEqual(
+            payload,
+            {
+                "model": "qwen38-27b-uncensored",
+                "messages": [
+                    {"role": "system", "content": DESCRIBE_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": DESCRIBE_USER_PROMPT},
+                            {"type": "image_url", "image_url": {"url": expected_uri}},
+                        ],
+                    },
+                ],
+                "max_tokens": 512,
+                "temperature": 0.4,
+                "stream": False,
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        )
+        self.assertTrue(
+            payload["messages"][1]["content"][1]["image_url"]["url"].startswith(
+                "data:image/png;base64,"
+            )
+        )
+
+    def test_prosa_sin_json_va_al_caption(self):
+        describer, _transport = self._load("a girl smiling")
+        result = describer(self.IMAGE)
+        self.assertEqual(result["caption"], "a girl smiling")
+        self.assertEqual(result["tags"], [])
+        self.assertEqual(result["dropped"], [])
+
+    def test_vacio_total_lanza_engine_error(self):
+        for content in ('{"caption": "", "tags": ""}', '{"caption": " ", "tags": "inventado"}'):
+            with self.subTest(content=content):
+                describer, _transport = self._load(content)
+                with self.assertRaises(EngineError) as ctx:
+                    describer(self.IMAGE)
+                self.assertEqual(str(ctx.exception), "vision: descripcion vacia")
+
+    def test_contenido_no_texto_o_vacio_lanza_engine_error(self):
+        for response in (
+            {},
+            {"choices": []},
+            {"choices": [{"message": {"content": None}}]},
+            {"choices": [{"message": {"content": "   "}}]},
+            "texto",
+        ):
+            with self.subTest(response=response):
+                describer = load_server_describer(
+                    "http://x", transport=RecordingTransport(response)
+                )
+                with self.assertRaises(EngineError) as ctx:
+                    describer(self.IMAGE)
+                self.assertEqual(str(ctx.exception), "vision: descripcion vacia")
+
+
+class VisionServiceUnifiedTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LLM_URL_ENV, None)
+
+    def test_servidor_usa_describer_factory_y_cachea(self):
+        calls: list[str] = []
+
+        def factory(url):
+            calls.append(url)
+            return lambda raw: {
+                "caption": "cap srv",
+                "tags": ["1girl"],
+                "dropped": ["inventado"],
+                "mode": "server",
+            }
+
+        service = VisionService(
+            self.root,
+            server_url="http://127.0.0.1:8290/",
+            describer_factory=factory,
+        )
+        expected = {
+            "caption": "cap srv",
+            "tags": ["1girl"],
+            "dropped": ["inventado"],
+            "mode": "server",
+            "model": {"wd14": WD14_MODEL, "vl": VL_MODEL_FILE},
+        }
+        self.assertEqual(service.describe_unified(b"img"), expected)
+        self.assertEqual(calls, ["http://127.0.0.1:8290"])
+        self.assertEqual(service.describe_unified(b"img"), expected)
+        self.assertEqual(len(calls), 1)
+
+    def test_local_dos_pasos_sin_dropped(self):
+        _write_assets(self.root)
+        service = VisionService(
+            self.root,
+            tagger_factory=lambda _o, _c: (lambda raw: ["1girl", "long hair"]),
+            captioner_factory=lambda _m, _p, _g: (lambda raw: "a girl"),
+        )
+        result = service.describe_unified(b"img")
+        self.assertEqual(result["tags"], ["1girl", "long hair"])
+        self.assertEqual(result["caption"], "a girl")
+        self.assertEqual(result["dropped"], [])
+        self.assertEqual(result["mode"], "local")
+        self.assertEqual(result["model"], {"wd14": WD14_MODEL, "vl": VL_MODEL_FILE})
 
 
 class VisionServiceServerTests(unittest.TestCase):

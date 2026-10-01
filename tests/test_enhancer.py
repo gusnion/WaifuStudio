@@ -29,6 +29,7 @@ from app.enhancer import (
     load_local_llm,
     load_server_llm,
     retrieve,
+    server_llm_state,
     server_llm_status,
 )
 from app.prompt_zones import canonical_order
@@ -939,7 +940,18 @@ class HttpTransportTests(unittest.TestCase):
         with mock.patch("app.enhancer.urllib.request.urlopen", fake_urlopen):
             with self.assertRaises(EngineError) as ctx:
                 _http_transport("http://x", None, 1.0)
-        self.assertEqual(str(ctx.exception), "HTTP 500")
+        self.assertEqual(str(ctx.exception), "HTTP 500: boom")
+
+    def test_http_503_lleva_codigo_y_reason(self):
+        def fake_urlopen(request, timeout=None):
+            raise urllib.error.HTTPError(
+                "http://x", 503, "Service Unavailable", None, None
+            )
+
+        with mock.patch("app.enhancer.urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(EngineError) as ctx:
+                _http_transport("http://x/v1/chat/completions", {"a": 1}, 1.0)
+        self.assertEqual(str(ctx.exception), "HTTP 503: Service Unavailable")
 
 
 class ServerLlmStatusTests(unittest.TestCase):
@@ -972,6 +984,60 @@ class ServerLlmStatusTests(unittest.TestCase):
                 self.assertFalse(ok)
                 self.assertEqual(reason, "URL invalida")
         self.assertEqual(transport.calls, [])
+
+
+class ServerLlmStateTests(unittest.TestCase):
+    """`server_llm_state` (M11-3G): ready/loading/offline/unknown sin red."""
+
+    def test_ready_cuando_el_transporte_no_lanza(self):
+        transport = RecordingTransport({})
+        state, detail = server_llm_state("http://127.0.0.1:8290/", transport=transport)
+        self.assertEqual((state, detail), ("ready", "OK"))
+        url, payload, timeout = transport.calls[0]
+        self.assertEqual(url, "http://127.0.0.1:8290/health")
+        self.assertIsNone(payload)
+        self.assertEqual(timeout, 2.0)
+
+    def test_loading_con_http_503(self):
+        transport = RecordingTransport(error=EngineError("HTTP 503: loading model"))
+        state, detail = server_llm_state(
+            "http://127.0.0.1:8290", transport=transport
+        )
+        self.assertEqual((state, detail), ("loading", "HTTP 503: loading model"))
+
+    def test_offline_con_otro_error(self):
+        for error in (EngineError("red: refused"), RuntimeError("boom")):
+            with self.subTest(error=type(error).__name__):
+                transport = RecordingTransport(error=error)
+                state, detail = server_llm_state(
+                    "http://127.0.0.1:8290", transport=transport
+                )
+                self.assertEqual(state, "offline")
+                self.assertIn(str(error), detail)
+
+    def test_http_503_solo_en_el_prefijo(self):
+        transport = RecordingTransport(error=EngineError("error HTTP 503 interno"))
+        state, _detail = server_llm_state("http://x", transport=transport)
+        self.assertEqual(state, "offline")
+
+    def test_url_invalida_sin_red(self):
+        transport = RecordingTransport({})
+        for base in ("no-es-url", "localhost:8290", "http://", "   ", ""):
+            with self.subTest(base=base):
+                state, detail = server_llm_state(base, transport=transport)
+                self.assertEqual((state, detail), ("unknown", "URL invalida"))
+        self.assertEqual(transport.calls, [])
+
+    def test_status_sigue_siendo_booleano_sobre_el_estado(self):
+        transport = RecordingTransport({})
+        self.assertEqual(
+            server_llm_status("http://x", transport=transport), (True, "OK")
+        )
+        transport = RecordingTransport(error=EngineError("HTTP 503: loading"))
+        self.assertEqual(
+            server_llm_status("http://x", transport=transport),
+            (False, "HTTP 503: loading"),
+        )
 
 
 if __name__ == "__main__":

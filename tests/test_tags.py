@@ -22,6 +22,7 @@ from app.tags import (
     resolve,
     retrieve,
     search,
+    validate_list,
 )
 
 EXPECTED_GROUPS = [
@@ -377,6 +378,47 @@ class ValidationTests(unittest.TestCase):
     def test_fold_guion_bajo(self):
         self.assertTrue(is_valid("LONG_HAIR"))
         self.assertEqual(resolve("LONG_HAIR"), "long hair")
+
+
+class ValidateListTests(unittest.TestCase):
+    def test_vacio_o_solo_vacios(self):
+        self.assertEqual(validate_list(""), ([], []))
+        self.assertEqual(validate_list("  , ,, "), ([], []))
+
+    def test_canonicos_y_strip(self):
+        self.assertEqual(
+            validate_list(" 1girl , long hair "),
+            (["1girl", "long hair"], []),
+        )
+
+    def test_alias_se_sustituye_por_canonico(self):
+        self.assertEqual(validate_list("longhair"), (["long hair"], []))
+        self.assertEqual(validate_list("nekomimi"), (["cat ears"], []))
+
+    def test_inventado_va_a_dropped_tal_cual(self):
+        self.assertEqual(
+            validate_list(" 1girl, inventado , otro-inventado "),
+            (["1girl"], ["inventado", "otro-inventado"]),
+        )
+
+    def test_score_9_conserva_el_texto_original(self):
+        self.assertEqual(validate_list("SCORE_9"), (["SCORE_9"], []))
+        self.assertEqual(validate_list("score_9"), (["score_9"], []))
+
+    def test_dedup_case_insensitive_conserva_la_primera(self):
+        self.assertEqual(
+            validate_list("long hair, LONG HAIR, LongHair, longhair"),
+            (["long hair"], []),
+        )
+        self.assertEqual(
+            validate_list("LONGHAIR, long hair"),
+            (["long hair"], []),
+        )
+
+    def test_orden_kept_y_dropped(self):
+        kept, dropped = validate_list("1girl, inventado, nekomimi, otro")
+        self.assertEqual(kept, ["1girl", "cat ears"])
+        self.assertEqual(dropped, ["inventado", "otro"])
 
 
 class RetrieveTests(unittest.TestCase):

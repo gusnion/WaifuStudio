@@ -645,6 +645,45 @@ input[type="checkbox"] {
   color: var(--error);
 }
 
+.llm-status {
+  align-self: center;
+  color: var(--muted);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.llm-status.is-ok {
+  color: #86efac;
+}
+
+.llm-status.is-warn {
+  color: #f5c542;
+}
+
+.llm-status.is-off {
+  color: var(--error);
+}
+
+.vision-advanced {
+  margin-right: auto;
+}
+
+.vision-advanced summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.vision-advanced[open] summary {
+  margin-bottom: 0.4rem;
+}
+
+.vision-advanced button {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+}
+
 .vision-box {
   width: min(720px, 100%);
 }

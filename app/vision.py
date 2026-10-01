@@ -13,10 +13,12 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import json
 import os
 from pathlib import Path
 from typing import Any, Callable
 
+from app import tags as tag_catalog
 from app.engine import EngineError
 
 WD14_DIRNAME = "wd14"
@@ -33,6 +35,13 @@ VL_SYSTEM_PROMPT = (
     "(sujeto, rasgos, ropa, pose, fondo, luz), sin intro ni conclusion."
 )
 VL_USER_PROMPT = "Describe la imagen para usarla como prompt."
+DESCRIBE_SYSTEM_PROMPT = (
+    "Eres un descriptor de imagenes anime para un generador local. "
+    'Responde SOLO con un JSON valido de la forma {"caption": "<una frase densa '
+    'en INGLES>", "tags": "<etiquetas danbooru en minusculas separadas por comas>"}; '
+    "sin markdown ni texto extra."
+)
+DESCRIBE_USER_PROMPT = "Describe la imagen para usarla como prompt."
 
 
 class VisionUnavailable(RuntimeError):
@@ -62,6 +71,88 @@ def _postprocess(
         elif category == "0" and score > threshold:
             general.append(name)
     return character + general
+
+
+def _strip_fences(text: str) -> str:
+    """Quita el envoltorio de fences de markdown (```json ... ```) si lo hay."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        newline = cleaned.find("\n")
+        cleaned = cleaned[newline + 1 :] if newline != -1 else cleaned[3:]
+    if cleaned.rstrip().endswith("```"):
+        cleaned = cleaned.rstrip()[:-3]
+    return cleaned.strip()
+
+
+def _balanced_json_candidates(text: str):
+    """Cede los candidatos `{...}` equilibrados desde cada `{` pendiente.
+
+    Recorrido string-aware: dentro de un string JSON las llaves no cuentan y
+    `"` abre/cierra salvo que venga escapada (`\\"`). De cada `{` cede el
+    substring hasta el `}` que cierra el nivel 0; si el objeto no cierra
+    (o queda un string abierto) para el recorrido. Tras un candidato sigue
+    con el siguiente `{`, de modo que un primer objeto invalido no impide
+    encontrar uno valido mas adelante.
+    """
+    index = 0
+    length = len(text)
+    while True:
+        start = text.find("{", index)
+        if start == -1:
+            return
+        depth = 0
+        in_string = False
+        escaped = False
+        end = -1
+        for pos in range(start, length):
+            char = text[pos]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = pos
+                    break
+        if end == -1:
+            return
+        yield text[start : end + 1]
+        index = end + 1
+
+
+def _parse_describe(raw: str) -> tuple[str, str]:
+    """Parte la salida del LLM en `(caption, tags_text)`.
+
+    Tolerante a fences de markdown y prosa: recorre los candidatos `{...}`
+    equilibrados string-aware (una `}` o `{` dentro de un string JSON no rompe
+    el conteo) y descarta los que no parsean probando el siguiente; en el
+    primer dict valido, `caption`/`tags` deben ser str (si no, vacio). Si
+    ningun candidato parsea, devuelve el texto limpio de fences con espacios
+    colapsados y tags vacio.
+    """
+    text = raw if isinstance(raw, str) else ""
+    for candidate in _balanced_json_candidates(text):
+        try:
+            parsed = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(parsed, dict):
+            caption = parsed.get("caption")
+            tags = parsed.get("tags")
+            return (
+                caption.strip() if isinstance(caption, str) else "",
+                tags.strip() if isinstance(tags, str) else "",
+            )
+    return " ".join(_strip_fences(text).split()), ""
 
 
 def _preprocess(image_bytes: bytes, size: int):
@@ -213,6 +304,68 @@ def load_server_captioner(
     return captioner
 
 
+def load_server_describer(
+    base_url: str | None = None,
+    *,
+    transport: Callable[[str, dict | None, float], dict] | None = None,
+    max_tokens: int = 512,
+    temperature: float = 0.4,
+    timeout: float = 120.0,
+    model: str = "qwen38-27b-uncensored",
+) -> Callable[[bytes], dict]:
+    """Descriptor unificado contra el `llama-server` (caption + tags en 1 llamada).
+
+    Base = `base_url`, `WAIFU_LLM_URL` o `DEFAULT_LLM_URL` (sin '/' final). Cada
+    llamada manda la imagen como data URI PNG base64 con `DESCRIBE_USER_PROMPT`
+    y `DESCRIBE_SYSTEM_PROMPT`, thinking desactivado y `stream=False`; la
+    respuesta se parte con `_parse_describe` y los tags se validan con
+    `app.tags.validate_list` (canonicos + `dropped`). Sin caption ni tags
+    validos -> `EngineError`. El transporte es inyectable (por defecto el de
+    `app.enhancer`) y la red jamas se toca en tests.
+    """
+    from app.enhancer import _http_transport, _resolve_base_url
+
+    base = _resolve_base_url(base_url)
+    send = transport if transport is not None else _http_transport
+
+    def describer(image_bytes: bytes) -> dict[str, Any]:
+        data_uri = "data:image/png;base64," + base64.b64encode(image_bytes).decode(
+            "ascii"
+        )
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": DESCRIBE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": DESCRIBE_USER_PROMPT},
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ],
+                },
+            ],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        response = send(f"{base}/v1/chat/completions", payload, timeout)
+        try:
+            content = response["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            content = None
+        if not isinstance(content, str) or not content.strip():
+            raise EngineError("vision: descripcion vacia")
+        caption, tags_text = _parse_describe(content)
+        caption = " ".join(caption.split())
+        kept, dropped = tag_catalog.validate_list(tags_text)
+        if not caption and not kept:
+            raise EngineError("vision: descripcion vacia")
+        return {"caption": caption, "tags": kept, "dropped": dropped, "mode": "server"}
+
+    return describer
+
+
 class VisionService:
     """WD14 + VL con cargas perezosas; estado y descripcion de imagenes."""
 
@@ -226,6 +379,7 @@ class VisionService:
         gpu_layers: int | None = None,
         tagger_factory: Callable[[Path, Path], Callable[[bytes], list[str]]] | None = None,
         captioner_factory: Callable[[Path, Path, int], Callable[[bytes], str]] | None = None,
+        describer_factory: Callable[[str], Callable[[bytes], dict]] | None = None,
         server_url: str | None = None,
     ) -> None:
         self.comfy_root = Path(comfy_root)
@@ -261,8 +415,10 @@ class VisionService:
         self.gpu_layers = int(gpu_layers)
         self._tagger_factory = tagger_factory or _default_tagger
         self._captioner_factory = captioner_factory or _default_captioner
+        self._describer_factory = describer_factory or load_server_describer
         self._tagger: Callable[[bytes], list[str]] | None = None
         self._captioner: Callable[[bytes], str] | None = None
+        self._describer: Callable[[bytes], dict] | None = None
 
     @property
     def wd14_model_path(self) -> Path:
@@ -318,6 +474,36 @@ class VisionService:
                 )
         return str(self._captioner(image_bytes))
 
+    def describe_unified(self, image_bytes: bytes) -> dict[str, Any]:
+        """Caption + tags en una llamada (servidor) o en dos pasos (local).
+
+        En modo servidor usa `describer_factory` (inyectable; por defecto
+        `load_server_describer`) contra `server_url` y propaga su `dropped`; en
+        modo local encadena `tags()` + `caption()` con `dropped` vacio. El
+        resultado es `{tags, caption, dropped, mode, model}`.
+        """
+        model = {"wd14": WD14_MODEL, "vl": self.vl_model.name}
+        if self.server_url is not None:
+            if self._describer is None:
+                self._describer = self._describer_factory(self.server_url)
+            result = self._describer(image_bytes)
+            if not isinstance(result, dict):
+                raise EngineError("vision: descripcion invalida")
+            result = dict(result)
+            result.setdefault("tags", [])
+            result.setdefault("caption", "")
+            result.setdefault("dropped", [])
+            result["mode"] = "server"
+            result["model"] = model
+            return result
+        return {
+            "tags": self.tags(image_bytes),
+            "caption": self.caption(image_bytes),
+            "dropped": [],
+            "mode": "local",
+            "model": model,
+        }
+
     def describe(
         self, image_bytes: bytes, *, use_tags: bool = True, use_caption: bool = True
     ) -> dict[str, Any]:
@@ -335,11 +521,15 @@ class VisionService:
 
 
 __all__ = [
+    "DESCRIBE_SYSTEM_PROMPT",
+    "DESCRIBE_USER_PROMPT",
     "VL_MMPROJ_FILE",
     "VL_MODEL_FILE",
     "VisionService",
     "VisionUnavailable",
     "WD14_MODEL",
+    "_parse_describe",
     "_postprocess",
     "load_server_captioner",
+    "load_server_describer",
 ]

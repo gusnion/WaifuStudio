@@ -333,6 +333,36 @@ def resolve(tag: str) -> str | None:
     return _ALIAS_INDEX.get(key)
 
 
+def validate_list(text: str) -> tuple[list[str], list[str]]:
+    """Valida una lista de tags separadas por coma contra el catalogo.
+
+    Cada fragmento (separado por coma) se limpia (strip); los vacios se
+    ignoran. Los fragmentos no resolubles van a `dropped` con su texto tal
+    cual (strip). Los resolubles se sustituyen por su forma canonica; si el
+    fragmento ya es canonico case-insensitive se conserva el texto original
+    tal cual (p. ej. `SCORE_9`). Dedup case-insensitive del resultado
+    conservando la 1a aparicion. Devuelve `(kept, dropped)`.
+    """
+    kept: list[str] = []
+    dropped: list[str] = []
+    seen: set[str] = set()
+    for part in str(text).split(","):
+        fragment = part.strip()
+        if not fragment:
+            continue
+        canonical = resolve(fragment)
+        if canonical is None:
+            dropped.append(fragment)
+            continue
+        final = fragment if fragment.lower() == canonical.lower() else canonical
+        folded = final.lower()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        kept.append(final)
+    return kept, dropped
+
+
 def search(q: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
     """Curados por substring (tag/label) y despues catalogo via FTS5; limit clamp 1..200 y copias."""
     if not isinstance(q, str):
@@ -444,4 +474,5 @@ __all__ = [
     "resolve",
     "retrieve",
     "search",
+    "validate_list",
 ]

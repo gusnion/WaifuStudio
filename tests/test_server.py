@@ -20,7 +20,7 @@ from app import loras as loras_module
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
-from app.enhancer import BASE_NEGATIVE, apply_preprompt
+from app.enhancer import BASE_NEGATIVE, LLM_URL_ENV, apply_preprompt
 from app.formats import DEFAULT_FORMAT, list_image_formats
 from app.jobs import JobQueue
 from app.params import (
@@ -1461,6 +1461,7 @@ class FakeVision:
     def __init__(self, *, available: bool = True) -> None:
         self.available = available
         self.calls: list[tuple[bytes, bool, bool]] = []
+        self.unified_calls = 0
 
     def status(self) -> dict:
         return {
@@ -1479,6 +1480,18 @@ class FakeVision:
         return {
             "tags": ["1girl"] if use_tags else None,
             "caption": "a girl" if use_caption else None,
+            "model": {"wd14": "wd14-fake", "vl": "vl-fake"},
+        }
+
+    def describe_unified(self, image_bytes: bytes) -> dict:
+        if not self.available:
+            raise VisionUnavailable("vision no instalada (fake)")
+        self.unified_calls += 1
+        return {
+            "tags": ["1girl", "long hair"],
+            "caption": "a girl",
+            "dropped": ["inventado"],
+            "mode": "server",
             "model": {"wd14": "wd14-fake", "vl": "vl-fake"},
         }
 
@@ -1571,6 +1584,132 @@ class VisionRouteTests(ServerTestCase):
         )
         self.assertEqual(response.status_code, 503)
         self.assertIn("error", response.json())
+
+
+class VisionModeRouteTests(ServerTestCase):
+    """`mode` unificado/tags/caption del `image_to_prompt` (M11-3G)."""
+
+    B64 = base64.b64encode(PNG_BYTES).decode("ascii")
+
+    def test_sin_mode_respuesta_exacta_sin_claves_nuevas(self):
+        response = self.make_client(vision=FakeVision()).post(
+            "/api/vision/image_to_prompt", json={"image_b64": self.B64}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(response.json()), {"tags", "caption", "model"})
+
+    def test_mode_unified_usa_describe_unified(self):
+        vision = FakeVision()
+        response = self.make_client(vision=vision).post(
+            "/api/vision/image_to_prompt",
+            json={"image_b64": self.B64, "mode": "unified"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["mode"], "unified")
+        self.assertEqual(data["tags"], ["1girl", "long hair"])
+        self.assertEqual(data["caption"], "a girl")
+        self.assertEqual(data["dropped"], ["inventado"])
+        self.assertEqual(data["model"], {"wd14": "wd14-fake", "vl": "vl-fake"})
+        self.assertTrue(any(zone["tags"] for zone in data["zones"]))
+        self.assertEqual(vision.unified_calls, 1)
+        self.assertEqual(vision.calls, [])
+
+    def test_mode_tags_ignora_flags_y_anade_zones(self):
+        vision = FakeVision()
+        response = self.make_client(vision=vision).post(
+            "/api/vision/image_to_prompt",
+            json={
+                "image_b64": self.B64,
+                "mode": "tags",
+                "use_tags": False,
+                "use_caption": False,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(
+            set(data), {"tags", "caption", "model", "mode", "dropped", "zones"}
+        )
+        self.assertEqual(data["mode"], "tags")
+        self.assertEqual(data["tags"], ["1girl"])
+        self.assertIsNone(data["caption"])
+        self.assertEqual(data["dropped"], [])
+        self.assertEqual(vision.calls[-1][1:], (True, False))
+
+    def test_mode_caption_sin_zones(self):
+        vision = FakeVision()
+        response = self.make_client(vision=vision).post(
+            "/api/vision/image_to_prompt",
+            json={"image_b64": self.B64, "mode": "caption"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(
+            set(data), {"tags", "caption", "model", "mode", "dropped"}
+        )
+        self.assertIsNone(data["tags"])
+        self.assertEqual(data["caption"], "a girl")
+        self.assertEqual(data["dropped"], [])
+        self.assertEqual(vision.calls[-1][1:], (False, True))
+
+    def test_mode_invalido_400(self):
+        client = self.make_client(vision=FakeVision())
+        for mode in ("nope", 3, True):
+            with self.subTest(mode=mode):
+                response = client.post(
+                    "/api/vision/image_to_prompt",
+                    json={"image_b64": self.B64, "mode": mode},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("mode", response.json()["error"])
+
+    def test_mode_unified_503_sin_vision(self):
+        response = self.make_client(vision=FakeVision(available=False)).post(
+            "/api/vision/image_to_prompt",
+            json={"image_b64": self.B64, "mode": "unified"},
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("error", response.json())
+
+
+class LlmStatusRouteTests(ServerTestCase):
+    """`GET /api/llm/status` (M11-3G): local o servidor, sin red real."""
+
+    def test_local_cuando_no_hay_env(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop(LLM_URL_ENV, None)
+            response = self.make_client().get("/api/llm/status")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "mode": "local",
+                "state": "local",
+                "url": None,
+                "detail": "llama-cpp",
+            },
+        )
+
+    def test_servidor_con_env_y_estado_inyectado(self):
+        with mock.patch.dict(os.environ, {LLM_URL_ENV: "http://127.0.0.1:9"}):
+            with mock.patch.object(
+                server_module,
+                "server_llm_state",
+                return_value=("loading", "HTTP 503: loading model"),
+            ) as state:
+                response = self.make_client().get("/api/llm/status")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "mode": "server",
+                "state": "loading",
+                "url": "http://127.0.0.1:9",
+                "detail": "HTTP 503: loading model",
+            },
+        )
+        state.assert_called_once_with("http://127.0.0.1:9")
 
 
 class PromptGeneralUiStaticTests(ServerTestCase):
@@ -5240,6 +5379,38 @@ class ZoneCatalogSearchUiStaticTests(ServerTestCase):
     def test_app_css_titulo_catalogo(self):
         text = self.make_client().get("/static/app.css").text
         self.assertIn(".zone-catalog-title", text)
+
+
+class UnifiedDescribeUiStaticTests(ServerTestCase):
+    """UI del flujo unificado de vision + estado del LLM + tiempos (M11-3H)."""
+
+    def test_index_marcadores(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="llm-status"',
+            'id="vision-advanced"',
+            'id="btn-vision-tags-only"',
+            "Solo tags (rápido)",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_marcadores(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            'mode = "unified"',
+            "visionLastPayload",
+            "refreshLlmStatus",
+            '"/api/llm/status"',
+            "performance.now()",
+            "dropped",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_css_llm_status(self):
+        text = self.make_client().get("/static/app.css").text
+        self.assertIn(".llm-status", text)
 
 
 if __name__ == "__main__":

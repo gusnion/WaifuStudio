@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 
 from app.config import describe, load_config
-from app.enhancer import LLM_URL_ENV, server_llm_status
+from app.enhancer import LLM_URL_ENV, server_llm_state
 
 ENGINE_TIMEOUT = 2.0
 
@@ -69,9 +69,14 @@ def main(argv: list[str] | None = None) -> int:
     llm_url = os.environ.get(LLM_URL_ENV, "").strip()
     llm_ok = False
     if llm_url:
-        llm_ok, llm_reason = server_llm_status(llm_url)
-        status_text = "OK" if llm_ok else f"OFFLINE ({llm_reason})"
-        print(f"llm: {status_text}")
+        llm_state, llm_detail = server_llm_state(llm_url)
+        llm_ok = llm_state == "ready"
+        if llm_state == "ready":
+            print("llm: LISTO")
+        elif llm_state == "loading":
+            print(f"llm: CARGANDO ({llm_detail})")
+        else:
+            print(f"llm: OFFLINE ({llm_detail})")
     else:
         print("llm: local (llama-cpp)")
 

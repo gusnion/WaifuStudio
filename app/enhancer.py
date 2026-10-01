@@ -574,7 +574,7 @@ def _http_transport(url: str, payload: dict | None, timeout: float) -> dict:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read()
     except urllib.error.HTTPError as exc:
-        raise EngineError(f"HTTP {exc.code}") from exc
+        raise EngineError(f"HTTP {exc.code}: {exc.reason}") from exc
     except urllib.error.URLError as exc:
         raise EngineError(f"red: {str(exc.reason)[:80]}") from exc
     except (OSError, ValueError) as exc:
@@ -639,36 +639,59 @@ def load_server_llm(
     return llm
 
 
-def server_llm_status(
+def server_llm_state(
     base_url: str | None = None,
     *,
     transport: Transport | None = None,
     timeout: float = 2.0,
-) -> tuple[bool, str]:
-    """Estado del servidor LLM: GET `{base}/health` -> `(ok, mensaje corto)`.
+) -> tuple[str, str]:
+    """Estado del servidor LLM: GET `{base}/health` -> `(estado, detalle)`.
 
-    El exito solo exige que el transporte no lance (se considera OK). Una base
-    HTTP(S) sin host o no parseable devuelve `(False, "URL invalida")` sin red;
-    sin `base_url` se resuelve como en `load_server_llm` (env o default).
+    Estados: `ready` (el transporte no lanza), `loading` (EngineError cuyo
+    mensaje empieza por `HTTP 503`: el modelo se esta cargando), `offline`
+    (cualquier otro fallo del transporte) y `unknown` (URL no parseable o sin
+    host, sin red). Sin `base_url` se resuelve como en `load_server_llm`
+    (env o default).
     """
     if base_url is None:
         base = _resolve_base_url(None)
     else:
         base = str(base_url).strip().rstrip("/")
         if not base:
-            return False, "URL invalida"
+            return "unknown", "URL invalida"
     try:
         parts = urllib.parse.urlsplit(base)
     except ValueError:
-        return False, "URL invalida"
+        return "unknown", "URL invalida"
     if parts.scheme not in ("http", "https") or not parts.netloc:
-        return False, "URL invalida"
+        return "unknown", "URL invalida"
     send = transport if transport is not None else _http_transport
     try:
         send(f"{base}/health", None, timeout)
+    except EngineError as exc:
+        message = str(exc)[:80]
+        if message.startswith("HTTP 503"):
+            return "loading", message
+        return "offline", message
     except Exception as exc:
-        return False, str(exc)[:80]
-    return True, "OK"
+        return "offline", str(exc)[:80]
+    return "ready", "OK"
+
+
+def server_llm_status(
+    base_url: str | None = None,
+    *,
+    transport: Transport | None = None,
+    timeout: float = 2.0,
+) -> tuple[bool, str]:
+    """Estado booleano del servidor LLM: `(ok, detalle)` sobre `server_llm_state`.
+
+    `ok` es True solo con estado `ready`; el detalle es el de
+    `server_llm_state` ("OK", mensaje de error o "URL invalida"). Sin
+    `base_url` se resuelve como en `load_server_llm` (env o default).
+    """
+    state, detail = server_llm_state(base_url, transport=transport, timeout=timeout)
+    return state == "ready", detail
 
 
 __all__ = [
@@ -688,5 +711,6 @@ __all__ = [
     "load_local_llm",
     "load_server_llm",
     "retrieve",
+    "server_llm_state",
     "server_llm_status",
 ]

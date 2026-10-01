@@ -48,7 +48,7 @@ from app.engine import ComfyEngine, EngineError, load_graph
 from app.enhancer import DEFAULT_LLM_RELATIVE, DEFAULT_STRENGTH_PRESET, STRENGTH_PRESETS
 from app.enhancer import apply_preprompt
 from app.enhancer import enhance as enhance_prompt
-from app.enhancer import LLM_URL_ENV, load_local_llm, load_server_llm
+from app.enhancer import LLM_URL_ENV, load_local_llm, load_server_llm, server_llm_state
 from app.formats import DEFAULT_FORMAT, get_size, list_image_formats
 from app.graphs import (
     DEFAULT_STRENGTH,
@@ -1593,9 +1593,30 @@ def create_app(
     async def api_vision_status() -> dict:
         return vision_service.status()
 
+    @app.get("/api/llm/status")
+    async def api_llm_status() -> dict:
+        """Estado del LLM: servidor si `WAIFU_LLM_URL` esta definido; si no, local."""
+        url = os.environ.get(LLM_URL_ENV, "").strip()
+        if not url:
+            return {
+                "mode": "local",
+                "state": "local",
+                "url": None,
+                "detail": "llama-cpp",
+            }
+        state, detail = server_llm_state(url)
+        return {"mode": "server", "state": state, "url": url, "detail": detail}
+
     @app.post("/api/vision/image_to_prompt")
     async def api_vision_image_to_prompt(payload: dict = Body(...)) -> Any:
-        """Tags WD14 y/o caption VL de una imagen (galeria por `gen_id` o base64)."""
+        """Tags WD14 y/o caption VL de una imagen (galeria por `gen_id` o base64).
+
+        Con `mode` (`unified|tags|caption`) se ignora `use_tags/use_caption`:
+        `tags`/`caption` usan `describe` con un solo componente y `unified`
+        pide caption + tags en una llamada (`describe_unified`); la respuesta
+        anade `mode`, `dropped` y `zones` (si hay tags) sobre las claves
+        actuales. Sin `mode` el comportamiento es el de siempre.
+        """
         gen_id = payload.get("gen_id")
         image_b64 = payload.get("image_b64")
         if (gen_id is None) == (image_b64 is None):
@@ -1603,15 +1624,23 @@ def create_app(
                 status_code=400,
                 content={"error": "usar gen_id o image_b64 (uno solo)"},
             )
-        use_tags = payload.get("use_tags", True)
-        use_caption = payload.get("use_caption", True)
-        if not isinstance(use_tags, bool) or not isinstance(use_caption, bool):
+        mode = payload.get("mode")
+        if mode is None:
+            use_tags = payload.get("use_tags", True)
+            use_caption = payload.get("use_caption", True)
+            if not isinstance(use_tags, bool) or not isinstance(use_caption, bool):
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "use_tags/use_caption booleanos"},
+                )
+            if not use_tags and not use_caption:
+                return JSONResponse(
+                    status_code=400, content={"error": "activa use_tags o use_caption"}
+                )
+        elif mode not in ("unified", "tags", "caption"):
             return JSONResponse(
-                status_code=400, content={"error": "use_tags/use_caption booleanos"}
-            )
-        if not use_tags and not use_caption:
-            return JSONResponse(
-                status_code=400, content={"error": "activa use_tags o use_caption"}
+                status_code=400,
+                content={"error": "mode invalido; usar unified|tags|caption"},
             )
         if image_b64 is not None:
             raw = _decode_image_b64(image_b64, "vision")
@@ -1660,6 +1689,31 @@ def create_app(
                     status_code=404, content={"error": "archivo de origen no encontrado"}
                 )
             raw = source.read_bytes()
+        if mode is not None:
+            try:
+                if mode == "unified":
+                    result = vision_service.describe_unified(raw)
+                elif mode == "tags":
+                    result = vision_service.describe(
+                        raw, use_tags=True, use_caption=False
+                    )
+                else:
+                    result = vision_service.describe(
+                        raw, use_tags=False, use_caption=True
+                    )
+            except VisionUnavailable as exc:
+                return JSONResponse(status_code=503, content={"error": str(exc)})
+            tags = result.get("tags") or []
+            response: dict[str, Any] = {
+                "tags": result.get("tags"),
+                "caption": result.get("caption"),
+                "model": result.get("model"),
+                "mode": mode,
+                "dropped": list(result.get("dropped") or []),
+            }
+            if mode in ("unified", "tags") and tags:
+                response["zones"] = zones_payload(", ".join(tags))
+            return response
         try:
             return vision_service.describe(
                 raw, use_tags=use_tags, use_caption=use_caption
