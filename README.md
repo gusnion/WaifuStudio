@@ -29,19 +29,24 @@ filtros NSFW/SFW.
 
 ### Editor
 - Qwen-Image 2.1 Uncensored (GGUF Q4_K_M + encoder Qwen3-VL-8B int8 + VAE propio).
-- Modos Generar y Editar con hasta 10 imágenes de referencia.
+- Modo **Editar** por defecto (también Generar) con hasta 10 imágenes de referencia, negativo,
+  pasos (10-50) y CFG (1-10, con aviso si sube de 1).
 - Preview del resultado y presets de tamaño de la app, incluida la opción **Original** (hereda el tamaño de la 1ª referencia, ideal para editar el resultado en cadena).
+- **Comparador antes/después**: divisor arrastrable sobre el resultado con zoom 1-8x (rueda) y
+  desplazamiento, para comparar cada edición con la imagen de partida.
 
 ### Upscaler
 - Imágenes: RealESRGAN x2 con galería visual de origen, archivo local y escalado ×2/×4
-  (doble pasada del mismo modelo).
+  (doble pasada del mismo modelo) más **mejora de detalle** opcional (Suave/Fuerte).
 - Vídeo: upscale por fotogramas e interpolación de FPS con RIFE (x2/x4, conserva el audio).
 
 ### Galería y OCs
-- Galería con visor y miniaturas; reusar una generación devuelve sus condiciones, incluida la
+- Galería (5ª pestaña) con visor y miniaturas; reusar una generación devuelve sus condiciones, incluida la
   referencia.
-- OC Maker: personajes con rasgos, referencias y hoja de vistas; entrenador de LoRA (orquesta
-  un entrenador externo).
+- Acciones por imagen en el visor: **usar referencia**, **animar** (primer frame de vídeo),
+  **editar** en el Editor, **escalar** en el Upscaler y descargar; botón de refresco interno.
+- OC Maker: personajes con rasgos, referencias y hoja de vistas; entrenador de LoRA
+  (orquesta un entrenador externo `kohya`; requiere instalarlo una vez, ver `tools/kohya/README.md`).
 
 ## Requisitos
 

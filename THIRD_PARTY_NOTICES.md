@@ -1,6 +1,6 @@
 # Avisos de terceros (THIRD_PARTY_NOTICES)
 
-Estado: 2026-09-26 (hito M10 / F3a).
+Estado: 2026-09-30 (cierre V1.0.0).
 Ambito: pesos, LoRAs y componentes consumidos por WAIFU. Los textos de licencia
 aun no estan archivados en el repo (carpeta prevista: `install/manifest/licenses/`),
 por lo que cualquier fila marcada como **PENDIENTE/VERIFICAR** debe contrastarse
@@ -21,7 +21,7 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | Componente | Licencia | ¿Redistribuible en el repo? | Estado |
 | --- | --- | --- | --- |
 | Anima (circlestone-labs) | circlestone-labs-non-commercial-license v1.2 | No (solo descarga desde origen con Attribution Notice) | Identificada; texto **PENDIENTE/VERIFICAR** |
-| Wan 2.2 (DiT) | Apache-2.0 | Si, con avisos | Texto **PENDIENTE/VERIFICAR** (archivar) |
+| Wan 2.2 (DiT) | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** (pesos borrados; `WAN_RETIRADO.md`) |
 | umt5 (text encoder) | Apache-2.0 | Si, con avisos | Texto **PENDIENTE/VERIFICAR** (archivar) |
 | Wan VAE | Apache-2.0 | Si, con avisos | Texto **PENDIENTE/VERIFICAR** (archivar) |
 | LightX2V (LoRA aceleracion) | Apache-2.0 | Si, con avisos | Texto **PENDIENTE/VERIFICAR** (archivar) |
@@ -36,6 +36,9 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | Turbo LoRA H3 | **PENDIENTE/VERIFICAR** | **PENDIENTE/VERIFICAR** | **PENDIENTE/VERIFICAR** |
 | TIPO-500M (legacy, nodo retirado) | kohaku-license-1.0 | Revisar antes de reintroducir | **PENDIENTE/VERIFICAR** |
 | animagine XL 4.0 (legacy) | Fair AI Public License 1.0-SD | Revisar antes de conservar | **PENDIENTE/VERIFICAR** |
+| WD14 tagger (vision «Describir», opcional) | **PENDIENTE/VERIFICAR** | No se redistribuye (descarga opcional) | **PENDIENTE/VERIFICAR** |
+| Qwen2.5-VL abliterated caption (vision, opcional) | qwen-research (derivada) | No se redistribuye (descarga opcional) | **PENDIENTE/VERIFICAR** |
+| sd-scripts kohya-ss (entrenador de LoRA; `tools/kohya`) | Apache-2.0 | No se redistribuye (se clona en local) | Identificada (Apache-2.0) |
 
 ## LoRAs personales del usuario
 
@@ -55,9 +58,13 @@ viajan en el `dist-info` de cada paquete instalado y no se archivan aqui:
 FastAPI y llama-cpp-python (MIT), uvicorn, Jinja2 y httpx (BSD-3-Clause),
 aiohttp (Apache-2.0 AND MIT), Pillow (HPND).
 
-## Acciones pendientes antes de publicar
+## Acciones pendientes (post-V1.0.0)
 
 1. Archivar los textos de licencia de terceros en `install/manifest/licenses/`
    y enlazarlos aqui (sustituir cada **PENDIENTE/VERIFICAR** por el estado real).
-2. Confirmar con el usuario la licencia del codigo propio y crear `LICENSE`.
-3. Verificar que ningun peso ni LoRA no-redistribuible viaja en el repo.
+2. ~~Confirmar con el usuario la licencia del codigo propio y crear `LICENSE`.~~
+   **HECHO 2026-09-27** (`LICENSE` MIT, © gusnion 2026).
+3. ~~Verificar que ningun peso ni LoRA no-redistribuible viaja en el repo.~~
+   **VERIFICADO 2026-09-30**: el repo publico solo lleva codigo; los registros de
+   usuario viven en `data/` (no versionado) y los pesos se descargan o aportan
+   aparte.

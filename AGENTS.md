@@ -32,7 +32,7 @@ Comandos directos equivalentes (desde la raíz del repo):
 & .\.venv\Scripts\python.exe -m app.server                 # app (uvicorn)
 & .\.venv\Scripts\python.exe -m app.health                 # rutas + ping al engine
 & .\.venv\Scripts\python.exe -m app.health --require-engine
-& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1095 tests offline (CPU, mocks)
+& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1208 tests offline (CPU, mocks)
 ```
 
 Los scripts comprueban que el proceso del puerto sea realmente de WAIFU (`.venv` o el Python
@@ -190,7 +190,7 @@ original no lo carga.
 4. **Cambiar puertos**: app → `WAIFU_APP_PORT`; engine → edita el `--port` en
    `scripts\start_engine.ps1` y apunta `WAIFU_COMFY_URL` al nuevo puerto.
 5. **Correr tests** antes de dar por bueno un cambio Python:
-   `& .\.venv\Scripts\python.exe -m unittest discover -s tests`. Son 1095 tests offline.
+   `& .\.venv\Scripts\python.exe -m unittest discover -s tests`. Son 1208 tests offline.
 6. **Ver logs**: la salida de la app y del engine es el stdout de sus consolas
    (`INICIAR_ENGINE.bat` / `INICIAR_WAIFU.bat`); ComfyUI escribe resultados en `ComfyUI\output`.
    El instalador deja marcadores en `.install-state\`.
