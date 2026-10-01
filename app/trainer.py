@@ -1,13 +1,14 @@
 """Entrenador de LoRA desde el OC (M9-E1): dataset, config y runner externo.
 
 Pipeline CPU/testeable sin GPU ni red: `prepare_dataset` copia imagenes de la
-galeria con sus captions, `write_config` escribe el TOML del entrenador,
-`run_training` lanza el comando externo (`WAIFU_TRAINER_CMD`) volcando el log y
-`register_lora` copia el `.safetensors` a `ComfyUI\\models\\loras\\waifu` y lo
-registra en `registry\\loras.json`. El entrenador real vive en `tools/kohya`
-(checkout de `kohya-ss/sd-scripts` v0.12.0 con `networks.lora_anima`, venv
-propio y wrapper `run_waifu_train.py` que consume este TOML); aqui solo se
-orquesta (el servidor encola `kind="train"`).
+galeria con sus captions (y, con `tagger`, tags WD14 auto-captionados),
+`write_config` escribe el TOML del entrenador, `run_training` lanza el comando
+externo (`WAIFU_TRAINER_CMD`) volcando el log y `register_lora` copia el
+`.safetensors` a `ComfyUI\\models\\loras\\waifu` y lo registra en
+`registry\\loras.json`. El entrenador real vive en `tools/kohya` (checkout de
+`kohya-ss/sd-scripts` v0.12.0 con `networks.lora_anima`, venv propio y wrapper
+`run_waifu_train.py` que consume este TOML); aqui solo se orquesta (el servidor
+encola `kind="train"`).
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import subprocess
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from app import loras
 from app.characters import prompt_from_tags
@@ -30,6 +31,7 @@ MIN_IMAGES = 10
 MAX_IMAGES = 50
 TRAINER_CMD_ENV = "WAIFU_TRAINER_CMD"
 DEFAULT_TIMEOUT_S = 4 * 3600
+DEFAULT_TAG_THRESHOLD = 0.35
 CONFIG_FILENAME = "train_config.toml"
 CONFIG_COMMENT = "consumida por tools/kohya/run_waifu_train.py (sd-scripts + networks.lora_anima)"
 LORAS_SUBDIR = "waifu"
@@ -92,12 +94,57 @@ def _positive_float(value: object, label: str) -> float:
     return result
 
 
-def _caption(trigger: str, tags: object) -> str:
-    """``trigger, prompt_from_tags(tags)`` deduplicado case-insensitive."""
-    prompt = prompt_from_tags(tags if tags is not None else [])
+def _require_threshold(value: object) -> float:
+    """Umbral de tags WD14: float finito en [0.01, 0.99]; EngineError si no."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise EngineError(f"tag_threshold invalido: {value!r}")
+    result = float(value)
+    if not math.isfinite(result) or not 0.01 <= result <= 0.99:
+        raise EngineError(f"tag_threshold invalido: {value!r} (rango 0.01-0.99)")
+    return result
+
+
+def _clean_tags(tags: object) -> list[str]:
+    """Tags crudos del tagger -> str limpios, sin vacios y sin repetidos.
+
+    Acepta una lista/tupla o un str (separado por comas); ignora cualquier otro
+    elemento que no sea str; deduplica case-insensitive conservando la primera
+    aparicion.
+    """
+    if isinstance(tags, str):
+        items: list[object] = tags.split(",")
+    elif isinstance(tags, (list, tuple)):
+        items = list(tags)
+    else:
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for tag in items:
+        if not isinstance(tag, str):
+            continue
+        tag = tag.strip()
+        if not tag:
+            continue
+        folded = tag.lower()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        cleaned.append(tag)
+    return cleaned
+
+
+def _caption(
+    trigger: str, wd14_tags: object = None, oc_tags: object = None
+) -> str:
+    """``trigger, tags WD14, tags del OC`` deduplicado case-insensitive."""
+    parts = [
+        trigger,
+        prompt_from_tags(_clean_tags(wd14_tags)),
+        prompt_from_tags(oc_tags if oc_tags is not None else []),
+    ]
     seen: set[str] = set()
     merged: list[str] = []
-    for part in (trigger, prompt):
+    for part in parts:
         for tag in part.split(","):
             tag = tag.strip()
             if not tag:
@@ -126,23 +173,37 @@ def prepare_dataset(
     gallery_root: Path,
     out_dir: Path,
     trigger: str,
+    tagger: Callable[[bytes], list[str]] | None = None,
+    tag_threshold: float | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict:
     """Copia la galeria a ``out_dir/<char_id>/img/NN.png`` con caption ``NN.txt``.
 
     Valida el OC, 10..50 ``gen_ids`` (enteros unicos), que cada generacion sea
     ``kind="image"`` y ``status="done"`` y que el archivo exista en
-    ``gallery_root/<gen_id>/``. Escribe ademas ``manifest.json`` y devuelve
-    ``{"dataset_dir", "images", "captions", "trigger"}``; EngineError si algo
-    falla.
+    ``gallery_root/<gen_id>/``. Con ``tagger`` (p. ej. ``VisionService.
+    tagger_for(...)``) lee los bytes de cada imagen y auto-captiona:
+    ``trigger, tags WD14, tags del OC`` con dedup case-insensitive; sin tagger
+    el caption es ``trigger, tags del OC``. ``tag_threshold`` (opcional, float
+    finito en [0.01, 0.99]) se valida y registra sin filtrar (el tagger ya
+    viene configurado); ``progress(step, total)`` recibe ``(0, N)`` al empezar
+    y ``(i, N)`` por imagen. Escribe ademas ``manifest.json`` (con
+    ``wd14_tags`` por imagen, ``auto_tags`` y ``tag_threshold``) y devuelve
+    ``{"dataset_dir", "images", "captions", "trigger", "auto_tags",
+    "tag_threshold"}``; EngineError si algo falla.
     """
     char = _require_char(char)
     ids = _require_gen_ids(gen_ids)
     trigger = _require_trigger(trigger)
+    threshold = _require_threshold(tag_threshold) if tag_threshold is not None else None
+    if tagger is not None and not callable(tagger):
+        raise EngineError(f"tagger invalido: {tagger!r}")
+    auto_tags = tagger is not None
     char_id = char["id"]
     gallery_root = Path(gallery_root)
     dataset_dir = Path(out_dir) / str(char_id)
     img_dir = dataset_dir / "img"
-    sources: list[tuple[int, Path, str]] = []
+    sources: list[tuple[int, Path]] = []
     for gen_id in ids:
         row = store.get(gen_id)
         if row is None:
@@ -161,14 +222,25 @@ def prepare_dataset(
             raise EngineError(
                 f"archivo de la generacion {gen_id} no encontrado: {name!r}"
             )
-        sources.append((gen_id, source, _caption(trigger, char.get("tags"))))
+        sources.append((gen_id, source))
+    total = len(sources)
+    if progress is not None:
+        progress(0, total)
     try:
         shutil.rmtree(img_dir, ignore_errors=True)
         img_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise EngineError(f"no se pudo preparar el dataset {img_dir}: {exc}") from exc
     manifest: list[dict] = []
-    for index, (gen_id, source, caption) in enumerate(sources, start=1):
+    for index, (gen_id, source) in enumerate(sources, start=1):
+        wd14_tags: list[str] = []
+        if auto_tags:
+            try:
+                raw_tags = tagger(source.read_bytes())
+            except OSError as exc:
+                raise EngineError(f"no se pudo leer {source}: {exc}") from exc
+            wd14_tags = _clean_tags(raw_tags)
+        caption = _caption(trigger, wd14_tags, char.get("tags"))
         stem = f"{index:02d}"
         image_path = img_dir / f"{stem}.png"
         caption_path = img_dir / f"{stem}.txt"
@@ -183,11 +255,16 @@ def prepare_dataset(
                 "image": f"img/{stem}.png",
                 "caption": f"img/{stem}.txt",
                 "prompt": caption,
+                "wd14_tags": wd14_tags,
             }
         )
+        if progress is not None:
+            progress(index, total)
     payload = {
         "character_id": char_id,
         "trigger": trigger,
+        "auto_tags": auto_tags,
+        "tag_threshold": threshold,
         "images": manifest,
     }
     try:
@@ -203,6 +280,8 @@ def prepare_dataset(
         "images": len(manifest),
         "captions": len(manifest),
         "trigger": trigger,
+        "auto_tags": auto_tags,
+        "tag_threshold": threshold,
     }
 
 
@@ -419,12 +498,17 @@ def train_character(
     lora_path: str | Path | None = None,
     registry_path: str | Path | None = None,
     comfy_loras_dir: str | Path | None = None,
+    tagger: Callable[[bytes], list[str]] | None = None,
+    tag_threshold: float | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict:
     """Orquestador puro: prepare -> config -> run -> register (sin servidor).
 
     ``config`` es un ``EngineConfig``: la galeria sale de ``data_dir/gallery`` y
-    el trabajo vive en ``data_dir/trainer``. Devuelve un dict de resultado con
-    dataset, rutas, exit code y entrada registrada.
+    el trabajo vive en ``data_dir/trainer``. ``tagger``, ``tag_threshold`` y
+    ``progress`` se pasan tal cual a `prepare_dataset` (auto-caption WD14).
+    Devuelve un dict de resultado con dataset, rutas, exit code y entrada
+    registrada.
     """
     char = _require_char(char)
     char_id = char["id"]
@@ -440,6 +524,9 @@ def train_character(
         gallery_root=gallery_root,
         out_dir=work_dir,
         trigger=trigger,
+        tagger=tagger,
+        tag_threshold=tag_threshold,
+        progress=progress,
     )
     dataset_dir = Path(dataset["dataset_dir"])
     config_path = write_config(dataset_dir, work_dir, rank=rank, epochs=epochs, lr=lr)
@@ -483,6 +570,7 @@ def train_character(
 
 __all__ = [
     "CONFIG_FILENAME",
+    "DEFAULT_TAG_THRESHOLD",
     "DEFAULT_TIMEOUT_S",
     "MAX_IMAGES",
     "MIN_IMAGES",

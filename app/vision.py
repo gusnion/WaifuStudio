@@ -186,7 +186,13 @@ def _load_rows(csv_path: Path) -> list[tuple[str, str]]:
     return rows
 
 
-def _default_tagger(onnx_path: Path, csv_path: Path) -> Callable[[bytes], list[str]]:
+def _default_tagger(
+    onnx_path: Path,
+    csv_path: Path,
+    *,
+    threshold: float = WD14_THRESHOLD,
+    character_threshold: float = WD14_CHARACTER_THRESHOLD,
+) -> Callable[[bytes], list[str]]:
     import onnxruntime
 
     session = onnxruntime.InferenceSession(
@@ -199,7 +205,9 @@ def _default_tagger(onnx_path: Path, csv_path: Path) -> Callable[[bytes], list[s
 
     def tagger(image_bytes: bytes) -> list[str]:
         probs = session.run([label], {input_meta.name: _preprocess(image_bytes, size)})[0][0]
-        return _postprocess(rows, probs)
+        return _postprocess(
+            rows, probs, threshold=threshold, character_threshold=character_threshold
+        )
 
     return tagger
 
@@ -377,7 +385,7 @@ class VisionService:
         vl_model: str | Path | None = None,
         vl_mmproj: str | Path | None = None,
         gpu_layers: int | None = None,
-        tagger_factory: Callable[[Path, Path], Callable[[bytes], list[str]]] | None = None,
+        tagger_factory: Callable[..., Callable[[bytes], list[str]]] | None = None,
         captioner_factory: Callable[[Path, Path, int], Callable[[bytes], str]] | None = None,
         describer_factory: Callable[[str], Callable[[bytes], dict]] | None = None,
         server_url: str | None = None,
@@ -458,6 +466,27 @@ class VisionService:
         if self._tagger is None:
             self._tagger = self._tagger_factory(self.wd14_model_path, self.wd14_csv_path)
         return list(self._tagger(image_bytes))
+
+    def tagger_for(
+        self, threshold: float | None = None, character_threshold: float | None = None
+    ) -> Callable[[bytes], list[str]]:
+        """Tagger WD14 para auto-caption: sin umbrales reusa `tags` (con cache).
+
+        Con algun umbral exige WD14 instalado y construye un tagger nuevo con
+        `_tagger_factory` pasando solo los umbrales indicados (el que falte
+        queda en el default de la factoria). Sin cache: el servidor lo pide una
+        vez por job de entrenamiento.
+        """
+        if threshold is None and character_threshold is None:
+            return self.tags
+        if not self.wd14_installed():
+            raise VisionUnavailable(f"WD14 no instalado en {self.wd14_dir}")
+        kwargs: dict[str, float] = {}
+        if threshold is not None:
+            kwargs["threshold"] = threshold
+        if character_threshold is not None:
+            kwargs["character_threshold"] = character_threshold
+        return self._tagger_factory(self.wd14_model_path, self.wd14_csv_path, **kwargs)
 
     def caption(self, image_bytes: bytes) -> str:
         if not self.vl_installed():

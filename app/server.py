@@ -136,7 +136,7 @@ from app.video import (
     vram_hint,
 )
 from app.video_presets import PRESET_MANUAL, list_video_presets
-from app.vision import VisionService, VisionUnavailable
+from app.vision import WD14_THRESHOLD, VisionService, VisionUnavailable
 
 APP_HOST = "127.0.0.1"
 APP_PORT = 8765
@@ -518,13 +518,31 @@ def run_generation(
             tracker.stop()
 
 
-def run_training_job(job: dict, *, config: EngineConfig, store: Store) -> None:
+def run_training_job(
+    job: dict, *, config: EngineConfig, store: Store, vision: VisionService | None = None
+) -> None:
     """Ejecuta un job de entrenamiento: trainer -> lora -> registry -> store.
 
-    No propaga errores: el fallo se guarda en el store y en ``job["error"]``.
+    Si ``auto_tags`` (default True) y hay ``vision`` con WD14 instalado, el
+    dataset se auto-captiona con ``vision.tagger_for(tag_threshold)``; el
+    progreso del tagging queda en ``job["progress"]`` (node="tags"). No
+    propaga errores: el fallo se guarda en el store y en ``job["error"]``.
     """
     gen_id = job["gen_id"]
     try:
+        tagger = None
+        if job.get("auto_tags", True) and vision is not None and vision.wd14_installed():
+            tagger = vision.tagger_for(job.get("tag_threshold"))
+
+        def progress(step: int, total: int) -> None:
+            job["progress"] = {
+                "step": step,
+                "total": total,
+                "percent": (100.0 * step / total if total else 0.0),
+                "node": "tags",
+                "state": "running",
+            }
+
         result = trainer.train_character(
             job["char"],
             job["gen_ids"],
@@ -533,6 +551,9 @@ def run_training_job(job: dict, *, config: EngineConfig, store: Store) -> None:
             trigger=job.get("trigger"),
             rank=job.get("rank", 16),
             epochs=job.get("epochs", 10),
+            tagger=tagger,
+            tag_threshold=job.get("tag_threshold"),
+            progress=progress,
         )
         outputs = [result["lora_path"]]
         store.update(gen_id, status="done", outputs=outputs, kind="train")
@@ -592,7 +613,7 @@ def create_app(
 
     def _dispatch(job: dict) -> None:
         if job.get("kind") == "train":
-            run_training_job(job, config=cfg, store=st)
+            run_training_job(job, config=cfg, store=st, vision=vision_service)
         elif job.get("kind") == "video":
             record = _JOBS.setdefault(
                 job["gen_id"],
@@ -1081,6 +1102,12 @@ def create_app(
             if not isinstance(trigger, str) or not trigger.strip():
                 raise EngineError(f"trigger invalido: {trigger!r}")
             trigger = trigger.strip()
+        auto_tags = payload.get("auto_tags", True)
+        if not isinstance(auto_tags, bool):
+            raise EngineError(f"auto_tags invalido: {auto_tags!r}")
+        tag_threshold = trainer._require_threshold(
+            payload.get("tag_threshold", WD14_THRESHOLD)
+        )
         gen_id = st.add(
             f"oc-{char_id}",
             trigger or row["name"],
@@ -1091,6 +1118,8 @@ def create_app(
                 "rank": rank,
                 "epochs": epochs,
                 "trigger": trigger,
+                "auto_tags": auto_tags,
+                "tag_threshold": tag_threshold,
             },
             kind="train",
         )
@@ -1103,6 +1132,8 @@ def create_app(
             "rank": rank,
             "epochs": epochs,
             "trigger": trigger,
+            "auto_tags": auto_tags,
+            "tag_threshold": tag_threshold,
         }
         _JOBS[gen_id] = {
             "prompt_id": None,
@@ -2303,6 +2334,9 @@ def create_app(
                 "node": snapshot.get("node"),
                 "state": snapshot.get("state"),
             }
+        elif isinstance(job.get("progress"), dict):
+            snapshot = job["progress"]
+            progress = {key: snapshot.get(key) for key in PROGRESS_KEYS}
         else:
             progress = _empty_progress()
         gen_id = job.get("gen_id")

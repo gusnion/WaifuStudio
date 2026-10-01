@@ -5769,6 +5769,7 @@ function openTrainModal(character) {
   $("btn-train-more").classList.add("hidden");
   $("oc-train-modal").classList.remove("hidden");
   updateTrainControls();
+  refreshTrainVisionState();
   setTrainStatus("Cargando galería...");
   loadTrainGalleryPage()
     .then(() => setTrainStatus(`Elige entre ${TRAIN_MIN} y ${TRAIN_MAX} imágenes`))
@@ -5777,6 +5778,25 @@ function openTrainModal(character) {
 
 function closeTrainModal() {
   $("oc-train-modal").classList.add("hidden");
+}
+
+function refreshTrainVisionState() {
+  const check = $("train-auto-tags");
+  const threshold = $("train-tag-threshold");
+  const note = $("train-wd14-note");
+  api("/api/vision/status")
+    .then((data) => {
+      const missing = Boolean(data && data.wd14 && data.wd14.installed === false);
+      check.disabled = missing;
+      threshold.disabled = missing;
+      note.classList.toggle("hidden", !missing);
+      if (missing) {
+        check.checked = false;
+      }
+    })
+    .catch((error) => {
+      console.error("No se pudo consultar el estado de WD14", error);
+    });
 }
 
 function setTrainProgress(progress) {
@@ -5793,7 +5813,8 @@ function setTrainProgress(progress) {
   fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
   const step = progress.step == null ? "-" : progress.step;
   const total = progress.total == null ? "-" : progress.total;
-  text.textContent = `paso ${step}/${total}`;
+  const label = progress.node === "tags" ? "etiquetando" : "paso";
+  text.textContent = `${label} ${step}/${total}`;
   box.classList.remove("hidden");
 }
 
@@ -5822,6 +5843,12 @@ async function startTrain() {
     setTrainStatus("Epochs fuera de [5, 30]", true);
     return;
   }
+  const autoTags = $("train-auto-tags").checked && !$("train-auto-tags").disabled;
+  const tagThreshold = Number($("train-tag-threshold").value);
+  if (!(tagThreshold >= 0.05 && tagThreshold <= 0.95)) {
+    setTrainStatus("Umbral WD14 fuera de [0.05, 0.95]", true);
+    return;
+  }
   state.trainBusy = true;
   updateTrainControls();
   setTrainStatus("Encolando...");
@@ -5833,6 +5860,8 @@ async function startTrain() {
         rank: Number($("train-rank").value),
         epochs,
         trigger,
+        auto_tags: autoTags,
+        tag_threshold: tagThreshold,
       }
     );
     state.trainJobId = data.job_id;
@@ -6385,6 +6414,8 @@ const REQUIRED_IDS = [
   "train-rank",
   "train-epochs",
   "train-trigger",
+  "train-auto-tags",
+  "train-tag-threshold",
   "btn-lora-modal",
   "lora-modal",
   "btn-lora-close",

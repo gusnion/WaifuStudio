@@ -738,6 +738,11 @@ non_diegetic_music: &lt;música o None&gt;</pre>
             <small id="train-trigger-hint" class="train-hint">solo [a-z0-9_-]{2,32}</small>
           </label>
         </div>
+        <div class="train-caption-params">
+          <label class="train-check-line"><input id="train-auto-tags" type="checkbox" checked> Generar tags automáticamente (WD14)</label>
+          <label class="train-threshold-line">Umbral WD14 <input id="train-tag-threshold" type="number" value="0.35" min="0.05" max="0.95" step="0.05"></label>
+          <small id="train-wd14-note" class="train-hint hidden">WD14 no instalado: se usarán solo los tags del OC.</small>
+        </div>
         <div class="train-gallery-head">
           <strong id="train-counter">0 seleccionadas (mín. 10, máx. 50)</strong>
           <button id="btn-train-more" class="hidden" type="button">Cargar más</button>

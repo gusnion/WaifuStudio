@@ -34,7 +34,7 @@ from app.registry import ModelRegistry
 from app.server import create_app, run_generation
 from app.store import Store
 from app.tags import list_groups
-from app.vision import VisionUnavailable
+from app.vision import WD14_THRESHOLD, VisionUnavailable
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-fake-png"
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"waifu-fake-mp4"
@@ -3384,6 +3384,81 @@ class CharacterTrainRoutesTests(ServerTestCase):
             {"step": None, "total": None, "percent": None, "node": None, "state": None},
         )
 
+    def test_auto_tags_y_tag_threshold_invalidos_400(self):
+        client = self.make_client()
+        char_id = self.add_character(client)
+        for payload in (
+            {"gen_ids": list(range(10)), "auto_tags": 1},
+            {"gen_ids": list(range(10)), "auto_tags": "si"},
+            {"gen_ids": list(range(10)), "auto_tags": None},
+            {"gen_ids": list(range(10)), "tag_threshold": 0},
+            {"gen_ids": list(range(10)), "tag_threshold": 1.0},
+            {"gen_ids": list(range(10)), "tag_threshold": "0.5"},
+            {"gen_ids": list(range(10)), "tag_threshold": True},
+        ):
+            with self.subTest(payload=payload):
+                response = client.post(
+                    f"/api/characters/{char_id}/train", json=payload
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.store.count(), 0)
+
+    def test_encola_job_train_con_auto_tags_y_umbral(self):
+        queue = RecordingQueue()
+        client = self.make_client(queue=queue)
+        char_id = self.add_character(client)
+        response = client.post(
+            f"/api/characters/{char_id}/train", json={"gen_ids": list(range(10))}
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertIs(job["auto_tags"], True)
+        self.assertEqual(job["tag_threshold"], WD14_THRESHOLD)
+        response = client.post(
+            f"/api/characters/{char_id}/train",
+            json={
+                "gen_ids": list(range(10)),
+                "auto_tags": False,
+                "tag_threshold": 0.6,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[1]
+        self.assertIs(job["auto_tags"], False)
+        self.assertEqual(job["tag_threshold"], 0.6)
+        rows = self.store.list(order="asc")
+        self.assertEqual(rows[0]["params"]["auto_tags"], True)
+        self.assertEqual(rows[0]["params"]["tag_threshold"], WD14_THRESHOLD)
+        self.assertEqual(rows[1]["params"]["auto_tags"], False)
+        self.assertEqual(rows[1]["params"]["tag_threshold"], 0.6)
+
+    def test_job_status_train_progress_del_job(self):
+        queue = StatusQueue()
+        client = self.make_client(queue=queue)
+        char_id = self.add_character(client)
+        job_id = client.post(
+            f"/api/characters/{char_id}/train", json={"gen_ids": list(range(10))}
+        ).json()["job_id"]
+        queue.jobs[0]["progress"] = {
+            "step": 3,
+            "total": 10,
+            "percent": 30.0,
+            "node": "tags",
+            "state": "running",
+        }
+        status = client.get(f"/api/jobs/{job_id}").json()
+        self.assertEqual(
+            status["progress"],
+            {
+                "step": 3,
+                "total": 10,
+                "percent": 30.0,
+                "node": "tags",
+                "state": "running",
+            },
+        )
+
     def test_cancel_train_409(self):
         queue = StatusQueue()
         client = self.make_client(queue=queue)
@@ -3397,6 +3472,22 @@ class CharacterTrainRoutesTests(ServerTestCase):
         self.assertIn("train", response.json()["error"])
         gen_id = queue.jobs[0]["gen_id"]
         self.assertEqual(self.store.get(gen_id)["status"], "queued")
+
+
+class FakeTrainerVision:
+    """Vision falsa del entrenador: WD14 instalado configurable y tagger fijo."""
+
+    def __init__(self, *, installed: bool = True, tags=None) -> None:
+        self.installed = installed
+        self.tags = ["long hair", "smile"] if tags is None else list(tags)
+        self.tagger_calls: list[tuple] = []
+
+    def wd14_installed(self) -> bool:
+        return self.installed
+
+    def tagger_for(self, threshold=None, character_threshold=None):
+        self.tagger_calls.append((threshold, character_threshold))
+        return lambda raw: list(self.tags)
 
 
 class RunTrainingJobTests(ServerTestCase):
@@ -3414,6 +3505,36 @@ class RunTrainingJobTests(ServerTestCase):
         }
         job.update(overrides)
         return job
+
+    def add_images(self, count: int = 10) -> list[int]:
+        gen_ids: list[int] = []
+        for _ in range(count):
+            gen_id = self.store.add(MODEL_ID, "1girl", kind="image")
+            self.store.update(gen_id, status="done", outputs=["ok.png"])
+            self.add_gallery_png(gen_id, "ok.png")
+            gen_ids.append(gen_id)
+        return gen_ids
+
+    def run_with_fake_trainer(self, job: dict, vision=None) -> None:
+        lora = self.config.data_dir / "trainer" / "1.safetensors"
+
+        def fake_run(config_path, **kwargs) -> int:
+            lora.parent.mkdir(parents=True, exist_ok=True)
+            lora.write_bytes(b"lora")
+            return 0
+
+        with mock.patch.object(
+            server_module.trainer, "run_training", side_effect=fake_run
+        ), mock.patch.object(
+            server_module.trainer, "register_lora", return_value={"id": "oc-1"}
+        ):
+            server_module.run_training_job(
+                job, config=self.config, store=self.store, vision=vision
+            )
+
+    def read_manifest(self) -> dict:
+        path = self.config.data_dir / "trainer" / "1" / "manifest.json"
+        return json.loads(path.read_text(encoding="utf-8"))
 
     def test_exito_marca_store_y_outputs(self):
         job = self.make_job()
@@ -3446,6 +3567,46 @@ class RunTrainingJobTests(ServerTestCase):
         self.assertIn("M10", row["error"])
         self.assertEqual(job["outputs"], [])
         self.assertIn("M10", job["error"])
+
+    def test_auto_tags_escribe_manifest_y_progress(self):
+        job = self.make_job(
+            gen_ids=self.add_images(), auto_tags=True, tag_threshold=0.5
+        )
+        vision = FakeTrainerVision()
+        self.run_with_fake_trainer(job, vision)
+        self.assertIsNone(job["error"])
+        manifest = self.read_manifest()
+        self.assertIs(manifest["auto_tags"], True)
+        self.assertEqual(manifest["tag_threshold"], 0.5)
+        self.assertEqual(manifest["images"][0]["wd14_tags"], ["long hair", "smile"])
+        self.assertEqual(manifest["images"][0]["prompt"], "aiko, long hair, smile")
+        self.assertEqual(vision.tagger_calls, [(0.5, None)])
+        self.assertEqual(job["progress"]["node"], "tags")
+        self.assertEqual(job["progress"]["step"], 10)
+        self.assertEqual(job["progress"]["total"], 10)
+        self.assertEqual(job["progress"]["percent"], 100.0)
+        self.assertEqual(self.store.get(job["gen_id"])["status"], "done")
+
+    def test_sin_vision_o_auto_tags_false_cae_a_tags_oc(self):
+        for overrides, vision in (
+            ({"auto_tags": False}, FakeTrainerVision()),
+            ({"auto_tags": True}, None),
+            ({"auto_tags": True}, FakeTrainerVision(installed=False)),
+        ):
+            with self.subTest(overrides=overrides, vision=vision):
+                job = self.make_job(
+                    gen_ids=self.add_images(), tag_threshold=0.5, **overrides
+                )
+                self.run_with_fake_trainer(job, vision)
+                self.assertIsNone(job["error"])
+                manifest = self.read_manifest()
+                self.assertIs(manifest["auto_tags"], False)
+                self.assertEqual(manifest["tag_threshold"], 0.5)
+                self.assertEqual(manifest["images"][0]["wd14_tags"], [])
+                self.assertEqual(manifest["images"][0]["prompt"], "aiko, smile")
+                if vision is not None:
+                    self.assertEqual(vision.tagger_calls, [])
+                self.assertEqual(job["progress"]["node"], "tags")
 
 
 class CharacterMediaTests(ServerTestCase):
@@ -5411,6 +5572,33 @@ class UnifiedDescribeUiStaticTests(ServerTestCase):
     def test_app_css_llm_status(self):
         text = self.make_client().get("/static/app.css").text
         self.assertIn(".llm-status", text)
+
+
+class TrainAutoCaptionUiStaticTests(ServerTestCase):
+    """UI del auto-caption WD14 en el modal de entrenamiento (M11-4J)."""
+
+    def test_index_marcadores(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="train-auto-tags"',
+            "Generar tags automáticamente (WD14)",
+            'id="train-tag-threshold"',
+            'id="train-wd14-note"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_app_js_marcadores(self):
+        text = self.make_client().get("/static/app.js").text
+        for marker in (
+            "train-auto-tags",
+            "tag_threshold",
+            "/api/vision/status",
+            "etiquetando",
+            "auto_tags",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -22,6 +24,7 @@ from app.vision import (
     VisionService,
     VisionUnavailable,
     WD14_MODEL,
+    _default_tagger,
     _load_rows,
     _parse_describe,
     _postprocess,
@@ -68,6 +71,48 @@ class LoadRowsTests(unittest.TestCase):
                 _load_rows(path),
                 [("long hair", "0"), ("hatsune miku", "4")],
             )
+
+
+class DefaultTaggerTests(unittest.TestCase):
+    def test_umbrales_llegan_a_postprocess(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            onnx_path = root / "m.onnx"
+            onnx_path.write_bytes(b"onnx")
+            csv_path = root / "m.csv"
+            csv_path.write_text(
+                "tag_id,name,category,count\n0,long_hair,0,10\n", encoding="utf-8"
+            )
+            input_meta = types.SimpleNamespace(name="pixels", shape=[1, 448, 448, 3])
+            session = mock.Mock()
+            session.get_inputs.return_value = [input_meta]
+            session.get_outputs.return_value = [
+                types.SimpleNamespace(name="probs")
+            ]
+            session.run.return_value = [[0.9]]
+            fake_ort = mock.Mock()
+            fake_ort.InferenceSession.return_value = session
+            captured: dict = {}
+
+            def fake_postprocess(rows, probs, *, threshold, character_threshold):
+                captured["rows"] = rows
+                captured["probs"] = probs
+                captured["threshold"] = threshold
+                captured["character_threshold"] = character_threshold
+                return ["tag"]
+
+            with mock.patch.dict(sys.modules, {"onnxruntime": fake_ort}), mock.patch(
+                "app.vision._preprocess", return_value="tensor"
+            ), mock.patch("app.vision._postprocess", side_effect=fake_postprocess):
+                tagger = _default_tagger(
+                    onnx_path, csv_path, threshold=0.6, character_threshold=0.7
+                )
+                self.assertEqual(tagger(b"img"), ["tag"])
+            self.assertEqual(captured["threshold"], 0.6)
+            self.assertEqual(captured["character_threshold"], 0.7)
+            self.assertEqual(captured["rows"], [("long hair", "0")])
+            self.assertEqual(captured["probs"], 0.9)
+            session.run.assert_called_once_with(["probs"], {"pixels": "tensor"})
 
 
 def _write_assets(root: Path) -> Path:
@@ -127,6 +172,57 @@ class VisionServiceTests(unittest.TestCase):
     def test_tags_sin_wd14_lanza_vision_unavailable(self):
         with self.assertRaises(VisionUnavailable):
             VisionService(self.root).tags(b"img")
+
+    def test_tagger_for_sin_umbrales_devuelve_tags_con_cache(self):
+        _write_assets(self.root)
+        calls: list[tuple[str, str]] = []
+
+        def factory(onnx_path: Path, csv_path: Path):
+            calls.append((onnx_path.name, csv_path.name))
+            return lambda raw: ["a", "b"]
+
+        service = VisionService(self.root, tagger_factory=factory)
+        tagger = service.tagger_for()
+        self.assertIs(tagger.__self__, service)
+        self.assertIs(tagger.__func__, VisionService.tags)
+        self.assertEqual(tagger(b"img"), ["a", "b"])
+        self.assertEqual(service.tags(b"img"), ["a", "b"])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0], (f"{WD14_MODEL}.onnx", f"{WD14_MODEL}.csv"))
+
+    def test_tagger_for_sin_wd14_lanza_vision_unavailable(self):
+        service = VisionService(self.root)
+        with self.assertRaises(VisionUnavailable):
+            service.tagger_for(0.5)
+        with self.assertRaises(VisionUnavailable):
+            service.tagger_for(character_threshold=0.9)
+
+    def test_tagger_for_con_umbrales_usa_factoria_sin_cache(self):
+        _write_assets(self.root)
+        calls: list[tuple[str, str, dict]] = []
+
+        def factory(onnx_path: Path, csv_path: Path, **kwargs):
+            calls.append((onnx_path.name, csv_path.name, kwargs))
+            return lambda raw: ["tag"]
+
+        service = VisionService(self.root, tagger_factory=factory)
+        self.assertEqual(service.tagger_for(0.5, 0.9)(b"img"), ["tag"])
+        self.assertEqual(service.tagger_for(0.4)(b"img"), ["tag"])
+        self.assertEqual(
+            calls,
+            [
+                (
+                    f"{WD14_MODEL}.onnx",
+                    f"{WD14_MODEL}.csv",
+                    {"threshold": 0.5, "character_threshold": 0.9},
+                ),
+                (
+                    f"{WD14_MODEL}.onnx",
+                    f"{WD14_MODEL}.csv",
+                    {"threshold": 0.4},
+                ),
+            ],
+        )
 
     def test_caption_sin_vl_lanza_vision_unavailable(self):
         with self.assertRaises(VisionUnavailable):

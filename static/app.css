@@ -1869,6 +1869,30 @@ input[type="checkbox"] {
   color: var(--error);
 }
 
+.train-caption-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.2rem;
+}
+
+.train-check-line,
+.train-threshold-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.train-threshold-line input {
+  width: 4.6rem;
+}
+
+.train-caption-params .train-hint {
+  flex-basis: 100%;
+}
+
 .train-gallery-head {
   display: flex;
   align-items: center;

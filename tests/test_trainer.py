@@ -16,6 +16,7 @@ from app.config import EngineConfig
 from app.engine import EngineError
 from app.store import Store
 from app.trainer import (
+    DEFAULT_TAG_THRESHOLD,
     MAX_IMAGES,
     MIN_IMAGES,
     TRAINER_CMD_ENV,
@@ -74,7 +75,9 @@ class TrainerTestCase(unittest.TestCase):
         data.update(overrides)
         return data
 
-    def prepare(self, char: dict, gen_ids: list[int], trigger: str = "aiko") -> dict:
+    def prepare(
+        self, char: dict, gen_ids: list[int], trigger: str = "aiko", **kwargs
+    ) -> dict:
         return prepare_dataset(
             char,
             gen_ids,
@@ -82,6 +85,7 @@ class TrainerTestCase(unittest.TestCase):
             gallery_root=self.gallery_root,
             out_dir=self.out_dir,
             trigger=trigger,
+            **kwargs,
         )
 
 
@@ -186,6 +190,137 @@ class PrepareDatasetTests(TrainerTestCase):
             with self.subTest(trigger=trigger):
                 with self.assertRaises(EngineError):
                     self.prepare(self.char(), self.ids(10), trigger=trigger)
+
+
+class PrepareDatasetTaggerTests(TrainerTestCase):
+    """Auto-caption WD14 (M11-4I): tagger inyectado, manifest y progreso."""
+
+    def read_manifest(self, result: dict) -> dict:
+        return json.loads(
+            (Path(result["dataset_dir"]) / "manifest.json").read_text(encoding="utf-8")
+        )
+
+    def caption_of(self, result: dict, index: int = 1) -> str:
+        path = Path(result["dataset_dir"]) / "img" / f"{index:02d}.txt"
+        return path.read_text(encoding="utf-8").strip()
+
+    def test_default_tag_threshold_exportado(self):
+        self.assertEqual(DEFAULT_TAG_THRESHOLD, 0.35)
+
+    def test_sin_tagger_caption_exacta_y_manifest_sin_wd14(self):
+        result = self.prepare(self.char(), self.ids(10))
+        self.assertIs(result["auto_tags"], False)
+        self.assertIsNone(result["tag_threshold"])
+        self.assertEqual(self.caption_of(result), "aiko, long hair, smile")
+        manifest = self.read_manifest(result)
+        self.assertIs(manifest["auto_tags"], False)
+        self.assertIsNone(manifest["tag_threshold"])
+        for item in manifest["images"]:
+            self.assertEqual(item["wd14_tags"], [])
+            self.assertEqual(item["prompt"], "aiko, long hair, smile")
+
+    def test_tagger_mezcla_wd14_y_oc_con_dedup(self):
+        char = self.char(tags=["long hair", "blue eyes"])
+        calls: list[bytes] = []
+
+        def tagger(image_bytes: bytes) -> list[str]:
+            calls.append(image_bytes)
+            return ["long hair", "smile"]
+
+        result = self.prepare(char, self.ids(10), tagger=tagger, tag_threshold=0.5)
+        self.assertIs(result["auto_tags"], True)
+        self.assertEqual(result["tag_threshold"], 0.5)
+        expected = "aiko, long hair, smile, blue eyes"
+        self.assertEqual(self.caption_of(result), expected)
+        manifest = self.read_manifest(result)
+        self.assertIs(manifest["auto_tags"], True)
+        self.assertEqual(manifest["tag_threshold"], 0.5)
+        for item in manifest["images"]:
+            self.assertEqual(item["wd14_tags"], ["long hair", "smile"])
+            self.assertEqual(item["prompt"], expected)
+        self.assertEqual(calls, [PNG_BYTES] * 10)
+
+    def test_tags_por_imagen_en_manifest_y_caption(self):
+        per_image = [["long hair", "smile"], ["long hair"]]
+        counter = {"n": 0}
+
+        def tagger(_image_bytes: bytes) -> list[str]:
+            index = counter["n"]
+            counter["n"] += 1
+            return per_image[index] if index < len(per_image) else ["smile"]
+
+        result = self.prepare(
+            self.char(tags=["long hair", "blue eyes"]), self.ids(10), tagger=tagger
+        )
+        self.assertEqual(self.caption_of(result, 1), "aiko, long hair, smile, blue eyes")
+        self.assertEqual(self.caption_of(result, 2), "aiko, long hair, blue eyes")
+        self.assertEqual(self.caption_of(result, 3), "aiko, smile, long hair, blue eyes")
+        manifest = self.read_manifest(result)
+        self.assertEqual(manifest["images"][0]["wd14_tags"], ["long hair", "smile"])
+        self.assertEqual(manifest["images"][1]["wd14_tags"], ["long hair"])
+        self.assertEqual(manifest["images"][2]["wd14_tags"], ["smile"])
+
+    def test_progress_inicio_y_por_imagen(self):
+        calls: list[tuple[int, int]] = []
+        result = self.prepare(
+            self.char(),
+            self.ids(10),
+            tagger=lambda _raw: ["smile"],
+            progress=lambda step, total: calls.append((step, total)),
+        )
+        self.assertEqual(result["images"], 10)
+        self.assertEqual(calls[0], (0, 10))
+        self.assertEqual(calls[1:], [(index, 10) for index in range(1, 11)])
+
+    def test_tag_threshold_limites_validos(self):
+        for value in (0.01, 0.99):
+            with self.subTest(value=value):
+                result = self.prepare(self.char(), self.ids(10), tag_threshold=value)
+                self.assertEqual(result["tag_threshold"], value)
+
+    def test_tag_threshold_invalido_lanza(self):
+        for value in (
+            0,
+            0.001,
+            1.0,
+            1.5,
+            -0.2,
+            "x",
+            True,
+            float("nan"),
+            float("inf"),
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(EngineError) as ctx:
+                    self.prepare(self.char(), self.ids(10), tag_threshold=value)
+                self.assertIn("tag_threshold", str(ctx.exception))
+
+    def test_tagger_no_callable_lanza(self):
+        with self.assertRaises(EngineError) as ctx:
+            self.prepare(self.char(), self.ids(10), tagger="no-callable")
+        self.assertIn("tagger", str(ctx.exception))
+
+    def test_tagger_basura_se_limpia_sin_romper(self):
+        def tagger(_image_bytes: bytes) -> list:
+            return [None, 3, "  ", "smile", "SMILE", "long hair"]
+
+        result = self.prepare(self.char(tags=["smile"]), self.ids(10), tagger=tagger)
+        self.assertEqual(self.caption_of(result), "aiko, smile, long hair")
+        manifest = self.read_manifest(result)
+        for item in manifest["images"]:
+            self.assertEqual(item["wd14_tags"], ["smile", "long hair"])
+            self.assertEqual(item["prompt"], "aiko, smile, long hair")
+
+    def test_tagger_none_o_escalar_se_limpia(self):
+        for raw, expected in ((None, []), (7, []), ("long hair, smile", ["long hair", "smile"])):
+            with self.subTest(raw=raw):
+                result = self.prepare(
+                    self.char(tags=["smile"]),
+                    self.ids(10),
+                    tagger=lambda _raw, raw=raw: raw,
+                )
+                manifest = self.read_manifest(result)
+                self.assertEqual(manifest["images"][0]["wd14_tags"], expected)
 
 
 class WriteConfigTests(TrainerTestCase):
@@ -447,6 +582,33 @@ class TrainCharacterTests(TrainerTestCase):
             [item["id"] for item in loras.list_loras(path=self.registry_path)],
             ["oc-1"],
         )
+
+    def test_tagger_umbral_y_progress_llegan_al_dataset(self):
+        progress_calls: list[tuple[int, int]] = []
+        result = train_character(
+            self.char(),
+            self.ids(10),
+            store=self.store,
+            config=self.config,
+            trigger="aiko",
+            cmd=[sys.executable, str(self.script)],
+            registry_path=self.registry_path,
+            timeout_s=60,
+            tagger=lambda _raw: ["long hair"],
+            tag_threshold=0.4,
+            progress=lambda step, total: progress_calls.append((step, total)),
+        )
+        self.assertIs(result["dataset"]["auto_tags"], True)
+        self.assertEqual(result["dataset"]["tag_threshold"], 0.4)
+        caption_path = (
+            Path(result["dataset"]["dataset_dir"]) / "img" / "01.txt"
+        )
+        self.assertEqual(
+            caption_path.read_text(encoding="utf-8").strip(),
+            "aiko, long hair, smile",
+        )
+        self.assertEqual(progress_calls[0], (0, 10))
+        self.assertEqual(progress_calls[-1], (10, 10))
 
     def test_trigger_por_defecto_es_el_nombre(self):
         result = train_character(
