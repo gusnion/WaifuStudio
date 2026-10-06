@@ -473,5 +473,81 @@ class RetrieveTests(unittest.TestCase):
         self.assertIn("long hair", retrieve("a girl with long hair"))
 
 
+class TagOverlayTests(unittest.TestCase):
+    def setUp(self):
+        import os
+        self.orig_env = os.environ.get("WAIFU_DATA_DIR")
+        self.temp_dir = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        import os
+        from app.tags import reload
+        if self.orig_env is None:
+            os.environ.pop("WAIFU_DATA_DIR", None)
+        else:
+            os.environ["WAIFU_DATA_DIR"] = self.orig_env
+        self.temp_dir.cleanup()
+        reload()
+
+    def test_user_overlay_anade_tag_y_extiende_catalogo(self):
+        import os
+        from app.tags import (
+            by_group,
+            get,
+            is_valid,
+            reload,
+            resolve,
+            search,
+            user_overlay_path,
+        )
+
+        data_dir = Path(self.temp_dir.name)
+        os.environ["WAIFU_DATA_DIR"] = str(data_dir)
+        overlay_file = user_overlay_path()
+        self.assertEqual(overlay_file, data_dir / "registry" / "tags_danbooru.json")
+
+        overlay_file.parent.mkdir(parents=True, exist_ok=True)
+        overlay_payload = {
+            "groups": ["custom_group"],
+            "tags": [
+                {
+                    "tag": "custom_waifu_tag",
+                    "label": "Etiqueta Personalizada",
+                    "group": "custom_group",
+                    "rank": 99,
+                },
+                {
+                    "tag": "1girl",
+                    "label": "Una Chica Especial",
+                    "group": "general_top",
+                    "rank": 999,
+                },
+            ],
+            "catalog": [
+                {
+                    "name": "custom_character_xyz",
+                    "category": "character",
+                    "posts": 555,
+                    "aliases": ["xyz_waifu"],
+                }
+            ],
+        }
+        overlay_file.write_text(json.dumps(overlay_payload), encoding="utf-8")
+
+        reload()
+
+        self.assertTrue(is_valid("custom_waifu_tag"))
+        self.assertEqual(get("1girl")["label"], "Una Chica Especial")
+        custom_group_tags = by_group("custom_group")
+        self.assertEqual(len(custom_group_tags), 1)
+        self.assertEqual(custom_group_tags[0]["tag"], "custom_waifu_tag")
+
+        self.assertTrue(is_valid("custom_character_xyz"))
+        self.assertEqual(resolve("xyz_waifu"), "custom_character_xyz")
+        results = [item["tag"] for item in search("custom_character")]
+        self.assertIn("custom_character_xyz", results)
+
+
 if __name__ == "__main__":
     unittest.main()
+

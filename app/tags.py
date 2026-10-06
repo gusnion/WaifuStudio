@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import re
 import sqlite3
 import threading
@@ -25,6 +26,22 @@ from app.config import APP_ROOT
 from app.engine import EngineError
 
 CATALOG_PATH = APP_ROOT / "registry" / "tags_danbooru.json"
+
+
+def user_overlay_path() -> Path:
+    """Capa de usuario del catalogo de tags: `data/registry/tags_danbooru.json`.
+
+    Derivada de la raiz de `CATALOG_PATH`; `WAIFU_DATA_DIR` la mueve si esta
+    definida. Permite anadir o sobrescribir tags sin tocar el catalogo base.
+    """
+    root = (
+        CATALOG_PATH.parents[1]
+        if len(CATALOG_PATH.parents) > 1
+        else CATALOG_PATH.parent
+    )
+    base = Path(os.environ.get("WAIFU_DATA_DIR") or root / "data")
+    return base / "registry" / CATALOG_PATH.name
+
 MAX_SEARCH_LIMIT = 200
 DEFAULT_SEARCH_LIMIT = 50
 BULK_GROUPS = ("general_top", "character", "series", "artist")
@@ -112,7 +129,113 @@ def _load_catalog(
     order = {group: index for index, group in enumerate(groups)}
     entries.sort(key=lambda entry: order[entry["group"]])
     catalog = _load_catalog_layer(data["catalog"] if "catalog" in data else None, path)
+    if path == CATALOG_PATH:
+        overlay = user_overlay_path()
+        if overlay.is_file() and overlay.resolve() != CATALOG_PATH.resolve():
+            groups, entries, catalog = _merge_overlay(groups, entries, catalog, overlay)
     return list(groups), entries, catalog
+
+
+def _merge_overlay(
+    groups: list[str],
+    entries: list[dict],
+    catalog: list[dict],
+    overlay_path: Path,
+) -> tuple[list[str], list[dict], list[dict]]:
+    """Fusiona el overlay de usuario (data/registry/tags_danbooru.json) sobre el catalogo base."""
+    try:
+        user_data = json.loads(overlay_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise EngineError(f"overlay de tags ilegible en {overlay_path}: {exc}") from exc
+    if not isinstance(user_data, dict):
+        raise EngineError(f"overlay de tags invalido en {overlay_path}: se esperaba un objeto")
+
+    group_list = list(groups)
+    user_groups = user_data.get("groups")
+    if isinstance(user_groups, list):
+        for g in user_groups:
+            if isinstance(g, str) and g.strip() and g.strip() not in group_list:
+                group_list.append(g.strip())
+
+    curated_map: dict[str, dict] = {e["tag"].lower(): dict(e) for e in entries}
+    user_tags = user_data.get("tags")
+    if isinstance(user_tags, list):
+        for item in user_tags:
+            if not isinstance(item, dict):
+                continue
+            tag = item.get("tag")
+            if not isinstance(tag, str) or not tag.strip():
+                continue
+            tag_clean = tag.strip()
+            key = tag_clean.lower()
+            if key in curated_map:
+                entry = dict(curated_map[key])
+                if "label" in item and isinstance(item["label"], str) and item["label"].strip():
+                    entry["label"] = item["label"].strip()
+                if "group" in item and isinstance(item["group"], str) and item["group"].strip():
+                    grp = item["group"].strip()
+                    if grp not in group_list:
+                        group_list.append(grp)
+                    entry["group"] = grp
+                if "rank" in item and isinstance(item["rank"], int) and not isinstance(item["rank"], bool) and item["rank"] >= 0:
+                    entry["rank"] = item["rank"]
+                curated_map[key] = entry
+            else:
+                label = item.get("label") or tag_clean
+                grp = item.get("group") or "general_top"
+                rank = item.get("rank", 0)
+                if not isinstance(rank, int) or isinstance(rank, bool) or rank < 0:
+                    rank = 0
+                if grp not in group_list:
+                    group_list.append(grp)
+                curated_map[key] = {
+                    "tag": tag_clean,
+                    "label": str(label).strip(),
+                    "group": grp,
+                    "rank": rank,
+                }
+
+    order = {grp: idx for idx, grp in enumerate(group_list)}
+    merged_entries = list(curated_map.values())
+    merged_entries.sort(key=lambda e: (order.get(e["group"], 9999), -e.get("rank", 0), e["tag"]))
+
+    catalog_map: dict[str, dict] = {c["name"].lower(): dict(c) for c in catalog}
+    user_cat = user_data.get("catalog")
+    if isinstance(user_cat, list):
+        for item in user_cat:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            if not isinstance(name, str) or not name.strip():
+                continue
+            name_clean = name.strip()
+            key = name_clean.lower()
+            cat = item.get("category", "general")
+            posts = item.get("posts", 100)
+            aliases = item.get("aliases", [])
+            if not isinstance(aliases, list):
+                aliases = []
+            aliases = [str(a) for a in aliases if isinstance(a, str) and a.strip()]
+            if key in catalog_map:
+                existing = dict(catalog_map[key])
+                if "category" in item:
+                    existing["category"] = cat
+                if "posts" in item:
+                    existing["posts"] = posts
+                if "aliases" in item:
+                    existing["aliases"] = list(dict.fromkeys(existing["aliases"] + aliases))
+                catalog_map[key] = existing
+            else:
+                catalog_map[key] = {
+                    "name": name_clean,
+                    "category": cat,
+                    "posts": posts,
+                    "aliases": aliases,
+                }
+    merged_catalog = list(catalog_map.values())
+    merged_catalog.sort(key=lambda c: (-c["posts"], c["name"]))
+
+    return group_list, merged_entries, merged_catalog
 
 
 def _load_catalog_layer(raw: object, path: Path) -> list[dict]:
@@ -158,31 +281,75 @@ def _load_catalog_layer(raw: object, path: Path) -> list[dict]:
     return entries
 
 
-GROUPS, _ENTRIES, _CATALOG = _load_catalog()
-_BY_GROUP: dict[str, list[dict]] = {group: [] for group in GROUPS}
-for _entry in _ENTRIES:
-    _BY_GROUP[_entry["group"]].append(_entry)
-_INDEX: dict[str, dict] = {entry["tag"].lower(): entry for entry in _ENTRIES}
-_CURATED_KEYS: dict[str, bool] = {}
-_CURATED_CANON: dict[str, str] = {}
-for _entry in _ENTRIES:
-    _key = _fold(_entry["tag"])
-    _CURATED_KEYS[_key] = True
-    _CURATED_CANON[_key] = _entry["tag"]
-_NAME_INDEX: dict[str, str] = {}
-_ALIAS_INDEX: dict[str, str] = {}
-for _item in _CATALOG:
-    _key = _fold(_item["name"])
-    if _key and _key not in _NAME_INDEX:
-        _NAME_INDEX[_key] = _item["name"]
-    for _alias in _item["aliases"]:
-        _key = _fold(_alias)
-        if _key and _key not in _ALIAS_INDEX:
-            _ALIAS_INDEX[_key] = _item["name"]
-
 _FTS_LOCK = threading.Lock()
 _FTS_READY = False
 _FTS_CONN: sqlite3.Connection | None = None
+
+GROUPS: list[str] = []
+_ENTRIES: list[dict] = []
+_CATALOG: list[dict] = []
+_BY_GROUP: dict[str, list[dict]] = {}
+_INDEX: dict[str, dict] = {}
+_CURATED_KEYS: dict[str, bool] = {}
+_CURATED_CANON: dict[str, str] = {}
+_NAME_INDEX: dict[str, str] = {}
+_ALIAS_INDEX: dict[str, str] = {}
+
+
+def reload(path: Path | None = None) -> None:
+    """Recarga el catalogo y re-indexa en memoria (incluyendo el overlay de usuario)."""
+    global GROUPS, _ENTRIES, _CATALOG, _BY_GROUP, _INDEX
+    global _CURATED_KEYS, _CURATED_CANON, _NAME_INDEX, _ALIAS_INDEX
+    global _FTS_CONN, _FTS_READY
+
+    target = path or CATALOG_PATH
+    groups, entries, cat = _load_catalog(target)
+    GROUPS.clear()
+    GROUPS.extend(groups)
+    _ENTRIES.clear()
+    _ENTRIES.extend(entries)
+    _CATALOG.clear()
+    _CATALOG.extend(cat)
+
+    _BY_GROUP.clear()
+    for grp in GROUPS:
+        _BY_GROUP[grp] = []
+    for entry in _ENTRIES:
+        _BY_GROUP[entry["group"]].append(entry)
+
+    _INDEX.clear()
+    for entry in _ENTRIES:
+        _INDEX[entry["tag"].lower()] = entry
+
+    _CURATED_KEYS.clear()
+    _CURATED_CANON.clear()
+    for entry in _ENTRIES:
+        key = _fold(entry["tag"])
+        _CURATED_KEYS[key] = True
+        _CURATED_CANON[key] = entry["tag"]
+
+    _NAME_INDEX.clear()
+    _ALIAS_INDEX.clear()
+    for item in _CATALOG:
+        key = _fold(item["name"])
+        if key and key not in _NAME_INDEX:
+            _NAME_INDEX[key] = item["name"]
+        for alias in item["aliases"]:
+            key = _fold(alias)
+            if key and key not in _ALIAS_INDEX:
+                _ALIAS_INDEX[key] = item["name"]
+
+    with _FTS_LOCK:
+        if _FTS_CONN is not None:
+            try:
+                _FTS_CONN.close()
+            except sqlite3.Error:
+                pass
+            _FTS_CONN = None
+        _FTS_READY = False
+
+
+reload()
 
 
 def _build_fts() -> sqlite3.Connection | None:

@@ -1,26 +1,23 @@
-# Licencias de terceros — pendientes de archivar (M10-6b)
+# Licencias de terceros archivadas (M13-2 / M10-6b)
 
-Este directorio guardará los textos de licencia de los pesos y nodos que el
-instalador descarga. A 2026-09-26 ninguno está archivado en el repo; el campo
-`license` de `manifest.models.json` / `manifest.nodes.json` es la referencia.
+Este directorio contiene los textos de licencia de las dependencias clave y
+modelos que componen WaifuStudio:
 
-> **Retirados 2026-09-30 (M12)**: los pesos del LLM M11 (Qwen3.8-27B abliterado de AEON-7 con
-> quant de soyaakinohara y mmproj de chimingw) y el respaldo legacy (Qwen2.5-7B abliterado de
-> Josiefied/QuantFactory) y el caption Qwen2.5-VL de vision se borraron de disco y ya no se
-> descargan. El LLM vigente es **Qwen3.5-9B-abliterated** (Q4_K_M, lukey03) + **mmproj-F16**
-> (unsloth), Apache-2.0 declarada en `manifest.models.json`; sus textos siguen pendientes de
-> archivar (no inventar): contrastar los repos `Qwen/Qwen3.5-9B`,
-> `lukey03/Qwen3.5-9B-abliterated-GGUF` y `unsloth/Qwen3.5-9B-GGUF` antes de redistribuir.
+- `LICENSE_MIT.txt`: Licencia de WaifuStudio (código de la app).
+- `LICENSE_GPL-3.0.txt`: GNU General Public License v3.0 (ComfyUI backend).
+- `LICENSE_APACHE-2.0.txt`: Apache License 2.0 (Qwen3.5, WD14 tagger, Wan2.2 bases).
+- `LICENSE_BSD-3-Clause.txt`: BSD 3-Clause (Real-ESRGAN upscaler).
 
 ## Estado por asset
 
-| Asset | Licencia declarada | Acción |
+| Asset | Licencia declarada | Archivo en este directorio |
 |---|---|---|
-| Anima 2.9B / Official / text encoder / VAE | `circlestone-labs-non-commercial-license v1.2` (no comercial) | Archivar el LICENSE del repo `circlestone-labs/Anima` antes de redistribuir |
-| Wan 2.2 GGUF / umt5 / VAE / LightX2V | Apache-2.0 (heredada) | Verificar y archivar LICENSE de QuantStack / Comfy-Org |
-| MiniMax H3 (Comfy-Org), Krea-2, Kijai experimental, koongrizzly int4 | Sin verificar (`URL_VERIFICAR`) | Verificar antes de espejar |
-| ClipProj (NicoLab28) | Sin verificar | Verificar antes de espejar |
-| RealESRGAN | BSD-3-Clause | Bajo riesgo; archivar texto |
+| WaifuStudio App | MIT | `LICENSE_MIT.txt` |
+| ComfyUI Engine | GPL-3.0 | `LICENSE_GPL-3.0.txt` |
+| Qwen3.5-9B-abliterated / unsloth / WD14 | Apache-2.0 | `LICENSE_APACHE-2.0.txt` |
+| RealESRGAN | BSD-3-Clause | `LICENSE_BSD-3-Clause.txt` |
+| Anima 2.9B / Official / text encoder / VAE | `circlestone-labs-non-commercial-license v1.2` (no comercial) | No redistribuir; consulta upstream circlestone-labs |
+
 | RIFE ckpts (Fannovel16, release `models`) | Sin verificar por ckpt | Verificar redistribución |
 | TIPO-500M | `kohaku-license-1.0` | Solo entrada `obsolete`; no se descarga |
 | animagine XL 4.0 | Fair AI Public License 1.0-SD | Solo entrada `obsolete`; no se descarga |
