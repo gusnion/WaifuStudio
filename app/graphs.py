@@ -24,10 +24,6 @@ ANIMA_PATCH_CLASS = "WaifuAnimaPatch28to40"
 ANIMA_EXPANDED_MODELS = frozenset(
     {"anima-2.9b-preview", "one-obsession-anima-v40"}
 )
-ANIMA_EXPANDED_UNETS = (
-    "anima-2.9b-preview-v1.safetensors",
-    "oneobsessionanima_v40.safetensors",
-)
 LORA_ID_PREFIX = "lora_"
 UNET_LOADER_CLASSES = ("UNETLoader", "UnetLoaderGGUF")
 LORA_WEIGHT_MIN = 0.0
@@ -318,8 +314,9 @@ def apply_loras(
     ``UNETLoader`` (o ``UnetLoaderGGUF``) y el ultimo sustituye al loader en todo
     input ``model`` que apuntara a el.
 
-    Si ``model_id`` (o el ``unet_name`` en el loader) corresponde a un modelo
-    expandido Anima (como ``anima-2.9b-preview`` de 40 bloques), se usa la clase
+    Si ``model_id`` corresponde a un modelo expandido Anima (definido en
+    ``ANIMA_EXPANDED_MODELS``, como ``anima-2.9b-preview`` o
+    ``one-obsession-anima-v40`` de 40 bloques), se usa la clase
     ``WaifuAnimaPatch28to40`` para remapear los indices de bloque 28->40
     automaticamente sin degradar imagen.
 
@@ -338,8 +335,7 @@ def apply_loras(
         raise EngineError(
             "grafo sin UNETLoader/UnetLoaderGGUF: no se pueden aplicar LoRAs"
         )
-    loader_id, loader_node = loader
-    inputs = loader_node.get("inputs", {})
+    loader_id, _loader_node = loader
 
     use_patch = False
     if model_id is not None and model_id.strip().lower() in ANIMA_EXPANDED_MODELS:
@@ -376,7 +372,6 @@ def apply_loras(
 
 __all__ = [
     "ANIMA_EXPANDED_MODELS",
-    "ANIMA_EXPANDED_UNETS",
     "ANIMA_PATCH_CLASS",
     "DEFAULT_STRENGTH",
     "IMG_ENC_ID",
