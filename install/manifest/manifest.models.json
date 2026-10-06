@@ -556,30 +556,6 @@
       "required": true,
       "license": "Apache-2.0 (mismo master Qwen3.5-9B; torre de vision intacta)",
       "notes": "Proyector de vision F16 stock (unsloth); empareja con el texto abliterado (la abliteracion no toca la vision). Requerido para «Describir»."
-    },
-    {
-      "id": "h3-vdn-int8-convrot",
-      "filename": "vdn_minimax_h3_int8_convrot.safetensors",
-      "subdir": "diffusion_models",
-      "bytes": 2254857840,
-      "sha256": "4b6818e6988863f8864700d14b4344ca21c17045b73315a6b7d1e07505877f0a",
-      "url": "https://huggingface.co/Raretutor/vdn-minimax-h3-comfyui-int8-convrot/resolve/main/model_int8.safetensors",
-      "revision": "main",
-      "required": false,
-      "license": "Apache-2.0",
-      "notes": "VideoDeltaNet (VDN) MiniMax H3 INT8 ConvRot por Raretutor (aceleracion DMD 8 pasos; reduce VRAM ~4.7 GB en RTX 3060)."
-    },
-    {
-      "id": "h3-lora-vdn-8step",
-      "filename": "vdn_minimax_h3_step250_comfyui.safetensors",
-      "subdir": "loras",
-      "bytes": 2147483648,
-      "sha256": "4b6818e6988863f8864700d14b4344ca21c17045b73315a6b7d1e07505877f0a",
-      "url": "https://huggingface.co/OpenVDN/vdn-minimax-h3/resolve/main/vdn_minimax_h3_step250_comfyui.safetensors",
-      "revision": "main",
-      "required": false,
-      "license": "Apache-2.0",
-      "notes": "VideoDeltaNet (VDN) LoRA 8 pasos para MiniMax H3 (OpenVDN/vdn-minimax-h3). Acelera la generacion a 8 pasos via LoraLoaderModelOnly."
     }
   ]
 }

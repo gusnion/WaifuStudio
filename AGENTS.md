@@ -34,7 +34,7 @@ Comandos directos equivalentes (desde la raíz del repo):
 & .\.venv\Scripts\python.exe -m app.server                 # app (uvicorn)
 & .\.venv\Scripts\python.exe -m app.health                 # rutas + ping al engine y estado del LLM
 & .\.venv\Scripts\python.exe -m app.health --require-engine
-& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1449 tests offline (CPU, mocks)
+& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1444 tests offline (CPU, mocks)
 ```
 
 Los scripts comprueban que el proceso del puerto sea realmente de WAIFU (`.venv` o el Python
@@ -77,12 +77,11 @@ gestionado en `python\`) antes de arrancar o parar; no matan procesos ajenos.
 - `preprompts.py`: preprompts certificados por familia y preprompts propios
   (`data/preprompts.json`).
 - `formats.py`: presets de tamaño de `registry/formatos-v1.json`.
-- `h3_presets.py`: perfiles H3 (Referencia/Calidad/Ligero/VDN), variantes turbo4/turbo8/vdn8, segundos y
+- `h3_presets.py`: perfiles H3 (Referencia/Calidad/Ligero), variantes turbo4/turbo8, segundos y
   resoluciones de `registry/h3_presets-v1.json`.
 - `h3_prompt.py`: «Mejorar prompt (H3)»; escribe los tres bloques con el LLM.
 - `motion.py`: «Mejorar prompt (video)» para el motor Wan con el LLM.
-- `video.py`: grafos y runner de vídeo (H3 con modos **I2V**, **FLF2V** y **Ref2VA**; perfiles Referencia, Calidad, Ligero y VDN 8-pasos).
-- `video_chain.py`: utilidades OpenCV para encadenado continuo (>15 s): extracción de último fotograma (`extract_last_frame`), concatenación sin pérdida (`concat_videos`) y planificación de segmentos (`plan_chain_segments`).
+- `video.py`: grafos y runner de vídeo (H3 con modos **I2V** y **FLF2V**; perfiles Referencia, Calidad y Ligero).
 - `video_presets.py`: presets Wan de `registry/video_presets-v1.json`.
 - `editor.py`: grafo y runner del Editor Qwen-Image 2.1 UC (hasta 10 referencias); tamaño «Original» (`inherit_size_from_image`) hereda el de la primera referencia. En la UI, «Generar» admite referencias (archivo o clic en la galería) y «Editar» trabaja sobre la imagen seleccionada en el visor de Imagen (el backend exige ≥1 referencia en modo editar).
 - `editor_models.py`: nombres reales del par UC (`registry/editor_models-v1.json`).

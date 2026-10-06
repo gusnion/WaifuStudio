@@ -288,7 +288,7 @@ function Install-CustomNodes {
         Write-Ok ("{0} @ {1}" -f $node.id, $head)
     }
 
-    $localNodes = @('waifu_anima_patch', 'waifu_vdn_h3')
+    $localNodes = @('waifu_anima_patch')
     foreach ($localNode in $localNodes) {
         $sourceDir = Join-Path (Join-Path $Root 'tools\custom_nodes') $localNode
         $targetDir = Join-Path $nodesDir $localNode
@@ -315,7 +315,9 @@ function Install-Trainer {
     $trainerVenv = Join-Path $kohyaRoot 'venv'
     $trainerPython = Join-Path $trainerVenv 'Scripts\python.exe'
 
-    if (-not (Test-Path -LiteralPath $kohyaRoot)) { return }
+    if (-not (Test-Path -LiteralPath $kohyaRoot)) {
+        New-Item -ItemType Directory -Force -Path $kohyaRoot | Out-Null
+    }
     Write-Step 'entrenador LoRA Anima (tools\kohya)'
     if (-not (Test-Path -LiteralPath (Join-Path $sdScriptsDir '.git'))) {
         Write-Step 'clonando kohya-ss/sd-scripts (tag v0.12.0)'

@@ -1,6 +1,6 @@
 # Avisos de terceros (THIRD_PARTY_NOTICES)
 
-Estado: 2026-10-06 (M13: v1.3.0 — VideoDeltaNet H3, Anima Patch 28->40, Kohya Installer, Purga Wan).
+Estado: 2026-10-06 (M13: v1.3.0 — Anima Patch 28->40, Kohya Installer, Purga Wan).
 Ambito: pesos, LoRAs y componentes consumidos por WAIFU. Los textos de licencias
 principales (MIT, Apache-2.0, BSD-3-Clause, GPL-3.0) estan archivados en
 `install/manifest/licenses/`.
@@ -18,13 +18,12 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 ## Pesos y modelos
 
 > **Retirados 2026-09-27/30**: los pesos de Wan 2.2 y del LLM M11 (Qwen3.8-27B) se borraron de disco.
-> El motor actual utiliza MiniMax H3 acelerado con VideoDeltaNet (VDN) y LLM único Qwen3.5-9B en CPU.
+> El motor actual utiliza MiniMax H3 (perfiles Referencia, Calidad, Ligero) y LLM único Qwen3.5-9B en CPU.
 
 | Componente | Licencia | ¿Redistribuible en el repo? | Estado |
 | --- | --- | --- | --- |
 | Anima (circlestone-labs) | circlestone-labs-non-commercial-license v1.2 | No (solo descarga desde origen con Attribution Notice) | Identificada |
 | Wan 2.2 (DiT) | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** (`WAN_RETIRADO.md`) |
-| VideoDeltaNet H3 (Raretutor INT8 ConvRot + OpenVDN) | Apache-2.0 | Si, con avisos | Identificada (Apache-2.0, texto archivado) |
 | umt5 (text encoder) | Apache-2.0 | Si, con avisos | Texto archivado (`install/manifest/licenses/APACHE-2.0.txt`) |
 | Wan VAE | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** |
 | LightX2V (LoRA aceleracion) | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** |

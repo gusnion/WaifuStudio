@@ -508,7 +508,7 @@ class H3ProfilesApiTests(ServerVideoTestCase):
         self.assertEqual(data["profiles"], data["items"])
         self.assertEqual(
             [item["id"] for item in data["items"]],
-            ["referencia", "calidad", "ligero", "vdn"],
+            ["referencia", "calidad", "ligero"],
         )
         self.assertEqual(data["seconds"], [5, 8, 10, 12, 15])
         self.assertEqual(
@@ -545,11 +545,10 @@ class H3ProfilesApiTests(ServerVideoTestCase):
     def test_variantes_expuestas(self):
         data = self.make_client().get("/api/video/h3_profiles").json()
         self.assertEqual(
-            [item["id"] for item in data["variants"]], ["turbo4", "turbo8", "vdn8"]
+            [item["id"] for item in data["variants"]], ["turbo4", "turbo8"]
         )
         self.assertEqual(data["variants"][0]["steps"], 4)
         self.assertEqual(data["variants"][1]["steps"], 8)
-        self.assertEqual(data["variants"][2]["steps"], 8)
         for item in data["variants"]:
             with self.subTest(variant=item["id"]):
                 for field in ("id", "label", "lora", "steps"):

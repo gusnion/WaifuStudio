@@ -2273,11 +2273,7 @@ async function reuseVideoGeneration(item) {
   const params = item.params || {};
   $("video-engine").value = "h3";
   $("video-mode").value =
-    params.mode === "flf2v"
-      ? "flf2v"
-      : params.mode === "ref2va"
-        ? "ref2va"
-        : "i2v";
+    params.mode === "flf2v" ? "flf2v" : "i2v";
   const storedProfile =
     typeof params.profile === "string" && params.profile
       ? params.profile

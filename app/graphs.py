@@ -21,9 +21,7 @@ IMG_ENC_ID = "img_enc"
 DEFAULT_STRENGTH = 0.6
 LORA_CLASS = "LoraLoaderModelOnly"
 ANIMA_PATCH_CLASS = "WaifuAnimaPatch28to40"
-ANIMA_EXPANDED_MODELS = frozenset(
-    {"anima-2.9b-preview", "one-obsession-anima-v40"}
-)
+ANIMA_EXPANDED_MODELS = frozenset({"anima-2.9b-preview"})
 LORA_ID_PREFIX = "lora_"
 UNET_LOADER_CLASSES = ("UNETLoader", "UnetLoaderGGUF")
 LORA_WEIGHT_MIN = 0.0
@@ -315,10 +313,9 @@ def apply_loras(
     input ``model`` que apuntara a el.
 
     Si ``model_id`` corresponde a un modelo expandido Anima (definido en
-    ``ANIMA_EXPANDED_MODELS``, como ``anima-2.9b-preview`` o
-    ``one-obsession-anima-v40`` de 40 bloques), se usa la clase
+    ``ANIMA_EXPANDED_MODELS``, como ``anima-2.9b-preview`` de 40 bloques), se usa la clase
     ``WaifuAnimaPatch28to40`` para remapear los indices de bloque 28->40
-    automaticamente sin degradar imagen.
+    automaticamente sin degradar capas en modelos base.
 
     Lista vacia devuelve la copia sin cambios. EngineError si no hay loader, si
     colisiona algun id ``lora_N`` o si un item/weight es invalido.

@@ -489,14 +489,16 @@ class ApplyLorasTests(unittest.TestCase):
         )
         self.assertEqual(patched["lora_1"]["class_type"], ANIMA_PATCH_CLASS)
 
-    def test_one_obsession_v40_usa_nodo_waifu_anima_patch(self):
+    def test_one_obsession_v40_usa_nodo_estandar_lora_loader(self):
+        # one-obsession-anima-v40 es de 28 bloques (v4.0 no significa 40 bloques);
+        # debe usar LoraLoaderModelOnly para no desalinear pesos LoRA.
         graph = real_graph()
         patched = apply_loras(
             graph,
             [{"file": "reika.safetensors", "weight": 0.8}],
             model_id="one-obsession-anima-v40",
         )
-        self.assertEqual(patched["lora_1"]["class_type"], ANIMA_PATCH_CLASS)
+        self.assertEqual(patched["lora_1"]["class_type"], LORA_CLASS)
 
     def test_modelo_estandar_usa_lora_loader_normal(self):
         graph = real_graph()
