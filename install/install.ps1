@@ -41,6 +41,7 @@ param(
     [switch]$SkipModels,
     [switch]$Yes,
     [switch]$IncludeOptional,
+    [switch]$IncludeTrainer,
     [switch]$SkipVerify,
     [switch]$NoUserEnv
 )
@@ -286,7 +287,76 @@ function Install-CustomNodes {
         }
         Write-Ok ("{0} @ {1}" -f $node.id, $head)
     }
+
+    $localNodes = @('waifu_anima_patch')
+    foreach ($localNode in $localNodes) {
+        $sourceDir = Join-Path (Join-Path $Root 'tools\custom_nodes') $localNode
+        $targetDir = Join-Path $nodesDir $localNode
+        if (Test-Path -LiteralPath $sourceDir) {
+            if (-not (Test-Path -LiteralPath $targetDir)) {
+                Write-Step ("vinculando nodo local {0}" -f $localNode)
+                try {
+                    New-Item -ItemType Junction -Path $targetDir -Target $sourceDir -ErrorAction Stop | Out-Null
+                    Write-Ok ("junction {0} -> {1}" -f $localNode, $targetDir)
+                } catch {
+                    Copy-Item -Recurse -Force -Path $sourceDir -Destination $targetDir
+                    Write-Ok ("copia {0} -> {1}" -f $localNode, $targetDir)
+                }
+            } else {
+                Write-Ok ("nodo local presente: {0}" -f $localNode)
+            }
+        }
+    }
 }
+
+function Install-Trainer {
+    $kohyaRoot = Join-Path $Root 'tools\kohya'
+    $sdScriptsDir = Join-Path $kohyaRoot 'sd-scripts'
+    $trainerVenv = Join-Path $kohyaRoot 'venv'
+    $trainerPython = Join-Path $trainerVenv 'Scripts\python.exe'
+
+    if (-not (Test-Path -LiteralPath $kohyaRoot)) { return }
+    Write-Step 'entrenador LoRA Anima (tools\kohya)'
+    if (-not (Test-Path -LiteralPath (Join-Path $sdScriptsDir '.git'))) {
+        Write-Step 'clonando kohya-ss/sd-scripts (tag v0.12.0)'
+        Invoke-Tool -Label 'git clone sd-scripts' -Command 'git' -ToolArgs @(
+            'clone', '--branch', 'v0.12.0', '--depth', '1',
+            'https://github.com/kohya-ss/sd-scripts.git', $sdScriptsDir
+        )
+    } else {
+        Write-Ok 'sd-scripts presente'
+    }
+
+    if (-not (Test-Path -LiteralPath $trainerPython)) {
+        Write-Step 'creando venv para tools\kohya'
+        Invoke-Tool -Label 'uv venv kohya' -Command 'uv' -ToolArgs @(
+            'venv', '--python', '3.12.12', $trainerVenv
+        )
+        Invoke-Tool -Label 'uv pip torch kohya' -Command 'uv' -ToolArgs @(
+            'pip', 'install', '--python', $trainerPython,
+            'torch==2.11.0+cu130', 'torchvision==0.26.0+cu130',
+            '--extra-index-url', 'https://download.pytorch.org/whl/cu130'
+        )
+        $reqFile = Join-Path $sdScriptsDir 'requirements.txt'
+        if (Test-Path -LiteralPath $reqFile) {
+            Invoke-Tool -Label 'uv pip requirements kohya' -Command 'uv' -ToolArgs @(
+                'pip', 'install', '--python', $trainerPython, '-r', $reqFile
+            )
+        }
+    } else {
+        Write-Ok 'venv tools\kohya presente'
+    }
+
+    $wrapper = Join-Path $kohyaRoot 'run_waifu_train.py'
+    if (Test-Path -LiteralPath $wrapper) {
+        $trainerCmd = ("{0} {1}" -f $trainerPython, $wrapper)
+        if (-not $NoUserEnv) {
+            [Environment]::SetEnvironmentVariable('WAIFU_TRAINER_CMD', $trainerCmd, 'User')
+            Write-Ok ("WAIFU_TRAINER_CMD configurado: {0}" -f $trainerCmd)
+        }
+    }
+}
+
 
 function Install-Models {
     Write-Step 'modelos (install\manifest\manifest.models.json)'
@@ -464,6 +534,9 @@ Install-Uv
 Install-Python
 Install-Venv
 Install-Engine
+if ($IncludeTrainer -or ($IncludeOptional -and -not $SkipEngine)) {
+    Install-Trainer
+}
 $installRecommended = Confirm-RecommendedModels
 if (-not $installRecommended) { $SkipModels = $true }
 Install-Models

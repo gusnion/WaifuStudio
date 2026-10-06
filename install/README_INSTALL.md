@@ -74,7 +74,8 @@ El instalador acepta banderas si sabes lo que haces:
 |---|---|
 | `-SkipEngine` | No instala ComfyUI/nodos/torch/Sage |
 | `-SkipModels` | No descarga modelos (solo verifica los existentes) |
-| `-IncludeOptional` | Baja también assets opcionales |
+| `-IncludeOptional` | Baja también assets opcionales y el entrenador |
+| `-IncludeTrainer` | Clona kohya-ss/sd-scripts y prepara tools\kohya\venv |
 | `-SkipVerify` | No corre tests ni `app.health` al final |
 | `-NoUserEnv` | No escribe variables de usuario `WAIFU_COMFY_*` |
 
