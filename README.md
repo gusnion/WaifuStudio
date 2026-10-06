@@ -9,9 +9,9 @@ filtros NSFW/SFW.
 ## Características
 
 ### Imagen
-- Modelos de la familia Anima con perfil propio (encoder, VAE, sampler y resolución).
+- Modelos de la familia Anima con perfil propio (encoder, VAE, sampler y resolución); soporte para modelos expandidos de 40 capas (`anima-2.9b-preview`, `one-obsession-anima-v40`) mediante el patcher integrado `WaifuAnimaPatch28to40`.
 - Editor de prompt por zonas (calidad, safety, sujeto, personaje, general) con subcategorías.
-- Catálogo de tags Danbooru (capa curada + catálogo v3 de **91.357 etiquetas** con ranking) para buscar e insertar por zona; el buscador del popover cubre el catálogo completo.
+- Catálogo de tags Danbooru (capa curada + catálogo v3 de **91.357 etiquetas** con ranking) con soporte de sobreescritura de usuario en `data/registry/tags_danbooru.json`.
 - LoRAs con biblioteca gestionable: **subida desde disco con registro automático**, edición y borrado con o sin archivo.
 - Preprompts de calidad incluidos y propios, negativo avanzado y semilla con dado.
 - 15 presets de tamaño que incluyen los formatos vertical/horizontal de vídeo (XL).
@@ -23,9 +23,11 @@ filtros NSFW/SFW.
   opcionales; si faltan, la UI lo indica).
 
 ### Vídeo
-- Motor MiniMax H3 con dos modos: **I2V** (solo frame inicial) y **FLF2V** (inicial + final); perfiles Referencia, Calidad y Ligero.
-- Variantes turbo4/turbo8 (LoRA + pasos), toggle SageAttention y audio nativo.
-- Duración de 5 a 15 s (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
+- Motor MiniMax H3 con modos: **I2V** (solo frame inicial), **FLF2V** (inicial + final) y **Ref2VA** (referencia visual continua de personaje/estilo); perfiles Referencia, Calidad, Ligero y **VDN** (VideoDeltaNet).
+- **Aceleración VideoDeltaNet (VDN)**: generación en **8 pasos** mediante destilación DMD y pesos INT8 ConvRot de Raretutor (~2.1 GB), reduciendo el consumo de VRAM de pico en una RTX 3060 12 GB.
+- **Encadenado continuo de clips**: generación de secuencias largas (>15 s) mediante extracción automática del último fotograma y concatenación sin pérdida con OpenCV.
+- Variantes turbo4/turbo8/vdn8 (LoRA + pasos), toggle SageAttention y audio nativo.
+- Duración de 5 a 15 s por clip (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
 - «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM gestionado.
 - Guía H3 insertable en el prompt.
 
