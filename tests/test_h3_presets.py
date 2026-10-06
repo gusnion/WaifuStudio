@@ -44,7 +44,7 @@ from app.h3_presets import (
     validate_h3_size,
 )
 
-EXPECTED_IDS = ("referencia", "calidad", "ligero")
+EXPECTED_IDS = ("referencia", "calidad", "ligero", "vdn")
 EXPECTED_FRAMES = {5: 124, 8: 192, 10: 243, 12: 294, 15: 362}
 EXPECTED_VARIANTS = (
     {
@@ -57,6 +57,12 @@ EXPECTED_VARIANTS = (
         "id": "turbo8",
         "label": "mejor calidad, ~2×",
         "lora": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "steps": 8,
+    },
+    {
+        "id": "vdn8",
+        "label": "VideoDeltaNet 8 pasos (ConvRot INT8)",
+        "lora": "vdn_minimax_h3_step250_comfyui.safetensors",
         "steps": 8,
     },
 )
@@ -88,6 +94,16 @@ EXPECTED_ASSETS = {
         "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
         "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
         "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "seconds_recomendados": [8, 10, 12, 15],
+    },
+    "vdn": {
+        "template": "h3_vdn_8step.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+        "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "lora": "vdn_minimax_h3_step250_comfyui.safetensors",
         "seconds_recomendados": [8, 10, 12, 15],
     },
 }
@@ -176,7 +192,7 @@ class RegistryFileTests(unittest.TestCase):
                 profile = catalog[profile_id]
                 for field, value in expected.items():
                     self.assertEqual(profile[field], value)
-                self.assertEqual(profile["lora"], LORA)
+                self.assertEqual(profile["lora"], expected.get("lora", LORA))
                 self.assertTrue(profile["label"])
                 self.assertTrue(profile["note"])
                 for field in ("dit", "vae_video", "vae_audio"):
@@ -400,7 +416,7 @@ class LoadH3PresetsTests(unittest.TestCase):
         self.assertEqual(loaded["seconds"], [5, 8, 10, 12, 15])
         self.assertEqual(
             [variant["id"] for variant in loaded["variants"].values()],
-            ["turbo4", "turbo8"],
+            ["turbo4", "turbo8", "vdn8"],
         )
 
     def test_ilegible_o_json_invalido(self):

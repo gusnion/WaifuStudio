@@ -288,7 +288,7 @@ function Install-CustomNodes {
         Write-Ok ("{0} @ {1}" -f $node.id, $head)
     }
 
-    $localNodes = @('waifu_anima_patch')
+    $localNodes = @('waifu_anima_patch', 'waifu_vdn_h3')
     foreach ($localNode in $localNodes) {
         $sourceDir = Join-Path (Join-Path $Root 'tools\custom_nodes') $localNode
         $targetDir = Join-Path $nodesDir $localNode

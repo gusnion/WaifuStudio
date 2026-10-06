@@ -725,8 +725,8 @@ def build_video_graph(job: dict) -> dict:
                 if Path(template).name == WAN_FLF_TEMPLATE_PATH.name
                 else "i2v"
             )
-        if mode not in ("i2v", WAN_FLF_MODE):
-            raise EngineError(f"video: mode invalido {mode!r}; usar i2v|flf2v")
+        if mode not in ("i2v", WAN_FLF_MODE, "ref2va"):
+            raise EngineError(f"video: mode invalido {mode!r}; usar i2v|flf2v|ref2va")
         common = {
             "width": profile["width"],
             "height": profile["height"],

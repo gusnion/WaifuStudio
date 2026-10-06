@@ -1977,8 +1977,8 @@ def create_app(
         if engine_kind not in ("wan", "h3"):
             raise EngineError("engine invalido; usar wan|h3")
         mode = payload.get("mode") or "i2v"
-        if mode not in ("i2v", "flf2v"):
-            raise EngineError("mode invalido; usar i2v|flf2v")
+        if mode not in ("i2v", "flf2v", "ref2va"):
+            raise EngineError("mode invalido; usar i2v|flf2v|ref2va")
         aspect = payload.get("aspect") or "vertical"
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
