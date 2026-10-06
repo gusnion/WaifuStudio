@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.engine import EngineError, load_graph
 from app.graphs import (
+    ANIMA_PATCH_CLASS,
     IMG_ENC_ID,
     IMG_REF_ID,
     LORA_CLASS,
@@ -479,6 +480,34 @@ class ApplyLorasTests(unittest.TestCase):
 
         self.assertEqual(graph, snapshot)
 
+    def test_anima_29b_preview_usa_nodo_waifu_anima_patch(self):
+        graph = real_graph()
+        patched = apply_loras(
+            graph,
+            [{"file": "reika.safetensors", "weight": 0.8}],
+            model_id="anima-2.9b-preview",
+        )
+        self.assertEqual(patched["lora_1"]["class_type"], ANIMA_PATCH_CLASS)
+
+    def test_one_obsession_v40_usa_nodo_waifu_anima_patch(self):
+        graph = real_graph()
+        patched = apply_loras(
+            graph,
+            [{"file": "reika.safetensors", "weight": 0.8}],
+            model_id="one-obsession-anima-v40",
+        )
+        self.assertEqual(patched["lora_1"]["class_type"], ANIMA_PATCH_CLASS)
+
+    def test_modelo_estandar_usa_lora_loader_normal(self):
+        graph = real_graph()
+        patched = apply_loras(
+            graph,
+            [{"file": "reika.safetensors", "weight": 0.8}],
+            model_id="anima-official-aesthetic-v11",
+        )
+        self.assertEqual(patched["lora_1"]["class_type"], LORA_CLASS)
+
 
 if __name__ == "__main__":
     unittest.main()
+

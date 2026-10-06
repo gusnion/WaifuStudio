@@ -2671,7 +2671,7 @@ class RunGenerationTests(ServerTestCase):
         )
         self.assertEqual(self.store.get(job["gen_id"])["status"], "done")
         graph = transport.submits[0]["prompt"]
-        self.assertEqual(graph["lora_1"]["class_type"], "LoraLoaderModelOnly")
+        self.assertEqual(graph["lora_1"]["class_type"], "WaifuAnimaPatch28to40")
         self.assertEqual(
             graph["lora_1"]["inputs"],
             {

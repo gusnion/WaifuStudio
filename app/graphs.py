@@ -20,6 +20,14 @@ IMG_REF_ID = "img_ref"
 IMG_ENC_ID = "img_enc"
 DEFAULT_STRENGTH = 0.6
 LORA_CLASS = "LoraLoaderModelOnly"
+ANIMA_PATCH_CLASS = "WaifuAnimaPatch28to40"
+ANIMA_EXPANDED_MODELS = frozenset(
+    {"anima-2.9b-preview", "one-obsession-anima-v40"}
+)
+ANIMA_EXPANDED_UNETS = (
+    "anima-2.9b-preview-v1.safetensors",
+    "oneobsessionanima_v40.safetensors",
+)
 LORA_ID_PREFIX = "lora_"
 UNET_LOADER_CLASSES = ("UNETLoader", "UnetLoaderGGUF")
 LORA_WEIGHT_MIN = 0.0
@@ -299,17 +307,24 @@ def _rewire_model_inputs(graph: dict, loader_id: str, target_id: str) -> None:
                 inputs[key] = [target_id, 0]
 
 
-def apply_loras(graph: dict, loras: list[dict]) -> dict:
+def apply_loras(
+    graph: dict, loras: list[dict], model_id: str | None = None
+) -> dict:
     """Copia de ``graph`` con la cadena ``lora_1..lora_N`` tras el loader.
 
     Cada item aporta ``file`` (``lora_name``) y ``weight`` (``strength_model``);
     si falta ``file`` (o ``weight``) se resuelven por ``id`` en
     ``registry/loras.json`` (default 1.0 sin id). El primer nodo engancha al
-    ``UNETLoader`` (o
-    ``UnetLoaderGGUF``) y el ultimo sustituye al loader en todo input ``model``
-    que apuntara a el. Lista vacia devuelve la copia sin cambios. EngineError si
-    no hay loader, si colisiona algun id ``lora_N`` o si un item/weight es
-    invalido.
+    ``UNETLoader`` (o ``UnetLoaderGGUF``) y el ultimo sustituye al loader en todo
+    input ``model`` que apuntara a el.
+
+    Si ``model_id`` (o el ``unet_name`` en el loader) corresponde a un modelo
+    expandido Anima (como ``anima-2.9b-preview`` de 40 bloques), se usa la clase
+    ``WaifuAnimaPatch28to40`` para remapear los indices de bloque 28->40
+    automaticamente sin degradar imagen.
+
+    Lista vacia devuelve la copia sin cambios. EngineError si no hay loader, si
+    colisiona algun id ``lora_N`` o si un item/weight es invalido.
     """
     patched = copy.deepcopy(graph)
     if not isinstance(loras, list):
@@ -323,7 +338,15 @@ def apply_loras(graph: dict, loras: list[dict]) -> dict:
         raise EngineError(
             "grafo sin UNETLoader/UnetLoaderGGUF: no se pueden aplicar LoRAs"
         )
-    loader_id, _node = loader
+    loader_id, loader_node = loader
+    inputs = loader_node.get("inputs", {})
+
+    use_patch = False
+    if model_id is not None and model_id.strip().lower() in ANIMA_EXPANDED_MODELS:
+        use_patch = True
+
+    node_class = ANIMA_PATCH_CLASS if use_patch else LORA_CLASS
+
     for index in range(1, len(loras) + 1):
         node_id = f"{LORA_ID_PREFIX}{index}"
         if node_id in patched:
@@ -340,7 +363,7 @@ def apply_loras(graph: dict, loras: list[dict]) -> dict:
     for index, (file, weight) in enumerate(chain, start=1):
         node_id = f"{LORA_ID_PREFIX}{index}"
         patched[node_id] = {
-            "class_type": LORA_CLASS,
+            "class_type": node_class,
             "inputs": {
                 "model": [previous, 0],
                 "lora_name": file,
@@ -352,6 +375,9 @@ def apply_loras(graph: dict, loras: list[dict]) -> dict:
 
 
 __all__ = [
+    "ANIMA_EXPANDED_MODELS",
+    "ANIMA_EXPANDED_UNETS",
+    "ANIMA_PATCH_CLASS",
     "DEFAULT_STRENGTH",
     "IMG_ENC_ID",
     "IMG_REF_ID",

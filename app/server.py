@@ -458,6 +458,7 @@ def run_generation(
         graph = apply_loras(
             graph,
             validate_selection([] if raw_loras is None else raw_loras),
+            model_id=job.get("model_id"),
         )
         applied = {key: params[key] for key in PARAM_KEYS if params.get(key) is not None}
         graph = patch_params(graph, **applied)
