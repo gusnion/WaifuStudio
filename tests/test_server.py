@@ -3889,6 +3889,27 @@ class StartupHardeningUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
 
+    def test_required_ids_todos_presentes_en_index_html(self):
+        client = self.make_client()
+        html = client.get("/").text
+        app_js = client.get("/static/app.js").text
+        import re
+
+        html_ids = set(re.findall(r'id=["\']([^"\']+)["\']', html))
+        match = re.search(r"const REQUIRED_IDS = \[(.*?)\];", app_js, re.DOTALL)
+        self.assertIsNotNone(match, "REQUIRED_IDS debe estar declarado en app.js")
+        req_ids = [
+            s.strip().strip('"\'')
+            for s in match.group(1).split(",")
+            if s.strip().strip('"\'')
+        ]
+        missing = [rid for rid in req_ids if rid not in html_ids]
+        self.assertEqual(
+            missing,
+            [],
+            f"Faltan elementos de REQUIRED_IDS en templates/index.html: {missing}",
+        )
+
 
 class CharacterProfileUiStaticTests(ServerTestCase):
     def test_index_incluye_oc_picker_y_extras(self):

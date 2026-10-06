@@ -2318,13 +2318,8 @@ async function reuseVideoGeneration(item) {
 function startNewVideo() {
   $("video-engine").value = STARTUP_DEFAULTS.video_engine;
   $("video-mode").value = "i2v";
-  $("video-aspect").value = "vertical";
-  $("video-preset").value = "manual";
-  $("video-seconds").value = "5";
   $("video-seed").value = $("video-seed").defaultValue || "42";
-  $("video-motion").value = "";
   $("video-prompt").value = "";
-  $("video-motion-negative").value = "";
   $("video-image").value = "";
   $("video-last-image").value = "";
   setSelectValue($("video-h3-profile"), "calidad");
@@ -6093,14 +6088,10 @@ const REQUIRED_IDS = [
   "video-gallery-next",
   "btn-reload",
   "btn-video-reload",
-  "btn-motion",
   "btn-video-generate",
   "btn-video-cancel",
   "video-engine",
   "video-mode",
-  "video-preset",
-  "video-preset-note",
-  "video-seconds",
   "video-h3-profile",
   "video-h3-profile-note",
   "video-h3-seconds",
@@ -6113,7 +6104,6 @@ const REQUIRED_IDS = [
   "btn-h3-insert-template",
   "btn-h3-copy-guide",
   "h3-guide-status",
-  "video-motion-negative",
   "video-input-hint",
   "video-h3-prompt-actions",
   "btn-h3-prompt",

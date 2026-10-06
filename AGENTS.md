@@ -34,7 +34,7 @@ Comandos directos equivalentes (desde la raíz del repo):
 & .\.venv\Scripts\python.exe -m app.server                 # app (uvicorn)
 & .\.venv\Scripts\python.exe -m app.health                 # rutas + ping al engine y estado del LLM
 & .\.venv\Scripts\python.exe -m app.health --require-engine
-& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1444 tests offline (CPU, mocks)
+& .\.venv\Scripts\python.exe -m unittest discover -s tests # 1445 tests offline (CPU, mocks)
 ```
 
 Los scripts comprueban que el proceso del puerto sea realmente de WAIFU (`.venv` o el Python
