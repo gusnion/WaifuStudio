@@ -237,6 +237,19 @@ main {
   letter-spacing: 0.06em;
 }
 
+.field-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.25rem;
+}
+
+.field-inline input[type="checkbox"] {
+  cursor: pointer;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
 textarea,
 input,
 select {
