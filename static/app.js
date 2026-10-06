@@ -2271,60 +2271,35 @@ async function applyVideoSavedFrames(params) {
 
 async function reuseVideoGeneration(item) {
   const params = item.params || {};
-  const engine = (params.engine || item.model_id) === "h3" ? "h3" : "wan";
   $("video-engine").value = "h3";
   $("video-mode").value = params.mode === "flf2v" ? "flf2v" : "i2v";
-  setSelectValue($("video-aspect"), params.aspect);
-  const preset = typeof params.preset === "string" ? params.preset : "manual";
-  const presetSelect = $("video-preset");
-  presetSelect.value = preset;
-  if (presetSelect.value !== preset) {
-    presetSelect.value = "manual";
+  const storedProfile =
+    typeof params.profile === "string" && params.profile
+      ? params.profile
+      : "referencia";
+  setSelectValue($("video-h3-profile"), storedProfile);
+  const storedVariant =
+    typeof params.variant === "string" && params.variant
+      ? params.variant
+      : "turbo4";
+  setSelectValue($("video-h3-variant"), storedVariant);
+  $("video-h3-sage").checked = params.sage === true;
+  const h3Seconds = Number(params.seconds);
+  if (state.videoH3Seconds.includes(h3Seconds)) {
+    $("video-h3-seconds").value = String(h3Seconds);
   }
-  updateVideoPresetNote();
-  const seconds = Number(params.seconds);
-  if (Number.isFinite(seconds)) {
-    $("video-seconds").value = String(Math.min(15, Math.max(1, seconds)));
+  const width = Number(params.width);
+  const height = Number(params.height);
+  if (Number.isFinite(width) && Number.isFinite(height)) {
+    setSelectValue($("video-h3-size"), `${width}x${height}`);
   }
-  updateVideoDurationInfo();
-  if (engine === "h3") {
-    const storedProfile =
-      typeof params.profile === "string" && params.profile
-        ? params.profile
-        : "referencia";
-    setSelectValue($("video-h3-profile"), storedProfile);
-    const storedVariant =
-      typeof params.variant === "string" && params.variant
-        ? params.variant
-        : "turbo4";
-    setSelectValue($("video-h3-variant"), storedVariant);
-    $("video-h3-sage").checked = params.sage === true;
-    const h3Seconds = Number(params.seconds);
-    if (state.videoH3Seconds.includes(h3Seconds)) {
-      $("video-h3-seconds").value = String(h3Seconds);
-    }
-    const width = Number(params.width);
-    const height = Number(params.height);
-    if (Number.isFinite(width) && Number.isFinite(height)) {
-      setSelectValue($("video-h3-size"), `${width}x${height}`);
-    }
-    updateH3Notes();
-  }
+  updateH3Notes();
   if (params.seed != null) {
     $("video-seed").value = params.seed;
   }
-  $("video-motion").value =
-    engine === "wan" ? String(params.motion_positive || item.prompt || "") : "";
-  $("video-prompt").value =
-    engine === "h3" ? String(params.prompt || item.prompt || "") : "";
-  const storedNegative =
-    typeof item.negative === "string" && item.negative
-      ? item.negative
-      : typeof params.motion_negative === "string"
-        ? params.motion_negative
-        : "";
-  $("video-motion-negative").value = storedNegative;
-  state.videoNegativeTouched = Boolean(storedNegative);
+  $("video-prompt").value = String(
+    params.prompt || item.prompt || params.motion_positive || ""
+  );
   applyVideoEngine();
   let warning = "";
   try {
@@ -2384,47 +2359,6 @@ function clearReference() {
   setStatus("Referencia quitada");
 }
 
-async function improveMotion() {
-  if (state.pendingMotion) {
-    return;
-  }
-  const text = $("video-motion").value.trim();
-  if (!text) {
-    setVideoStatus("Escribe el movimiento para mejorarlo", true);
-    return;
-  }
-  const button = $("btn-motion");
-  state.pendingMotion = true;
-  button.disabled = true;
-  button.textContent = "Mejorando…";
-  setVideoStatus("Mejorando prompt de video...");
-  try {
-    const data = await postJson("/api/motion", {
-      text,
-      rating: $("video-rating").value,
-    });
-    $("video-motion").value = data.motion_positive || "";
-    if (!state.videoNegativeTouched && data.motion_negative) {
-      $("video-motion-negative").value = data.motion_negative;
-    }
-    button.textContent = "Listo ✓";
-    setVideoStatus("Prompt de video mejorado");
-  } catch (error) {
-    button.textContent = "Error";
-    setVideoStatus(error.message, true);
-  } finally {
-    state.pendingMotion = false;
-    button.disabled = false;
-    if (motionResetTimer) {
-      clearTimeout(motionResetTimer);
-    }
-    motionResetTimer = setTimeout(() => {
-      if (!state.pendingMotion) {
-        button.textContent = "Mejorar prompt (video)";
-      }
-    }, 1600);
-  }
-}
 
 async function improveH3Prompt() {
   if (state.pendingH3Prompt) {
@@ -2440,7 +2374,7 @@ async function improveH3Prompt() {
   const button = $("btn-h3-prompt");
   state.pendingH3Prompt = true;
   button.disabled = true;
-  button.textContent = "Generando…";
+  button.textContent = "Mejorando…";
   setH3PromptStatus("Generando…");
   if (h3PromptStatusTimer) {
     clearTimeout(h3PromptStatusTimer);
@@ -2485,28 +2419,7 @@ function readVideoSeed() {
   return Number.isFinite(value) ? Math.trunc(value) : 42;
 }
 
-function readVideoSeconds() {
-  const value = Number($("video-seconds").value);
-  return Number.isFinite(value) ? value : 5;
-}
-
-function secondsToFrames(seconds) {
-  const needed = Math.ceil(seconds * VIDEO_FPS);
-  return needed + ((4 - ((needed - 1) % 4)) % 4);
-}
-
-function updateVideoDurationInfo() {
-  const seconds = readVideoSeconds();
-  const label = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
-  $("video-seconds-info").textContent =
-    `≈ ${label} s → ${secondsToFrames(seconds)} frames (${VIDEO_FPS} fps)`;
-}
-
 function setVideoJobStatus(text, isError = false) {
-  if (state.videoVramHint && !isError) {
-    setVideoStatus(`${text} · ${state.videoVramHint}`);
-    return;
-  }
   setVideoStatus(text, isError);
 }
 
@@ -2514,7 +2427,7 @@ async function generateVideo() {
   if (state.busy) {
     return;
   }
-  const engine = $("video-engine").value;
+  const engine = $("video-engine") ? $("video-engine").value : "h3";
   const file = $("video-image").files[0];
   if (!file) {
     setVideoStatus("Sube la imagen inicial (first frame)", true);
@@ -2523,10 +2436,8 @@ async function generateVideo() {
   applyRandomSeed("video-seed");
   const payload = {
     engine,
-    aspect: $("video-aspect").value,
     seed: readVideoSeed(),
   };
-  state.videoVramHint = "";
   try {
     payload.image_b64 = await readFileBase64(file);
     const mode = $("video-mode").value;
@@ -2539,38 +2450,23 @@ async function generateVideo() {
       }
       payload.last_image_b64 = await readFileBase64(last);
     }
-    if (engine === "wan") {
-      const positive = $("video-motion").value.trim();
-      if (!positive) {
-        setVideoStatus("Escribe el movimiento del video", true);
-        return;
-      }
-      payload.seconds = readVideoSeconds();
-      payload.motion_positive = positive;
-      payload.preset = $("video-preset").value;
-      const negative = $("video-motion-negative").value.trim();
-      if (negative) {
-        payload.motion_negative = negative;
-      }
-    } else {
-      const prompt = $("video-prompt").value.trim();
-      if (!prompt) {
-        setVideoStatus("H3 requiere el prompt", true);
-        return;
-      }
-      const size = selectedH3Size();
-      if (!size) {
-        setVideoStatus("Resolución H3 inválida", true);
-        return;
-      }
-      payload.prompt = prompt;
-      payload.profile = $("video-h3-profile").value;
-      payload.variant = $("video-h3-variant").value;
-      payload.sage = $("video-h3-sage").checked;
-      payload.seconds = Number($("video-h3-seconds").value);
-      payload.width = size.width;
-      payload.height = size.height;
+    const prompt = $("video-prompt").value.trim();
+    if (!prompt) {
+      setVideoStatus("H3 requiere el prompt", true);
+      return;
     }
+    const size = selectedH3Size();
+    if (!size) {
+      setVideoStatus("Resolución H3 inválida", true);
+      return;
+    }
+    payload.prompt = prompt;
+    payload.profile = $("video-h3-profile").value;
+    payload.variant = $("video-h3-variant").value;
+    payload.sage = $("video-h3-sage").checked;
+    payload.seconds = Number($("video-h3-seconds").value);
+    payload.width = size.width;
+    payload.height = size.height;
   } catch (error) {
     setVideoStatus(error.message, true);
     return;
@@ -2580,9 +2476,6 @@ async function generateVideo() {
   setVideoStatus("Encolando...");
   try {
     const data = await postJson("/api/video/generate", payload);
-    if (engine === "wan" && data.vram_hint) {
-      state.videoVramHint = data.vram_hint;
-    }
     await pollJob(
       data.job_id,
       setVideoJobStatus,
@@ -2595,62 +2488,8 @@ async function generateVideo() {
     setVideoStatus(error.message, true);
   } finally {
     state.busy = false;
-    state.videoVramHint = "";
     $("btn-video-generate").disabled = false;
   }
-}
-
-const DEFAULT_VIDEO_SIZES = {
-  vertical: { width: 432, height: 768 },
-  horizontal: { width: 768, height: 432 },
-};
-
-async function loadVideoPresets() {
-  const data = await api("/api/video/presets");
-  state.videoPresets = data.items || [];
-  const select = $("video-preset");
-  const previous = select.value || "manual";
-  select.replaceChildren(option("manual", "Manual"));
-  for (const preset of state.videoPresets) {
-    select.appendChild(option(preset.id, preset.label || preset.id));
-  }
-  setSelectValue(select, previous);
-  updateVideoPresetNote();
-}
-
-function selectedVideoPreset() {
-  return (
-    state.videoPresets.find(
-      (preset) => preset.id === $("video-preset").value
-    ) || null
-  );
-}
-
-function updateVideoAspectLabels() {
-  const preset = selectedVideoPreset();
-  for (const opt of $("video-aspect").options) {
-    const size = (preset && preset[opt.value]) || DEFAULT_VIDEO_SIZES[opt.value];
-    if (!size) {
-      continue;
-    }
-    const label = opt.value === "vertical" ? "Vertical" : "Horizontal";
-    opt.textContent = `${label} ${size.width}×${size.height}`;
-  }
-}
-
-function updateVideoPresetNote() {
-  const note = $("video-preset-note");
-  if ($("video-engine").value !== "wan") {
-    note.textContent = "no aplica a H3 (solo Wan)";
-    updateVideoAspectLabels();
-    return;
-  }
-  const preset = selectedVideoPreset();
-  note.textContent = preset
-    ? `Perfil: ${preset.sampler} · ${preset.scheduler} · ${preset.steps} pasos · ` +
-      `shift ${preset.shift}${preset.note ? ` · ${preset.note}` : ""}`
-    : "Sin preset: perfil certificado (euler · simple · 20 pasos · shift 8)";
-  updateVideoAspectLabels();
 }
 
 function selectedH3Profile() {
@@ -2758,27 +2597,21 @@ async function loadH3Profiles() {
 }
 
 function applyVideoEngine() {
-  const isWan = $("video-engine").value === "wan";
-  const showLast = $("video-mode").value === "flf2v";
-  $("video-mode-field").style.display = "";
-  $("video-aspect-field").style.display = isWan ? "" : "none";
-  $("video-preset-field").style.display = isWan ? "" : "none";
-  $("video-preset").disabled = !isWan;
-  $("video-seconds-field").style.display = isWan ? "" : "none";
-  $("video-motion-field").style.display = isWan ? "" : "none";
-  $("video-motion-actions").style.display = isWan ? "" : "none";
-  $("video-negative-details").style.display = isWan ? "" : "none";
-  $("video-prompt-field").style.display = isWan ? "none" : "";
-  $("video-h3-prompt-actions").style.display = isWan ? "none" : "";
+  const isWan = $("video-engine") ? $("video-engine").value === "wan" : false;
+  const showLast = $("video-mode") && $("video-mode").value === "flf2v";
+  if ($("video-mode-field")) $("video-mode-field").style.display = "";
+  if ($("video-prompt-field")) $("video-prompt-field").style.display = isWan ? "none" : "";
+  if ($("video-h3-prompt-actions")) $("video-h3-prompt-actions").style.display = isWan ? "none" : "";
   $("video-h3-guide").style.display = isWan ? "none" : "";
-  $("video-last-field").style.display = showLast ? "" : "none";
+  if ($("video-last-field")) $("video-last-field").style.display = showLast ? "" : "none";
   for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field", "video-h3-variant-field", "video-h3-sage-field"]) {
-    $(id).style.display = isWan ? "none" : "";
+    const el = $(id);
+    if (el) el.style.display = isWan ? "none" : "";
   }
   for (const id of ["video-h3-profile", "video-h3-seconds", "video-h3-size", "video-h3-variant", "video-h3-sage"]) {
-    $(id).disabled = isWan;
+    const el = $(id);
+    if (el) el.disabled = isWan;
   }
-  updateVideoPresetNote();
   updateH3Notes();
 }
 
@@ -6658,27 +6491,16 @@ function bind() {
     state.videoViewer.page = 1;
     loadVideoViewer();
   });
-  on("btn-motion", "click", improveMotion);
   on("btn-h3-prompt", "click", improveH3Prompt);
   on("btn-video-generate", "click", generateVideo);
   on("btn-video-cancel", "click", cancelJob);
-  on("video-engine", "change", () => {
-    applyVideoEngine();
-    if ($("video-engine").value !== "wan") {
-      setVideoStatus("H3: perfil ClipProj 4B · el preset Wan no aplica");
-    }
-  });
+  on("video-engine", "change", applyVideoEngine);
   on("video-mode", "change", applyVideoEngine);
-  on("video-preset", "change", updateVideoPresetNote);
-  on("video-seconds", "input", updateVideoDurationInfo);
   on("video-h3-profile", "change", updateH3Notes);
   on("video-h3-seconds", "change", updateH3Notes);
   on("video-h3-size", "change", updateH3Notes);
   on("btn-h3-insert-template", "click", insertH3Template);
   on("btn-h3-copy-guide", "click", copyH3Guide);
-  on("video-motion-negative", "input", () => {
-    state.videoNegativeTouched = true;
-  });
   on("editor-prompt", "input", updateEditorControls);
   on("editor-cfg", "input", updateEditorCfgNote);
   on("editor-refs", "change", (event) => {
@@ -6877,12 +6699,8 @@ async function init() {
     }
     await settle("secciones", initPanelSections);
     await settle("seed aleatoria", initSeedRandom);
-    await settle("presets de video", loadVideoPresets);
     await settle("perfiles H3", loadH3Profiles);
-    await settle("video", () => {
-      applyVideoEngine();
-      updateVideoDurationInfo();
-    });
+    await settle("video", applyVideoEngine);
     await settle("editor", () => {
       updateEditorControls();
       updateEditorMode();

@@ -261,42 +261,19 @@
           <input id="video-last-image" type="file" accept="image/png">
         </label>
 
-        <label class="field" id="video-motion-field">
-          <span>Movimiento (qué pasa en el video)</span>
-          <textarea id="video-motion" rows="4" placeholder="Describe qué debe pasar en el video..."></textarea>
-        </label>
-        <div class="enhance-row" id="video-motion-actions">
-          <button id="btn-motion" type="button">Mejorar prompt (video)</button>
-          <label class="inline-field">
-            <span>Rating</span>
-            <select id="video-rating">
-              <option value="nsfw">nsfw</option>
-              <option value="sfw">sfw</option>
-            </select>
-          </label>
-        </div>
-
-        <details id="video-negative-details" class="advanced">
-          <summary>Avanzado: negativo de video</summary>
-          <label class="field">
-            <span>Negativo de video (opcional)</span>
-            <textarea id="video-motion-negative" rows="3" placeholder="automático: anti-censura + anti-menores"></textarea>
-          </label>
-        </details>
-
-        <label class="field" id="video-prompt-field" style="display: none">
+        <label class="field" id="video-prompt-field">
           <span>Prompt H3 (FL2VA)</span>
           <textarea id="video-prompt" rows="3" placeholder="integrated_multimodal_description: ..."></textarea>
         </label>
 
-        <div id="video-h3-prompt-actions" style="display: none">
+        <div id="video-h3-prompt-actions">
           <div class="enhance-row">
             <button id="btn-h3-prompt" type="button">Mejorar prompt (H3)</button>
           </div>
           <p id="h3-prompt-status" class="field-hint"></p>
         </div>
 
-        <details id="video-h3-guide" class="advanced" style="display: none">
+        <details id="video-h3-guide" class="advanced">
           <summary>Guía de prompt H3</summary>
           <div class="section-body">
             <p class="field-hint">H3 espera tres bloques, en una sola toma continua (sin cortes):</p>
@@ -319,40 +296,26 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         </details>
 
         <div class="grid-2">
-          <label class="field" id="video-aspect-field">
-            <span>Aspecto (Wan)</span>
-            <select id="video-aspect">
-              <option value="vertical">Vertical 432×768</option>
-              <option value="horizontal">Horizontal 768×432</option>
-            </select>
-          </label>
-          <label class="field" id="video-preset-field">
-            <span>Preset de vídeo (Wan)</span>
-            <select id="video-preset">
-              <option value="manual">Manual</option>
-            </select>
-            <p id="video-preset-note" class="field-hint"></p>
-          </label>
-          <label class="field" id="video-h3-profile-field" style="display: none">
+          <label class="field" id="video-h3-profile-field">
             <span>Perfil (H3)</span>
             <select id="video-h3-profile"></select>
             <p id="video-h3-profile-note" class="field-hint"></p>
           </label>
-          <label class="field" id="video-h3-seconds-field" style="display: none">
+          <label class="field" id="video-h3-seconds-field">
             <span>Duración (H3)</span>
             <select id="video-h3-seconds"></select>
             <p id="video-h3-seconds-info" class="field-hint"></p>
           </label>
-          <label class="field" id="video-h3-size-field" style="display: none">
+          <label class="field" id="video-h3-size-field">
             <span>Resolución (H3)</span>
             <select id="video-h3-size"></select>
             <p id="video-h3-size-info" class="field-hint"></p>
           </label>
-          <label class="field" id="video-h3-variant-field" style="display: none">
+          <label class="field" id="video-h3-variant-field">
             <span>Pasos (H3)</span>
             <select id="video-h3-variant"></select>
           </label>
-          <label class="field" id="video-h3-sage-field" style="display: none">
+          <label class="field" id="video-h3-sage-field">
             <span>Sage Attention (requiere instalado)</span>
             <input id="video-h3-sage" type="checkbox">
           </label>
@@ -360,13 +323,6 @@ non_diegetic_music: &lt;música o None&gt;</pre>
             <span>Seed</span>
             <input id="video-seed" type="number" value="42">
           </label>
-        </div>
-
-        <div class="field" id="video-seconds-field">
-          <span>Duración (Wan)</span>
-          <input id="video-seconds" type="range" min="1" max="15" step="0.5" value="5">
-          <p id="video-seconds-info" class="field-hint">≈ 5 s → 81 frames (16 fps)</p>
-          <p class="field-warn">VRAM 12 GB: ≤5 s certificado · 6-7.5 s ajustado · &gt;7.5 s riesgo</p>
         </div>
 
       </aside>
