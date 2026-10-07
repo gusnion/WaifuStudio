@@ -14,6 +14,12 @@
       "label": "mejor calidad, ~2×",
       "lora": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
       "steps": 8
+    },
+    {
+      "id": "vdn8",
+      "label": "VDN 8-Pasos (Ultra Rápido)",
+      "lora": null,
+      "steps": 8
     }
   ],
   "resoluciones": {
@@ -65,6 +71,32 @@
       "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
       "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
       "seconds_recomendados": [8, 10, 12, 15]
+    },
+    {
+      "id": "vdn",
+      "label": "VDN (8-Pasos Ultra Rápido)",
+      "note": "Video Delta Net: atención híbrida + 8 pasos, optimizado para RTX 3060",
+      "template": "h3_vdn_8step.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": null,
+      "seconds_recomendados": [5, 8, 10, 12]
+    },
+    {
+      "id": "ref2va",
+      "label": "Ref2VA (Referencias)",
+      "note": "Acondicionamiento por imágenes de referencia para conservar identidad de personaje",
+      "template": "h3_ref2va.api.json",
+      "dit": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": null,
+      "seconds_recomendados": [8]
     }
   ]
 }

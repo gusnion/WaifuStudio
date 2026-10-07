@@ -552,7 +552,7 @@ class H3ProfilesApiTests(ServerVideoTestCase):
         self.assertEqual(data["profiles"], data["items"])
         self.assertEqual(
             [item["id"] for item in data["items"]],
-            ["referencia", "calidad", "ligero"],
+            ["referencia", "calidad", "ligero", "vdn", "ref2va"],
         )
         self.assertEqual(data["seconds"], [5, 8, 10, 12, 15])
         self.assertEqual(
@@ -589,10 +589,12 @@ class H3ProfilesApiTests(ServerVideoTestCase):
     def test_variantes_expuestas(self):
         data = self.make_client().get("/api/video/h3_profiles").json()
         self.assertEqual(
-            [item["id"] for item in data["variants"]], ["turbo4", "turbo8"]
+            [item["id"] for item in data["variants"]], ["turbo4", "turbo8", "vdn8"]
         )
         self.assertEqual(data["variants"][0]["steps"], 4)
         self.assertEqual(data["variants"][1]["steps"], 8)
+        self.assertEqual(data["variants"][2]["steps"], 8)
+        self.assertIsNone(data["variants"][2]["lora"])
         for item in data["variants"]:
             with self.subTest(variant=item["id"]):
                 for field in ("id", "label", "lora", "steps"):
@@ -961,6 +963,48 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         )
         self.assertEqual(job["profile"], "ligero")
         self.assertEqual((job["width"], job["height"]), (1344, 768))
+
+    def test_h3_vdn_profile_y_variante_vdn8(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "profile": "vdn",
+                "variant": "vdn8",
+                "seconds": 8,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(
+            job["template"], str(h3_template_path(resolve_h3_profile("vdn")))
+        )
+        self.assertEqual(job["profile"], "vdn")
+        self.assertEqual(job["variant"], "vdn8")
+
+    def test_h3_ref2va_profile(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "profile": "ref2va",
+                "seconds": 8,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(
+            job["template"], str(h3_template_path(resolve_h3_profile("ref2va")))
+        )
+        self.assertEqual(job["profile"], "ref2va")
 
     def test_h3_sin_variant_usa_turbo4_y_sage_false(self):
         queue = RecordingQueue()

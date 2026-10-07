@@ -21,6 +21,10 @@ class EngineConfig:
     data_dir: Path
 
     @property
+    def comfy_input_dir(self) -> Path:
+        return self.comfy_root / "input"
+
+    @property
     def comfy_output_dir(self) -> Path:
         return self.comfy_root / "output"
 
@@ -62,6 +66,7 @@ def describe(cfg: EngineConfig) -> list[str]:
         f"app_root: {APP_ROOT}",
         f"comfy_root: {cfg.comfy_root}",
         f"comfy_url: {cfg.comfy_url}",
+        f"comfy_input_dir: {cfg.comfy_input_dir}",
         f"comfy_output_dir: {cfg.comfy_output_dir}",
         f"comfy_workflows_dir: {cfg.comfy_workflows_dir}",
         f"comfy_models_dir: {cfg.comfy_models_dir}",

@@ -51,6 +51,14 @@
       "notes": "ClipProjApply (H3 Calidad/Ligero)."
     },
     {
+      "id": "ComfyUI-VDN-H3-Plus",
+      "url": "https://github.com/xmarre/ComfyUI-VDN-H3-Plus.git",
+      "commit": "f0dec6c1f64d5e0e96f1fa191ff3e7abba9df3f0",
+      "required": true,
+      "obsolete": false,
+      "notes": "Video Delta Net (VDN-H3) hybrid attention para MiniMax H3 en 8 pasos con soporte INT8 ConvRot."
+    },
+    {
       "id": "comfyui-controlnet-aux",
       "url": "https://github.com/comfyorg/comfyui-controlnet-aux.git",
       "commit": "83463c2e4b04e729268e57f638b4212e0da4badc",

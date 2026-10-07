@@ -121,7 +121,8 @@ def _parse_variant(entry: Any, index: int) -> dict[str, Any]:
     label = entry.get("label")
     if not isinstance(label, str) or not label.strip():
         raise EngineError(f"variante H3 {variant_id!r}: label invalido: {label!r}")
-    lora = _require_text(entry.get("lora"), f"variante H3 {variant_id!r}: lora")
+    lora_raw = entry.get("lora")
+    lora = None if lora_raw is None else _require_text(lora_raw, f"variante H3 {variant_id!r}: lora")
     steps = entry.get("steps")
     if (
         isinstance(steps, bool)

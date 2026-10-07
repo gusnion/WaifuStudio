@@ -544,14 +544,78 @@ def prepare_wan_flf_graph(
 
 
 def _patch_h3_variant(graph: dict, variant: dict[str, Any]) -> str:
-    """Aplica la variante H3 (``lora_name`` y ``steps``) y devuelve el id del LoRA."""
-    lora_id, lora = _find_node(graph, "LoraLoaderModelOnly")
-    _require_field(lora, "lora_name", lora_id)
-    lora["lora_name"] = variant["lora"]
+    """Aplica la variante H3 (``lora_name`` y ``steps``) y devuelve el id del nodo de modelo."""
     scheduler_id, scheduler = _find_node(graph, "BasicScheduler")
     _require_field(scheduler, "steps", scheduler_id)
     scheduler["steps"] = variant["steps"]
-    return lora_id
+
+    target_lora = variant.get("lora")
+    has_lora_loader = any(
+        isinstance(node, dict) and node.get("class_type") == "LoraLoaderModelOnly"
+        for node in graph.values()
+    )
+
+    if has_lora_loader:
+        lora_id, lora = _find_node(graph, "LoraLoaderModelOnly")
+        if target_lora is not None:
+            _require_field(lora, "lora_name", lora_id)
+            lora["lora_name"] = target_lora
+            return lora_id
+        else:
+            # Variante sin LoRA (ej. vdn8): puentea y retira el LoraLoader
+            upstream = lora.get("model")
+            if not isinstance(upstream, list) or not upstream:
+                raise EngineError(f"nodo {lora_id!r} sin upstream model")
+            for nid, node in graph.items():
+                if isinstance(node, dict) and isinstance(node.get("inputs"), dict):
+                    if node["inputs"].get("model") == [lora_id, 0]:
+                        node["inputs"]["model"] = list(upstream)
+            graph.pop(lora_id, None)
+            return str(upstream[0])
+    else:
+        # Grafo sin LoraLoaderModelOnly (ej. plantillas VDN o Ref2VA)
+        if target_lora is None:
+            # Sin LoRA en variante ni en grafo: localizar el nodo que alimenta a BasicGuider o Scheduler
+            for ctype in ("BasicGuider", "BasicScheduler"):
+                try:
+                    _, consumer = _find_node(graph, ctype)
+                    model_ref = consumer.get("model")
+                    if isinstance(model_ref, list) and model_ref:
+                        return str(model_ref[0])
+                except EngineError:
+                    pass
+            for ctype in ("ApplyVDNH3", "UNETLoader"):
+                for nid, node in graph.items():
+                    if isinstance(node, dict) and node.get("class_type") == ctype:
+                        return nid
+            return "127"
+        else:
+            # La variante especifica un LoRA pero el grafo no tiene LoraLoader: insertar uno
+            upstream = ["127", 0]
+            for ctype in ("BasicGuider", "BasicScheduler"):
+                try:
+                    _, consumer = _find_node(graph, ctype)
+                    model_ref = consumer.get("model")
+                    if isinstance(model_ref, list) and model_ref:
+                        upstream = list(model_ref)
+                        break
+                except EngineError:
+                    pass
+            numeric_ids = [int(nid) for nid in graph if str(nid).isdigit()]
+            new_id = str(max(numeric_ids, default=0) + 1)
+            graph[new_id] = {
+                "class_type": "LoraLoaderModelOnly",
+                "inputs": {
+                    "model": upstream,
+                    "lora_name": target_lora,
+                    "strength_model": 1.0,
+                },
+            }
+            for nid, node in graph.items():
+                if nid != new_id and isinstance(node, dict) and isinstance(node.get("inputs"), dict):
+                    if node["inputs"].get("model") == upstream:
+                        node["inputs"]["model"] = [new_id, 0]
+            return new_id
 
 
 def _patch_h3_sage(graph: dict, lora_id: str) -> str:
@@ -693,6 +757,9 @@ def build_video_graph(job: dict) -> dict:
             frames = h3_frames_for_seconds(require_h3_seconds(seconds))
         else:
             frames = require_h3_frames(frames)
+        variant = job.get("variant")
+        if variant is None and profile.get("lora") is None:
+            variant = "vdn8"
         return prepare_h3_graph(
             graph,
             first_image_name=job.get("image_name"),
@@ -702,7 +769,7 @@ def build_video_graph(job: dict) -> dict:
             width=width,
             height=height,
             frames=frames,
-            variant=job.get("variant"),
+            variant=variant,
             sage=job.get("sage", False),
         )
     template = job.get("template")

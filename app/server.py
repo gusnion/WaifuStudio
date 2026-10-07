@@ -1445,7 +1445,7 @@ def create_app(
             fps_out = None if fps_in is None else fps_in * multiplier
         else:
             entry = get_upscaler(payload.get("model"))
-        input_dir = cfg.comfy_root / "input"
+        input_dir = cfg.comfy_input_dir
         input_dir.mkdir(parents=True, exist_ok=True)
         media_name = f"{uuid.uuid4().hex}{source.suffix.lower()}"
         (input_dir / media_name).write_bytes(source.read_bytes())
@@ -1962,7 +1962,7 @@ def create_app(
                 )
             if width is not None and height is not None:
                 raw = _fit_reference(raw, width, height)
-            input_dir = cfg.comfy_root / "input"
+            input_dir = cfg.comfy_input_dir
             input_dir.mkdir(parents=True, exist_ok=True)
             ref_image = f"{uuid.uuid4().hex}.png"
             (input_dir / ref_image).write_bytes(raw)
@@ -2114,7 +2114,7 @@ def create_app(
             seed = int(seed)
         except (TypeError, ValueError) as exc:
             raise EngineError("seed invalido") from exc
-        input_dir = cfg.comfy_root / "input"
+        input_dir = cfg.comfy_input_dir
         image_name = _write_input_png(input_dir, first_raw)
         last_image_name = (
             _write_input_png(input_dir, last_raw) if last_raw is not None else None
@@ -2363,7 +2363,7 @@ def create_app(
             width = EDITOR_DEFAULT_SIZE
         if height is None:
             height = EDITOR_DEFAULT_SIZE
-        input_dir = cfg.comfy_root / "input"
+        input_dir = cfg.comfy_input_dir
         ref_images = [_write_input_png(input_dir, raw) for raw in raw_refs]
         params = {
             "task": "editor",

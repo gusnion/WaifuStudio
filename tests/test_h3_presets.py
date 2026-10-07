@@ -44,7 +44,7 @@ from app.h3_presets import (
     validate_h3_size,
 )
 
-EXPECTED_IDS = ("referencia", "calidad", "ligero")
+EXPECTED_IDS = ("referencia", "calidad", "ligero", "vdn", "ref2va")
 EXPECTED_FRAMES = {5: 124, 8: 192, 10: 243, 12: 294, 15: 362}
 EXPECTED_VARIANTS = (
     {
@@ -57,6 +57,12 @@ EXPECTED_VARIANTS = (
         "id": "turbo8",
         "label": "mejor calidad, ~2×",
         "lora": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "steps": 8,
+    },
+    {
+        "id": "vdn8",
+        "label": "VDN 8-Pasos (Ultra Rápido)",
+        "lora": None,
         "steps": 8,
     },
 )
@@ -89,6 +95,26 @@ EXPECTED_ASSETS = {
         "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
         "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
         "seconds_recomendados": [8, 10, 12, 15],
+    },
+    "vdn": {
+        "template": "h3_vdn_8step.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+        "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "lora": None,
+        "seconds_recomendados": [5, 8, 10, 12],
+    },
+    "ref2va": {
+        "template": "h3_ref2va.api.json",
+        "dit": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+        "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "lora": None,
+        "seconds_recomendados": [8],
     },
 }
 
@@ -145,10 +171,11 @@ class RegistryFileTests(unittest.TestCase):
             with self.subTest(variant=variant["id"]):
                 self.assertTrue(variant["label"])
                 self.assertTrue(variant["steps"] >= 1)
-                self.assertTrue(
-                    (VARIANT_LORAS_DIR / variant["lora"]).is_file(),
-                    f"falta en disco: {variant['lora']}",
-                )
+                if variant.get("lora") is not None:
+                    self.assertTrue(
+                        (VARIANT_LORAS_DIR / variant["lora"]).is_file(),
+                        f"falta en disco: {variant['lora']}",
+                    )
 
     def test_segundos_y_resoluciones(self):
         self.assertEqual(h3_seconds(), [5, 8, 10, 12, 15])
@@ -190,9 +217,16 @@ class RegistryFileTests(unittest.TestCase):
                 self.assertEqual(path.parent, APP_ROOT / "workflows")
                 self.assertTrue(path.is_file())
                 graph = load_graph(path)
-                self.assertTrue(set(reference) <= set(graph))
-                expected_extra = {"135"} if profile["projection"] else set()
-                self.assertEqual(set(graph) - set(reference), expected_extra)
+                expected_nodes = set(reference)
+                if profile["lora"] is None:
+                    expected_nodes = expected_nodes - {"134"}
+                self.assertTrue(expected_nodes <= set(graph))
+                expected_extra = set()
+                if profile["projection"]:
+                    expected_extra.add("135")
+                if profile["id"] == "vdn":
+                    expected_extra.add("136")
+                self.assertEqual(set(graph) - expected_nodes, expected_extra)
                 self.assertEqual(
                     graph["131"]["class_type"], "MiniMaxH3ImageToVideo"
                 )
@@ -206,11 +240,14 @@ class RegistryFileTests(unittest.TestCase):
                 self.assertEqual(
                     graph["120"]["inputs"]["vae_name"], profile["vae_audio"]
                 )
-                self.assertEqual(graph["134"]["inputs"]["lora_name"], profile["lora"])
+                if profile["lora"] is not None:
+                    self.assertEqual(graph["134"]["inputs"]["lora_name"], profile["lora"])
+                else:
+                    self.assertNotIn("134", graph)
 
     def test_clip_proyectado_alimenta_minimax(self):
         catalog = {profile["id"]: profile for profile in list_h3_profiles()}
-        for profile_id in ("calidad", "ligero"):
+        for profile_id in ("calidad", "ligero", "vdn", "ref2va"):
             with self.subTest(profile_id=profile_id):
                 profile = catalog[profile_id]
                 graph = load_graph(h3_template_path(profile))
@@ -400,8 +437,18 @@ class LoadH3PresetsTests(unittest.TestCase):
         self.assertEqual(loaded["seconds"], [5, 8, 10, 12, 15])
         self.assertEqual(
             [variant["id"] for variant in loaded["variants"].values()],
-            ["turbo4", "turbo8"],
+            ["turbo4", "turbo8", "vdn8"],
         )
+
+    def test_variante_con_lora_null(self):
+        loaded = load_h3_presets(
+            self.write(
+                _valid_catalog(
+                    variants=[{"id": "turbo4", "label": "x", "lora": None, "steps": 4}]
+                )
+            )
+        )
+        self.assertIsNone(loaded["variants"]["turbo4"]["lora"])
 
     def test_ilegible_o_json_invalido(self):
         with self.assertRaises(EngineError):
@@ -445,7 +492,8 @@ class LoadH3PresetsTests(unittest.TestCase):
             ["x"],
             [{"label": "x", "lora": "a.safetensors", "steps": 4}],
             [{"id": "turbo4", "label": "", "lora": "a.safetensors", "steps": 4}],
-            [{"id": "turbo4", "label": "x", "lora": None, "steps": 4}],
+            [{"id": "turbo4", "label": "x", "lora": "", "steps": 4}],
+            [{"id": "turbo4", "label": "x", "lora": 123, "steps": 4}],
             [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": 0}],
             [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": 201}],
             [{"id": "turbo4", "label": "x", "lora": "a.safetensors", "steps": True}],

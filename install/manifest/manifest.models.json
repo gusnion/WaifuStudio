@@ -52,6 +52,30 @@
       "notes": "Opcional R2V (huerfano hoy, guardado para R2V futuro); retirado el 2026-09-26 en F2 y re-descargable; sha256 completo del lfs oid de HF."
     },
     {
+      "id": "h3-ref2va-int8",
+      "filename": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "subdir": "diffusion_models",
+      "bytes": 20970379616,
+      "sha256": null,
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "revision": "main",
+      "license": "URL_VERIFICAR: licencia de Comfy-Org/MiniMax-H3 sin verificar en disco",
+      "required": false,
+      "notes": "DiT H3 Ref2VA int8 ConvRot (Acondicionamiento por Referencia)."
+    },
+    {
+      "id": "vdn-h3-int8-convrot",
+      "filename": "model_int8_convrot_comfyui.safetensors",
+      "subdir": "vdn/vdn-minimax-h3-int8-convrot-comfyui",
+      "bytes": 2254857840,
+      "sha256": null,
+      "url": "URL_VERIFICAR",
+      "revision": "main",
+      "license": "URL_VERIFICAR",
+      "required": false,
+      "notes": "Video Delta Net (VDN-H3) Stage-DMD INT8 ConvRot checkpoint para aceleracion 8 pasos."
+    },
+    {
       "id": "anima-29b-preview",
       "filename": "Anima-2.9B-preview-v1.safetensors",
       "subdir": "diffusion_models",
