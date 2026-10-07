@@ -25,7 +25,7 @@ PROFILES_PATH = APP_ROOT / "registry" / "h3_presets-v1.json"
 DEFAULT_PROFILE = "referencia"
 DEFAULT_VARIANT = "turbo4"
 H3_ASPECTS: tuple[str, ...] = ("vertical", "horizontal")
-H3_SECONDS: tuple[int, ...] = (5, 8, 10, 12, 15)
+H3_SECONDS: tuple[int, ...] = (5, 8, 10, 12, 15, 20, 24, 25, 30)
 H3_VARIANT_STEPS_MAX = 200
 H3_FPS = 24
 H3_FRAME_BASE = 5
@@ -395,18 +395,47 @@ def h3_frames_for_seconds(seconds: Any) -> int:
     """Menor length 5+17n >= ``seconds`` a 24 fps (5 s → 124, 8 s → 192).
 
     10 s → 243, 12 s → 294 y 15 s → 362 (grid entrenado 124-362). EngineError
-    si ``seconds`` no es un numero finito entre 5 y 15.
+    si ``seconds`` no es un numero valido del catalogo.
     """
     if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
         raise EngineError(f"h3: seconds invalido {seconds!r}; usar {h3_seconds()}")
     value = float(seconds)
     if not math.isfinite(value) or not H3_SECONDS[0] <= value <= H3_SECONDS[-1]:
-        raise EngineError(f"h3: seconds fuera de rango (5-15): {seconds!r}")
+        raise EngineError(f"h3: seconds fuera de rango (5-{H3_SECONDS[-1]}): {seconds!r}")
+    if int(value) != value or int(value) not in H3_SECONDS:
+        raise EngineError(f"h3: seconds invalido {seconds!r}; usar {h3_seconds()}")
     needed = math.ceil(value * H3_FPS)
     if needed <= H3_FRAME_BASE:
         return H3_FRAME_BASE
     steps = math.ceil((needed - H3_FRAME_BASE) / H3_FRAME_STEP)
     return H3_FRAME_BASE + H3_FRAME_STEP * steps
+
+
+def split_chained_seconds(seconds: int | float) -> list[int]:
+    """Divide segundos (> 15) en bloques secuenciales <= 15 s para encadenado continuo."""
+    s = int(seconds)
+    if s <= 15:
+        return [s]
+    if s == 20:
+        return [10, 10]
+    if s == 24:
+        return [12, 12]
+    if s == 25:
+        return [10, 15]
+    if s == 30:
+        return [15, 15]
+    blocks: list[int] = []
+    rem = s
+    while rem > 15:
+        cand = 15
+        while cand >= 5 and rem - cand < 5:
+            cand -= 1
+        blocks.append(cand)
+        rem -= cand
+    if rem > 0:
+        blocks.append(rem)
+    return blocks
+
 
 
 def require_h3_frames(frames: Any) -> int:
@@ -507,5 +536,6 @@ __all__ = [
     "require_h3_seconds",
     "resolve_h3_profile",
     "resolve_h3_variant",
+    "split_chained_seconds",
     "validate_h3_size",
 ]

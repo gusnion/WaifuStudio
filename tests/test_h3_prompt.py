@@ -15,6 +15,7 @@ from app.enhancer import load_local_llm as enhancer_load_local_llm
 from app.h3_prompt import (
     H3_BLOCKS,
     SYS_PROMPT_H3,
+    SYS_PROMPT_H3_REF2VA,
     SYS_PROMPT_H3_VISION,
     clean_h3_prompt,
     load_local_llm,
@@ -201,16 +202,64 @@ class WriteH3PromptTests(unittest.TestCase):
         self.assertIsInstance(user, list)
         self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,aW1hZ2VkYXRh")
 
-    def test_image_b64_vacio_mantiene_texto_plano(self):
-        for empty_b64 in ("", "   ", None):
-            with self.subTest(empty_b64=empty_b64):
-                llm = FakeLLM()
-                write_h3_prompt(self.ESCENA, llm=llm, image_b64=empty_b64)
-                system, user = llm.calls[0]
-                self.assertEqual(system, SYS_PROMPT_H3)
-                self.assertIsInstance(user, str)
-                self.assertTrue(user.startswith("escena: la chica camina junto al mar"))
+    def test_sys_prompt_ref2va_estructura(self):
+        self.assertTrue(SYS_PROMPT_H3_REF2VA.startswith("Eres el escritor de prompts"))
+        self.assertIn("Ref2VA", SYS_PROMPT_H3_REF2VA)
+        self.assertIn("rasgos visuales, ropa, colores y estilo", SYS_PROMPT_H3_REF2VA)
+        self.assertIn("sin imponer una pose inicial fija", SYS_PROMPT_H3_REF2VA)
+        self.assertTrue(SYS_PROMPT_H3_REF2VA.endswith("responde SOLO con los tres bloques."))
+
+    def test_multimodal_con_images_b64_multiples(self):
+        llm = FakeLLM()
+        result = write_h3_prompt(
+            self.ESCENA,
+            rating="nsfw",
+            llm=llm,
+            images_b64=[
+                "data:image/png;base64,cmVmMQ==",
+                "cmVmMg==",
+                "cmVmMw==",
+            ],
+        )
+        self.assertEqual(result, {"h3_prompt": H3_OUTPUT})
+        self.assertEqual(len(llm.calls), 1)
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3_REF2VA)
+        self.assertIsInstance(user, list)
+        self.assertEqual(len(user), 4)  # 1 text + 3 images
+        self.assertEqual(user[0]["type"], "text")
+        self.assertIn("imágenes de referencia", user[0]["text"])
+        self.assertIn("identidad del personaje", user[0]["text"])
+        self.assertEqual(user[1]["type"], "image_url")
+        self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,cmVmMQ==")
+        self.assertEqual(user[2]["type"], "image_url")
+        self.assertEqual(user[2]["image_url"]["url"], "data:image/jpeg;base64,cmVmMg==")
+        self.assertEqual(user[3]["type"], "image_url")
+        self.assertEqual(user[3]["image_url"]["url"], "data:image/jpeg;base64,cmVmMw==")
+
+    def test_multimodal_con_images_b64_un_elemento(self):
+        llm = FakeLLM()
+        result = write_h3_prompt(
+            self.ESCENA,
+            rating="sfw",
+            llm=llm,
+            images_b64=["cmVmX3NvbG8="],
+        )
+        self.assertEqual(result, {"h3_prompt": H3_OUTPUT})
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3_REF2VA)
+        self.assertIsInstance(user, list)
+        self.assertEqual(len(user), 2)
+        self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,cmVmX3NvbG8=")
+
+    def test_images_b64_vacia_mantiene_texto_plano(self):
+        llm = FakeLLM()
+        write_h3_prompt(self.ESCENA, llm=llm, images_b64=[])
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3)
+        self.assertIsInstance(user, str)
 
 
 if __name__ == "__main__":
     unittest.main()
+

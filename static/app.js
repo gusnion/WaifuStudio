@@ -83,6 +83,7 @@ const H3_GUIDE_TEXT = [
   "También aplica a FL2VA (primer y último frame).",
 ].join("\n");
 
+const VIDEO_REF_LIMIT = 4;
 const EDITOR_REF_LIMIT = 10;
 const EDITOR_GALLERY_PAGE_SIZE = 5;
 const UPSCALE_GALLERY_PAGE_SIZE = 5;
@@ -162,6 +163,7 @@ const state = {
   videoH3Variants: [],
   videoH3Seconds: [],
   videoH3Resolutions: {},
+  videoRefs: [],
   editorInstalled: false,
   editorRefs: [],
   editorBusy: false,
@@ -2597,6 +2599,7 @@ function startNewVideo() {
   $("video-prompt").value = "";
   $("video-image").value = "";
   $("video-last-image").value = "";
+  clearVideoRefs();
   setSelectValue($("video-h3-profile"), "calidad");
   setSelectValue($("video-h3-variant"), "turbo4");
   $("video-h3-sage").checked = false;
@@ -2606,6 +2609,85 @@ function startNewVideo() {
   applyVideoEngine();
   updateVideoDurationInfo();
   setVideoStatus("Nuevo: opciones por defecto");
+}
+
+function updateVideoRefs() {
+  const list = $("video-refs-list");
+  if (!list) {
+    return;
+  }
+  list.textContent = "";
+  (state.videoRefs || []).forEach((ref, index) => {
+    const item = document.createElement("div");
+    item.className = "editor-ref";
+    const img = document.createElement("img");
+    img.src = ref.url;
+    img.alt = ref.name || `Ref ${index + 1}`;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.textContent = "Quitar";
+    removeBtn.addEventListener("click", () => removeVideoRef(index));
+    item.append(img, removeBtn);
+    list.appendChild(item);
+  });
+}
+
+function removeVideoRef(index) {
+  if (!state.videoRefs) {
+    return;
+  }
+  const removed = state.videoRefs.splice(index, 1)[0];
+  if (removed && removed.url) {
+    URL.revokeObjectURL(removed.url);
+  }
+  updateVideoRefs();
+  setVideoStatus(`Referencias: ${state.videoRefs.length}/${VIDEO_REF_LIMIT}`);
+}
+
+async function addVideoRefs(fileList) {
+  if (!state.videoRefs) {
+    state.videoRefs = [];
+  }
+  const files = Array.from(fileList || []);
+  if (!files.length) {
+    return;
+  }
+  const room = Math.max(0, VIDEO_REF_LIMIT - state.videoRefs.length);
+  if (files.length > room) {
+    setVideoStatus(`Máximo ${VIDEO_REF_LIMIT} referencias de personaje`, true);
+  }
+  for (const file of files.slice(0, room)) {
+    const b64 = await readFileBase64(file);
+    state.videoRefs.push({
+      name: file.name,
+      b64,
+      url: URL.createObjectURL(file),
+    });
+  }
+  const inputEl = $("video-refs-input");
+  if (inputEl) {
+    inputEl.value = "";
+  }
+  updateVideoRefs();
+  if (files.length <= room) {
+    setVideoStatus(`Referencias: ${state.videoRefs.length}/${VIDEO_REF_LIMIT}`);
+  }
+}
+
+function clearVideoRefs() {
+  if (state.videoRefs) {
+    for (const ref of state.videoRefs) {
+      if (ref && ref.url) {
+        URL.revokeObjectURL(ref.url);
+      }
+    }
+    state.videoRefs = [];
+  }
+  const inputEl = $("video-refs-input");
+  if (inputEl) {
+    inputEl.value = "";
+  }
+  updateVideoRefs();
 }
 
 function updateReferencePreview() {
@@ -2653,20 +2735,34 @@ async function improveH3Prompt() {
   }
   try {
     const ratingEl = $("video-rating");
+    const mode = $("video-mode") ? $("video-mode").value : "i2v";
     let image_b64 = null;
-    const videoImageInput = $("video-image");
-    const file = videoImageInput && videoImageInput.files && videoImageInput.files[0];
-    if (file) {
-      const rawB64 = await readFileBase64(file);
-      image_b64 = (typeof rawB64 === "string" && rawB64.includes(","))
-        ? rawB64.split(",", 2)[1]
-        : rawB64;
+    let images_b64 = null;
+    if (mode === "ref2va" && state.videoRefs && state.videoRefs.length > 0) {
+      images_b64 = state.videoRefs.map((ref) => {
+        const raw = ref.b64 || "";
+        return raw.includes(",") ? raw.split(",", 2)[1] : raw;
+      });
+    } else {
+      const videoImageInput = $("video-image");
+      const file = videoImageInput && videoImageInput.files && videoImageInput.files[0];
+      if (file) {
+        const rawB64 = await readFileBase64(file);
+        image_b64 = (typeof rawB64 === "string" && rawB64.includes(","))
+          ? rawB64.split(",", 2)[1]
+          : rawB64;
+      }
     }
-    const data = await postJson("/api/video/h3_prompt", {
+    const reqBody = {
       text,
       rating: (ratingEl && ratingEl.value) || "nsfw",
-      image_b64: image_b64 || null,
-    });
+    };
+    if (images_b64) {
+      reqBody.images_b64 = images_b64;
+    } else if (image_b64) {
+      reqBody.image_b64 = image_b64;
+    }
+    const data = await postJson("/api/video/h3_prompt", reqBody);
     area.value = data.h3_prompt || "";
     button.textContent = "Listo ✓";
     setH3PromptStatus("Generado ✓");
@@ -2709,27 +2805,43 @@ async function generateVideo() {
     return;
   }
   const engine = $("video-engine") ? $("video-engine").value : "h3";
-  const file = $("video-image").files[0];
-  if (!file) {
-    setVideoStatus("Sube la imagen inicial (first frame)", true);
-    return;
+  const mode = $("video-mode") ? $("video-mode").value : "i2v";
+  if (mode === "ref2va") {
+    if (!state.videoRefs || !state.videoRefs.length) {
+      setVideoStatus("Ref2VA requiere al menos una imagen de referencia", true);
+      return;
+    }
+  } else {
+    const file = $("video-image").files[0];
+    if (!file) {
+      setVideoStatus("Sube la imagen inicial (first frame)", true);
+      return;
+    }
   }
   applyRandomSeed("video-seed");
   const payload = {
     engine,
     seed: readVideoSeed(),
+    mode,
   };
   try {
-    payload.image_b64 = await readFileBase64(file);
-    const mode = $("video-mode").value;
-    payload.mode = mode;
-    if (mode === "flf2v") {
-      const last = $("video-last-image").files[0];
-      if (!last) {
-        setVideoStatus("FLF2V requiere la imagen final (last frame)", true);
-        return;
+    if (mode === "ref2va") {
+      payload.profile = "ref2va";
+      payload.ref_images_b64 = state.videoRefs.map((r) => {
+        const raw = r.b64 || "";
+        return raw.includes(",") ? raw.split(",", 2)[1] : raw;
+      });
+    } else {
+      const file = $("video-image").files[0];
+      payload.image_b64 = await readFileBase64(file);
+      if (mode === "flf2v") {
+        const last = $("video-last-image").files[0];
+        if (!last) {
+          setVideoStatus("FLF2V requiere la imagen final (last frame)", true);
+          return;
+        }
+        payload.last_image_b64 = await readFileBase64(last);
       }
-      payload.last_image_b64 = await readFileBase64(last);
     }
     const prompt = $("video-prompt").value.trim();
     if (!prompt) {
@@ -2742,10 +2854,13 @@ async function generateVideo() {
       return;
     }
     payload.prompt = prompt;
-    payload.profile = $("video-h3-profile").value;
+    if (mode !== "ref2va") {
+      payload.profile = $("video-h3-profile").value;
+    }
     payload.variant = $("video-h3-variant").value;
     payload.sage = $("video-h3-sage").checked;
-    payload.seconds = Number($("video-h3-seconds").value);
+    const secondsEl = $("video-h3-seconds") || $("video-seconds");
+    payload.seconds = Number(secondsEl ? secondsEl.value : 8);
     payload.width = size.width;
     payload.height = size.height;
   } catch (error) {
@@ -2879,12 +2994,18 @@ async function loadH3Profiles() {
 
 function applyVideoEngine() {
   const isWan = $("video-engine") ? $("video-engine").value === "wan" : false;
-  const showLast = $("video-mode") && $("video-mode").value === "flf2v";
+  const mode = $("video-mode") ? $("video-mode").value : "i2v";
+  const showFirst = mode !== "ref2va";
+  const showLast = mode === "flf2v";
+  const showRefs = mode === "ref2va";
   if ($("video-mode-field")) $("video-mode-field").style.display = "";
+  if ($("video-image-field")) $("video-image-field").style.display = showFirst ? "" : "none";
+  const lastField = $("video-last-image-field") || $("video-last-field");
+  if (lastField) lastField.style.display = showLast ? "" : "none";
+  if ($("video-refs-box")) $("video-refs-box").style.display = showRefs ? "" : "none";
   if ($("video-prompt-field")) $("video-prompt-field").style.display = isWan ? "none" : "";
   if ($("video-h3-prompt-actions")) $("video-h3-prompt-actions").style.display = isWan ? "none" : "";
   $("video-h3-guide").style.display = isWan ? "none" : "";
-  if ($("video-last-field")) $("video-last-field").style.display = showLast ? "" : "none";
   for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field", "video-h3-variant-field", "video-h3-sage-field"]) {
     const el = $(id);
     if (el) el.style.display = isWan ? "none" : "";
@@ -2892,6 +3013,9 @@ function applyVideoEngine() {
   for (const id of ["video-h3-profile", "video-h3-seconds", "video-h3-size", "video-h3-variant", "video-h3-sage"]) {
     const el = $(id);
     if (el) el.disabled = isWan;
+  }
+  if (mode === "ref2va") {
+    setSelectValue($("video-h3-profile"), "ref2va");
   }
   updateH3Notes();
 }
@@ -7015,6 +7139,16 @@ function bind() {
   on("video-h3-size", "change", updateH3Notes);
   on("btn-h3-insert-template", "click", insertH3Template);
   on("btn-h3-copy-guide", "click", copyH3Guide);
+  on("btn-video-add-refs", "click", () => {
+    const input = $("video-refs-input");
+    if (input) input.click();
+  });
+  on("video-refs-input", "change", (event) => {
+    addVideoRefs(event.target.files).catch((error) =>
+      setVideoStatus(error.message, true)
+    );
+  });
+  on("btn-video-clear-refs", "click", clearVideoRefs);
   on("editor-prompt", "input", updateEditorControls);
   on("editor-cfg", "input", updateEditorCfgNote);
   on("editor-refs", "change", (event) => {

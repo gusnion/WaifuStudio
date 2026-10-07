@@ -259,18 +259,30 @@
           <select id="video-mode">
             <option value="i2v">I2V · solo imagen inicial</option>
             <option value="flf2v">FLF2V · imagen inicial + final</option>
+            <option value="ref2va">Ref2VA · referencias de personaje (R2V)</option>
           </select>
         </label>
 
-        <label class="field">
+        <label class="field" id="video-image-field">
           <span>Imagen inicial (first frame)</span>
           <input id="video-image" type="file" accept="image/png">
           <p id="video-input-hint" class="field-hint">Consejo: genera la imagen de entrada con el mismo aspecto y más resolución que el vídeo (p. ej. VIDEO 9:16 XL 1008×1792 para vertical, VIDEO 16:9 XL 1792×1008 para horizontal). A más resolución de entrada, más detalle en cara y ojos.</p>
         </label>
-        <label class="field" id="video-last-field" style="display: none">
+        <label class="field" id="video-last-image-field" style="display: none">
           <span>Imagen final (last frame)</span>
           <input id="video-last-image" type="file" accept="image/png">
         </label>
+
+        <div id="video-refs-box" class="field hidden" style="display: none">
+          <span>Imágenes de referencia del personaje (hasta 4)</span>
+          <div class="video-refs-actions" style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+            <input id="video-refs-input" type="file" accept="image/*" multiple style="display: none">
+            <button id="btn-video-add-refs" type="button">Añadir referencias (máx. 4)</button>
+            <button id="btn-video-clear-refs" type="button">Limpiar referencias</button>
+          </div>
+          <div id="video-refs-list" class="editor-refs video-refs-list" style="margin-top: 0.5rem;"></div>
+          <p class="field-hint">Hasta 4 imágenes del personaje para acondicionar rasgos, ropa y colores sin fijar la pose.</p>
+        </div>
 
         <label class="field" id="video-prompt-field">
           <span>Prompt H3 (FL2VA)</span>
@@ -314,7 +326,16 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           </label>
           <label class="field" id="video-h3-seconds-field">
             <span>Duración (H3)</span>
-            <select id="video-h3-seconds"></select>
+            <select id="video-h3-seconds" name="video-seconds">
+              <option value="5">5 s</option>
+              <option value="8" selected>8 s</option>
+              <option value="10">10 s</option>
+              <option value="12">12 s</option>
+              <option value="15">15 s</option>
+              <option value="20">20 s</option>
+              <option value="25">25 s</option>
+              <option value="30">30 s</option>
+            </select>
             <p id="video-h3-seconds-info" class="field-hint"></p>
           </label>
           <label class="field" id="video-h3-size-field">

@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
-from app.h3_prompt import SYS_PROMPT_H3, SYS_PROMPT_H3_VISION
+from app.h3_prompt import SYS_PROMPT_H3, SYS_PROMPT_H3_REF2VA, SYS_PROMPT_H3_VISION
 from app.h3_presets import h3_template_path, resolve_h3_profile
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, SYS_PROMPT_MOTION
@@ -302,6 +302,30 @@ class H3PromptRouteTests(ServerVideoTestCase):
         self.assertEqual(system, SYS_PROMPT_H3)
         self.assertIsInstance(user, str)
 
+    def test_ok_con_images_b64_multiples_envia_ref2va(self):
+        llm = FakeLLM(self.H3_OUTPUT)
+        response = self.make_client(llm=llm).post(
+            "/api/video/h3_prompt",
+            json={
+                "text": "la waifu sonríe en la playa",
+                "rating": "nsfw",
+                "images_b64": ["img_a_b64", "img_b_b64"],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"h3_prompt": self.H3_OUTPUT})
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3_REF2VA)
+        self.assertIsInstance(user, list)
+        self.assertEqual(len(user), 3)
+        self.assertEqual(user[0]["type"], "text")
+        self.assertIn("escena: la waifu sonríe en la playa", user[0]["text"])
+        self.assertEqual(user[1]["type"], "image_url")
+        self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,img_a_b64")
+        self.assertEqual(user[2]["type"], "image_url")
+        self.assertEqual(user[2]["image_url"]["url"], "data:image/jpeg;base64,img_b_b64")
+
+
 
 class VideoGenerateValidationTests(ServerVideoTestCase):
     def payload(self, **overrides) -> dict:
@@ -393,6 +417,18 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         )
         self.assert_400(self.payload(mode="flf2v", last_image_b64=None))
         self.assert_400(self.payload(mode="flf2v", last_image_b64="%%%mal%%%"))
+
+    def test_ref2va_sin_referencias_400(self):
+        self.assert_400(
+            {
+                "engine": "h3",
+                "mode": "ref2va",
+                "prompt": "prompt de prueba",
+                "image_b64": None,
+                "ref_images_b64": [],
+            }
+        )
+
 
     def test_h3_flf2v_encola_dos_frames(self):
         queue = RecordingQueue()
@@ -554,7 +590,7 @@ class H3ProfilesApiTests(ServerVideoTestCase):
             [item["id"] for item in data["items"]],
             ["referencia", "calidad", "ligero", "vdn", "ref2va"],
         )
-        self.assertEqual(data["seconds"], [5, 8, 10, 12, 15])
+        self.assertEqual(data["seconds"], [5, 8, 10, 12, 15, 20, 24, 25, 30])
         self.assertEqual(
             data["resolutions"]["vertical"],
             [{"width": 576, "height": 1024}, {"width": 768, "height": 1344}],
@@ -1006,6 +1042,34 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         )
         self.assertEqual(job["profile"], "ref2va")
 
+    def test_video_generate_ref2va_con_ref_images_b64(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "mode": "ref2va",
+                "prompt": "integrated_multimodal_description: test",
+                "ref_images_b64": [PNG_B64, PNG_B64],
+                "seconds": 8,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["engine"], "h3")
+        self.assertEqual(job["mode"], "ref2va")
+        self.assertEqual(job["profile"], "ref2va")
+        self.assertEqual(len(job["ref_image_names"]), 2)
+        self.assertEqual(job["image_name"], job["ref_image_names"][0])
+        self.assertEqual(job["last_image_name"], job["ref_image_names"][1])
+        files = self.input_files()
+        self.assertEqual(len(files), 2)
+        row = self.store.list()[0]
+        self.assertEqual(row["params"]["mode"], "ref2va")
+        self.assertEqual(row["params"]["profile"], "ref2va")
+        self.assertEqual(row["params"]["ref_images"], job["ref_image_names"])
+
+
     def test_h3_sin_variant_usa_turbo4_y_sage_false(self):
         queue = RecordingQueue()
         response = self.make_client(queue=queue).post(
@@ -1260,6 +1324,47 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
         )
         self.assertEqual(graph["126"]["inputs"]["model"], [sage_id, 0])
         self.assertEqual(graph["124"]["inputs"]["model"], [sage_id, 0])
+
+    def test_h3_extended_seconds_chaining(self):
+        transport = FakeVideoTransport(self.config)
+        factory = lambda: ComfyEngine(  # noqa: E731
+            self.config, transport=transport, poll_s=0.01, history_timeout_s=5.0
+        )
+
+        def run_job(job):
+            run_video_generation(
+                job, config=self.config, store=self.store, engine_factory=factory
+            )
+
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(run_job),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/video/generate",
+                json={
+                    "engine": "h3",
+                    "image_b64": PNG_B64,
+                    "prompt": "integrated_multimodal_description: test",
+                    "seconds": 20,
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 5)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            self.assertEqual(len(status["outputs"]), 1)
+            # 20s se divide en [10, 10] -> 2 submits
+            self.assertEqual(len(transport.submits), 2)
+            row = self.store.list()[0]
+            self.assertEqual(row["status"], "done")
+            self.assertEqual(row["params"]["seconds"], 20.0)
+
 
 
 class VideoMediaTests(ServerVideoTestCase):

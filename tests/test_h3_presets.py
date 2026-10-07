@@ -41,6 +41,7 @@ from app.h3_presets import (
     require_h3_seconds,
     resolve_h3_profile,
     resolve_h3_variant,
+    split_chained_seconds,
     validate_h3_size,
 )
 
@@ -141,7 +142,7 @@ def _valid_profile() -> dict:
 def _valid_catalog(entries=None, variants=None) -> dict:
     return {
         "schema_version": "h3_presets/v1",
-        "seconds": [5, 8, 10, 12, 15],
+        "seconds": [5, 8, 10, 12, 15, 20, 24, 25, 30],
         "variants": [dict(variant) for variant in EXPECTED_VARIANTS]
         if variants is None
         else variants,
@@ -178,7 +179,7 @@ class RegistryFileTests(unittest.TestCase):
                     )
 
     def test_segundos_y_resoluciones(self):
-        self.assertEqual(h3_seconds(), [5, 8, 10, 12, 15])
+        self.assertEqual(h3_seconds(), [5, 8, 10, 12, 15, 20, 24, 25, 30])
         resolutions = h3_resolutions()
         self.assertEqual(
             [(r["width"], r["height"]) for r in resolutions["vertical"]],
@@ -375,13 +376,25 @@ class FramesTests(unittest.TestCase):
                     require_h3_frames(value)
 
     def test_require_h3_seconds(self):
-        for value in (5, 8, 10, 12, 15, 8.0):
+        for value in (5, 8, 10, 12, 15, 20, 24, 25, 30, 8.0):
             with self.subTest(value=value):
                 self.assertEqual(require_h3_seconds(value), int(value))
-        for value in (0, 6, 7, 15.5, 16, "8", True, None, float("nan")):
+        for value in (0, 6, 7, 15.5, 16, 21, 29, 31, "8", True, None, float("nan")):
             with self.subTest(value=value):
                 with self.assertRaises(EngineError):
                     require_h3_seconds(value)
+
+    def test_split_chained_seconds(self):
+        self.assertEqual(split_chained_seconds(5), [5])
+        self.assertEqual(split_chained_seconds(8), [8])
+        self.assertEqual(split_chained_seconds(10), [10])
+        self.assertEqual(split_chained_seconds(12), [12])
+        self.assertEqual(split_chained_seconds(15), [15])
+        self.assertEqual(split_chained_seconds(20), [10, 10])
+        self.assertEqual(split_chained_seconds(24), [12, 12])
+        self.assertEqual(split_chained_seconds(25), [10, 15])
+        self.assertEqual(split_chained_seconds(30), [15, 15])
+
 
 
 class SizeTests(unittest.TestCase):
@@ -434,7 +447,7 @@ class LoadH3PresetsTests(unittest.TestCase):
     def test_valido(self):
         loaded = load_h3_presets(self.write(_valid_catalog()))
         self.assertEqual(list(loaded["profiles"]), ["prueba"])
-        self.assertEqual(loaded["seconds"], [5, 8, 10, 12, 15])
+        self.assertEqual(loaded["seconds"], list(H3_SECONDS))
         self.assertEqual(
             [variant["id"] for variant in loaded["variants"].values()],
             ["turbo4", "turbo8", "vdn8"],

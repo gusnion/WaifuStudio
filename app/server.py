@@ -265,10 +265,10 @@ def _decode_image_b64(value: Any, label: str) -> bytes:
     return raw
 
 
-def _write_input_png(input_dir: Any, raw: bytes) -> str:
-    """Escribe la imagen en comfy_root/input con nombre uuid y devuelve el nombre."""
+def _write_input_png(input_dir: Any, raw: bytes, filename: str | None = None) -> str:
+    """Escribe la imagen en comfy_root/input con nombre uuid (o filename) y devuelve el nombre."""
     input_dir.mkdir(parents=True, exist_ok=True)
-    name = f"{uuid.uuid4().hex}.png"
+    name = filename if filename is not None else f"{uuid.uuid4().hex}.png"
     (input_dir / name).write_bytes(raw)
     return name
 
@@ -1710,11 +1710,15 @@ def create_app(
         image_b64 = payload.get("image_b64")
         if image_b64 is not None and not isinstance(image_b64, str):
             image_b64 = None
+        images_b64 = payload.get("images_b64")
+        if images_b64 is not None and not isinstance(images_b64, list):
+            images_b64 = None
         return write_h3_prompt(
             payload.get("text"),
             rating=str(payload.get("rating") or "nsfw"),
             llm=llm,
             image_b64=image_b64,
+            images_b64=images_b64,
         )
 
     @app.get("/api/vision/status")
@@ -2017,12 +2021,14 @@ def create_app(
         if "engine" in payload:
             engine_kind = payload.get("engine")
         else:
-            engine_kind = "wan"
+            engine_kind = "h3" if payload.get("mode") == "ref2va" or payload.get("profile") == "ref2va" else "wan"
         if engine_kind not in ("wan", "h3"):
             raise EngineError("engine invalido; usar wan|h3")
-        mode = payload.get("mode") or "i2v"
-        if mode not in ("i2v", "flf2v"):
-            raise EngineError("mode invalido; usar i2v|flf2v")
+        mode = payload.get("mode") or ("ref2va" if payload.get("profile") == "ref2va" else "i2v")
+        if mode not in ("i2v", "flf2v", "ref2va"):
+            raise EngineError("mode invalido; usar i2v|flf2v|ref2va")
+        if mode == "ref2va" and engine_kind != "h3":
+            raise EngineError("ref2va solo es compatible con motor h3")
         aspect = payload.get("aspect") or "vertical"
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
@@ -2059,7 +2065,8 @@ def create_app(
                 raw_preset = raw_preset.strip()
             if raw_preset not in (None, "", PRESET_MANUAL):
                 raise EngineError("preset de video solo aplica a engine wan")
-            h3_profile = resolve_h3_profile(payload.get("profile"))
+            req_profile = payload.get("profile") or ("ref2va" if mode == "ref2va" else None)
+            h3_profile = resolve_h3_profile(req_profile)
             h3_variant = resolve_h3_variant(payload.get("variant"))
             sage = payload.get("sage")
             if sage is None:
@@ -2080,10 +2087,17 @@ def create_app(
             width, height = validate_h3_size(width, height)
             aspect = h3_aspect(width, height)
             hint = None
-        first_raw = _decode_image_b64(payload.get("image_b64"), "image")
-        last_raw = None
-        if mode == "flf2v":
-            last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
+        ref_images_b64 = payload.get("ref_images_b64") or []
+        if mode == "ref2va":
+            if not ref_images_b64 and not payload.get("image_b64"):
+                raise EngineError("ref2va requiere al menos una imagen de referencia")
+            first_raw = _decode_image_b64(payload.get("image_b64"), "image") if payload.get("image_b64") else None
+            last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image") if payload.get("last_image_b64") else None
+        else:
+            first_raw = _decode_image_b64(payload.get("image_b64"), "image")
+            last_raw = None
+            if mode == "flf2v":
+                last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
         if engine_kind == "wan":
             motion_positive = payload.get("motion_positive")
             if not isinstance(motion_positive, str) or not motion_positive.strip():
@@ -2115,10 +2129,21 @@ def create_app(
         except (TypeError, ValueError) as exc:
             raise EngineError("seed invalido") from exc
         input_dir = cfg.comfy_input_dir
-        image_name = _write_input_png(input_dir, first_raw)
+        ref_image_names: list[str] = []
+        if ref_images_b64:
+            for i, raw_b64 in enumerate(ref_images_b64):
+                ref_bytes = _decode_image_b64(raw_b64, f"ref_{i}")
+                ref_name = _write_input_png(input_dir, ref_bytes, filename=f"ref_{i}.png")
+                ref_image_names.append(ref_name)
+        image_name = _write_input_png(input_dir, first_raw) if first_raw is not None else None
         last_image_name = (
             _write_input_png(input_dir, last_raw) if last_raw is not None else None
         )
+        if mode == "ref2va":
+            if not image_name and ref_image_names:
+                image_name = ref_image_names[0]
+            if not last_image_name and len(ref_image_names) > 1:
+                last_image_name = ref_image_names[1]
         if engine_kind == "h3":
             template = h3_template_path(h3_profile)
         elif mode == "flf2v":
@@ -2142,6 +2167,7 @@ def create_app(
             "seed": seed,
             "image": image_name,
             "last_image": last_image_name,
+            "ref_images": ref_image_names,
             "preset": PRESET_MANUAL if profile is None else profile["preset"],
             **profile_fields,
         }
@@ -2166,6 +2192,7 @@ def create_app(
             "template": str(template),
             "image_name": image_name,
             "last_image_name": last_image_name,
+            "ref_image_names": ref_image_names,
             "motion_positive": motion_positive,
             "motion_negative": motion_negative,
             "prompt": prompt,
