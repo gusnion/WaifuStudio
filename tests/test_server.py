@@ -5409,6 +5409,58 @@ class H3GuideUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
 
+    def test_app_js_improve_h3_prompt_envia_image_b64(self):
+        text = self.make_client().get("/static/app.js").text
+        self.assertIn('$("video-image")', text)
+        self.assertIn("image_b64", text)
+        self.assertIn('postJson("/api/video/h3_prompt"', text)
+
+
+class H3PromptServerTests(ServerTestCase):
+    H3_OUTPUT = (
+        "integrated_multimodal_description: 1girl in school uniform\n"
+        "overall_soundscape: birds chirping\n"
+        "non_diegetic_music: None"
+    )
+
+    def test_h3_prompt_con_image_b64_multimodal(self):
+        calls = []
+
+        def fake_llm(system, user):
+            calls.append((system, user))
+            return self.H3_OUTPUT
+
+        client = self.make_client(llm=fake_llm)
+        res = client.post(
+            "/api/video/h3_prompt",
+            json={"text": "chica", "image_b64": "fakeb64data"},
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"h3_prompt": self.H3_OUTPUT})
+        self.assertEqual(len(calls), 1)
+        system, user = calls[0]
+        self.assertIn("primer fotograma", system)
+        self.assertIsInstance(user, list)
+        self.assertEqual(user[0]["type"], "text")
+        self.assertEqual(user[1]["type"], "image_url")
+        self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,fakeb64data")
+
+    def test_h3_prompt_sin_image_b64_texto_plano(self):
+        calls = []
+
+        def fake_llm(system, user):
+            calls.append((system, user))
+            return self.H3_OUTPUT
+
+        client = self.make_client(llm=fake_llm)
+        res = client.post("/api/video/h3_prompt", json={"text": "chica"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"h3_prompt": self.H3_OUTPUT})
+        self.assertEqual(len(calls), 1)
+        _system, user = calls[0]
+        self.assertIsInstance(user, str)
+        self.assertIn("escena: chica", user)
+
 
 class UpscaleUiStaticTests(ServerTestCase):
     def test_index_incluye_pestana_y_controles_upscaler(self):

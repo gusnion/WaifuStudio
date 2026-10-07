@@ -7,13 +7,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
-from app.h3_prompt import SYS_PROMPT_H3
+from app.h3_prompt import SYS_PROMPT_H3, SYS_PROMPT_H3_VISION
 from app.h3_presets import h3_template_path, resolve_h3_profile
 from app.jobs import JobQueue
 from app.motion import MOTION_NEGATIVE, SYS_PROMPT_MOTION
@@ -35,9 +36,9 @@ PNG_B64 = base64.b64encode(PNG_BYTES).decode("ascii")
 class FakeLLM:
     def __init__(self, output: str = "She walks slowly.") -> None:
         self.output = output
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, Any]] = []
 
-    def __call__(self, system: str, user: str) -> str:
+    def __call__(self, system: str, user: Any) -> str:
         self.calls.append((system, user))
         return self.output
 
@@ -257,6 +258,49 @@ class H3PromptRouteTests(ServerVideoTestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
+
+    def test_ok_con_image_b64_envia_multimodal(self):
+        llm = FakeLLM(self.H3_OUTPUT)
+        response = self.make_client(llm=llm).post(
+            "/api/video/h3_prompt",
+            json={"text": "la chica camina", "rating": "nsfw", "image_b64": "abc123test"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"h3_prompt": self.H3_OUTPUT})
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3_VISION)
+        self.assertIsInstance(user, list)
+        self.assertEqual(len(user), 2)
+        self.assertEqual(user[0]["type"], "text")
+        self.assertIn("escena: la chica camina", user[0]["text"])
+        self.assertIn("primer fotograma", user[0]["text"])
+        self.assertEqual(user[1]["type"], "image_url")
+        self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,abc123test")
+
+    def test_image_b64_null_o_vacio_mantiene_texto_plano(self):
+        for img_val in (None, "", "   "):
+            with self.subTest(img_val=img_val):
+                llm = FakeLLM(self.H3_OUTPUT)
+                response = self.make_client(llm=llm).post(
+                    "/api/video/h3_prompt",
+                    json={"text": "camina", "image_b64": img_val},
+                )
+                self.assertEqual(response.status_code, 200)
+                system, user = llm.calls[0]
+                self.assertEqual(system, SYS_PROMPT_H3)
+                self.assertIsInstance(user, str)
+                self.assertIn("escena: camina", user)
+
+    def test_image_b64_no_string_coaccionado_a_texto(self):
+        llm = FakeLLM(self.H3_OUTPUT)
+        response = self.make_client(llm=llm).post(
+            "/api/video/h3_prompt",
+            json={"text": "camina", "image_b64": 12345},
+        )
+        self.assertEqual(response.status_code, 200)
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3)
+        self.assertIsInstance(user, str)
 
 
 class VideoGenerateValidationTests(ServerVideoTestCase):

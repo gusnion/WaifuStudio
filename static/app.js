@@ -2411,9 +2411,19 @@ async function improveH3Prompt() {
   }
   try {
     const ratingEl = $("video-rating");
+    let image_b64 = null;
+    const videoImageInput = $("video-image");
+    const file = videoImageInput && videoImageInput.files && videoImageInput.files[0];
+    if (file) {
+      const rawB64 = await readFileBase64(file);
+      image_b64 = (typeof rawB64 === "string" && rawB64.includes(","))
+        ? rawB64.split(",", 2)[1]
+        : rawB64;
+    }
     const data = await postJson("/api/video/h3_prompt", {
       text,
       rating: (ratingEl && ratingEl.value) || "nsfw",
+      image_b64: image_b64 || null,
     });
     area.value = data.h3_prompt || "";
     button.textContent = "Listo ✓";

@@ -587,14 +587,14 @@ def _manager() -> LlamaServerManager:
         return _manager_instance
 
 
-def _manager_llm() -> Callable[[str, str], str]:
+def _manager_llm() -> Callable[[str, Any], str]:
     """LLM perezoso contra el servidor gestionado (o externo si hay env).
 
     El primer uso llama a `_manager().ensure()`, que arranca `llama-server`
     si hace falta; el cliente HTTP acepta `temperature` por kwarg.
     """
 
-    def llm(system: str, user: str, temperature: float | None = None) -> str:
+    def llm(system: str, user: Any, temperature: float | None = None) -> str:
         client = load_server_llm(_manager().ensure())
         return client(system, user, temperature=temperature)
 
@@ -1667,10 +1667,14 @@ def create_app(
     async def api_video_h3_prompt(payload: dict = Body(...)) -> Any:
         if llm is None:
             return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
+        image_b64 = payload.get("image_b64")
+        if image_b64 is not None and not isinstance(image_b64, str):
+            image_b64 = None
         return write_h3_prompt(
             payload.get("text"),
             rating=str(payload.get("rating") or "nsfw"),
             llm=llm,
+            image_b64=image_b64,
         )
 
     @app.get("/api/vision/status")

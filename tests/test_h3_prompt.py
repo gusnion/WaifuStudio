@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import unittest
 
+from typing import Any
+
 from app.engine import EngineError
 from app.enhancer import load_local_llm as enhancer_load_local_llm
 from app.h3_prompt import (
     H3_BLOCKS,
     SYS_PROMPT_H3,
+    SYS_PROMPT_H3_VISION,
     clean_h3_prompt,
     load_local_llm,
     write_h3_prompt,
@@ -49,9 +52,9 @@ H3_OUTPUT = (
 class FakeLLM:
     def __init__(self, output: str = H3_OUTPUT) -> None:
         self.output = output
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, Any]] = []
 
-    def __call__(self, system: str, user: str) -> str:
+    def __call__(self, system: str, user: Any) -> str:
         self.calls.append((system, user))
         return self.output
 
@@ -160,6 +163,53 @@ class WriteH3PromptTests(unittest.TestCase):
     def test_llm_sin_bloques_lanza_engine_error(self):
         with self.assertRaises(EngineError):
             write_h3_prompt(self.ESCENA, llm=lambda _s, _u: "   ")
+
+    def test_multimodal_con_image_b64(self):
+        llm = FakeLLM()
+        result = write_h3_prompt(
+            self.ESCENA,
+            rating="nsfw",
+            llm=llm,
+            image_b64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        )
+        self.assertEqual(result, {"h3_prompt": H3_OUTPUT})
+        self.assertEqual(len(llm.calls), 1)
+        system, user = llm.calls[0]
+        self.assertEqual(system, SYS_PROMPT_H3_VISION)
+        self.assertIsInstance(user, list)
+        self.assertEqual(len(user), 2)
+        self.assertEqual(user[0]["type"], "text")
+        self.assertIn("primer fotograma", user[0]["text"])
+        self.assertIn("sujeto, vestimenta, cabello, rasgos faciales, pose, entorno y estilo", user[0]["text"])
+        self.assertIn("escena: la chica camina junto al mar", user[0]["text"])
+        self.assertIn("rating: nsfw", user[0]["text"])
+        self.assertEqual(user[1]["type"], "image_url")
+        self.assertEqual(
+            user[1]["image_url"]["url"],
+            "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        )
+
+    def test_multimodal_con_data_url_prefijo(self):
+        llm = FakeLLM()
+        write_h3_prompt(
+            self.ESCENA,
+            rating="sfw",
+            llm=llm,
+            image_b64="data:image/png;base64,aW1hZ2VkYXRh",
+        )
+        _system, user = llm.calls[0]
+        self.assertIsInstance(user, list)
+        self.assertEqual(user[1]["image_url"]["url"], "data:image/jpeg;base64,aW1hZ2VkYXRh")
+
+    def test_image_b64_vacio_mantiene_texto_plano(self):
+        for empty_b64 in ("", "   ", None):
+            with self.subTest(empty_b64=empty_b64):
+                llm = FakeLLM()
+                write_h3_prompt(self.ESCENA, llm=llm, image_b64=empty_b64)
+                system, user = llm.calls[0]
+                self.assertEqual(system, SYS_PROMPT_H3)
+                self.assertIsInstance(user, str)
+                self.assertTrue(user.startswith("escena: la chica camina junto al mar"))
 
 
 if __name__ == "__main__":
