@@ -23,10 +23,12 @@ filtros NSFW/SFW.
   opcionales; si faltan, la UI lo indica).
 
 ### Vídeo
-- Motor MiniMax H3 con dos modos certificados: **I2V** (solo frame inicial) y **FLF2V** (inicial + final); perfiles Referencia, Calidad y Ligero.
-- Variantes turbo4/turbo8 (LoRA + pasos), toggle SageAttention y audio nativo.
-- Duración de 5 a 15 s por clip (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
-- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM gestionado; **soporte multimodal con visión en first frame** para adaptar el prompt con fidelidad al personaje y vestuario de partida.
+- Motor MiniMax H3 con tres modos certificados: **I2V** (solo frame inicial), **FLF2V** (inicial + final) y **Ref2VA** (hasta 4 imágenes de referencia de personaje/estilo para conservar identidad sin fijar la pose inicial).
+- Aceleración de vanguardia con **VideoDeltaNet (VDN-H3)**: atención híbrida lineal bidireccional + sliding window que genera vídeo completo en solo **8 pasos** con máxima fidelidad de movimiento en la RTX 3060 (12 GB).
+- Perfiles optimizados: **VDN (8-Pasos Ultra Rápido)**, **Ref2VA**, **Calidad**, **Ligero** y **Referencia**, con variantes turbo4/turbo8/vdn8, toggle SageAttention y audio nativo.
+- Duración flexible: clips nativos de 5 a 15 s y **encadenado continuo para vídeos largos** (20, 24, 25, 30 s) con ensamblado automático de segmentos y audio continuo.
+- Inyección directa por filesystem (`ComfyUI/input/`) que elimina latencias de transferencia en servidor local.
+- «Mejorar prompt (H3)»: asistencia con LLM VLM gestionado (Qwen3.5-9B), con visión en first frame para I2V y **análisis multirreferencia para Ref2VA**.
 - Guía H3 insertable en el prompt.
 
 ### Editor
