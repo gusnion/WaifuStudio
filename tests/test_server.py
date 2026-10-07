@@ -962,6 +962,18 @@ class PromptZonesRoutesTests(ServerTestCase):
         self.assertEqual(zones["quality"]["label"], "Calidad/meta")
         self.assertEqual(data["composed"], "masterpiece, nsfw, 1girl, long hair")
 
+    def test_zones_subcats_other(self):
+        response = self.make_client().post(
+            "/api/prompt/zones",
+            json={"text": "1girl, blue sky, tag_desconocido"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        general = next(item for item in data["zones"] if item["id"] == "general")
+        subcats = {item["id"]: item["tags"] for item in general["subcats"]}
+        self.assertEqual(subcats["fondo"], ["blue sky"])
+        self.assertEqual(subcats["other"], ["tag_desconocido"])
+
     def test_zones_texto_vacio(self):
         response = self.make_client().post("/api/prompt/zones", json={"text": ""})
         self.assertEqual(response.status_code, 200)
@@ -5538,6 +5550,7 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
             'scheduler: "normal"',
             "width: 1024",
             "height: 1024",
+            "seed: 42",
             'preprompt: "anima_default"',
             'rating: "nsfw"',
             'video_engine: "h3"',
@@ -5546,6 +5559,8 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
             STARTUP_NEGATIVE_ANTI_MINORS,
             "applyStartupDefaults",
             'await settle("defaults de arranque", applyStartupDefaults);',
+            'other: "Otros"',
+            'const GENERAL_SUBCAT_FALLBACK = "other";',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

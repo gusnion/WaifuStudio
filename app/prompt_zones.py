@@ -7,10 +7,11 @@ general) con las listas canonicas de calidad/safety/sujeto y el catalogo de
 ``split_zones`` reparte el prompt en zonas deduplicando case-insensitive y
 ``compose_zones`` lo vuelve a unir en el orden Anima. ``canonical_order``
 reordena un texto completo por zonas y, dentro de general, por subcategorias
-(``GENERAL_SUBCATS``, sin ``otros`` desde M10-2f: las poses/expresiones NSFW
-son listas curadas con precedencia tipo ``CAMERA_TAGS`` y lo desconocido cae en
-``GENERAL_FALLBACK_SUBCAT``) y ``prompt_options`` publica las opciones de una
-zona para la UI. Sin red, GPU ni dependencias.
+(``GENERAL_SUBCATS``, con subcategoria ``other`` como fallback desde
+M14-2: las poses/expresiones NSFW son listas curadas con precedencia tipo
+``CAMERA_TAGS`` y lo desconocido cae en ``GENERAL_FALLBACK_SUBCAT`` = 'other')
+y ``prompt_options`` publica las opciones de una zona para la UI. Sin red, GPU
+ni dependencias.
 """
 
 from __future__ import annotations
@@ -101,8 +102,8 @@ SUBJECT_TAGS = frozenset(
     }
 )
 
-# Subcategorias de la zona general (M9-C2 + M10-2f), en orden canonico, con label
-# ES. Sin ``otros`` (M10-2f): lo desconocido cae en ``GENERAL_FALLBACK_SUBCAT``.
+# Subcategorias de la zona general (M9-C2 + M10-2f + M14-2), en orden canonico, con label
+# ES. Lo desconocido cae en ``GENERAL_FALLBACK_SUBCAT`` ("other").
 GENERAL_SUBCATS = (
     "rasgos",
     "ropa",
@@ -115,6 +116,7 @@ GENERAL_SUBCATS = (
     "expresiones_nsfw",
     "camara",
     "fondo",
+    "other",
 )
 GENERAL_SUBCAT_LABELS = {
     "rasgos": "Rasgos",
@@ -128,12 +130,12 @@ GENERAL_SUBCAT_LABELS = {
     "expresiones_nsfw": "Expresiones NSFW",
     "camara": "Cámara",
     "fondo": "Fondo/Escena",
+    "other": "Otros",
 }
 
-# Fallback de ``general_subcat`` sin ``otros`` (M10-2f): el bucket de escena
-# cierra el orden general, asi los tags desconocidos no se pierden y quedan al
-# final (misma posicion relativa que tenia ``otros``).
-GENERAL_FALLBACK_SUBCAT = "fondo"
+# Fallback de ``general_subcat`` (M14-2): el bucket 'other' cierra el orden
+# general, dejando 'fondo' exclusivamente para tags de entorno/fondo reales.
+GENERAL_FALLBACK_SUBCAT = "other"
 
 # Grupo del catalogo -> subcategoria; lo no listado (meta) se resuelve por tag
 # o cae en ``GENERAL_FALLBACK_SUBCAT``.
@@ -409,14 +411,15 @@ def classify_tag(tag: str) -> str:
 
 
 def general_subcat(tag: str) -> str:
-    """Subcategoria general de un tag (``GENERAL_SUBCATS``), sin ``otros``.
+    """Subcategoria general de un tag (``GENERAL_SUBCATS``).
 
     ``CAMERA_TAGS`` manda siempre (incluso si el tag esta en el catalogo o en
     las listas curadas); despues mandan las listas curadas (``poses``,
     ``poses_sexuales``, ``poses_sexys``, ``expresiones_nsfw``); si el tag esta
     en el catalogo se usa ``CATALOG_TAG_SUBCAT`` (los 3 tags de fondo del grupo
     ``meta``) o el grupo (``hair/eyes/face/body`` -> rasgos, ``outfit`` ->
-    ropa, ...). Desconocido, no-catalogo o vacio -> ``GENERAL_FALLBACK_SUBCAT``.
+    ropa, ...). Desconocido, no-catalogo o vacio -> ``GENERAL_FALLBACK_SUBCAT``
+    ('other').
     ``EngineError`` si el tag no es str.
     """
     if not isinstance(tag, str):

@@ -35,6 +35,7 @@ const GENERAL_SUBCATS = [
   "expresiones_nsfw",
   "camara",
   "fondo",
+  "other",
 ];
 
 const GENERAL_SUBCAT_LABELS = {
@@ -49,9 +50,10 @@ const GENERAL_SUBCAT_LABELS = {
   expresiones_nsfw: "Expresiones NSFW",
   camara: "Cámara",
   fondo: "Fondo/Escena",
+  other: "Otros",
 };
 
-const GENERAL_SUBCAT_FALLBACK = "fondo";
+const GENERAL_SUBCAT_FALLBACK = "other";
 
 const PAGE_SIZE = 6;
 const IMAGE_PAGE_SIZE = 5;
@@ -98,6 +100,7 @@ const STARTUP_DEFAULTS = {
   scheduler: "normal",
   width: 1024,
   height: 1024,
+  seed: 42,
   preprompt: "anima_default",
   rating: "nsfw",
   negative:
@@ -146,6 +149,7 @@ const state = {
       expresiones_nsfw: [],
       camara: [],
       fondo: [],
+      other: [],
     },
   },
   pendingEnhance: false,
@@ -974,15 +978,29 @@ async function applyModel(modelId) {
   select.value =
     model.preprompt && data.names.includes(model.preprompt) ? model.preprompt : data.default;
   const defaults = model.defaults || {};
-  if (defaults.steps != null) {
-    $("steps").value = defaults.steps;
+  $("steps").value = defaults.steps != null ? defaults.steps : 30;
+  $("cfg").value = defaults.cfg != null ? defaults.cfg : 6.0;
+  setSelectValue($("sampler"), defaults.sampler_name || "euler");
+  setSelectValue($("scheduler"), defaults.scheduler || "normal");
+  setSizeFromDefaults(
+    defaults.width != null ? defaults.width : 1024,
+    defaults.height != null ? defaults.height : 1024
+  );
+  if ($("seed")) {
+    $("seed").value = defaults.seed != null ? defaults.seed : 42;
   }
-  if (defaults.cfg != null) {
-    $("cfg").value = defaults.cfg;
+  const sizeSquare = $("size-square");
+  if (sizeSquare) {
+    if (sizeSquare.type === "radio" || sizeSquare.type === "checkbox") {
+      sizeSquare.checked = true;
+    } else {
+      sizeSquare.value = "cuadro_hd";
+    }
   }
-  setSelectValue($("sampler"), defaults.sampler_name);
-  setSelectValue($("scheduler"), defaults.scheduler);
-  setSizeFromDefaults(defaults.width, defaults.height);
+  const imageSize = $("image-size");
+  if (imageSize) {
+    imageSize.value = "1024x1024";
+  }
   await loadLoras();
   if (!state.negativeTouched) {
     await refreshNegative();
@@ -1005,6 +1023,21 @@ async function applyStartupDefaults() {
   setSelectValue($("sampler"), STARTUP_DEFAULTS.sampler);
   setSelectValue($("scheduler"), STARTUP_DEFAULTS.scheduler);
   setSizeFromDefaults(STARTUP_DEFAULTS.width, STARTUP_DEFAULTS.height);
+  if ($("seed")) {
+    $("seed").value = STARTUP_DEFAULTS.seed != null ? STARTUP_DEFAULTS.seed : 42;
+  }
+  const sizeSquare = $("size-square");
+  if (sizeSquare) {
+    if (sizeSquare.type === "radio" || sizeSquare.type === "checkbox") {
+      sizeSquare.checked = true;
+    } else {
+      sizeSquare.value = "cuadro_hd";
+    }
+  }
+  const imageSize = $("image-size");
+  if (imageSize) {
+    imageSize.value = "1024x1024";
+  }
   state.negativeTouched = false;
   state.negativeBase = STARTUP_DEFAULTS.negative;
   $("negative").value = STARTUP_DEFAULTS.negative;

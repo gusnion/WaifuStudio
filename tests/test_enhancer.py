@@ -579,6 +579,11 @@ class CanonicalPositiveTests(unittest.TestCase):
             "blue sky, long hair, nsfw, 1girl, masterpiece, uncensored",
         )
 
+    def test_canonical_order_ubica_other_tras_fondo(self):
+        ordered = canonical_order("blue sky, tag_desconocido, 1girl, masterpiece")
+        self.assertEqual(ordered, "masterpiece, 1girl, blue sky, tag_desconocido")
+
+
 
 class StrengthPresetTests(unittest.TestCase):
     QUERY = "score_9, quality, safety, nsfw, artist, uncensored"

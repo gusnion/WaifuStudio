@@ -22,12 +22,12 @@
       "license": "Anima License (CircleStone Labs LLC) - no comercial",
       "preprompt": "glossy",
       "defaults": {
-        "steps": 20,
-        "cfg": 4.0,
+        "steps": 30,
+        "cfg": 6.0,
         "sampler_name": "euler",
-        "scheduler": "sgm_uniform",
-        "width": 320,
-        "height": 576
+        "scheduler": "normal",
+        "width": 1024,
+        "height": 1024
       },
       "notes": "Recomendado (28 bloques). sha256=3C1868387A3A1FF504BBB87C33678321965EAD381FCF87AFBD0264DAA600C082 | 4182230656 bytes | dest: ComfyUI/models/diffusion_models/anima_aestheticV11.safetensors"
     },
@@ -45,12 +45,12 @@
       "license": "Anima License (CircleStone Labs LLC) - no comercial",
       "preprompt": "glossy",
       "defaults": {
-        "steps": 20,
-        "cfg": 4.0,
+        "steps": 30,
+        "cfg": 6.0,
         "sampler_name": "euler",
-        "scheduler": "sgm_uniform",
-        "width": 320,
-        "height": 576
+        "scheduler": "normal",
+        "width": 1024,
+        "height": 1024
       },
       "notes": "Recomendado (40 bloques, mas detalle; los LoRA de Anima base de 28 bloques rinden mejor en el modelo de 28). sha256=2ACBD9F1D53845833FC8D5093FC11CC32C3E613A476097B8FAE9BA2B59ED677B | 4182229969 bytes | dest: ComfyUI/models/diffusion_models/oneObsessionAnima_v40.safetensors"
     }
