@@ -553,6 +553,7 @@ class PrepareH3Ref2VAGraphTests(unittest.TestCase):
             "vdn-minimax-h3-int8-convrot-comfyui-ref2va",
         )
         self.assertEqual(patched["136"]["inputs"]["retain_buffers"], "auto")
+        self.assertEqual(patched["136"]["inputs"]["branch_weights"], "auto")
         self.assertEqual(patched["126"]["inputs"]["model"], ["136", 0])
         self.assertEqual(patched["124"]["inputs"]["model"], ["136", 0])
 
@@ -572,6 +573,7 @@ class PrepareH3Ref2VAGraphTests(unittest.TestCase):
         self.assertIn("136", graph)
         self.assertEqual(graph["136"]["class_type"], "ApplyVDNH3")
         self.assertEqual(graph["136"]["inputs"]["retain_buffers"], "auto")
+        self.assertEqual(graph["136"]["inputs"]["branch_weights"], "auto")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@
       "apply_turbo_adapter": true,
       "strength": 1.0,
       "lora_mode": "merge",
-      "branch_weights": "resident",
+      "branch_weights": "auto",
       "retain_buffers": "auto",
       "verbose": false,
       "attention_backend": "grouped"
