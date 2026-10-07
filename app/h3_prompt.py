@@ -10,6 +10,7 @@ ejecuta en tests.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 from app.engine import EngineError
@@ -119,6 +120,20 @@ def clean_h3_prompt(text) -> str:
     for quote in ('"', "'", "`"):
         if len(cleaned) > 1 and cleaned.startswith(quote) and cleaned.endswith(quote):
             cleaned = cleaned[1:-1].strip()
+
+    # Normalizar negritas o marcadores markdown que el LLM a veces inserta antes de los bloques:
+    # Ej: **integrated_multimodal_description:** o - overall_soundscape:
+    cleaned = re.sub(
+        r"(?im)^[\s*\-#]*\**\s*(integrated_multimodal_description|overall_soundscape|non_diegetic_music)\s*(?::\**|\**\s*:)",
+        r"\1:",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?im)^[\s*\-#]*\**\s*non-diegetic_music\s*(?::\**|\**\s*:)",
+        "non_diegetic_music:",
+        cleaned,
+    )
+
     for block in H3_BLOCKS:
         if f"{block}:" not in cleaned:
             raise EngineError(f"h3_prompt: falta el bloque {block}")
@@ -197,9 +212,21 @@ def write_h3_prompt(
         )
         system = SYS_PROMPT_H3
 
-    raw = llm(system, user)
+    try:
+        raw = llm(system, user, max_tokens=512)
+    except TypeError:
+        raw = llm(system, user)
     if not isinstance(raw, str):
         raise EngineError("h3_prompt: el LLM no devolvio texto")
+
+    # Si el LLM genero la descripcion visual y sonido pero omitio el bloque de musica,
+    # completar con el default oficial 'None' para no fallar la peticion al usuario
+    if "integrated_multimodal_description" in raw:
+        if "overall_soundscape" not in raw:
+            raw = raw.rstrip() + "\noverall_soundscape: Quiet environment ambience and subtle clothing movement. No dialogue."
+        if "non_diegetic_music" not in raw and "non-diegetic" not in raw:
+            raw = raw.rstrip() + "\nnon_diegetic_music: None"
+
     return {"h3_prompt": clean_h3_prompt(raw)}
 
 

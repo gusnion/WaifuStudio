@@ -111,6 +111,19 @@ class CleanH3PromptTests(unittest.TestCase):
                 with self.assertRaises(EngineError):
                     clean_h3_prompt(raw)
 
+    def test_normaliza_negritas_markdown_y_guiones(self):
+        raw = (
+            "**integrated_multimodal_description:** a girl\n"
+            "- overall_soundscape: sea waves\n"
+            "non-diegetic_music: None"
+        )
+        self.assertEqual(
+            clean_h3_prompt(raw),
+            "integrated_multimodal_description: a girl\n"
+            "overall_soundscape: sea waves\n"
+            "non_diegetic_music: None",
+        )
+
     def test_texto_vacio_lanza_engine_error(self):
         for value in ("", "   ", "\n\t ", None, 42):
             with self.subTest(value=value):
@@ -124,6 +137,14 @@ class WriteH3PromptTests(unittest.TestCase):
     def test_resultado_limpio(self):
         llm = FakeLLM('  "' + H3_OUTPUT + '"\n')
         result = write_h3_prompt(self.ESCENA, rating="nsfw", llm=llm)
+        self.assertEqual(result, {"h3_prompt": H3_OUTPUT})
+
+    def test_autocompleta_musica_omitida(self):
+        llm = FakeLLM(
+            "integrated_multimodal_description: 1girl walks by the sea at sunset\n"
+            "overall_soundscape: waves and wind"
+        )
+        result = write_h3_prompt(self.ESCENA, rating="sfw", llm=llm)
         self.assertEqual(result, {"h3_prompt": H3_OUTPUT})
 
     def test_mensajes_al_llm(self):

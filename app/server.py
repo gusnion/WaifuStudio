@@ -606,8 +606,18 @@ def _manager_llm() -> Callable[[str, Any], str]:
     si hace falta; el cliente HTTP acepta `temperature` por kwarg.
     """
 
-    def llm(system: str, user: Any, temperature: float | None = None) -> str:
+    def llm(
+        system: str,
+        user: Any,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         client = load_server_llm(_manager().ensure())
+        if max_tokens is not None:
+            try:
+                return client(system, user, temperature=temperature, max_tokens=max_tokens)
+            except TypeError:
+                pass
         return client(system, user, temperature=temperature)
 
     return llm

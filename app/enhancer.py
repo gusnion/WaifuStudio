@@ -612,15 +612,23 @@ def load_server_llm(
     send = transport if transport is not None else _http_transport
     effective_timeout = _resolve_timeout(timeout)
     default_temperature = temperature
+    default_max_tokens = max_tokens
 
-    def llm(system: str, user: str, temperature: float | None = None) -> str:
+    def llm(
+        system: str,
+        user: str,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         payload = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "max_tokens": max_tokens,
+            "max_tokens": (
+                max_tokens if max_tokens is not None else default_max_tokens
+            ),
             "temperature": (
                 temperature if temperature is not None else default_temperature
             ),
