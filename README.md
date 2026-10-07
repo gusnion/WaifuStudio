@@ -26,7 +26,7 @@ filtros NSFW/SFW.
 - Motor MiniMax H3 con dos modos certificados: **I2V** (solo frame inicial) y **FLF2V** (inicial + final); perfiles Referencia, Calidad y Ligero.
 - Variantes turbo4/turbo8 (LoRA + pasos), toggle SageAttention y audio nativo.
 - Duración de 5 a 15 s por clip (5/8/10/12/15) a 24 fps; resoluciones vertical y horizontal hasta 768x1344.
-- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM gestionado.
+- «Mejorar prompt (H3)»: escribe los tres bloques del prompt H3 con el LLM gestionado; **soporte multimodal con visión en first frame** para adaptar el prompt con fidelidad al personaje y vestuario de partida.
 - Guía H3 insertable en el prompt.
 
 ### Editor
@@ -34,17 +34,17 @@ filtros NSFW/SFW.
 - Modo **Editar** por defecto (también Generar) con hasta 10 imágenes de referencia, negativo,
   pasos (10-50) y CFG (1-10, con aviso si sube de 1).
 - Preview del resultado y presets de tamaño de la app, incluida la opción **Original** (hereda el tamaño de la 1ª referencia, ideal para editar el resultado en cadena).
-- **Comparador antes/después**: divisor arrastrable sobre el resultado con zoom 1-8x (rueda) y
-  desplazamiento, para comparar cada edición con la imagen de partida.
+- **Comparador permanente antes/después**: divisor arrastrable con zoom 1-8x (rueda) y desplazamiento; accesible permanentemente en la barra del previewer para comparar con cualquier imagen de la minigalería.
 
 ### Upscaler
 - Imágenes: RealESRGAN x2 con galería visual de origen, archivo local y escalado ×2/×4
   (doble pasada del mismo modelo) más **mejora de detalle** opcional (Suave/Fuerte).
 - Vídeo: upscale por fotogramas e interpolación de FPS con RIFE (x2/x4, conserva el audio).
 
-### Galería y OCs
-- Galería (5ª pestaña) con visor y miniaturas; reusar una generación devuelve sus condiciones, incluida la
-  referencia.
+### Galería, Controles de Preview y OCs
+- Galería (5ª pestaña) con visor y miniaturas; reusar una generación devuelve sus condiciones, incluida la referencia.
+- **Gestión avanzada de Galería**: buscador por etiquetas en tiempo real, borrado individual con eliminación física de archivos en disco, limpieza en lote de generaciones fallidas y gestión visual del catálogo de tags personalizadas de usuario (`data/registry/tags_danbooru.json`) con recarga automática FTS5.
+- **Controles de Preview en todas las pestañas**: botón para colapsar/expandir la tira de miniaturas inferior para ampliar el previewer a pantalla completa; comparador interactivo permanente (Slot 1 fijo y Slot 2 intercambiable desde la minigalería).
 - Acciones por imagen en el visor: **usar referencia**, **animar** (primer frame de vídeo),
   **editar** en el Editor, **escalar** en el Upscaler y descargar; botón de refresco interno.
 - OC Maker: personajes con rasgos, referencias y hoja de vistas; entrenador de LoRA
