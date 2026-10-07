@@ -547,6 +547,13 @@ class PrepareH3Ref2VAGraphTests(unittest.TestCase):
 
         self.assertEqual(patched["126"]["inputs"]["conditioning"], ["131", 0])
         self.assertEqual(patched["125"]["inputs"]["latent_image"], ["131", 1])
+        self.assertEqual(patched["136"]["class_type"], "ApplyVDNH3")
+        self.assertEqual(
+            patched["136"]["inputs"]["vdn_checkpoint"],
+            "vdn-minimax-h3-int8-convrot-comfyui-ref2va",
+        )
+        self.assertEqual(patched["126"]["inputs"]["model"], ["136", 0])
+        self.assertEqual(patched["124"]["inputs"]["model"], ["136", 0])
 
     def test_wiring_minimax_h3_reference_sin_referencias_lanza_error(self):
         ref2va_path = ROOT / "workflows" / "h3_ref2va.api.json"

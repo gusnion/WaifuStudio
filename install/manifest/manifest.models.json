@@ -66,14 +66,14 @@
     {
       "id": "vdn-h3-int8-convrot",
       "filename": "model_int8_convrot_comfyui.safetensors",
-      "subdir": "vdn/vdn-minimax-h3-int8-convrot-comfyui",
-      "bytes": 3500000000,
-      "sha256": null,
-      "url": "https://huggingface.co/drbaph/vdn-minimax-h3-int8-convrot-comfyui",
+      "subdir": "vdn/vdn-minimax-h3-int8-convrot-comfyui/linear_branch",
+      "bytes": 2304371056,
+      "sha256": "1fa18c3ebd94caa804ae3dc3a93df7ae069d8f5c363a00b6eb5288112c0f5abc",
+      "url": "https://huggingface.co/drbaph/vdn-minimax-h3-int8-convrot-comfyui/resolve/main/linear_branch/model_int8_convrot_comfyui.safetensors",
       "revision": "main",
-      "license": "URL_VERIFICAR",
+      "license": "minimax-h3-community-license",
       "required": false,
-      "notes": "Build INT8 ConvRot de OpenVDN stage-dmd-step-250 para ComfyUI-VDN-H3-Plus."
+      "notes": "Build INT8 ConvRot de OpenVDN stage-dmd-step-250 para ComfyUI-VDN-H3-Plus. Para el stage completo (adapters + affine), ejecutar scripts/download_models.py --vdn."
     },
     {
       "id": "anima-29b-preview",

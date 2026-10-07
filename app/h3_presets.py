@@ -37,7 +37,7 @@ H3_MAX_PIXELS = 768 * 1344
 
 PROFILE_COMPATIBLE_VARIANTS: dict[str, set[str]] = {
     "vdn": {"vdn8"},
-    "ref2va": {"vdn8", "turbo4", "turbo8"},
+    "ref2va": {"vdn8"},
     "referencia": {"turbo4", "turbo8"},
     "calidad": {"turbo4", "turbo8"},
     "ligero": {"turbo4", "turbo8"},
@@ -431,12 +431,12 @@ def resolve_h3_variant(
 
     EngineError si ``variant`` no es texto o si el id no existe en el catalogo.
     """
-    is_vdn = False
-    if isinstance(profile, str) and profile.strip() == "vdn":
-        is_vdn = True
-    elif isinstance(profile, dict) and profile.get("id") == "vdn":
-        is_vdn = True
-    default_v = "vdn8" if is_vdn else DEFAULT_VARIANT
+    is_vdn_like = False
+    if isinstance(profile, str) and profile.strip() in ("vdn", "ref2va"):
+        is_vdn_like = True
+    elif isinstance(profile, dict) and profile.get("id") in ("vdn", "ref2va"):
+        is_vdn_like = True
+    default_v = "vdn8" if is_vdn_like else DEFAULT_VARIANT
     if variant is None:
         return get_h3_variant(default_v)
     if not isinstance(variant, str):

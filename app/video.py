@@ -33,6 +33,7 @@ from app.h3_presets import (
     resolve_h3_profile,
     resolve_h3_variant,
     split_chained_seconds,
+    validate_h3_profile_variant,
     validate_h3_size,
 )
 from app.motion import MOTION_NEGATIVE
@@ -691,9 +692,24 @@ def prepare_h3_graph(
     width, height = validate_h3_size(width, height)
     if frames is not None:
         frames = require_h3_frames(frames)
-    variant_entry = resolve_h3_variant(variant)
 
     prepared = copy.deepcopy(graph)
+
+    is_ref2va = any(
+        isinstance(node, dict)
+        and node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+        for node in prepared.values()
+    )
+    is_vdn = any(
+        isinstance(node, dict) and node.get("class_type") == "ApplyVDNH3"
+        for node in prepared.values()
+    )
+    detected_profile = "ref2va" if is_ref2va else "vdn" if is_vdn else None
+    if variant is None and detected_profile in {"ref2va", "vdn"}:
+        variant = "vdn8"
+    if detected_profile and variant:
+        validate_h3_profile_variant(detected_profile, variant)
+    variant_entry = resolve_h3_variant(variant, profile=detected_profile)
 
     # Detectar si es un grafo Ref2VA con MiniMaxH3ReferenceToVideo
     ref_node_id = None

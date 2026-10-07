@@ -24,11 +24,11 @@ filtros NSFW/SFW.
 
 ### Vídeo
 - Motor MiniMax H3 con tres modos certificados: **I2V** (solo frame inicial), **FLF2V** (inicial + final) y **Ref2VA** (hasta 4 imágenes de referencia de personaje/estilo para conservar identidad sin fijar la pose inicial).
-- Aceleración de vanguardia con **VideoDeltaNet (VDN-H3)**: atención híbrida lineal bidireccional + sliding window que genera vídeo completo en solo **8 pasos** con máxima fidelidad de movimiento en la RTX 3060 (12 GB).
-- Perfiles optimizados: **VDN (8-Pasos Ultra Rápido)**, **Ref2VA**, **Calidad**, **Ligero** y **Referencia**, con variantes turbo4/turbo8/vdn8, toggle SageAttention y audio nativo.
-- Duración flexible: clips nativos de 5 a 15 s y **encadenado continuo para vídeos largos** (20, 24, 25, 30 s) con ensamblado automático de segmentos y audio continuo.
+- Aceleración de vanguardia con **VideoDeltaNet (VDN-H3)**: atención híbrida lineal bidireccional + sliding window que genera vídeo completo en solo **8 pasos** (tanto en I2V/FLF2V como en Ref2VA) con máxima fidelidad de movimiento en la RTX 3060 (12 GB).
+- Perfiles optimizados: **VDN (8-Pasos Ultra Rápido)**, **Ref2VA (Referencias)**, **Calidad**, **Ligero** y **Referencia**, con variantes turbo4/turbo8/vdn8, toggle SageAttention y audio nativo.
+- Duración flexible: clips nativos de 5 a 15 s y **encadenado continuo para vídeos largos** (20, 24, 25, 30 s) con ensamblado automático de segmentos mediante FFmpeg y audio continuo.
 - Inyección directa por filesystem (`ComfyUI/input/`) que elimina latencias de transferencia en servidor local.
-- «Mejorar prompt (H3)»: asistencia con LLM VLM gestionado (Qwen3.5-9B), con visión en first frame para I2V y **análisis multirreferencia para Ref2VA**.
+- «Mejorar prompt (H3)»: asistencia con LLM VLM gestionado (Qwen3.5-9B), con visión en first frame para I2V y **análisis multirreferencia con tags `<Picture i>` para Ref2VA**.
 - Guía H3 insertable en el prompt.
 
 ### Editor
@@ -59,7 +59,7 @@ filtros NSFW/SFW.
 | Sistema | Windows 10/11 x64 |
 | GPU | NVIDIA. 8 GB de VRAM para imagen, Editor y Upscaler; 12 GB para vídeo (H3). Probado en RTX 3060 12 GB |
 | Disco | SSD SATA con ~150 GB libres (descarga completa ≈126 GB; ~106 GB son modelos). El paquete LLM incluido añade ~6,5 GB |
-| Programas | `git` para clonar; `curl.exe` ya viene con Windows |
+| Programas | `git` para clonar; `curl.exe` ya viene con Windows; `ffmpeg` opcional en el PATH o en `tools/ffmpeg/ffmpeg.exe` (requerido para encadenado >15 s) |
 
 ## Instalar y usar
 
@@ -122,6 +122,22 @@ a mano.
 
 El destino exacto y el SHA256 de cada uno están en `registry/recommended-v1.json`. Tras
 copiarlos, vuelve a ejecutar `INSTALAR.bat` para registrarlos.
+
+### Modelos de Vídeo M15 (VDN-H3 y Ref2VA DiT)
+
+Para habilitar la aceleración extrema de vídeo en 8 pasos con **VideoDeltaNet (VDN-H3)** o el condicionamiento por referencias multirreferencia **Ref2VA**, ejecuta el script oficial de descarga verificado:
+
+```powershell
+# Descargar pesos VDN-H3 (~2.3 GB: linear_branch + adapters + affine):
+& .\.venv\Scripts\python.exe scripts\download_models.py --vdn
+
+# Descargar checkpoint DiT Ref2VA (~20.9 GB INT8 ConvRot):
+& .\.venv\Scripts\python.exe scripts\download_models.py --ref2va
+
+# O descargar ambos y configurar los stages automáticamente:
+& .\.venv\Scripts\python.exe scripts\download_models.py --all
+```
+
 
 Las LoRAs de terceros no se incluyen. Se añaden desde la app: pestaña Imagen → «Elegir LoRAs»
 → «Gestionar biblioteca» (archivo relativo a `ComfyUI\models\loras`, trigger y peso).

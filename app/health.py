@@ -96,6 +96,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("llm: NO INSTALADO (ver scripts/download_llm.py)")
 
+    from app.video import find_ffmpeg
+    ffmpeg_bin = find_ffmpeg()
+    print(f"ffmpeg: {'OK (' + ffmpeg_bin + ')' if ffmpeg_bin else 'NO ENCONTRADO (encadenado >15 s no disponible)'}")
+
     if not critical_ok:
         print("Resultado: FALLO (falta ruta critica)")
         return 1

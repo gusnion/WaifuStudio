@@ -6,6 +6,22 @@
       "weight_dtype": "default"
     }
   },
+  "136": {
+    "class_type": "ApplyVDNH3",
+    "inputs": {
+      "model": [
+        "127",
+        0
+      ],
+      "vdn_checkpoint": "vdn-minimax-h3-int8-convrot-comfyui-ref2va",
+      "apply_turbo_adapter": true,
+      "strength": 1.0,
+      "lora_mode": "merge",
+      "branch_weights": "resident",
+      "verbose": false,
+      "attention_backend": "grouped"
+    }
+  },
   "128": {
     "class_type": "CLIPLoader",
     "inputs": {
@@ -84,7 +100,7 @@
     "class_type": "BasicGuider",
     "inputs": {
       "model": [
-        "127",
+        "136",
         0
       ],
       "conditioning": [
@@ -103,7 +119,7 @@
     "class_type": "BasicScheduler",
     "inputs": {
       "model": [
-        "127",
+        "136",
         0
       ],
       "scheduler": "simple",

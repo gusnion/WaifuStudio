@@ -138,11 +138,13 @@ from app.upscale import (
     run_upscale,
     run_video_upscale,
 )
+from app import video as video_module
 from app.video import (
     ASPECTS,
     VIDEO_HISTORY_TIMEOUT_S,
     WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
+    find_ffmpeg,
     frames_for_seconds,
     resolve_wan_profile,
     run_video_generation,
@@ -2070,12 +2072,12 @@ def create_app(
             req_profile = payload.get("profile") or ("ref2va" if mode == "ref2va" else None)
             h3_profile = resolve_h3_profile(req_profile)
             raw_variant = payload.get("variant")
-            if h3_profile["id"] == "vdn" and (
+            if h3_profile["id"] in ("vdn", "ref2va") and (
                 raw_variant is None
                 or (isinstance(raw_variant, str) and not raw_variant.strip())
             ):
                 raw_variant = "vdn8"
-            h3_variant = resolve_h3_variant(raw_variant)
+            h3_variant = resolve_h3_variant(raw_variant, profile=h3_profile["id"])
             validate_h3_profile_variant(h3_profile["id"], h3_variant["id"])
             if h3_profile["id"] == "vdn" and not is_vdn_installed(cfg.comfy_root):
                 raise EngineError(
@@ -2090,6 +2092,14 @@ def create_app(
             if raw_seconds is None:
                 raw_seconds = h3_profile["seconds_recomendados"][0]
             seconds = float(require_h3_seconds(raw_seconds))
+            if mode == "ref2va" and seconds > 15:
+                raise EngineError(
+                    "El modo Ref2VA esta optimizado para clips de identidad continua <= 15 s (recomendado: 8 s)"
+                )
+            if seconds > 15 and video_module.find_ffmpeg() is None:
+                raise EngineError(
+                    "El encadenado continuo de videos >15 s requiere ffmpeg en el PATH o en tools/ffmpeg/ffmpeg.exe"
+                )
             frames = h3_frames_for_seconds(seconds)
             width = payload.get("width")
             height = payload.get("height")

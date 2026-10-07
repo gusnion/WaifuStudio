@@ -1604,6 +1604,51 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
         self.assertEqual(job.get("outputs"), [])
         self.assertIsNone(job.get("error"))
 
+    @patch("app.video.find_ffmpeg", return_value=None)
+    def test_h3_extended_seconds_without_ffmpeg_returns_400(self, mock_ffmpeg):
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(lambda job: None),
+            start_worker=False,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/video/generate",
+                json={
+                    "engine": "h3",
+                    "image_b64": PNG_B64,
+                    "prompt": "test prompt",
+                    "seconds": 20,
+                },
+            )
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("requiere ffmpeg", response.json()["error"].lower())
+
+    def test_h3_ref2va_extended_seconds_returns_400(self):
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(lambda job: None),
+            start_worker=False,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/video/generate",
+                json={
+                    "engine": "h3",
+                    "mode": "ref2va",
+                    "ref_images_b64": [PNG_B64],
+                    "prompt": "test prompt",
+                    "seconds": 20,
+                },
+            )
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("ref2va", response.json()["error"].lower())
+            self.assertIn("<= 15 s", response.json()["error"])
+
 
 class FfmpegErrorHandlingTests(unittest.TestCase):
     def setUp(self):

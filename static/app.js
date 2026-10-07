@@ -2966,7 +2966,7 @@ function updateH3Notes() {
 
 const PROFILE_COMPATIBLE_VARIANTS = {
   vdn: ["vdn8"],
-  ref2va: ["vdn8", "turbo4", "turbo8"],
+  ref2va: ["vdn8"],
   referencia: ["turbo4", "turbo8"],
   calidad: ["turbo4", "turbo8"],
   ligero: ["turbo4", "turbo8"],

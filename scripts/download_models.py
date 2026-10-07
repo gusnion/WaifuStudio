@@ -30,6 +30,7 @@ REF2VA_DIT_URL = "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffu
 
 # Especificacion de archivos VDN (~2.3 GB total)
 VDN_TARGET_DIR = COMFY_ROOT / "models" / "vdn" / "vdn-minimax-h3-int8-convrot-comfyui"
+VDN_REF2VA_TARGET_DIR = COMFY_ROOT / "models" / "vdn" / "vdn-minimax-h3-int8-convrot-comfyui-ref2va"
 VDN_FILES = [
     {
         "id": "model_spec",
@@ -189,6 +190,55 @@ def check_models():
     return vdn_ok, ref_ok
 
 
+def setup_ref2va_vdn_stage():
+    """Crea/actualiza el directorio de stage VDN para Ref2VA con adaln_affine correspondiente."""
+    if not (VDN_TARGET_DIR / "linear_branch").is_dir():
+        return False
+    VDN_REF2VA_TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    for f in ["model_spec.json", "metadata.json"]:
+        src_f = VDN_TARGET_DIR / f
+        dst_f = VDN_REF2VA_TARGET_DIR / f
+        if src_f.is_file() and not dst_f.is_file():
+            try:
+                os.link(src_f, dst_f)
+            except OSError:
+                shutil.copy2(src_f, dst_f)
+
+    (VDN_REF2VA_TARGET_DIR / "linear_branch").mkdir(exist_ok=True)
+    for f in (VDN_TARGET_DIR / "linear_branch").iterdir():
+        dst_f = VDN_REF2VA_TARGET_DIR / "linear_branch" / f.name
+        if not dst_f.is_file():
+            try:
+                os.link(f, dst_f)
+            except OSError:
+                shutil.copy2(f, dst_f)
+
+    for sub in ["default", "turbo"]:
+        src_sub = VDN_TARGET_DIR / "adapters" / sub
+        dst_sub = VDN_REF2VA_TARGET_DIR / "adapters" / sub
+        if src_sub.is_dir():
+            dst_sub.mkdir(parents=True, exist_ok=True)
+            for f in src_sub.iterdir():
+                dst_f = dst_sub / f.name
+                if not dst_f.is_file():
+                    try:
+                        os.link(f, dst_f)
+                    except OSError:
+                        shutil.copy2(f, dst_f)
+
+    # El affine de ref2va se coloca como adaln_affine.safetensors en el stage de ref2va
+    ref_affine_src = VDN_TARGET_DIR / "adaln_affine_ref2va.safetensors"
+    if not ref_affine_src.is_file():
+        ref_affine_src = REF2VA_TARGET_DIR / "adaln_affine_ref2va.safetensors"
+    dst_affine = VDN_REF2VA_TARGET_DIR / "adaln_affine.safetensors"
+    if ref_affine_src.is_file() and not dst_affine.is_file():
+        try:
+            os.link(ref_affine_src, dst_affine)
+        except OSError:
+            shutil.copy2(ref_affine_src, dst_affine)
+    return True
+
+
 def download_vdn(curl_bin: str) -> bool:
     print(f"\n=== Descargando pesos y config de VDN-H3 (INT8 ConvRot) ===")
     print(f"Destino: {VDN_TARGET_DIR}")
@@ -205,6 +255,8 @@ def download_vdn(curl_bin: str) -> bool:
         if not ok:
             all_ok = False
             break
+    if all_ok:
+        setup_ref2va_vdn_stage()
     return all_ok
 
 

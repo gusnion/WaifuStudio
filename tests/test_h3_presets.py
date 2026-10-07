@@ -229,7 +229,7 @@ class RegistryFileTests(unittest.TestCase):
                 expected_extra = set()
                 if profile["projection"]:
                     expected_extra.add("135")
-                if profile["id"] == "vdn":
+                if profile["id"] in {"vdn", "ref2va"}:
                     expected_extra.add("136")
                 if profile["id"] == "ref2va":
                     expected_extra.update({"142", "143"})
@@ -616,9 +616,7 @@ class LoadH3PresetsTests(unittest.TestCase):
 class H3ProfileVariantCompatibilityTests(unittest.TestCase):
     def test_compatible_variants_mapping(self):
         self.assertEqual(PROFILE_COMPATIBLE_VARIANTS["vdn"], {"vdn8"})
-        self.assertEqual(
-            PROFILE_COMPATIBLE_VARIANTS["ref2va"], {"vdn8", "turbo4", "turbo8"}
-        )
+        self.assertEqual(PROFILE_COMPATIBLE_VARIANTS["ref2va"], {"vdn8"})
         self.assertEqual(
             PROFILE_COMPATIBLE_VARIANTS["referencia"], {"turbo4", "turbo8"}
         )
@@ -633,8 +631,6 @@ class H3ProfileVariantCompatibilityTests(unittest.TestCase):
         valid = [
             ("vdn", "vdn8"),
             ("ref2va", "vdn8"),
-            ("ref2va", "turbo4"),
-            ("ref2va", "turbo8"),
             ("referencia", "turbo4"),
             ("referencia", "turbo8"),
             ("calidad", "turbo4"),
@@ -650,6 +646,8 @@ class H3ProfileVariantCompatibilityTests(unittest.TestCase):
         invalid = [
             ("vdn", "turbo4"),
             ("vdn", "turbo8"),
+            ("ref2va", "turbo4"),
+            ("ref2va", "turbo8"),
             ("referencia", "vdn8"),
             ("calidad", "vdn8"),
             ("ligero", "vdn8"),
