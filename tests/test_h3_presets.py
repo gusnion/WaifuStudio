@@ -24,7 +24,9 @@ from app.h3_presets import (
     H3_MAX_PIXELS,
     H3_MIN_FRAMES,
     H3_SECONDS,
+    PROFILE_COMPATIBLE_VARIANTS,
     PROFILES_PATH,
+    get_h3_presets,
     get_h3_profile,
     get_h3_variant,
     h3_aspect,
@@ -34,6 +36,7 @@ from app.h3_presets import (
     h3_resolutions,
     h3_seconds,
     h3_template_path,
+    is_vdn_installed,
     list_h3_profiles,
     list_h3_variants,
     load_h3_presets,
@@ -42,6 +45,7 @@ from app.h3_presets import (
     resolve_h3_profile,
     resolve_h3_variant,
     split_chained_seconds,
+    validate_h3_profile_variant,
     validate_h3_size,
 )
 
@@ -227,10 +231,15 @@ class RegistryFileTests(unittest.TestCase):
                     expected_extra.add("135")
                 if profile["id"] == "vdn":
                     expected_extra.add("136")
+                if profile["id"] == "ref2va":
+                    expected_extra.update({"142", "143"})
                 self.assertEqual(set(graph) - expected_nodes, expected_extra)
-                self.assertEqual(
-                    graph["131"]["class_type"], "MiniMaxH3ImageToVideo"
+                expected_class = (
+                    "MiniMaxH3ReferenceToVideo"
+                    if profile["id"] == "ref2va"
+                    else "MiniMaxH3ImageToVideo"
                 )
+                self.assertEqual(graph["131"]["class_type"], expected_class)
                 self.assertEqual(graph["131"]["inputs"]["width"], 576)
                 self.assertEqual(graph["131"]["inputs"]["height"], 1024)
                 self.assertEqual(graph["131"]["inputs"]["length"], 192)
@@ -602,6 +611,87 @@ class LoadH3PresetsTests(unittest.TestCase):
 
     def test_catalogo_cacheado(self):
         self.assertIs(h3_presets_module._catalog(), h3_presets_module._catalog())
+
+
+class H3ProfileVariantCompatibilityTests(unittest.TestCase):
+    def test_compatible_variants_mapping(self):
+        self.assertEqual(PROFILE_COMPATIBLE_VARIANTS["vdn"], {"vdn8"})
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["ref2va"], {"vdn8", "turbo4", "turbo8"}
+        )
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["referencia"], {"turbo4", "turbo8"}
+        )
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["calidad"], {"turbo4", "turbo8"}
+        )
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["ligero"], {"turbo4", "turbo8"}
+        )
+
+    def test_validate_h3_profile_variant_success(self):
+        valid = [
+            ("vdn", "vdn8"),
+            ("ref2va", "vdn8"),
+            ("ref2va", "turbo4"),
+            ("ref2va", "turbo8"),
+            ("referencia", "turbo4"),
+            ("referencia", "turbo8"),
+            ("calidad", "turbo4"),
+            ("calidad", "turbo8"),
+            ("ligero", "turbo4"),
+            ("ligero", "turbo8"),
+        ]
+        for p, v in valid:
+            with self.subTest(profile=p, variant=v):
+                validate_h3_profile_variant(p, v)
+
+    def test_validate_h3_profile_variant_rejects_incompatible(self):
+        invalid = [
+            ("vdn", "turbo4"),
+            ("vdn", "turbo8"),
+            ("referencia", "vdn8"),
+            ("calidad", "vdn8"),
+            ("ligero", "vdn8"),
+            ("desconocido", "turbo4"),
+            ("calidad", "desconocida"),
+        ]
+        for p, v in invalid:
+            with self.subTest(profile=p, variant=v):
+                with self.assertRaises(EngineError):
+                    validate_h3_profile_variant(p, v)
+
+    def test_resolve_h3_variant_default_for_vdn(self):
+        res = resolve_h3_variant(None, profile="vdn")
+        self.assertEqual(res["id"], "vdn8")
+        res_empty = resolve_h3_variant("", profile="vdn")
+        self.assertEqual(res_empty["id"], "vdn8")
+        res_other = resolve_h3_variant(None, profile="calidad")
+        self.assertEqual(res_other["id"], DEFAULT_VARIANT)
+
+    def test_is_vdn_installed(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            # Sin carpeta vdn
+            self.assertFalse(is_vdn_installed(tmp_root))
+            # Con carpeta vdn vacía
+            vdn_models = tmp_root / "models" / "vdn"
+            vdn_models.mkdir(parents=True)
+            self.assertFalse(is_vdn_installed(tmp_root))
+            sub = vdn_models / "model_checkpoint"
+            sub.mkdir()
+            self.assertFalse(is_vdn_installed(tmp_root))
+            # Con subcarpeta linear_branch
+            (sub / "linear_branch").mkdir()
+            self.assertTrue(is_vdn_installed(tmp_root))
+
+    def test_get_h3_presets_availability_flag(self):
+        presets = get_h3_presets()
+        for p in presets:
+            self.assertIn("available", p)
+            self.assertIsInstance(p["available"], bool)
+            if p["id"] == "vdn" and not p["available"]:
+                self.assertIn("missing_reason", p)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import Body, FastAPI, Request
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -65,9 +65,11 @@ from app.h3_presets import (
     h3_default_size,
     h3_frames_for_seconds,
     h3_template_path,
+    is_vdn_installed,
     require_h3_seconds,
     resolve_h3_profile,
     resolve_h3_variant,
+    validate_h3_profile_variant,
     validate_h3_size,
 )
 from app.jobs import JobQueue
@@ -1270,7 +1272,7 @@ def create_app(
     @app.get("/api/video/h3_profiles")
     async def api_video_h3_profiles() -> dict:
         """Perfiles H3 (M10-2c-1): catalogo + variantes, segundos y resoluciones."""
-        catalog = h3_catalog()
+        catalog = h3_catalog(cfg.comfy_root)
         items = catalog["profiles"]
         return {
             "items": items,
@@ -2067,7 +2069,18 @@ def create_app(
                 raise EngineError("preset de video solo aplica a engine wan")
             req_profile = payload.get("profile") or ("ref2va" if mode == "ref2va" else None)
             h3_profile = resolve_h3_profile(req_profile)
-            h3_variant = resolve_h3_variant(payload.get("variant"))
+            raw_variant = payload.get("variant")
+            if h3_profile["id"] == "vdn" and (
+                raw_variant is None
+                or (isinstance(raw_variant, str) and not raw_variant.strip())
+            ):
+                raw_variant = "vdn8"
+            h3_variant = resolve_h3_variant(raw_variant)
+            validate_h3_profile_variant(h3_profile["id"], h3_variant["id"])
+            if h3_profile["id"] == "vdn" and not is_vdn_installed(cfg.comfy_root):
+                raise EngineError(
+                    "los pesos de VDN deben instalarse previamente en ComfyUI/models/vdn"
+                )
             sage = payload.get("sage")
             if sage is None:
                 sage = False
@@ -2131,9 +2144,12 @@ def create_app(
         input_dir = cfg.comfy_input_dir
         ref_image_names: list[str] = []
         if ref_images_b64:
+            ref_batch_id = uuid.uuid4().hex
             for i, raw_b64 in enumerate(ref_images_b64):
                 ref_bytes = _decode_image_b64(raw_b64, f"ref_{i}")
-                ref_name = _write_input_png(input_dir, ref_bytes, filename=f"ref_{i}.png")
+                ref_name = _write_input_png(
+                    input_dir, ref_bytes, filename=f"ref_{ref_batch_id}_{i}.png"
+                )
                 ref_image_names.append(ref_name)
         image_name = _write_input_png(input_dir, first_raw) if first_raw is not None else None
         last_image_name = (
@@ -2512,6 +2528,9 @@ def create_app(
             engine.interrupt()
         if record is not None:
             record["status"] = "cancelled"
+            tracker = record.get("tracker")
+            if tracker is not None:
+                tracker.is_cancelled = True
         if gen_id is not None:
             app.state.store.update(gen_id, status="cancelled")
         return {"status": "cancelled"}
@@ -2551,6 +2570,11 @@ def create_app(
         row = st.get(id)
         if row is None:
             return JSONResponse(status_code=404, content={"error": "no encontrado"})
+        if row.get("status") in ("queued", "running"):
+            raise HTTPException(
+                status_code=409,
+                detail="No se puede eliminar una generacion en cola o en ejecucion",
+            )
 
         base_root = cfg.data_dir.resolve()
         candidate_dirs = [

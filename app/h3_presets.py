@@ -35,6 +35,59 @@ H3_MAX_FRAMES = 362
 H3_SIZE_STEP = 32
 H3_MAX_PIXELS = 768 * 1344
 
+PROFILE_COMPATIBLE_VARIANTS: dict[str, set[str]] = {
+    "vdn": {"vdn8"},
+    "ref2va": {"vdn8", "turbo4", "turbo8"},
+    "referencia": {"turbo4", "turbo8"},
+    "calidad": {"turbo4", "turbo8"},
+    "ligero": {"turbo4", "turbo8"},
+}
+
+
+def validate_h3_profile_variant(profile_id: str, variant_id: str) -> None:
+    """Valida compatibilidad estricta perfil <-> variante."""
+    if not isinstance(profile_id, str) or not isinstance(variant_id, str):
+        raise EngineError(
+            f"perfil o variante invalido: profile_id={profile_id!r}, variant_id={variant_id!r}"
+        )
+    p_id = profile_id.strip()
+    v_id = variant_id.strip()
+    allowed = PROFILE_COMPATIBLE_VARIANTS.get(p_id)
+    if allowed is None:
+        raise EngineError(f"perfil H3 desconocido: {profile_id!r}")
+    if v_id not in allowed:
+        raise EngineError(
+            f"la variante {v_id!r} no es compatible con el perfil {p_id!r}; "
+            f"variantes permitidas: {sorted(allowed)}"
+        )
+
+
+def is_vdn_installed(comfy_root: Path | str | None = None) -> bool:
+    """Comprueba si existe el directorio models/vdn y contiene al menos una carpeta con linear_branch."""
+    if comfy_root is None:
+        vdn_dir = APP_ROOT / "ComfyUI" / "models" / "vdn"
+    else:
+        root = Path(comfy_root)
+        if root.name == "vdn":
+            vdn_dir = root
+        elif (root / "models" / "vdn").exists():
+            vdn_dir = root / "models" / "vdn"
+        elif (root / "vdn").exists():
+            vdn_dir = root / "vdn"
+        else:
+            vdn_dir = root / "models" / "vdn"
+    if not vdn_dir.is_dir():
+        return False
+    try:
+        for child in vdn_dir.iterdir():
+            if child.is_dir() and (child / "linear_branch").is_dir():
+                return True
+        if (vdn_dir / "linear_branch").is_dir():
+            return True
+    except OSError:
+        return False
+    return False
+
 
 def _require_text(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
@@ -285,15 +338,31 @@ def _catalog() -> dict[str, Any]:
     return _CATALOG
 
 
-def h3_catalog() -> dict[str, Any]:
+def h3_catalog(comfy_root: Path | str | None = None) -> dict[str, Any]:
     """Copia serializable del catalogo completo (segundos, resoluciones, variantes y perfiles)."""
     catalog = _catalog()
+    vdn_ok = is_vdn_installed(comfy_root)
+    profiles = []
+    for p in catalog["profiles"].values():
+        item = copy.deepcopy(p)
+        if item.get("id") == "vdn":
+            item["available"] = vdn_ok
+            if not vdn_ok:
+                item["missing_reason"] = "Pesos VDN no encontrados en ComfyUI/models/vdn"
+        else:
+            item["available"] = True
+        profiles.append(item)
     return {
         "seconds": list(catalog["seconds"]),
         "resolutions": copy.deepcopy(catalog["resolutions"]),
         "variants": [copy.deepcopy(v) for v in catalog["variants"].values()],
-        "profiles": [copy.deepcopy(p) for p in catalog["profiles"].values()],
+        "profiles": profiles,
     }
+
+
+def get_h3_presets(comfy_root: Path | str | None = None) -> list[dict[str, Any]]:
+    """Devuelve la lista de perfiles anotada con su disponibilidad."""
+    return h3_catalog(comfy_root)["profiles"]
 
 
 def list_h3_profiles() -> list[dict[str, Any]]:
@@ -355,18 +424,26 @@ def get_h3_variant(variant_id: object) -> dict[str, Any]:
     return entry
 
 
-def resolve_h3_variant(variant: object = None) -> dict[str, Any]:
-    """Variante por id; ausente/``""`` = ``turbo4`` (reproduce jobs viejos).
+def resolve_h3_variant(
+    variant: object = None, profile: object = None
+) -> dict[str, Any]:
+    """Variante por id; ausente/``""`` = ``turbo4`` (o ``vdn8`` si el perfil es vdn).
 
     EngineError si ``variant`` no es texto o si el id no existe en el catalogo.
     """
+    is_vdn = False
+    if isinstance(profile, str) and profile.strip() == "vdn":
+        is_vdn = True
+    elif isinstance(profile, dict) and profile.get("id") == "vdn":
+        is_vdn = True
+    default_v = "vdn8" if is_vdn else DEFAULT_VARIANT
     if variant is None:
-        return get_h3_variant(DEFAULT_VARIANT)
+        return get_h3_variant(default_v)
     if not isinstance(variant, str):
         raise EngineError(f"variante H3 desconocida: {variant!r}")
     value = variant.strip()
     if not value:
-        return get_h3_variant(DEFAULT_VARIANT)
+        return get_h3_variant(default_v)
     return get_h3_variant(value)
 
 
@@ -519,7 +596,9 @@ __all__ = [
     "H3_SECONDS",
     "H3_SIZE_STEP",
     "H3_VARIANT_STEPS_MAX",
+    "PROFILE_COMPATIBLE_VARIANTS",
     "PROFILES_PATH",
+    "get_h3_presets",
     "get_h3_profile",
     "get_h3_variant",
     "h3_aspect",
@@ -529,6 +608,7 @@ __all__ = [
     "h3_resolutions",
     "h3_seconds",
     "h3_template_path",
+    "is_vdn_installed",
     "list_h3_profiles",
     "list_h3_variants",
     "load_h3_presets",
@@ -537,5 +617,6 @@ __all__ = [
     "resolve_h3_profile",
     "resolve_h3_variant",
     "split_chained_seconds",
+    "validate_h3_profile_variant",
     "validate_h3_size",
 ]

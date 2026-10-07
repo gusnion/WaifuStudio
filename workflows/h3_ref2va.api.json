@@ -37,7 +37,7 @@
     }
   },
   "131": {
-    "class_type": "MiniMaxH3ImageToVideo",
+    "class_type": "MiniMaxH3ReferenceToVideo",
     "inputs": {
       "clip": [
         "135",
@@ -47,16 +47,29 @@
         "119",
         0
       ],
+      "audio_vae": [
+        "120",
+        0
+      ],
       "prompt": "integrated_multimodal_description: [Ref2VA] Generate a consistent video sequence preserving character identity, outfit and features from the reference input. Natural motion without abrupt cuts.\noverall_soundscape: Quiet environment ambience and subtle movement. No dialogue.\nnon_diegetic_music: None.",
       "width": 576,
       "height": 1024,
       "length": 192,
-      "first_frame": [
+      "ref_image_size": "match",
+      "ref_image_1": [
         "140",
         0
       ],
-      "last_frame": [
+      "ref_image_2": [
         "141",
+        0
+      ],
+      "ref_image_3": [
+        "142",
+        0
+      ],
+      "ref_image_4": [
+        "143",
         0
       ]
     }
@@ -183,13 +196,25 @@
   "140": {
     "class_type": "LoadImage",
     "inputs": {
-      "image": "frames/FIRST_FRAME.png"
+      "image": "frames/REF_1.png"
     }
   },
   "141": {
     "class_type": "LoadImage",
     "inputs": {
-      "image": "frames/LAST_FRAME.png"
+      "image": "frames/REF_2.png"
+    }
+  },
+  "142": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "frames/REF_3.png"
+    }
+  },
+  "143": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "frames/REF_4.png"
     }
   }
 }

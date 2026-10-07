@@ -5894,6 +5894,19 @@ class GalleryDeleteRoutesTests(ServerTestCase):
         self.assertEqual(res.status_code, 404)
         self.assertIn("no encontrado", res.json()["error"])
 
+    def test_delete_gallery_item_409_when_queued_or_running(self):
+        client = self.make_client()
+        for status in ("queued", "running"):
+            with self.subTest(status=status):
+                gen_id = self.store.add("m1", f"item {status}", status=status)
+                res = client.delete(f"/api/gallery/{gen_id}")
+                self.assertEqual(res.status_code, 409)
+                self.assertIn(
+                    "No se puede eliminar una generacion en cola o en ejecucion",
+                    res.json()["detail"],
+                )
+                self.assertIsNotNone(self.store.get(gen_id))
+
     def test_clean_failed(self):
         self.store.add("m1", "done item", status="done")
         self.store.add("m1", "error item", status="error")

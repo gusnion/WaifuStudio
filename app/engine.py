@@ -26,6 +26,10 @@ class EngineError(RuntimeError):
     """Fallo generico del cliente del engine."""
 
 
+class JobCancelledError(EngineError):
+    """Ejecucion cancelada o interrumpida en ComfyUI."""
+
+
 class EngineRejected(EngineError):
     """Rechazo 4xx al enviar un grafo (submit)."""
 
@@ -138,7 +142,9 @@ class ComfyEngine:
                 state = status.get("status_str") if isinstance(status, dict) else None
                 if state == "success":
                     return entry
-                if state in ("error", "cancelled"):
+                if state == "cancelled":
+                    raise JobCancelledError(self._execution_detail(entry))
+                if state == "error":
                     raise EngineError(self._execution_detail(entry))
             if time.monotonic() >= deadline:
                 raise EngineTimeout(
@@ -293,5 +299,6 @@ __all__ = [
     "EngineError",
     "EngineRejected",
     "EngineTimeout",
+    "JobCancelledError",
     "load_graph",
 ]

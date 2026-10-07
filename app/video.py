@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.config import APP_ROOT
-from app.engine import ComfyEngine, EngineError, load_graph
+from app.engine import ComfyEngine, EngineError, JobCancelledError, load_graph
 from app.h3_presets import (
     h3_default_size,
     h3_frames_for_seconds,
@@ -605,7 +605,10 @@ def _patch_h3_variant(graph: dict, variant: dict[str, Any]) -> str:
                 except EngineError:
                     pass
             numeric_ids = [int(nid) for nid in graph if str(nid).isdigit()]
-            new_id = str(max(numeric_ids, default=0) + 1)
+            cand = max(numeric_ids, default=0) + 1
+            while cand in {140, 141, 142, 143}:
+                cand += 1
+            new_id = str(cand)
             graph[new_id] = {
                 "class_type": "LoraLoaderModelOnly",
                 "inputs": {
@@ -681,14 +684,6 @@ def prepare_h3_graph(
     LoRA y sus consumidores de modelo (guider/scheduler); EngineError si no
     hay ninguno que rewirear. La plantilla original nunca se muta.
     """
-    if ref_image_names:
-        if not first_image_name and len(ref_image_names) > 0:
-            first_image_name = ref_image_names[0]
-        if last_image_name is None and len(ref_image_names) > 1:
-            last_image_name = ref_image_names[1]
-    first_image_name = _require_text(first_image_name, "h3: first_image_name")
-    if last_image_name is not None:
-        last_image_name = _require_text(last_image_name, "h3: last_image_name")
     prompt = _require_text(prompt, "h3: prompt")
     seed = _require_seed(seed)
     if not isinstance(sage, bool):
@@ -699,32 +694,89 @@ def prepare_h3_graph(
     variant_entry = resolve_h3_variant(variant)
 
     prepared = copy.deepcopy(graph)
-    first = _node_inputs(prepared, "140", "LoadImage")
-    _require_field(first, "image", "140")
-    first["image"] = first_image_name
-    to_video = _node_inputs(prepared, "131", "MiniMaxH3ImageToVideo")
-    if last_image_name is None:
-        prepared.pop("141", None)
-        to_video.pop("last_frame", None)
+
+    # Detectar si es un grafo Ref2VA con MiniMaxH3ReferenceToVideo
+    ref_node_id = None
+    to_ref_video = None
+    for nid, node in prepared.items():
+        if (
+            isinstance(node, dict)
+            and node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+        ):
+            ref_node_id = nid
+            to_ref_video = node.get("inputs")
+            break
+
+    if ref_node_id is not None and isinstance(to_ref_video, dict):
+        refs: list[str] = []
+        if ref_image_names:
+            refs.extend([r for r in ref_image_names if r])
+        elif first_image_name:
+            refs.append(first_image_name)
+            if last_image_name:
+                refs.append(last_image_name)
+        if not refs:
+            raise EngineError("ref2va requiere al menos una imagen de referencia")
+        refs = refs[:4]
+
+        for k in range(1, 5):
+            slot = f"ref_image_{k}"
+            node_id = str(139 + k)
+            if k <= len(refs):
+                prepared[node_id] = {
+                    "class_type": "LoadImage",
+                    "inputs": {"image": refs[k - 1]},
+                }
+                to_ref_video[slot] = [node_id, 0]
+            else:
+                prepared.pop(node_id, None)
+                to_ref_video.pop(slot, None)
+
+        for field in ("prompt", "width", "height"):
+            _require_field(to_ref_video, field, ref_node_id)
+        to_ref_video["prompt"] = prompt
+        to_ref_video["width"] = width
+        to_ref_video["height"] = height
+        if frames is not None:
+            _require_field(to_ref_video, "length", ref_node_id)
+            to_ref_video["length"] = frames
     else:
-        last = _node_inputs(prepared, "141", "LoadImage")
-        _require_field(last, "image", "141")
-        last["image"] = last_image_name
-    if ref_image_names and len(ref_image_names) > 2:
-        for idx, ref_name in enumerate(ref_image_names[2:], start=2):
-            node_id = str(140 + idx)
-            prepared[node_id] = {
-                "class_type": "LoadImage",
-                "inputs": {"image": ref_name},
-            }
-    for field in ("prompt", "width", "height"):
-        _require_field(to_video, field, "131")
-    to_video["prompt"] = prompt
-    to_video["width"] = width
-    to_video["height"] = height
-    if frames is not None:
-        _require_field(to_video, "length", "131")
-        to_video["length"] = frames
+        if ref_image_names:
+            if not first_image_name and len(ref_image_names) > 0:
+                first_image_name = ref_image_names[0]
+            if last_image_name is None and len(ref_image_names) > 1:
+                last_image_name = ref_image_names[1]
+        first_image_name = _require_text(first_image_name, "h3: first_image_name")
+        if last_image_name is not None:
+            last_image_name = _require_text(last_image_name, "h3: last_image_name")
+
+        first = _node_inputs(prepared, "140", "LoadImage")
+        _require_field(first, "image", "140")
+        first["image"] = first_image_name
+        to_video = _node_inputs(prepared, "131", "MiniMaxH3ImageToVideo")
+        if last_image_name is None:
+            prepared.pop("141", None)
+            to_video.pop("last_frame", None)
+        else:
+            last = _node_inputs(prepared, "141", "LoadImage")
+            _require_field(last, "image", "141")
+            last["image"] = last_image_name
+        if ref_image_names and len(ref_image_names) > 2:
+            for idx, ref_name in enumerate(ref_image_names[2:], start=2):
+                node_id = str(140 + idx)
+                prepared[node_id] = {
+                    "class_type": "LoadImage",
+                    "inputs": {"image": ref_name},
+                }
+        for field in ("prompt", "width", "height"):
+            _require_field(to_video, field, "131")
+        to_video["prompt"] = prompt
+        to_video["width"] = width
+        to_video["height"] = height
+        if frames is not None:
+            _require_field(to_video, "length", "131")
+            to_video["length"] = frames
+
     noise = _node_inputs(prepared, "129", "RandomNoise")
     _require_field(noise, "noise_seed", "129")
     noise["noise_seed"] = seed
@@ -860,39 +912,37 @@ def find_ffmpeg() -> str | None:
 def extract_last_frame(
     video_path: Path, output_image_path: Path, ffmpeg_exe: str | None = None
 ) -> Path:
-    """Extrae el último fotograma de un vídeo MP4 con ffmpeg (o genera fallback PNG)."""
+    """Extrae el último fotograma de un vídeo MP4 con ffmpeg."""
     exe = ffmpeg_exe or find_ffmpeg()
+    if not exe:
+        raise EngineError(
+            "ffmpeg no encontrado: el encadenado continuo de videos >15 s requiere ffmpeg en el PATH o en tools/ffmpeg/ffmpeg.exe"
+        )
     output_image_path.parent.mkdir(parents=True, exist_ok=True)
-    if exe:
-        try:
-            cmd = [
-                exe,
-                "-y",
-                "-sseof",
-                "-0.1",
-                "-i",
-                str(video_path),
-                "-frames:v",
-                "1",
-                "-update",
-                "1",
-                str(output_image_path),
-            ]
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            if (
-                proc.returncode == 0
-                and output_image_path.is_file()
-                and output_image_path.stat().st_size > 0
-            ):
-                return output_image_path
-        except Exception:
-            pass
-    # Fallback si ffmpeg no está disponible o el archivo es simulado (tests):
-    # Escribe un PNG 1x1 válido
-    output_image_path.write_bytes(
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
-        b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-    )
+    cmd = [
+        exe,
+        "-y",
+        "-sseof",
+        "-0.1",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        "-update",
+        "1",
+        str(output_image_path),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except Exception as exc:
+        raise EngineError(f"error de ffmpeg al extraer ultimo frame: {exc}") from exc
+    if (
+        proc.returncode != 0
+        or not output_image_path.is_file()
+        or output_image_path.stat().st_size == 0
+    ):
+        stderr = proc.stderr if hasattr(proc, "stderr") else ""
+        raise EngineError(f"error de ffmpeg al extraer ultimo frame: {stderr}")
     return output_image_path
 
 
@@ -907,40 +957,41 @@ def concat_videos(
         shutil.copy2(video_paths[0], output_path)
         return output_path
     exe = ffmpeg_exe or find_ffmpeg()
-    if exe:
-        concat_txt = output_path.parent / f"_concat_{output_path.stem}.txt"
+    if not exe:
+        raise EngineError(
+            "ffmpeg no encontrado: la concatenacion de videos >15 s requiere ffmpeg en el PATH o en tools/ffmpeg/ffmpeg.exe"
+        )
+    concat_txt = output_path.parent / f"_concat_{output_path.stem}.txt"
+    try:
+        lines = [f"file '{p.resolve().as_posix()}'" for p in video_paths]
+        concat_txt.write_text("\n".join(lines), encoding="utf-8")
+        cmd = [
+            exe,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_txt),
+            "-c",
+            "copy",
+            str(output_path),
+        ]
         try:
-            lines = [f"file '{p.resolve().as_posix()}'" for p in video_paths]
-            concat_txt.write_text("\n".join(lines), encoding="utf-8")
-            cmd = [
-                exe,
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_txt),
-                "-c",
-                "copy",
-                str(output_path),
-            ]
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            if (
-                proc.returncode == 0
-                and output_path.is_file()
-                and output_path.stat().st_size > 0
-            ):
-                return output_path
-        except Exception:
-            pass
-        finally:
-            concat_txt.unlink(missing_ok=True)
-    # Fallback si ffmpeg no está disponible o falla (e.g. tests con archivos mock):
-    with open(output_path, "wb") as out_f:
-        for p in video_paths:
-            out_f.write(p.read_bytes())
-    return output_path
+        except Exception as exc:
+            raise EngineError(f"error de ffmpeg al concatenar videos: {exc}") from exc
+        if (
+            proc.returncode != 0
+            or not output_path.is_file()
+            or output_path.stat().st_size == 0
+        ):
+            stderr = proc.stderr if hasattr(proc, "stderr") else ""
+            raise EngineError(f"error de ffmpeg al concatenar videos: {stderr}")
+        return output_path
+    finally:
+        concat_txt.unlink(missing_ok=True)
 
 
 def run_video_generation(
@@ -1000,14 +1051,25 @@ def run_video_generation(
             segments = split_chained_seconds(seconds)
             segment_clips: list[Path] = []
             current_image = job.get("image_name")
+            target_last_image = job.get("last_image_name")
             for seg_idx, seg_seconds in enumerate(segments):
-                if record is not None and record.get("status") == "cancelled":
-                    break
+                if (
+                    (tracker is not None and getattr(tracker, "is_cancelled", False))
+                    or (record is not None and record.get("status") == "cancelled")
+                ):
+                    store.update(gen_id, status="cancelled", kind="video")
+                    if record is not None:
+                        record["status"] = "cancelled"
+                    job["outputs"] = []
+                    job["error"] = None
+                    return
                 seg_job = copy.deepcopy(job)
                 seg_job["seconds"] = seg_seconds
                 seg_job["frames"] = None
                 seg_job["image_name"] = current_image
-                if seg_idx > 0:
+                if seg_idx == len(segments) - 1:
+                    seg_job["last_image_name"] = target_last_image
+                else:
                     seg_job["last_image_name"] = None
                 graph = build_video_graph(seg_job)
                 prompt_id = engine.submit(graph)
@@ -1027,6 +1089,17 @@ def run_video_generation(
                     next_frame_path = config.comfy_input_dir / next_frame_name
                     extract_last_frame(seg_clip, next_frame_path)
                     current_image = next_frame_name
+
+            if (
+                (tracker is not None and getattr(tracker, "is_cancelled", False))
+                or (record is not None and record.get("status") == "cancelled")
+            ):
+                store.update(gen_id, status="cancelled", kind="video")
+                if record is not None:
+                    record["status"] = "cancelled"
+                job["outputs"] = []
+                job["error"] = None
+                return
 
             final_mp4_name = f"{gen_id}.mp4"
             final_mp4_path = gallery_dir / final_mp4_name
@@ -1053,16 +1126,32 @@ def run_video_generation(
         job["error"] = None
         if record is not None:
             record["status"] = "done"
+    except JobCancelledError:
+        job["outputs"] = []
+        job["error"] = None
+        if record is not None:
+            record["status"] = "cancelled"
+        try:
+            store.update(gen_id, status="cancelled", kind="video")
+        except EngineError:
+            pass
+        return
     except Exception as exc:
         job["outputs"] = []
-        job["error"] = str(exc)
-        if record is not None and record.get("status") == "cancelled":
+        is_cancelled = (
+            (record is not None and record.get("status") == "cancelled")
+            or (tracker is not None and getattr(tracker, "is_cancelled", False))
+        )
+        if is_cancelled:
             job["error"] = None
+            if record is not None:
+                record["status"] = "cancelled"
             try:
-                store.update(gen_id, status="cancelled")
+                store.update(gen_id, status="cancelled", kind="video")
             except EngineError:
                 pass
         else:
+            job["error"] = str(exc)
             if record is not None:
                 record["status"] = "error"
             try:

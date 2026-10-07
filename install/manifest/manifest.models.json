@@ -67,13 +67,13 @@
       "id": "vdn-h3-int8-convrot",
       "filename": "model_int8_convrot_comfyui.safetensors",
       "subdir": "vdn/vdn-minimax-h3-int8-convrot-comfyui",
-      "bytes": 2254857840,
+      "bytes": 3500000000,
       "sha256": null,
-      "url": "URL_VERIFICAR",
+      "url": "https://huggingface.co/drbaph/vdn-minimax-h3-int8-convrot-comfyui",
       "revision": "main",
       "license": "URL_VERIFICAR",
       "required": false,
-      "notes": "Video Delta Net (VDN-H3) Stage-DMD INT8 ConvRot checkpoint para aceleracion 8 pasos."
+      "notes": "Build INT8 ConvRot de OpenVDN stage-dmd-step-250 para ComfyUI-VDN-H3-Plus."
     },
     {
       "id": "anima-29b-preview",

@@ -2556,6 +2556,7 @@ async function reuseVideoGeneration(item) {
       ? params.profile
       : "referencia";
   setSelectValue($("video-h3-profile"), storedProfile);
+  updateH3Variants();
   const storedVariant =
     typeof params.variant === "string" && params.variant
       ? params.variant
@@ -2601,6 +2602,7 @@ function startNewVideo() {
   $("video-last-image").value = "";
   clearVideoRefs();
   setSelectValue($("video-h3-profile"), "calidad");
+  updateH3Variants();
   setSelectValue($("video-h3-variant"), "turbo4");
   $("video-h3-sage").checked = false;
   setSelectValue($("video-h3-seconds"), String(defaultH3Seconds()));
@@ -2962,6 +2964,43 @@ function updateH3Notes() {
     : "";
 }
 
+const PROFILE_COMPATIBLE_VARIANTS = {
+  vdn: ["vdn8"],
+  ref2va: ["vdn8", "turbo4", "turbo8"],
+  referencia: ["turbo4", "turbo8"],
+  calidad: ["turbo4", "turbo8"],
+  ligero: ["turbo4", "turbo8"],
+};
+
+function updateH3Variants() {
+  const profileEl = $("video-h3-profile");
+  const profile = profileEl ? profileEl.value : "calidad";
+  const allowed = PROFILE_COMPATIBLE_VARIANTS[profile] || ["turbo4", "turbo8"];
+  const variantSelect = $("video-h3-variant");
+  if (!variantSelect) return;
+  const currentVal = variantSelect.value;
+  variantSelect.replaceChildren();
+  for (const variant of state.videoH3Variants || []) {
+    if (allowed.includes(variant.id)) {
+      variantSelect.appendChild(
+        option(variant.id, `Pasos: ${variant.steps} (${variant.label})`)
+      );
+    }
+  }
+  if (allowed.includes(currentVal)) {
+    variantSelect.value = currentVal;
+  } else if (profile === "vdn") {
+    variantSelect.value = "vdn8";
+  } else if (allowed.length > 0) {
+    variantSelect.value = allowed[0];
+  }
+}
+
+function onH3ProfileChange() {
+  updateH3Variants();
+  updateH3Notes();
+}
+
 async function loadH3Profiles() {
   const data = await api("/api/video/h3_profiles");
   state.videoH3Profiles = data.items || data.profiles || [];
@@ -2971,23 +3010,25 @@ async function loadH3Profiles() {
   const profileSelect = $("video-h3-profile");
   profileSelect.replaceChildren();
   for (const profile of state.videoH3Profiles) {
-    profileSelect.appendChild(option(profile.id, profile.label || profile.id));
+    let label = profile.label || profile.id;
+    if (profile.available === false) {
+      label = profile.id === "vdn" ? "VDN (8-Pasos · Requiere Pesos)" : `${label} (No disponible)`;
+    }
+    const opt = option(profile.id, label);
+    if (profile.available === false) {
+      opt.title = profile.missing_reason || "Requiere pesos no instalados";
+    }
+    profileSelect.appendChild(opt);
   }
-  const variantSelect = $("video-h3-variant");
-  variantSelect.replaceChildren();
-  for (const variant of state.videoH3Variants) {
-    variantSelect.appendChild(
-      option(variant.id, `Pasos: ${variant.steps} (${variant.label})`)
-    );
-  }
+  setSelectValue(profileSelect, "calidad");
+  updateH3Variants();
   const secondsSelect = $("video-h3-seconds");
   secondsSelect.replaceChildren();
   for (const seconds of state.videoH3Seconds) {
     secondsSelect.appendChild(option(String(seconds), `${seconds} s`));
   }
   fillH3Sizes();
-  setSelectValue(profileSelect, "calidad");
-  setSelectValue(variantSelect, "turbo4");
+  setSelectValue($("video-h3-variant"), "turbo4");
   setSelectValue(secondsSelect, String(defaultH3Seconds()));
   updateH3Notes();
 }
@@ -3016,6 +3057,7 @@ function applyVideoEngine() {
   }
   if (mode === "ref2va") {
     setSelectValue($("video-h3-profile"), "ref2va");
+    updateH3Variants();
   }
   updateH3Notes();
 }
@@ -7134,7 +7176,7 @@ function bind() {
   on("btn-video-cancel", "click", cancelJob);
   on("video-engine", "change", applyVideoEngine);
   on("video-mode", "change", applyVideoEngine);
-  on("video-h3-profile", "change", updateH3Notes);
+  on("video-h3-profile", "change", onH3ProfileChange);
   on("video-h3-seconds", "change", updateH3Notes);
   on("video-h3-size", "change", updateH3Notes);
   on("btn-h3-insert-template", "click", insertH3Template);

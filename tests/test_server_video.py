@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from app import server as server_module
 from app.config import EngineConfig
-from app.engine import ComfyEngine, EngineError
+from app.engine import ComfyEngine, EngineError, JobCancelledError
 from app.h3_prompt import SYS_PROMPT_H3, SYS_PROMPT_H3_REF2VA, SYS_PROMPT_H3_VISION
 from app.h3_presets import h3_template_path, resolve_h3_profile
 from app.jobs import JobQueue
@@ -25,6 +27,8 @@ from app.video import (
     H3_TEMPLATE_PATH,
     WAN_FLF_TEMPLATE_PATH,
     WAN_TEMPLATE_PATH,
+    concat_videos,
+    extract_last_frame,
     run_video_generation,
 )
 
@@ -540,6 +544,49 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         self.assertEqual(self.input_files(), [])
         self.assertEqual(self.store.count(), 0)
 
+    def test_h3_perfil_variante_incompatible_400(self):
+        # vdn sólo acepta vdn8
+        self.assert_400(
+            self.payload(
+                engine="h3",
+                prompt="p",
+                profile="vdn",
+                variant="turbo4",
+            )
+        )
+        # referencia no acepta vdn8
+        self.assert_400(
+            self.payload(
+                engine="h3",
+                prompt="p",
+                profile="referencia",
+                variant="vdn8",
+            )
+        )
+        # calidad no acepta vdn8
+        self.assert_400(
+            self.payload(
+                engine="h3",
+                prompt="p",
+                profile="calidad",
+                variant="vdn8",
+            )
+        )
+
+    def test_h3_vdn_sin_pesos_instalados_400(self):
+        with patch("app.server.is_vdn_installed", return_value=False):
+            res = self.make_client().post(
+                "/api/video/generate",
+                json=self.payload(
+                    engine="h3",
+                    prompt="p",
+                    profile="vdn",
+                    variant="vdn8",
+                ),
+            )
+            self.assertEqual(res.status_code, 400)
+            self.assertIn("pesos de VDN deben instalarse previamente", res.json()["error"])
+
 
 class VideoPresetsApiTests(ServerVideoTestCase):
     def test_lista_de_presets(self):
@@ -1001,6 +1048,9 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual((job["width"], job["height"]), (1344, 768))
 
     def test_h3_vdn_profile_y_variante_vdn8(self):
+        (self.config.comfy_root / "models" / "vdn" / "linear_branch").mkdir(
+            parents=True, exist_ok=True
+        )
         queue = RecordingQueue()
         response = self.make_client(queue=queue).post(
             "/api/video/generate",
@@ -1060,6 +1110,11 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(job["mode"], "ref2va")
         self.assertEqual(job["profile"], "ref2va")
         self.assertEqual(len(job["ref_image_names"]), 2)
+        for name in job["ref_image_names"]:
+            self.assertTrue(
+                re.match(r"^ref_[0-9a-f]{32}_\d+\.png$", name),
+                f"Nombre no esperado: {name}",
+            )
         self.assertEqual(job["image_name"], job["ref_image_names"][0])
         self.assertEqual(job["last_image_name"], job["ref_image_names"][1])
         files = self.input_files()
@@ -1325,7 +1380,22 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
         self.assertEqual(graph["126"]["inputs"]["model"], [sage_id, 0])
         self.assertEqual(graph["124"]["inputs"]["model"], [sage_id, 0])
 
-    def test_h3_extended_seconds_chaining(self):
+    @patch("app.video.find_ffmpeg", return_value="fake_ffmpeg")
+    @patch("subprocess.run")
+    def test_h3_extended_seconds_chaining(self, mock_run, mock_ffmpeg):
+        def fake_ffmpeg_run(cmd, *args, **kwargs):
+            out_file = Path(cmd[-1])
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            if out_file.suffix == ".png":
+                out_file.write_bytes(PNG_BYTES)
+            elif out_file.suffix in (".mp4", ".webm"):
+                out_file.write_bytes(MP4_BYTES)
+            proc = MagicMock()
+            proc.returncode = 0
+            proc.stderr = ""
+            return proc
+
+        mock_run.side_effect = fake_ffmpeg_run
         transport = FakeVideoTransport(self.config)
         factory = lambda: ComfyEngine(  # noqa: E731
             self.config, transport=transport, poll_s=0.01, history_timeout_s=5.0
@@ -1364,6 +1434,228 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
             row = self.store.list()[0]
             self.assertEqual(row["status"], "done")
             self.assertEqual(row["params"]["seconds"], 20.0)
+
+    @patch("app.video.find_ffmpeg", return_value="fake_ffmpeg")
+    @patch("subprocess.run")
+    def test_h3_flf2v_extended_seconds_last_image_propagation(
+        self, mock_run, mock_ffmpeg
+    ):
+        def fake_ffmpeg_run(cmd, *args, **kwargs):
+            out_file = Path(cmd[-1])
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            if out_file.suffix == ".png":
+                out_file.write_bytes(PNG_BYTES)
+            elif out_file.suffix in (".mp4", ".webm"):
+                out_file.write_bytes(MP4_BYTES)
+            proc = MagicMock()
+            proc.returncode = 0
+            proc.stderr = ""
+            return proc
+
+        mock_run.side_effect = fake_ffmpeg_run
+        transport = FakeVideoTransport(self.config)
+        factory = lambda: ComfyEngine(  # noqa: E731
+            self.config, transport=transport, poll_s=0.01, history_timeout_s=5.0
+        )
+
+        def run_job(job):
+            run_video_generation(
+                job, config=self.config, store=self.store, engine_factory=factory
+            )
+
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(run_job),
+            start_worker=True,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/video/generate",
+                json={
+                    "engine": "h3",
+                    "mode": "flf2v",
+                    "image_b64": PNG_B64,
+                    "last_image_b64": PNG_B64,
+                    "prompt": "integrated_multimodal_description: test",
+                    "seconds": 20,
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            job_id = response.json()["job_id"]
+            app.state.queue.wait(job_id, 5)
+            status = client.get(f"/api/jobs/{job_id}").json()
+            self.assertEqual(status["status"], "done")
+            self.assertEqual(len(transport.submits), 2)
+
+            # Segmento 0: no debe tener last_frame conectado
+            seg0 = transport.submits[0]["prompt"]
+            self.assertNotIn("141", seg0)
+            self.assertNotIn("last_frame", seg0["131"]["inputs"])
+
+            # Segmento 1 (último): sí debe tener last_frame conectado
+            seg1 = transport.submits[1]["prompt"]
+            self.assertIn("141", seg1)
+            self.assertIn("last_frame", seg1["131"]["inputs"])
+
+    @patch("app.video.find_ffmpeg", return_value="fake_ffmpeg")
+    @patch("subprocess.run")
+    def test_chained_cancellation_preserves_status_cancelled(
+        self, mock_run, mock_ffmpeg
+    ):
+        def fake_ffmpeg_run(cmd, *args, **kwargs):
+            out_file = Path(cmd[-1])
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            if out_file.suffix == ".png":
+                out_file.write_bytes(PNG_BYTES)
+            elif out_file.suffix in (".mp4", ".webm"):
+                out_file.write_bytes(MP4_BYTES)
+            proc = MagicMock()
+            proc.returncode = 0
+            proc.stderr = ""
+            return proc
+
+        mock_run.side_effect = fake_ffmpeg_run
+        transport = FakeVideoTransport(self.config)
+        call_count = [0]
+
+        def cancel_transport(method, path, body=None, headers=None, timeout=None):
+            res = transport(method, path, body=body, headers=headers, timeout=timeout)
+            if method == "POST" and path == "/prompt":
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    record["status"] = "cancelled"
+                    if record.get("tracker"):
+                        record["tracker"].is_cancelled = True
+            return res
+
+        factory = lambda: ComfyEngine(  # noqa: E731
+            self.config, transport=cancel_transport, poll_s=0.01, history_timeout_s=5.0
+        )
+        gen_id = self.store.add("h3", "prompt", kind="video", status="queued")
+        record = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "queued",
+            "engine": None,
+            "kind": "video",
+        }
+        job = {
+            "kind": "video",
+            "gen_id": gen_id,
+            "engine": "h3",
+            "image_name": "first.png",
+            "prompt": "prompt",
+            "seconds": 20,
+            "seed": 42,
+        }
+        self.config.comfy_input_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.comfy_input_dir / "first.png").write_bytes(PNG_BYTES)
+
+        run_video_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=factory,
+            record=record,
+        )
+        row = self.store.get(gen_id)
+        self.assertEqual(row["status"], "cancelled")
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(job.get("outputs"), [])
+
+    def test_job_cancelled_error_preserves_status_cancelled(self):
+        gen_id = self.store.add("h3", "prompt", kind="video", status="queued")
+        record = {
+            "prompt_id": None,
+            "tracker": None,
+            "status": "running",
+            "engine": None,
+            "kind": "video",
+        }
+        job = {
+            "kind": "video",
+            "gen_id": gen_id,
+            "engine": "h3",
+            "image_name": "first.png",
+            "prompt": "prompt",
+            "seconds": 8,
+            "seed": 42,
+        }
+        self.config.comfy_input_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.comfy_input_dir / "first.png").write_bytes(PNG_BYTES)
+
+        mock_engine = MagicMock()
+        mock_engine.client_id = "test-cid"
+        mock_engine.submit.return_value = "p1"
+        mock_engine.wait.side_effect = JobCancelledError("ejecucion interrumpida")
+
+        run_video_generation(
+            job,
+            config=self.config,
+            store=self.store,
+            engine_factory=lambda: mock_engine,
+            record=record,
+        )
+        row = self.store.get(gen_id)
+        self.assertEqual(row["status"], "cancelled")
+        self.assertEqual(record["status"], "cancelled")
+        self.assertEqual(job.get("outputs"), [])
+        self.assertIsNone(job.get("error"))
+
+
+class FfmpegErrorHandlingTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.video_file = self.tmp / "test.mp4"
+        self.video_file.write_bytes(MP4_BYTES)
+        self.out_png = self.tmp / "out.png"
+        self.out_mp4 = self.tmp / "out.mp4"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_extract_last_frame_sin_ffmpeg_lanza_engine_error(self):
+        with patch("app.video.find_ffmpeg", return_value=None):
+            with self.assertRaises(EngineError) as ctx:
+                extract_last_frame(self.video_file, self.out_png, ffmpeg_exe=None)
+            self.assertIn("ffmpeg no encontrado", str(ctx.exception))
+
+    def test_extract_last_frame_subprocess_falla_lanza_engine_error(self):
+        bad_proc = MagicMock()
+        bad_proc.returncode = 1
+        bad_proc.stderr = "codec error"
+        with patch("app.video.find_ffmpeg", return_value="fake_ffmpeg"):
+            with patch("subprocess.run", return_value=bad_proc):
+                with self.assertRaises(EngineError) as ctx:
+                    extract_last_frame(self.video_file, self.out_png)
+                self.assertIn(
+                    "error de ffmpeg al extraer ultimo frame", str(ctx.exception)
+                )
+
+    def test_concat_videos_sin_ffmpeg_lanza_engine_error(self):
+        with patch("app.video.find_ffmpeg", return_value=None):
+            with self.assertRaises(EngineError) as ctx:
+                concat_videos(
+                    [self.video_file, self.video_file],
+                    self.out_mp4,
+                    ffmpeg_exe=None,
+                )
+            self.assertIn("ffmpeg no encontrado", str(ctx.exception))
+
+    def test_concat_videos_subprocess_falla_lanza_engine_error(self):
+        bad_proc = MagicMock()
+        bad_proc.returncode = 1
+        bad_proc.stderr = "demuxer error"
+        with patch("app.video.find_ffmpeg", return_value="fake_ffmpeg"):
+            with patch("subprocess.run", return_value=bad_proc):
+                with self.assertRaises(EngineError) as ctx:
+                    concat_videos([self.video_file, self.video_file], self.out_mp4)
+                self.assertIn(
+                    "error de ffmpeg al concatenar videos", str(ctx.exception)
+                )
 
 
 

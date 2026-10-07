@@ -50,6 +50,7 @@ class ProgressTracker:
             "node": None,
             "state": "unknown",
         }
+        self._cancelled = False
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -86,6 +87,19 @@ class ProgressTracker:
         """Copia del estado actual con claves step/total/node/state."""
         with self._lock:
             return dict(self._state)
+
+    @property
+    def is_cancelled(self) -> bool:
+        """True si la ejecucion fue cancelada o marcada como tal."""
+        with self._lock:
+            return self._cancelled or self._state.get("state") == "cancelled"
+
+    @is_cancelled.setter
+    def is_cancelled(self, value: bool) -> None:
+        with self._lock:
+            self._cancelled = bool(value)
+            if self._cancelled:
+                self._state["state"] = "cancelled"
 
     def percent(self) -> float | None:
         """Avance 0-100 redondeado a 2 decimales; None si falta step o total."""

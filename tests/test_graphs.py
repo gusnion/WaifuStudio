@@ -18,6 +18,7 @@ from app.graphs import (
     to_img2img,
 )
 from app.registry import ModelEntry, ModelProfile
+from app.video import prepare_h3_graph
 
 ROOT = Path(__file__).resolve().parents[1]
 GRAPH_PATH = ROOT / "workflows" / "anima_base.json"
@@ -508,6 +509,54 @@ class ApplyLorasTests(unittest.TestCase):
             model_id="anima-official-aesthetic-v11",
         )
         self.assertEqual(patched["lora_1"]["class_type"], LORA_CLASS)
+
+
+class PrepareH3Ref2VAGraphTests(unittest.TestCase):
+    def test_wiring_minimax_h3_reference_to_video(self):
+        ref2va_path = ROOT / "workflows" / "h3_ref2va.api.json"
+        graph = load_graph(ref2va_path)
+
+        ref_names = ["ref_a.png", "ref_b.png", "ref_c.png"]
+        patched = prepare_h3_graph(
+            graph,
+            ref_image_names=ref_names,
+            prompt="1girl looking at camera",
+            seed=42,
+            width=576,
+            height=1024,
+            frames=192,
+        )
+
+        self.assertEqual(patched["131"]["class_type"], "MiniMaxH3ReferenceToVideo")
+        inputs = patched["131"]["inputs"]
+        self.assertEqual(inputs["prompt"], "1girl looking at camera")
+        self.assertEqual(inputs["width"], 576)
+        self.assertEqual(inputs["height"], 1024)
+        self.assertEqual(inputs["length"], 192)
+        self.assertEqual(inputs["ref_image_size"], "match")
+
+        self.assertEqual(inputs["ref_image_1"], ["140", 0])
+        self.assertEqual(inputs["ref_image_2"], ["141", 0])
+        self.assertEqual(inputs["ref_image_3"], ["142", 0])
+        self.assertNotIn("ref_image_4", inputs)
+
+        self.assertEqual(patched["140"]["inputs"]["image"], "ref_a.png")
+        self.assertEqual(patched["141"]["inputs"]["image"], "ref_b.png")
+        self.assertEqual(patched["142"]["inputs"]["image"], "ref_c.png")
+        self.assertNotIn("143", patched)
+
+        self.assertEqual(patched["126"]["inputs"]["conditioning"], ["131", 0])
+        self.assertEqual(patched["125"]["inputs"]["latent_image"], ["131", 1])
+
+    def test_wiring_minimax_h3_reference_sin_referencias_lanza_error(self):
+        ref2va_path = ROOT / "workflows" / "h3_ref2va.api.json"
+        graph = load_graph(ref2va_path)
+        with self.assertRaises(EngineError):
+            prepare_h3_graph(
+                graph,
+                prompt="test",
+                seed=42,
+            )
 
 
 if __name__ == "__main__":
