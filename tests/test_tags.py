@@ -547,7 +547,64 @@ class TagOverlayTests(unittest.TestCase):
         results = [item["tag"] for item in search("custom_character")]
         self.assertIn("custom_character_xyz", results)
 
+    def test_crud_user_custom_tags_and_fts_reload(self):
+        import os
+        from app.engine import EngineError
+        from app.tags import (
+            add_custom_tag,
+            delete_custom_tag,
+            is_valid,
+            list_custom_tags,
+            load_catalog,
+            search,
+            user_overlay_path,
+        )
+
+        data_dir = Path(self.temp_dir.name)
+        os.environ["WAIFU_DATA_DIR"] = str(data_dir)
+        load_catalog(force=True)
+
+        # 1. Initial list empty
+        self.assertEqual(list_custom_tags(), [])
+
+        # 2. Validation error on empty name
+        with self.assertRaises(EngineError):
+            add_custom_tag("   ")
+
+        # 3. Add custom tag
+        created = add_custom_tag("cyber_katana", category="general", count=250)
+        self.assertEqual(created["name"], "cyber_katana")
+        self.assertEqual(created["category"], "general")
+        self.assertEqual(created["count"], 250)
+
+        # 4. Valid and indexed in FTS5
+        self.assertTrue(is_valid("cyber_katana"))
+        results = search("cyber_katana")
+        self.assertTrue(any(item["tag"] == "cyber_katana" for item in results))
+
+        # 5. List returns created tag
+        tags_list = list_custom_tags()
+        self.assertEqual(len(tags_list), 1)
+        self.assertEqual(tags_list[0]["name"], "cyber_katana")
+        self.assertEqual(tags_list[0]["count"], 250)
+
+        # 6. Update existing tag
+        updated = add_custom_tag("cyber_katana", category="artist", count=500)
+        self.assertEqual(updated["count"], 500)
+        self.assertEqual(updated["category"], "artist")
+        tags_list = list_custom_tags()
+        self.assertEqual(len(tags_list), 1)
+        self.assertEqual(tags_list[0]["count"], 500)
+
+        # 7. Delete tag
+        self.assertTrue(delete_custom_tag("cyber_katana"))
+        self.assertFalse(is_valid("cyber_katana"))
+        self.assertEqual(list_custom_tags(), [])
+        self.assertFalse(delete_custom_tag("cyber_katana"))
+        self.assertFalse(delete_custom_tag("nonexistent_tag"))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

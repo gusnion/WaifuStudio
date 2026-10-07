@@ -211,7 +211,7 @@ def _merge_overlay(
             name_clean = name.strip()
             key = name_clean.lower()
             cat = item.get("category", "general")
-            posts = item.get("posts", 100)
+            posts = item.get("count") if "count" in item else item.get("posts", 100)
             aliases = item.get("aliases", [])
             if not isinstance(aliases, list):
                 aliases = []
@@ -220,7 +220,7 @@ def _merge_overlay(
                 existing = dict(catalog_map[key])
                 if "category" in item:
                     existing["category"] = cat
-                if "posts" in item:
+                if "posts" in item or "count" in item:
                     existing["posts"] = posts
                 if "aliases" in item:
                     existing["aliases"] = list(dict.fromkeys(existing["aliases"] + aliases))
@@ -626,20 +626,194 @@ def all_tags() -> list[dict]:
     return copy.deepcopy(_ENTRIES)
 
 
+def load_catalog(path: Path | None = None, force: bool = False) -> None:
+    """Recarga el catalogo y reconstruye los indices en memoria y FTS5."""
+    reload(path=path)
+
+
+def list_custom_tags(path: Path | None = None) -> list[dict]:
+    """Retorna la lista de tags personalizadas del JSON de usuario."""
+    target = path or user_overlay_path()
+    if not target.is_file():
+        return []
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    catalog = data.get("catalog") or []
+    tags = data.get("tags") or []
+    res = []
+    seen = set()
+    if isinstance(catalog, list):
+        for item in catalog:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            if not isinstance(name, str) or not name.strip():
+                continue
+            key = name.strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cat = item.get("category", "general")
+            count = item.get("count") if "count" in item else item.get("posts", 100)
+            res.append({"name": name.strip(), "category": str(cat), "count": int(count)})
+    if isinstance(tags, list):
+        for item in tags:
+            if not isinstance(item, dict):
+                continue
+            tag = item.get("tag")
+            if not isinstance(tag, str) or not tag.strip():
+                continue
+            key = tag.strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            grp = item.get("group", "general")
+            count = item.get("count") if "count" in item else item.get("rank", item.get("posts", 100))
+            res.append({"name": tag.strip(), "category": str(grp), "count": int(count)})
+    return res
+
+
+def add_custom_tag(
+    name: str,
+    category: str = "general",
+    count: int = 100,
+    path: Path | None = None,
+) -> dict:
+    """Anade o actualiza una tag en el overlay de usuario y recarga el catalogo FTS5."""
+    if not isinstance(name, str) or not name.strip():
+        raise EngineError("nombre de tag requerido y no vacio")
+    name_clean = name.strip()
+    key = name_clean.lower()
+    cat = (category or "general").strip().lower()
+    if cat not in _CATALOG_CATEGORIES:
+        cat = "general"
+    try:
+        cnt = max(0, int(count))
+    except (TypeError, ValueError):
+        cnt = 100
+
+    target = path or user_overlay_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if target.is_file():
+        try:
+            data = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+
+    catalog_list = data.setdefault("catalog", [])
+    if not isinstance(catalog_list, list):
+        catalog_list = []
+        data["catalog"] = catalog_list
+
+    tags_list = data.setdefault("tags", [])
+    if not isinstance(tags_list, list):
+        tags_list = []
+        data["tags"] = tags_list
+
+    found_cat = False
+    for item in catalog_list:
+        if isinstance(item, dict) and str(item.get("name", "")).strip().lower() == key:
+            item["category"] = cat
+            item["posts"] = cnt
+            item["count"] = cnt
+            found_cat = True
+            break
+    if not found_cat:
+        catalog_list.append({
+            "name": name_clean,
+            "category": cat,
+            "posts": cnt,
+            "count": cnt,
+            "aliases": [],
+        })
+
+    found_tag = False
+    for item in tags_list:
+        if isinstance(item, dict) and str(item.get("tag", "")).strip().lower() == key:
+            item["label"] = name_clean
+            item["group"] = cat if cat in ("character", "series", "artist") else "general_top"
+            item["rank"] = cnt
+            found_tag = True
+            break
+    if not found_tag:
+        tags_list.append({
+            "tag": name_clean,
+            "label": name_clean,
+            "group": cat if cat in ("character", "series", "artist") else "general_top",
+            "rank": cnt,
+        })
+
+    target.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    load_catalog(force=True)
+    return {"name": name_clean, "category": cat, "count": cnt}
+
+
+def delete_custom_tag(name: str, path: Path | None = None) -> bool:
+    """Elimina una tag del overlay de usuario y recarga el catalogo FTS5."""
+    if not isinstance(name, str) or not name.strip():
+        return False
+    key = name.strip().lower()
+    target = path or user_overlay_path()
+    if not target.is_file():
+        return False
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+
+    catalog_list = data.get("catalog", [])
+    tags_list = data.get("tags", [])
+    initial_len = len(catalog_list) + len(tags_list)
+
+    if isinstance(catalog_list, list):
+        data["catalog"] = [
+            item for item in catalog_list
+            if not (isinstance(item, dict) and str(item.get("name", "")).strip().lower() == key)
+        ]
+    if isinstance(tags_list, list):
+        data["tags"] = [
+            item for item in tags_list
+            if not (isinstance(item, dict) and str(item.get("tag", "")).strip().lower() == key)
+        ]
+
+    new_len = len(data.get("catalog", [])) + len(data.get("tags", []))
+    if new_len == initial_len:
+        return False
+
+    target.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    load_catalog(force=True)
+    return True
+
+
 __all__ = [
     "BULK_GROUPS",
     "CATALOG_PATH",
     "DEFAULT_SEARCH_LIMIT",
     "GROUPS",
     "MAX_SEARCH_LIMIT",
+    "add_custom_tag",
     "all_tags",
     "by_group",
     "catalog_count",
+    "delete_custom_tag",
     "get",
     "is_valid",
+    "list_custom_tags",
     "list_groups",
+    "load_catalog",
+    "reload",
     "resolve",
     "retrieve",
     "search",
+    "user_overlay_path",
     "validate_list",
 ]

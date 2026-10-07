@@ -5862,5 +5862,205 @@ class TrainAutoCaptionUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
 
+class GalleryDeleteRoutesTests(ServerTestCase):
+    """Pruebas para DELETE /api/gallery/{id} y POST /api/gallery/clean_failed."""
+
+    def test_delete_gallery_item_success(self):
+        gen_id = self.store.add("m1", "waifu test prompt", status="done")
+        self.store.update(gen_id, outputs=["ok.png"])
+        png_path = self.add_gallery_png(gen_id, "ok.png")
+        self.assertTrue(png_path.is_file())
+
+        gen_dir = self.config.data_dir / "generations" / str(gen_id)
+        gen_dir.mkdir(parents=True, exist_ok=True)
+        gen_file = gen_dir / "gen.png"
+        gen_file.write_bytes(PNG_BYTES)
+        self.assertTrue(gen_file.is_file())
+
+        client = self.make_client()
+        res = client.delete(f"/api/gallery/{gen_id}")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"ok": True, "id": gen_id})
+
+        self.assertIsNone(self.store.get(gen_id))
+        self.assertFalse(png_path.exists())
+        self.assertFalse((self.config.data_dir / "gallery" / str(gen_id)).exists())
+        self.assertFalse(gen_file.exists())
+        self.assertFalse(gen_dir.exists())
+
+    def test_delete_gallery_item_404_not_found(self):
+        client = self.make_client()
+        res = client.delete("/api/gallery/99999")
+        self.assertEqual(res.status_code, 404)
+        self.assertIn("no encontrado", res.json()["error"])
+
+    def test_clean_failed(self):
+        self.store.add("m1", "done item", status="done")
+        self.store.add("m1", "error item", status="error")
+        self.store.add("m1", "failed item", status="failed")
+
+        client = self.make_client()
+        res = client.post("/api/gallery/clean_failed")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"ok": True, "cleaned": 2})
+        self.assertEqual(self.store.count(), 1)
+
+    def test_gallery_search_q(self):
+        self.store.add("m1", "1girl blue hair smiling", status="done")
+        self.store.add("m1", "1boy red jacket outdoors", status="done")
+
+        client = self.make_client()
+        res = client.get("/api/gallery?q=blue")
+        self.assertEqual(res.status_code, 200)
+        items = res.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["prompt"], "1girl blue hair smiling")
+
+
+class CustomTagsRoutesTests(ServerTestCase):
+    """Pruebas para endpoints /api/tags/custom (GET, POST, DELETE)."""
+
+    def setUp(self):
+        super().setUp()
+        import os
+        from app.tags import load_catalog
+
+        self._old_data_dir = os.environ.get("WAIFU_DATA_DIR")
+        os.environ["WAIFU_DATA_DIR"] = str(self.config.data_dir)
+        load_catalog(force=True)
+
+        def cleanup_env():
+            if self._old_data_dir is not None:
+                os.environ["WAIFU_DATA_DIR"] = self._old_data_dir
+            else:
+                os.environ.pop("WAIFU_DATA_DIR", None)
+            load_catalog(force=True)
+
+        self.addCleanup(cleanup_env)
+
+    def test_custom_tags_crud(self):
+        client = self.make_client()
+
+        res = client.get("/api/tags/custom")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), [])
+
+        payload = {"name": "cyber_dress", "category": "general", "count": 120}
+        res = client.post("/api/tags/custom", json=payload)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["ok"])
+        self.assertEqual(res.json()["tag"]["name"], "cyber_dress")
+
+        res = client.get("/api/tags/custom")
+        self.assertEqual(res.status_code, 200)
+        items = res.json()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["name"], "cyber_dress")
+        self.assertEqual(items[0]["category"], "general")
+        self.assertEqual(items[0]["count"], 120)
+
+        res = client.delete("/api/tags/custom/cyber_dress")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"ok": True, "name": "cyber_dress"})
+
+        res = client.get("/api/tags/custom")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), [])
+
+    def test_custom_tags_validation_and_not_found(self):
+        client = self.make_client()
+
+        res = client.post("/api/tags/custom", json={"name": "   "})
+        self.assertEqual(res.status_code, 400)
+
+        res = client.delete("/api/tags/custom/no_such_tag")
+        self.assertEqual(res.status_code, 404)
+
+
+class GalleryUiPhase3Tests(ServerTestCase):
+    """Pruebas de UI estática para Phase 3 (M14-5, M14-6, M14-7, M14-8)."""
+
+    def test_index_html_phase3_elements(self):
+        html = self.make_client().get("/").text
+        for marker in (
+            'id="gallery-tag-search"',
+            'id="btn-gallery-clean-failed"',
+            'id="btn-manage-custom-tags"',
+            'id="btn-gallery-delete"',
+            'id="custom-tags-modal"',
+            'id="custom-tags-form"',
+            'id="custom-tag-name"',
+            'id="custom-tag-category"',
+            'id="custom-tag-count"',
+            'id="btn-custom-tag-add"',
+            'id="custom-tags-list"',
+            'id="btn-image-compare"',
+            'id="image-compare"',
+            'id="image-compare-stage"',
+            'id="image-compare-before"',
+            'id="image-compare-after"',
+            'id="image-compare-handle"',
+            'id="image-compare-ratio"',
+            'id="btn-toggle-image-thumbs"',
+            'id="btn-toggle-video-thumbs"',
+            'id="btn-toggle-editor-thumbs"',
+            'id="btn-toggle-upscale-thumbs"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+
+    def test_app_js_phase3_markers(self):
+        script = self.make_client().get("/static/app.js").text
+        for marker in (
+            "function setImageCompareEnabled",
+            "function setImageCompareSlot2",
+            "function applyImageCompare",
+            "function initImageCompareInteractions",
+            "function toggleThumbs",
+            "function openCustomTagsModal",
+            "function closeCustomTagsModal",
+            "function refreshCustomTagsList",
+            "function submitCustomTag",
+            "function deleteGalleryItem",
+            "function cleanFailedGenerations",
+            'on("gallery-tag-search"',
+            'on("btn-gallery-clean-failed"',
+            'on("btn-manage-custom-tags"',
+            'on("btn-gallery-delete"',
+            'on("btn-image-compare"',
+            'on("btn-toggle-image-thumbs"',
+            'on("btn-toggle-video-thumbs"',
+            'on("btn-toggle-editor-thumbs"',
+            'on("btn-toggle-upscale-thumbs"',
+            '"btn-image-compare",',
+            '"btn-toggle-image-thumbs",',
+            '"btn-toggle-video-thumbs",',
+            '"btn-toggle-editor-thumbs",',
+            '"btn-toggle-upscale-thumbs",',
+            '"gallery-tag-search",',
+            '"btn-gallery-clean-failed",',
+            '"btn-manage-custom-tags",',
+            '"btn-gallery-delete",',
+            '"custom-tags-modal",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, script)
+
+    def test_app_css_gallery_and_custom_tags_classes(self):
+        css = self.make_client().get("/static/app.css").text
+        for marker in (
+            ".image-compare",
+            ".gallery-search-field",
+            ".custom-tags-modal-box",
+            ".custom-tags-body",
+            ".custom-tags-form",
+            ".custom-tags-list",
+            ".custom-tag-item",
+            "align-content: start;",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, css)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -114,7 +114,15 @@ from app.registry import DEFAULT_PATH as REGISTRY_PATH
 from app.registry import ModelRegistry
 from app.sheet import make_sheet
 from app.store import Store
-from app.tags import by_group, list_groups, search
+from app.tags import (
+    add_custom_tag,
+    by_group,
+    delete_custom_tag,
+    list_custom_tags,
+    list_groups,
+    load_catalog,
+    search,
+)
 from app.upscale import (
     fps_ckpt,
     fps_multiplier,
@@ -994,6 +1002,38 @@ def create_app(
         else:
             items = search(q if q is not None else "", limit=limit)
         return {"items": items[:limit]}
+
+    @app.get("/api/tags/custom")
+    async def api_tags_custom_list() -> list[dict]:
+        return list_custom_tags()
+
+    @app.post("/api/tags/custom")
+    async def api_tags_custom_add(payload: dict = Body(...)) -> Any:
+        name = payload.get("name") if isinstance(payload, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            return JSONResponse(
+                status_code=400, content={"error": "nombre de tag requerido y no vacio"}
+            )
+        category = payload.get("category") or "general"
+        count = payload.get("count", 100)
+        try:
+            created = add_custom_tag(name=name, category=category, count=count)
+        except EngineError as exc:
+            return JSONResponse(status_code=400, content={"error": str(exc)})
+        return {"ok": True, "tag": created}
+
+    @app.delete("/api/tags/custom/{name}")
+    async def api_tags_custom_delete(name: str) -> Any:
+        if not name or not name.strip():
+            return JSONResponse(
+                status_code=400, content={"error": "nombre de tag requerido"}
+            )
+        deleted = delete_custom_tag(name)
+        if not deleted:
+            return JSONResponse(
+                status_code=404, content={"error": "tag personalizada no encontrada"}
+            )
+        return {"ok": True, "name": name}
 
     @app.get("/api/characters")
     async def api_characters() -> list[dict]:
@@ -2451,12 +2491,16 @@ def create_app(
 
     @app.get("/api/gallery")
     async def api_gallery(
-        limit: int = 24, offset: int = 0, kind: str | None = None
+        limit: int = 24,
+        offset: int = 0,
+        kind: str | None = None,
+        q: str | None = None,
     ) -> Any:
         """Feed paginado (mas nuevo primero); `kind` opcional filtra image|video.
 
         `count` refleja el filtro aplicado, no solo la ventana: el visor de
         video pide `kind=video&limit=5&offset=…` y calcula su pagina X de Y.
+        `q` filtra por substring de texto/tags en prompt o negative.
         """
         kind = kind or None
         if kind not in (None, "image", "video"):
@@ -2466,14 +2510,47 @@ def create_app(
         limit = max(1, min(int(limit), 24))
         offset = max(0, int(offset))
         items = []
-        for row in st.list(limit=limit, offset=offset, order="desc", kind=kind):
+        for row in st.list(limit=limit, offset=offset, order="desc", kind=kind, q=q):
             item = dict(row)
             item["urls"] = [
                 MEDIA_URL.format(gen_id=row["id"], name=name)
                 for name in (row.get("outputs") or [])
             ]
             items.append(item)
-        return {"items": items, "count": st.count(kind=kind)}
+        return {"items": items, "count": st.count(kind=kind, q=q)}
+
+    @app.delete("/api/gallery/{id}")
+    async def api_gallery_delete(id: int) -> Any:
+        row = st.get(id)
+        if row is None:
+            return JSONResponse(status_code=404, content={"error": "no encontrado"})
+
+        base_root = cfg.data_dir.resolve()
+        candidate_dirs = [
+            (cfg.data_dir / "gallery" / str(id)).resolve(),
+            (cfg.data_dir / "generations" / str(id)).resolve(),
+        ]
+        for dir_path in candidate_dirs:
+            if dir_path.is_dir() and dir_path.is_relative_to(base_root):
+                for out_name in (row.get("outputs") or []):
+                    fpath = (dir_path / out_name).resolve()
+                    if fpath.is_relative_to(dir_path) and fpath.is_file():
+                        try:
+                            fpath.unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                try:
+                    shutil.rmtree(dir_path, ignore_errors=True)
+                except OSError:
+                    pass
+
+        st.delete(id)
+        return {"ok": True, "id": id}
+
+    @app.post("/api/gallery/clean_failed")
+    async def api_gallery_clean_failed() -> Any:
+        cleaned = st.delete_failed()
+        return {"ok": True, "cleaned": cleaned}
 
     @app.get("/media/characters/{char_id}/{name:path}")
     async def api_character_media(char_id: int, name: str) -> Any:

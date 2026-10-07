@@ -106,21 +106,28 @@ class Store:
         offset: int = 0,
         order: str = "desc",
         kind: str | None = None,
+        q: str | None = None,
     ) -> list[dict]:
         """Generaciones paginadas por id; `order` es `asc` o `desc`.
 
         `kind` opcional filtra por tipo (`image`/`video`); `None` no filtra.
+        `q` opcional filtra por substring en `prompt` o `negative`.
         """
         direction = str(order).strip().lower()
         if direction not in ("asc", "desc"):
             raise EngineError(
                 f"store list: orden invalido {order!r} (usa asc|desc)"
             )
-        where = ""
+        clauses: list[str] = []
         filters: list[Any] = []
         if kind is not None:
-            where = "WHERE kind = ? "
+            clauses.append("kind = ?")
             filters.append(str(kind))
+        if q is not None and str(q).strip():
+            needle = f"%{str(q).strip()}%"
+            clauses.append("(prompt LIKE ? OR negative LIKE ?)")
+            filters.extend([needle, needle])
+        where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
         try:
             with closing(self._connect()) as conn, conn:
                 rows = conn.execute(
@@ -132,21 +139,48 @@ class Store:
             raise EngineError(f"store list fallo: {exc}") from exc
         return [self._row_to_dict(row) for row in rows]
 
-    def count(self, kind: str | None = None) -> int:
-        """Numero total de generaciones, opcionalmente filtrado por `kind`."""
-        where = ""
-        filters: tuple[Any, ...] = ()
+    def count(self, kind: str | None = None, q: str | None = None) -> int:
+        """Numero total de generaciones, opcionalmente filtrado por `kind` y `q`."""
+        clauses: list[str] = []
+        filters: list[Any] = []
         if kind is not None:
-            where = " WHERE kind = ?"
-            filters = (str(kind),)
+            clauses.append("kind = ?")
+            filters.append(str(kind))
+        if q is not None and str(q).strip():
+            needle = f"%{str(q).strip()}%"
+            clauses.append("(prompt LIKE ? OR negative LIKE ?)")
+            filters.extend([needle, needle])
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         try:
             with closing(self._connect()) as conn, conn:
                 row = conn.execute(
-                    f"SELECT COUNT(*) FROM generations{where}", filters
+                    f"SELECT COUNT(*) FROM generations{where}", tuple(filters)
                 ).fetchone()
         except sqlite3.Error as exc:
             raise EngineError(f"store count fallo: {exc}") from exc
         return int(row[0])
+
+    def delete(self, gen_id: int | str) -> bool:
+        """Elimina una generacion por id; False si no existe."""
+        try:
+            with closing(self._connect()) as conn, conn:
+                cursor = conn.execute(
+                    "DELETE FROM generations WHERE id = ?", (int(gen_id),)
+                )
+                return cursor.rowcount > 0
+        except (sqlite3.Error, TypeError, ValueError) as exc:
+            raise EngineError(f"store delete {gen_id} fallo: {exc}") from exc
+
+    def delete_failed(self) -> int:
+        """Elimina todas las generaciones con status in ('error', 'failed'). Devuelve conteo."""
+        try:
+            with closing(self._connect()) as conn, conn:
+                cursor = conn.execute(
+                    "DELETE FROM generations WHERE status IN ('error', 'failed')"
+                )
+                return int(cursor.rowcount)
+        except sqlite3.Error as exc:
+            raise EngineError(f"store delete_failed fallo: {exc}") from exc
 
     def fail_stale(self, message: str = "interrumpido por un reinicio de la app") -> int:
         """Marca como `error` las filas `queued`/`running` huerfanas de un reinicio.

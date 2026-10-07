@@ -203,14 +203,25 @@
           <h2>Galería</h2>
           <button id="btn-reload" type="button">Recargar</button>
         </div>
-        <button id="image-preview" class="image-preview" type="button" title="Ampliar imagen">
+        <div id="image-preview" class="image-preview" title="Ampliar imagen">
           <img id="image-preview-img" class="hidden" alt="Generación seleccionada">
+          <div id="image-compare" class="image-compare hidden">
+            <div id="image-compare-stage" class="image-compare-stage">
+              <img id="image-compare-before" class="image-compare-img" alt="Antes" draggable="false">
+              <img id="image-compare-after" class="image-compare-img" alt="Después" draggable="false">
+            </div>
+            <div id="image-compare-handle" class="image-compare-handle" role="slider" tabindex="0" aria-label="Comparación antes/después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+              <span id="image-compare-ratio" class="image-compare-ratio">50%</span>
+            </div>
+          </div>
           <span id="image-preview-empty" class="empty">Sin generaciones</span>
-        </button>
+        </div>
         <div class="viewer-toolbar">
           <button id="btn-new-generation" type="button">Generar nuevo</button>
           <button id="btn-describe-image" type="button" disabled>Describir</button>
           <button id="btn-save-to-oc" type="button" disabled>Guardar en OC</button>
+          <button id="btn-image-compare" type="button" aria-pressed="false" disabled>Comparar</button>
+          <button id="btn-toggle-image-thumbs" type="button" title="Ocultar/mostrar miniaturas" aria-pressed="true">Miniaturas</button>
           <button id="btn-download-image" type="button" disabled>Descargar</button>
           <span id="image-preview-info" class="viewer-info">Sin generaciones</span>
           <div class="viewer-pager">
@@ -338,6 +349,7 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         </div>
         <div class="viewer-toolbar">
           <button id="btn-new-video" type="button">Generar nuevo</button>
+          <button id="btn-toggle-video-thumbs" type="button" title="Ocultar/mostrar miniaturas" aria-pressed="true">Miniaturas</button>
           <span id="video-preview-info" class="viewer-info">Sin videos</span>
           <div class="viewer-pager">
             <button id="video-prev-page" type="button" aria-label="Página anterior">‹</button>
@@ -431,16 +443,19 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           </div>
           <span id="editor-preview-empty" class="empty">Sin imagen</span>
         </div>
+        <div class="viewer-toolbar editor-viewer-toolbar">
+          <button id="btn-editor-compare" type="button" aria-pressed="false" disabled>Comparar</button>
+          <button id="btn-toggle-editor-thumbs" type="button" title="Ocultar/mostrar miniaturas" aria-pressed="true">Miniaturas</button>
+        </div>
         <div id="editor-result" class="editor-result hidden">
           <div class="editor-result-actions">
             <button id="btn-editor-open-gallery" type="button">Ver en la galería</button>
             <button id="btn-editor-edit-result" type="button">Editar este resultado</button>
-            <button id="btn-editor-compare" type="button" aria-pressed="false" disabled>Comparar</button>
             <button id="btn-editor-download" type="button">Descargar</button>
           </div>
         </div>
         <p class="editor-placeholder">Qwen-Image 2.1 (GGUF UC Q4_K_M + text encoder INT8 ConvRot + VAE 2.1 bf16). «Generar» cuando los tres archivos están instalados; el resultado aparece en el visor y en la galería.</p>
-        <section class="editor-gallery">
+        <section id="editor-gallery" class="editor-gallery">
           <h3>Galería</h3>
           <div id="editor-gallery-thumbs" class="image-thumbs"></div>
           <div class="viewer-pager editor-gallery-pager">
@@ -534,7 +549,10 @@ non_diegetic_music: &lt;música o None&gt;</pre>
           <video id="upscale-preview-video" class="hidden" controls preload="metadata"></video>
           <span id="upscale-preview-empty" class="empty">Sin generaciones de imagen</span>
         </div>
-        <section class="upscaler-gallery">
+        <div class="viewer-toolbar upscaler-viewer-toolbar">
+          <button id="btn-toggle-upscale-thumbs" type="button" title="Ocultar/mostrar miniaturas" aria-pressed="true">Miniaturas</button>
+        </div>
+        <section id="upscaler-gallery" class="upscaler-gallery">
           <div id="upscale-gallery-thumbs" class="image-thumbs"></div>
           <div class="viewer-pager upscaler-gallery-pager">
             <button id="upscale-gallery-prev" type="button" aria-label="Página anterior" disabled>‹</button>
@@ -555,6 +573,12 @@ non_diegetic_music: &lt;música o None&gt;</pre>
             <option value="video">Vídeos</option>
           </select>
         </label>
+        <label class="field gallery-search-field">
+          <span>Buscar</span>
+          <input id="gallery-tag-search" type="search" placeholder="Filtrar por tag / texto...">
+        </label>
+        <button id="btn-gallery-clean-failed" type="button" title="Limpiar generaciones fallidas">Limpiar fallidas</button>
+        <button id="btn-manage-custom-tags" type="button" title="Gestionar tags personalizadas">Tags personalizadas</button>
         <button id="btn-gallery-refresh" type="button" title="Refrescar la galería">Refrescar</button>
         <div class="viewer-pager gallery-pager">
           <button id="gallery-prev" type="button" aria-label="Página anterior" disabled>‹</button>
@@ -887,7 +911,45 @@ non_diegetic_music: &lt;música o None&gt;</pre>
         <button id="btn-gallery-animate" type="button">Animar</button>
         <button id="btn-gallery-edit" type="button">Editar</button>
         <button id="btn-gallery-upscale" type="button">Upscale</button>
+        <button id="btn-gallery-delete" class="danger" type="button">Borrar</button>
         <button id="btn-gallery-download" class="primary" type="button">Descargar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="custom-tags-modal" class="modal hidden">
+    <div class="modal-box custom-tags-modal-box">
+      <div class="modal-header">
+        <h2>Tags Personalizadas</h2>
+        <span id="custom-tags-status" class="oc-status">Listo</span>
+        <button id="btn-custom-tags-close" type="button">Cerrar</button>
+      </div>
+      <div class="custom-tags-body">
+        <form id="custom-tags-form" class="custom-tags-form">
+          <label class="field">
+            <span>Nombre / Tag</span>
+            <input id="custom-tag-name" type="text" placeholder="ej. gothic_lolita_dress" required>
+          </label>
+          <label class="field">
+            <span>Categoría</span>
+            <select id="custom-tag-category">
+              <option value="general">general</option>
+              <option value="character">character</option>
+              <option value="series">series</option>
+              <option value="artist">artist</option>
+              <option value="meta">meta</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Frecuencia (Posts)</span>
+            <input id="custom-tag-count" type="number" min="0" value="100">
+          </label>
+          <button id="btn-custom-tag-add" type="submit" class="primary">Guardar tag</button>
+        </form>
+        <div class="custom-tags-list-container">
+          <h3>Mis Tags Personalizadas</h3>
+          <div id="custom-tags-list" class="custom-tags-list"></div>
+        </div>
       </div>
     </div>
   </div>

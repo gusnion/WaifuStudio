@@ -237,5 +237,52 @@ class MalformedJsonTests(StoreTestCase):
             self.store.list()
 
 
+class DeleteTests(StoreTestCase):
+    def test_delete_individual_y_no_existente(self):
+        gen_id = self.store.add("m", "prompt 1")
+        self.assertIsNotNone(self.store.get(gen_id))
+        self.assertTrue(self.store.delete(gen_id))
+        self.assertIsNone(self.store.get(gen_id))
+        self.assertFalse(self.store.delete(gen_id))
+        self.assertFalse(self.store.delete(9999))
+
+    def test_delete_con_string_id(self):
+        gen_id = self.store.add("m", "prompt 2")
+        self.assertTrue(self.store.delete(str(gen_id)))
+        self.assertIsNone(self.store.get(gen_id))
+
+    def test_delete_failed_elimina_solo_error_y_failed(self):
+        g_done = self.store.add("m", "p1", status="done")
+        g_queued = self.store.add("m", "p2", status="queued")
+        g_running = self.store.add("m", "p3", status="running")
+        g_error1 = self.store.add("m", "p4", status="error")
+        g_error2 = self.store.add("m", "p5", status="error")
+        g_failed = self.store.add("m", "p6", status="failed")
+
+        count = self.store.delete_failed()
+        self.assertEqual(count, 3)
+
+        self.assertIsNotNone(self.store.get(g_done))
+        self.assertIsNotNone(self.store.get(g_queued))
+        self.assertIsNotNone(self.store.get(g_running))
+        self.assertIsNone(self.store.get(g_error1))
+        self.assertIsNone(self.store.get(g_error2))
+        self.assertIsNone(self.store.get(g_failed))
+
+        self.assertEqual(self.store.delete_failed(), 0)
+
+    def test_list_y_count_con_filtro_q(self):
+        self.store.add("m", "cat girl outdoors", negative="bad quality")
+        self.store.add("m", "cyberpunk street", negative="blurry")
+        self.store.add("m", "solo 1girl", negative="cat bad")
+
+        self.assertEqual(self.store.count(q="cat"), 2)
+        results = self.store.list(q="cat")
+        self.assertEqual(len(results), 2)
+        self.assertEqual(self.store.count(q="cyberpunk"), 1)
+        self.assertEqual(self.store.count(q="nonexistent"), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
+

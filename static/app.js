@@ -184,6 +184,7 @@ const state = {
   galleryTab: {
     page: 1,
     kind: "",
+    q: "",
     items: [],
     total: 1,
   },
@@ -1685,10 +1686,245 @@ function updateImagePreview() {
   if (downloadButton) {
     downloadButton.disabled = !(item && item.kind === "image" && url);
   }
+  const compareButton = $("btn-image-compare");
+  if (compareButton) {
+    if (imageCompareActive) {
+      compareButton.disabled = false;
+      compareButton.textContent = "Cerrar comparación";
+      compareButton.setAttribute("aria-pressed", "true");
+    } else {
+      compareButton.disabled = !(item && item.kind === "image" && url);
+      compareButton.textContent = "Comparar";
+      compareButton.setAttribute("aria-pressed", "false");
+    }
+  }
   const info = $("image-preview-info");
-  info.textContent = item
-    ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
-    : "Sin generaciones";
+  if (!imageCompareActive) {
+    info.textContent = item
+      ? `#${item.id} · ${item.model_id} · ${formatGalleryDate(item.created_at)}`
+      : "Sin generaciones";
+  }
+}
+
+let imageCompareActive = false;
+let imageCompareSlot1 = "";
+let imageCompareSlot2 = "";
+let imageCompareView = { scale: 1, x: 0, y: 0, ratio: 0.5 };
+const IMAGE_COMPARE_MAX_SCALE = 8;
+const IMAGE_COMPARE_DRAG_THRESHOLD = 4;
+let imageComparePan = null;
+let imageCompareHandleDrag = false;
+
+function applyImageCompare() {
+  const stage = $("image-compare-stage");
+  const compare = $("image-compare");
+  if (!stage || !compare) {
+    return;
+  }
+  stage.style.transform = `translate(${imageCompareView.x}px, ${imageCompareView.y}px) scale(${imageCompareView.scale})`;
+  const after = $("image-compare-after");
+  if (after) {
+    after.style.clipPath = `inset(0 0 0 ${imageCompareView.ratio * 100}%)`;
+  }
+  compare.classList.toggle("zoomed", imageCompareView.scale > 1);
+  const rect = stage.getBoundingClientRect();
+  const wrap = compare.getBoundingClientRect();
+  const handle = $("image-compare-handle");
+  if (handle) {
+    handle.style.left = `${rect.left - wrap.left + imageCompareView.ratio * rect.width}px`;
+  }
+  const percent = Math.round(imageCompareView.ratio * 100);
+  if (handle) {
+    handle.setAttribute("aria-valuenow", String(percent));
+  }
+  const label = $("image-compare-ratio");
+  if (label) {
+    label.textContent = `${percent}%`;
+  }
+}
+
+function resetImageCompareView() {
+  imageCompareView.scale = 1;
+  imageCompareView.x = 0;
+  imageCompareView.y = 0;
+  imageCompareView.ratio = 0.5;
+  imageComparePan = null;
+  const compare = $("image-compare");
+  if (compare) {
+    compare.classList.remove("dragging");
+  }
+  applyImageCompare();
+}
+
+function setImageCompareEnabled(on) {
+  const button = $("btn-image-compare");
+  if (on) {
+    const item = selectedImageView();
+    const url = imageViewUrl(item);
+    if (!url) return;
+    imageCompareActive = true;
+    imageCompareSlot1 = url;
+    imageCompareSlot2 = "";
+    if (button) {
+      button.textContent = "Cerrar comparación";
+      button.setAttribute("aria-pressed", "true");
+      button.disabled = false;
+    }
+    const info = $("image-preview-info");
+    if (info) {
+      info.textContent = "Selecciona una imagen de la minigalería para comparar";
+    }
+  } else {
+    imageCompareActive = false;
+    imageCompareSlot1 = "";
+    imageCompareSlot2 = "";
+    imageCompareHandleDrag = false;
+    imageComparePan = null;
+    const compare = $("image-compare");
+    if (compare) {
+      compare.classList.add("hidden");
+    }
+    const img = $("image-preview-img");
+    if (img) {
+      img.classList.remove("hidden");
+    }
+    if (button) {
+      button.textContent = "Comparar";
+      button.setAttribute("aria-pressed", "false");
+    }
+    updateImagePreview();
+  }
+}
+
+function setImageCompareSlot2(url) {
+  if (!url || !imageCompareSlot1) return;
+  imageCompareSlot2 = url;
+  imageCompareActive = true;
+  const before = $("image-compare-before");
+  const after = $("image-compare-after");
+  if (before) before.src = imageCompareSlot1;
+  if (after) after.src = imageCompareSlot2;
+  resetImageCompareView();
+  const compare = $("image-compare");
+  if (compare) compare.classList.remove("hidden");
+  const img = $("image-preview-img");
+  if (img) img.classList.add("hidden");
+  const info = $("image-preview-info");
+  if (info) {
+    info.textContent = "Comparando: Slot 1 (fijo) vs Slot 2 (clic en otra miniatura para cambiar Slot 2)";
+  }
+  const button = $("btn-image-compare");
+  if (button) {
+    button.textContent = "Cerrar comparación";
+    button.setAttribute("aria-pressed", "true");
+    button.disabled = false;
+  }
+}
+
+function initImageCompareInteractions() {
+  const stage = $("image-compare-stage");
+  const handle = $("image-compare-handle");
+  if (!stage || !handle) return;
+
+  stage.addEventListener("wheel", (event) => {
+    if (!imageCompareActive || !imageCompareSlot2) return;
+    event.preventDefault();
+    const current = imageCompareView.scale;
+    const factor = Math.exp(-event.deltaY * 0.0015);
+    const next = Math.min(IMAGE_COMPARE_MAX_SCALE, Math.max(1, current * factor));
+    if (next === current) return;
+    const rect = stage.getBoundingClientRect();
+    const pointX = (event.clientX - rect.left) / current;
+    const pointY = (event.clientY - rect.top) / current;
+    const layoutLeft = rect.left - imageCompareView.x;
+    const layoutTop = rect.top - imageCompareView.y;
+    if (next <= 1) {
+      resetImageCompareView();
+      return;
+    }
+    imageCompareView.scale = next;
+    imageCompareView.x = event.clientX - pointX * next - layoutLeft;
+    imageCompareView.y = event.clientY - pointY * next - layoutTop;
+    applyImageCompare();
+  }, { passive: false });
+
+  stage.addEventListener("mousedown", (event) => {
+    if (event.button !== 0 || imageCompareView.scale <= 1) return;
+    event.preventDefault();
+    imageComparePan = {
+      startX: event.clientX,
+      startY: event.clientY,
+      x: imageCompareView.x,
+      y: imageCompareView.y,
+      moved: false,
+    };
+  });
+
+  stage.addEventListener("dblclick", () => resetImageCompareView());
+
+  document.addEventListener("mousemove", (event) => {
+    if (!imageComparePan) return;
+    const dx = event.clientX - imageComparePan.startX;
+    const dy = event.clientY - imageComparePan.startY;
+    if (!imageComparePan.moved) {
+      if (Math.abs(dx) + Math.abs(dy) <= IMAGE_COMPARE_DRAG_THRESHOLD) return;
+      imageComparePan.moved = true;
+      const compare = $("image-compare");
+      if (compare) compare.classList.add("dragging");
+    }
+    imageCompareView.x = imageComparePan.x + dx;
+    imageCompareView.y = imageComparePan.y + dy;
+    applyImageCompare();
+  });
+
+  document.addEventListener("mouseup", () => {
+    imageComparePan = null;
+    const compare = $("image-compare");
+    if (compare) compare.classList.remove("dragging");
+  });
+
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    imageCompareHandleDrag = true;
+    if (handle.setPointerCapture) handle.setPointerCapture(event.pointerId);
+  });
+
+  handle.addEventListener("pointermove", (event) => {
+    if (!imageCompareHandleDrag) return;
+    const stageEl = $("image-compare-stage");
+    if (!stageEl) return;
+    event.preventDefault();
+    const rect = stageEl.getBoundingClientRect();
+    if (!rect.width) return;
+    const ratio = (event.clientX - rect.left) / rect.width;
+    imageCompareView.ratio = Math.min(1, Math.max(0, ratio));
+    applyImageCompare();
+  });
+
+  const endDrag = () => { imageCompareHandleDrag = false; };
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+
+  handle.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const delta = event.key === "ArrowLeft" ? -0.02 : 0.02;
+      imageCompareView.ratio = Math.min(1, Math.max(0, imageCompareView.ratio + delta));
+      applyImageCompare();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      imageCompareView.ratio = event.key === "Home" ? 0 : 1;
+      applyImageCompare();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (imageCompareActive && imageCompareSlot2) {
+      applyImageCompare();
+    }
+  });
 }
 
 function downloadSelectedImage() {
@@ -1737,6 +1973,12 @@ function renderImageThumbs() {
       button.appendChild(missing);
     }
     button.addEventListener("click", () => {
+      if (imageCompareActive) {
+        if (url) {
+          setImageCompareSlot2(url);
+        }
+        return;
+      }
       selectImageGeneration(item).catch((error) => setStatus(error.message, true));
     });
     container.appendChild(button);
@@ -2954,16 +3196,23 @@ function applyEditorMetadata(meta) {
 }
 
 let editorCompareActive = false;
+let editorCompareSelecting = false;
+let editorCompareSlot1 = "";
+let editorCompareSlot2 = "";
 let editorCompareView = { scale: 1, x: 0, y: 0, ratio: 0.5, beforeUrl: "", afterUrl: "" };
 const EDITOR_COMPARE_MAX_SCALE = 8;
 const EDITOR_COMPARE_DRAG_THRESHOLD = 4;
 let editorComparePan = null;
 let editorCompareHandleDrag = false;
 
+function editorCurrentPreviewUrl() {
+  return state.editorResultUrl || (state.editorRefs.length ? state.editorRefs[0].url : "") || ($("editor-preview-img") ? $("editor-preview-img").getAttribute("src") : "");
+}
+
 function editorCompareUrls() {
   return {
-    before: state.editorRefs.length ? state.editorRefs[0].url : "",
-    after: state.editorResultUrl || "",
+    before: editorCompareSlot1 || (state.editorRefs.length ? state.editorRefs[0].url : ""),
+    after: editorCompareSlot2 || state.editorResultUrl || "",
   };
 }
 
@@ -3005,38 +3254,82 @@ function applyEditorCompare() {
 }
 
 function setEditorCompareEnabled(on) {
+  const button = $("btn-editor-compare");
   if (on) {
-    const { before, after } = editorCompareUrls();
-    if (!before || !after) {
+    const current = editorCurrentPreviewUrl();
+    if (!current) {
       return;
     }
-    editorCompareActive = true;
-    $("editor-compare-before").src = before;
-    $("editor-compare-after").src = after;
-    editorCompareView.beforeUrl = before;
-    editorCompareView.afterUrl = after;
-    resetEditorCompareView();
-    $("editor-compare").classList.remove("hidden");
+    const { before, after } = editorCompareUrls();
+    if (before && after) {
+      editorCompareSlot1 = before;
+      setEditorCompareSlot2(after);
+      return;
+    }
+    editorCompareSlot1 = current;
+    editorCompareSelecting = true;
+    editorCompareActive = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Cerrar comparación";
+      button.setAttribute("aria-pressed", "true");
+    }
+    setEditorStatus("Selecciona una imagen de la minigalería para comparar");
   } else {
     editorCompareActive = false;
+    editorCompareSelecting = false;
+    editorCompareSlot1 = "";
+    editorCompareSlot2 = "";
     editorCompareHandleDrag = false;
     $("editor-compare").classList.add("hidden");
     resetEditorCompareView();
+    if (button) {
+      button.textContent = "Comparar";
+      button.setAttribute("aria-pressed", "false");
+    }
   }
+  updateEditorPreview();
+}
+
+function setEditorCompareSlot2(url) {
+  if (!url || !editorCompareSlot1) return;
+  editorCompareSlot2 = url;
+  editorCompareActive = true;
+  editorCompareSelecting = false;
+  $("editor-compare-before").src = editorCompareSlot1;
+  $("editor-compare-after").src = editorCompareSlot2;
+  editorCompareView.beforeUrl = editorCompareSlot1;
+  editorCompareView.afterUrl = editorCompareSlot2;
+  resetEditorCompareView();
+  $("editor-compare").classList.remove("hidden");
+  const button = $("btn-editor-compare");
+  if (button) {
+    button.textContent = "Cerrar comparación";
+    button.setAttribute("aria-pressed", "true");
+    button.disabled = false;
+  }
+  setEditorStatus("Comparando: Slot 1 fijo vs Slot 2 (clic en otra miniatura para cambiar Slot 2)");
   updateEditorPreview();
 }
 
 function updateEditorCompare() {
   const button = $("btn-editor-compare");
-  const { before, after } = editorCompareUrls();
+  const hasImage = Boolean(editorCurrentPreviewUrl());
   if (button) {
-    button.disabled = !(before && after);
-    button.textContent = editorCompareActive ? "Cerrar comparación" : "Comparar";
-    button.setAttribute("aria-pressed", editorCompareActive ? "true" : "false");
+    if (editorCompareActive || editorCompareSelecting) {
+      button.disabled = false;
+      button.textContent = "Cerrar comparación";
+      button.setAttribute("aria-pressed", "true");
+    } else {
+      button.disabled = !hasImage;
+      button.textContent = "Comparar";
+      button.setAttribute("aria-pressed", "false");
+    }
   }
   if (!editorCompareActive) {
     return;
   }
+  const { before, after } = editorCompareUrls();
   if (!before || !after) {
     setEditorCompareEnabled(false);
     return;
@@ -3299,6 +3592,10 @@ function renderEditorGallery() {
       img.loading = "lazy";
       button.appendChild(img);
       button.addEventListener("click", () => {
+        if (editorCompareActive || editorCompareSelecting) {
+          setEditorCompareSlot2(url);
+          return;
+        }
         if ($("editor-mode").value === "edit") {
           setEditorEditSource(url, item).catch((error) =>
             setEditorStatus(error.message, true)
@@ -5900,14 +6197,15 @@ async function loadGalleryTab(page = 1) {
   const wanted = Math.max(1, Math.trunc(Number(page)) || 1);
   const offset = (wanted - 1) * GALLERY_PAGE_SIZE;
   const kind = gallery.kind ? `&kind=${encodeURIComponent(gallery.kind)}` : "";
+  const qParam = gallery.q ? `&q=${encodeURIComponent(gallery.q)}` : "";
   const data = await api(
-    `/api/gallery?limit=${GALLERY_PAGE_SIZE}&offset=${offset}${kind}`
+    `/api/gallery?limit=${GALLERY_PAGE_SIZE}&offset=${offset}${kind}${qParam}`
   );
   const items = data.items || [];
   const count = Number(data.count);
   const total = Number.isFinite(count) && count > 0 ? count : items.length;
   gallery.total = Math.max(1, Math.ceil(total / GALLERY_PAGE_SIZE));
-  if (wanted > gallery.total) {
+  if (wanted > gallery.total && gallery.total > 0) {
     return await loadGalleryTab(gallery.total);
   }
   gallery.page = wanted;
@@ -5974,6 +6272,135 @@ function closeGalleryModal() {
   }
   galleryModalItem = null;
   modal.classList.add("hidden");
+}
+
+async function deleteGalleryItem() {
+  if (!galleryModalItem) return;
+  const id = galleryModalItem.id;
+  if (!confirm(`¿Eliminar la generación #${id} y sus archivos del disco?`)) return;
+  try {
+    await api(`/api/gallery/${id}`, { method: "DELETE" });
+    closeGalleryModal();
+    setStatus(`Generación #${id} eliminada.`);
+    await loadGalleryTab(state.galleryTab.page);
+  } catch (err) {
+    setStatus(`Error al borrar: ${err.message}`, true);
+  }
+}
+
+async function cleanFailedGenerations() {
+  if (!confirm("¿Eliminar todas las generaciones fallidas de la base de datos?")) return;
+  try {
+    const res = await api("/api/gallery/clean_failed", { method: "POST" });
+    setStatus(`Limpieza completada: ${res.cleaned} generaciones eliminadas.`);
+    await loadGalleryTab(1);
+  } catch (err) {
+    setStatus(`Error en limpieza: ${err.message}`, true);
+  }
+}
+
+function toggleThumbs(containerId, buttonId) {
+  const container = $(containerId);
+  const btn = $(buttonId);
+  if (!container) return;
+  const isHidden = container.classList.toggle("hidden");
+  if (btn) {
+    btn.setAttribute("aria-pressed", isHidden ? "false" : "true");
+    btn.textContent = isHidden ? "Mostrar miniaturas" : "Miniaturas";
+  }
+}
+
+async function openCustomTagsModal() {
+  const modal = $("custom-tags-modal");
+  if (!modal) return;
+  $("custom-tags-status").textContent = "Cargando...";
+  modal.classList.remove("hidden");
+  await refreshCustomTagsList();
+}
+
+function closeCustomTagsModal() {
+  const modal = $("custom-tags-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+}
+
+async function refreshCustomTagsList() {
+  const container = $("custom-tags-list");
+  if (!container) return;
+  try {
+    const data = await api("/api/tags/custom");
+    const tags = Array.isArray(data) ? data : (data.tags || []);
+    container.replaceChildren();
+    if (!tags.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "No hay tags personalizadas en data/registry/tags_danbooru.json.";
+      container.appendChild(p);
+    } else {
+      for (const t of tags) {
+        const item = document.createElement("div");
+        item.className = "custom-tag-item";
+        const info = document.createElement("div");
+        info.className = "custom-tag-item-info";
+        const nameSpan = document.createElement("strong");
+        nameSpan.textContent = t.name;
+        const catSpan = document.createElement("span");
+        catSpan.className = "custom-tag-item-cat";
+        catSpan.textContent = t.category || "general";
+        const countSpan = document.createElement("span");
+        countSpan.className = "custom-tag-item-count";
+        countSpan.textContent = `(${t.count || 0} posts)`;
+        info.appendChild(nameSpan);
+        info.appendChild(catSpan);
+        info.appendChild(countSpan);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "custom-tag-item-del";
+        delBtn.textContent = "Eliminar";
+        delBtn.title = `Eliminar ${t.name}`;
+        delBtn.addEventListener("click", async () => {
+          if (!confirm(`¿Eliminar tag personalizada "${t.name}"?`)) return;
+          try {
+            await api(`/api/tags/custom/${encodeURIComponent(t.name)}`, { method: "DELETE" });
+            $("custom-tags-status").textContent = `Tag "${t.name}" eliminada`;
+            await refreshCustomTagsList();
+          } catch (err) {
+            $("custom-tags-status").textContent = `Error: ${err.message}`;
+          }
+        });
+
+        item.appendChild(info);
+        item.appendChild(delBtn);
+        container.appendChild(item);
+      }
+    }
+    $("custom-tags-status").textContent = `${tags.length} tags personalizadas`;
+  } catch (err) {
+    $("custom-tags-status").textContent = `Error: ${err.message}`;
+  }
+}
+
+async function submitCustomTag(event) {
+  event.preventDefault();
+  const nameInput = $("custom-tag-name");
+  const catInput = $("custom-tag-category");
+  const countInput = $("custom-tag-count");
+  const name = nameInput.value.trim();
+  if (!name) return;
+  const category = catInput.value;
+  const count = parseInt(countInput.value, 10) || 100;
+  try {
+    await api("/api/tags/custom", {
+      method: "POST",
+      body: { name, category, count },
+    });
+    nameInput.value = "";
+    $("custom-tags-status").textContent = `Tag "${name}" guardada`;
+    await refreshCustomTagsList();
+  } catch (err) {
+    $("custom-tags-status").textContent = `Error: ${err.message}`;
+  }
 }
 
 function downloadGalleryItem() {
@@ -6123,6 +6550,14 @@ const REQUIRED_IDS = [
   "image-preview-img",
   "image-preview-empty",
   "image-preview-info",
+  "btn-image-compare",
+  "image-compare",
+  "image-compare-stage",
+  "image-compare-before",
+  "image-compare-after",
+  "image-compare-handle",
+  "image-compare-ratio",
+  "btn-toggle-image-thumbs",
   "image-prev-page",
   "image-next-page",
   "image-page-info",
@@ -6159,6 +6594,7 @@ const REQUIRED_IDS = [
   "video-next-page",
   "video-page-info",
   "video-thumbs",
+  "btn-toggle-video-thumbs",
   "btn-new-video",
   "editor-prompt",
   "editor-refs",
@@ -6175,6 +6611,7 @@ const REQUIRED_IDS = [
   "editor-preview-img",
   "editor-preview-empty",
   "btn-editor-compare",
+  "btn-toggle-editor-thumbs",
   "editor-compare",
   "editor-compare-stage",
   "editor-compare-before",
@@ -6222,9 +6659,13 @@ const REQUIRED_IDS = [
   "upscale-preview-img",
   "upscale-preview-video",
   "upscale-preview-empty",
+  "btn-toggle-upscale-thumbs",
   "tab-gallery",
   "panel-gallery",
   "gallery-filter",
+  "gallery-tag-search",
+  "btn-gallery-clean-failed",
+  "btn-manage-custom-tags",
   "btn-gallery-refresh",
   "gallery-grid",
   "gallery-empty",
@@ -6239,6 +6680,7 @@ const REQUIRED_IDS = [
   "btn-gallery-animate",
   "btn-gallery-edit",
   "btn-gallery-upscale",
+  "btn-gallery-delete",
   "btn-gallery-download",
   "btn-gallery-close",
   "size",
@@ -6326,6 +6768,15 @@ const REQUIRED_IDS = [
   "btn-vision-insert-tags",
   "vision-advanced",
   "btn-vision-tags-only",
+  "custom-tags-modal",
+  "custom-tags-status",
+  "btn-custom-tags-close",
+  "custom-tags-form",
+  "custom-tag-name",
+  "custom-tag-category",
+  "custom-tag-count",
+  "btn-custom-tag-add",
+  "custom-tags-list",
 ];
 
 function bind() {
@@ -6348,6 +6799,21 @@ function bind() {
     state.galleryTab.kind = $("gallery-filter").value;
     loadGalleryTab(1).catch((error) => setStatus(error.message, true));
   });
+  on("gallery-tag-search", "input", (e) => {
+    state.galleryTab.q = e.target.value.trim();
+    loadGalleryTab(1).catch((error) => setStatus(error.message, true));
+  });
+  on("btn-gallery-clean-failed", "click", () => {
+    cleanFailedGenerations().catch((error) => setStatus(error.message, true));
+  });
+  on("btn-manage-custom-tags", "click", openCustomTagsModal);
+  on("btn-custom-tags-close", "click", closeCustomTagsModal);
+  on("custom-tags-form", "submit", submitCustomTag);
+  on("custom-tags-modal", "click", (event) => {
+    if (event.target === $("custom-tags-modal")) {
+      closeCustomTagsModal();
+    }
+  });
   on("gallery-prev", "click", () => {
     loadGalleryTab(state.galleryTab.page - 1).catch((error) =>
       setStatus(error.message, true)
@@ -6364,6 +6830,7 @@ function bind() {
     );
   });
   on("btn-gallery-close", "click", closeGalleryModal);
+  on("btn-gallery-delete", "click", deleteGalleryItem);
   on("btn-gallery-download", "click", downloadGalleryItem);
   on("btn-gallery-use-ref", "click", () => {
     if (!galleryModalItem) {
@@ -6435,6 +6902,12 @@ function bind() {
     openVisionModal().catch((error) => setStatus(error.message, true));
   });
   on("btn-download-image", "click", downloadSelectedImage);
+  on("btn-image-compare", "click", () =>
+    setImageCompareEnabled(!imageCompareActive)
+  );
+  on("btn-toggle-image-thumbs", "click", () =>
+    toggleThumbs("image-thumbs", "btn-toggle-image-thumbs")
+  );
   on("btn-vision-close", "click", closeVisionModal);
   on("vision-modal", "click", (event) => {
     if (event.target === $("vision-modal")) {
@@ -6484,10 +6957,14 @@ function bind() {
   });
   initLightboxInteractions();
   initEditorCompareInteractions();
+  initImageCompareInteractions();
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeLightbox();
       closeGalleryModal();
+      closeCustomTagsModal();
+      if (imageCompareActive) setImageCompareEnabled(false);
+      if (editorCompareActive || editorCompareSelecting) setEditorCompareEnabled(false);
       closeVisionModal();
       closePrepromptModal();
       closeLoraLibrary();
@@ -6517,6 +6994,9 @@ function bind() {
     loadVideoViewer();
   });
   on("btn-new-video", "click", startNewVideo);
+  on("btn-toggle-video-thumbs", "click", () =>
+    toggleThumbs("video-thumbs", "btn-toggle-video-thumbs")
+  );
   on("btn-reload", "click", () => {
     state.imageViewer.page = 1;
     loadImageViewer();
@@ -6548,6 +7028,9 @@ function bind() {
   on("btn-editor-compare", "click", () =>
     setEditorCompareEnabled(!editorCompareActive)
   );
+  on("btn-toggle-editor-thumbs", "click", () =>
+    toggleThumbs("editor-gallery", "btn-toggle-editor-thumbs")
+  );
   on("btn-editor-edit-result", "click", () => {
     editEditorResult().catch((error) => setEditorStatus(error.message, true));
   });
@@ -6577,6 +7060,9 @@ function bind() {
       setUpscaleStatus(error.message, true)
     );
   });
+  on("btn-toggle-upscale-thumbs", "click", () =>
+    toggleThumbs("upscaler-gallery", "btn-toggle-upscale-thumbs")
+  );
   on("upscale-model", "change", upscaleModelNote);
   on("upscale-ckpt", "change", upscaleCkptNote);
   on("btn-upscale", "click", generateUpscale);
