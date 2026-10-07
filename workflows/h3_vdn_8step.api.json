@@ -18,6 +18,7 @@
       "strength": 1.0,
       "lora_mode": "merge",
       "branch_weights": "resident",
+      "retain_buffers": "auto",
       "verbose": false,
       "attention_backend": "grouped"
     }

@@ -2997,6 +2997,14 @@ function updateH3Variants() {
 }
 
 function onH3ProfileChange() {
+  const profile = $("video-h3-profile") ? $("video-h3-profile").value : "";
+  if (profile === "ref2va" && $("video-mode") && $("video-mode").value !== "ref2va") {
+    setSelectValue($("video-mode"), "ref2va");
+    applyVideoEngine();
+  } else if (profile !== "ref2va" && $("video-mode") && $("video-mode").value === "ref2va") {
+    setSelectValue($("video-mode"), "i2v");
+    applyVideoEngine();
+  }
   updateH3Variants();
   updateH3Notes();
 }
@@ -3043,7 +3051,11 @@ function applyVideoEngine() {
   if ($("video-image-field")) $("video-image-field").style.display = showFirst ? "" : "none";
   const lastField = $("video-last-image-field") || $("video-last-field");
   if (lastField) lastField.style.display = showLast ? "" : "none";
-  if ($("video-refs-box")) $("video-refs-box").style.display = showRefs ? "" : "none";
+  const refsBox = $("video-refs-box");
+  if (refsBox) {
+    refsBox.classList.remove("hidden");
+    refsBox.style.display = showRefs ? "" : "none";
+  }
   if ($("video-prompt-field")) $("video-prompt-field").style.display = isWan ? "none" : "";
   if ($("video-h3-prompt-actions")) $("video-h3-prompt-actions").style.display = isWan ? "none" : "";
   $("video-h3-guide").style.display = isWan ? "none" : "";

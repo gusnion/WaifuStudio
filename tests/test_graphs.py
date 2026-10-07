@@ -552,6 +552,7 @@ class PrepareH3Ref2VAGraphTests(unittest.TestCase):
             patched["136"]["inputs"]["vdn_checkpoint"],
             "vdn-minimax-h3-int8-convrot-comfyui-ref2va",
         )
+        self.assertEqual(patched["136"]["inputs"]["retain_buffers"], "auto")
         self.assertEqual(patched["126"]["inputs"]["model"], ["136", 0])
         self.assertEqual(patched["124"]["inputs"]["model"], ["136", 0])
 
@@ -564,6 +565,13 @@ class PrepareH3Ref2VAGraphTests(unittest.TestCase):
                 prompt="test",
                 seed=42,
             )
+
+    def test_h3_vdn_template_has_retain_buffers(self):
+        vdn_path = ROOT / "workflows" / "h3_vdn_8step.api.json"
+        graph = load_graph(vdn_path)
+        self.assertIn("136", graph)
+        self.assertEqual(graph["136"]["class_type"], "ApplyVDNH3")
+        self.assertEqual(graph["136"]["inputs"]["retain_buffers"], "auto")
 
 
 if __name__ == "__main__":
