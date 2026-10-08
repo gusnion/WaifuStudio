@@ -410,17 +410,82 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </div>
 
           <!-- Panel condicional para modo 'personalizado' -->
-          <div id="video-custom-settings-panel" class="hidden" style="margin-top: 0.6rem; padding: 0.5rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 6px;">
-            <span style="font-size: 0.78rem; font-weight: bold; color: var(--text);">Ajustes Avanzados Personalizados</span>
-            <div class="grid-2" style="margin-top: 0.35rem;">
+          <div id="video-custom-settings-panel" class="hidden" style="margin-top: 0.6rem; padding: 0.6rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span style="font-size: 0.8rem; font-weight: bold; color: var(--text);">Ajustes Avanzados Personalizados</span>
+              <span style="font-size: 0.72rem; color: var(--text-dim, #888);">Control total del motor H3</span>
+            </div>
+
+            <div class="grid-2">
+              <label class="field" id="video-h3-encoder-field">
+                <span>Text Encoder</span>
+                <select id="video-h3-encoder">
+                  <option value="4b" selected>Qwen3-VL 4B (Recomendado 12GB VRAM)</option>
+                  <option value="32b">Qwen3-VL 32B (Semántica Alta · &gt;16GB VRAM)</option>
+                </select>
+              </label>
+
               <label class="field" id="video-h3-variant-field">
                 <span>Pasos de Generación</span>
                 <select id="video-h3-variant"></select>
               </label>
-              <label class="field field-inline" id="video-h3-sage-field">
-                <span>Sage Attention</span>
-                <input id="video-h3-sage" type="checkbox">
+            </div>
+            <p id="video-h3-encoder-warning" class="field-hint hidden" style="color: var(--warning, #e6a23c); font-size: 0.72rem; font-weight: bold; margin-top: 0.2rem; margin-bottom: 0.2rem;">⚠️ Qwen3-VL 32B consume &gt;16 GB VRAM y forzará swap a RAM en la RTX 3060 (mayor tiempo de render).</p>
+
+            <div class="grid-2" style="margin-top: 0.35rem;">
+              <label class="field">
+                <span>Sampler</span>
+                <select id="video-h3-sampler">
+                  <option value="res_multistep" selected>res_multistep (Óptimo H3)</option>
+                  <option value="euler">euler</option>
+                  <option value="dpmpp_2m">dpmpp_2m</option>
+                  <option value="uni_pc">uni_pc</option>
+                </select>
               </label>
+
+              <label class="field">
+                <span>Scheduler</span>
+                <select id="video-h3-scheduler">
+                  <option value="simple" selected>simple (Óptimo H3)</option>
+                  <option value="karras">karras</option>
+                  <option value="sgm_uniform">sgm_uniform</option>
+                  <option value="normal">normal</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="grid-2" style="margin-top: 0.35rem;">
+              <label class="field">
+                <span>Fuerza LoRA Turbo <span id="video-h3-lora-strength-val" style="color: var(--accent); font-weight: bold;">1.00</span></span>
+                <input id="video-h3-lora-strength" type="range" min="0.1" max="1.0" step="0.05" value="1.0">
+              </label>
+
+              <label class="field">
+                <span>Denoise <span id="video-h3-denoise-val" style="color: var(--accent); font-weight: bold;">1.00</span></span>
+                <input id="video-h3-denoise" type="range" min="0.1" max="1.0" step="0.05" value="1.0">
+              </label>
+            </div>
+
+            <div class="grid-2" style="margin-top: 0.35rem;">
+              <label class="field">
+                <span>VAE Tiled (Anti-OOM)</span>
+                <select id="video-h3-tile-size">
+                  <option value="256" selected>256 (Estándar / Rápido)</option>
+                  <option value="192">192 (Ahorro VRAM)</option>
+                  <option value="128">128 (Mínima VRAM · FHD/2K)</option>
+                </select>
+              </label>
+
+              <div style="display: flex; flex-direction: column; justify-content: center; gap: 0.25rem; margin-top: 0.25rem;">
+                <label class="field field-inline" style="cursor: pointer;">
+                  <input id="video-h3-audio" type="checkbox" checked>
+                  <span style="font-size: 0.78rem;">Audio Ambiental (FL2VA)</span>
+                </label>
+                <label class="field field-inline" id="video-h3-sage-field" style="cursor: pointer;">
+                  <input id="video-h3-sage" type="checkbox">
+                  <span style="font-size: 0.78rem;">Sage Attention (GPU)</span>
+                </label>
+              </div>
             </div>
           </div>
 

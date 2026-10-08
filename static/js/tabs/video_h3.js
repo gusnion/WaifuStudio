@@ -368,6 +368,23 @@ function initVideoH3() {
   on("video-h3-seconds", "change", updateH3Notes);
   on("video-h3-aspect", "change", fillH3Sizes);
   on("video-h3-size", "change", updateH3Notes);
+  on("video-h3-encoder", "change", () => {
+    const enc = $("video-h3-encoder") ? $("video-h3-encoder").value : "4b";
+    const warn = $("video-h3-encoder-warning");
+    if (warn) {
+      warn.classList.toggle("hidden", enc !== "32b");
+    }
+  });
+  on("video-h3-lora-strength", "input", () => {
+    const slider = $("video-h3-lora-strength");
+    const badge = $("video-h3-lora-strength-val");
+    if (slider && badge) badge.textContent = Number(slider.value).toFixed(2);
+  });
+  on("video-h3-denoise", "input", () => {
+    const slider = $("video-h3-denoise");
+    const badge = $("video-h3-denoise-val");
+    if (slider && badge) badge.textContent = Number(slider.value).toFixed(2);
+  });
   on("btn-h3-insert-template", "click", insertH3Template);
   on("btn-h3-template-portrait", "click", () => {
     const area = $("video-prompt");

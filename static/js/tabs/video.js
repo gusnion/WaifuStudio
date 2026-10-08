@@ -479,6 +479,22 @@ async function generateVideo() {
     }
     payload.variant = $("video-h3-variant").value;
     payload.sage = $("video-h3-sage").checked;
+    if (payload.profile === "personalizado") {
+      const encEl = $("video-h3-encoder");
+      if (encEl) payload.encoder = encEl.value;
+      const loraStrEl = $("video-h3-lora-strength");
+      if (loraStrEl) payload.lora_strength = Number(loraStrEl.value);
+      const denoiseEl = $("video-h3-denoise");
+      if (denoiseEl) payload.denoise = Number(denoiseEl.value);
+      const samplerEl = $("video-h3-sampler");
+      if (samplerEl) payload.sampler_name = samplerEl.value;
+      const schedEl = $("video-h3-scheduler");
+      if (schedEl) payload.scheduler = schedEl.value;
+      const tileEl = $("video-h3-tile-size");
+      if (tileEl) payload.tile_size = Number(tileEl.value);
+      const audioEl = $("video-h3-audio");
+      if (audioEl) payload.include_audio = audioEl.checked;
+    }
     const secondsEl = $("video-h3-seconds") || $("video-seconds");
     payload.seconds = Number(secondsEl ? secondsEl.value : 8);
     payload.width = size.width;

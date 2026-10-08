@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Request
 
 from app import video as video_module
+from app.config import APP_ROOT
 from app.engine import EngineError
 from app.h3_presets import (
     h3_aspect,
@@ -244,6 +245,10 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
     if engine_kind == "h3":
         if mode == "v2v":
             template = h3_template_path(resolve_h3_profile("ref2va"))
+        elif h3_profile["id"] == "personalizado" and payload.get("encoder") == "32b":
+            template = APP_ROOT / "workflows" / "h3_fl2va_vertical.api.json"
+        elif h3_profile["id"] == "personalizado" and h3_variant["id"] == "vdn8":
+            template = APP_ROOT / "workflows" / "h3_vdn_8step.api.json"
         else:
             template = h3_template_path(h3_profile)
     elif mode == "flf2v":
@@ -278,6 +283,17 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         stored_params["sage"] = sage
         stored_params["width"] = width
         stored_params["height"] = height
+        for opt_key in (
+            "encoder",
+            "lora_strength",
+            "denoise",
+            "sampler_name",
+            "scheduler",
+            "tile_size",
+            "include_audio",
+        ):
+            if opt_key in payload:
+                stored_params[opt_key] = payload[opt_key]
     gen_id = st.add(
         engine_kind,
         motion_positive if engine_kind == "wan" else prompt,
@@ -311,6 +327,17 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         job["sage"] = sage
         job["width"] = width
         job["height"] = height
+        for opt_key in (
+            "encoder",
+            "lora_strength",
+            "denoise",
+            "sampler_name",
+            "scheduler",
+            "tile_size",
+            "include_audio",
+        ):
+            if opt_key in payload:
+                job[opt_key] = payload[opt_key]
     _JOBS[gen_id] = {
         "prompt_id": None,
         "tracker": None,

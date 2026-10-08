@@ -1095,6 +1095,42 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(job["profile"], "vdn")
         self.assertEqual(job["variant"], "vdn8")
 
+    def test_h3_personalizado_opciones_avanzadas(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "h3",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "prompt": "p descripcion",
+                "profile": "personalizado",
+                "encoder": "32b",
+                "lora_strength": 0.85,
+                "denoise": 0.9,
+                "sampler_name": "euler",
+                "scheduler": "karras",
+                "tile_size": 192,
+                "include_audio": False,
+                "seconds": 8,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["profile"], "personalizado")
+        self.assertEqual(job["encoder"], "32b")
+        self.assertIn("h3_fl2va_vertical.api.json", job["template"])
+        self.assertEqual(job["lora_strength"], 0.85)
+        self.assertEqual(job["denoise"], 0.9)
+        self.assertEqual(job["sampler_name"], "euler")
+        self.assertEqual(job["scheduler"], "karras")
+        self.assertEqual(job["tile_size"], 192)
+        self.assertFalse(job["include_audio"])
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["encoder"], "32b")
+        self.assertEqual(params["lora_strength"], 0.85)
+        self.assertEqual(params["sampler_name"], "euler")
+
     def test_h3_ref2va_profile(self):
         queue = RecordingQueue()
         response = self.make_client(queue=queue).post(

@@ -669,6 +669,13 @@ def prepare_h3_graph(
     frames: int | None = None,
     variant: object = None,
     sage: bool = False,
+    encoder: str | None = None,
+    lora_strength: float | None = None,
+    denoise: float | None = None,
+    sampler_name: str | None = None,
+    scheduler: str | None = None,
+    tile_size: int | None = None,
+    include_audio: bool = True,
 ) -> dict:
     """Copia el grafo H3 FL2VA y fija primer/último frame, prompt, seed y tamaño.
 
@@ -820,6 +827,87 @@ def prepare_h3_graph(
     lora_id = _patch_h3_variant(prepared, variant_entry)
     if sage:
         _patch_h3_sage(prepared, lora_id)
+
+    if lora_strength is not None:
+        try:
+            ls = float(lora_strength)
+            if 0.0 <= ls <= 2.0:
+                for node in prepared.values():
+                    if isinstance(node, dict) and node.get("class_type") == "LoraLoaderModelOnly":
+                        node["inputs"]["strength_model"] = ls
+        except (ValueError, TypeError):
+            pass
+
+    if sampler_name is not None and isinstance(sampler_name, str) and sampler_name.strip():
+        for node in prepared.values():
+            if isinstance(node, dict) and node.get("class_type") == "KSamplerSelect":
+                node["inputs"]["sampler_name"] = sampler_name.strip()
+
+    if scheduler is not None and isinstance(scheduler, str) and scheduler.strip():
+        for node in prepared.values():
+            if isinstance(node, dict) and node.get("class_type") == "BasicScheduler":
+                node["inputs"]["scheduler"] = scheduler.strip()
+
+    if denoise is not None:
+        try:
+            dn = float(denoise)
+            if 0.0 < dn <= 1.0:
+                for node in prepared.values():
+                    if isinstance(node, dict) and node.get("class_type") == "BasicScheduler":
+                        node["inputs"]["denoise"] = dn
+        except (ValueError, TypeError):
+            pass
+
+    if tile_size is not None:
+        try:
+            ts = int(tile_size)
+            if ts in (64, 128, 192, 256, 384, 512):
+                for node in prepared.values():
+                    if isinstance(node, dict) and node.get("class_type") == "VAEDecodeTiled":
+                        node["inputs"]["tile_size"] = ts
+        except (ValueError, TypeError):
+            pass
+
+    if include_audio is False:
+        for node in prepared.values():
+            if isinstance(node, dict) and node.get("class_type") == "CreateVideo":
+                node["inputs"].pop("audio", None)
+        audio_nodes = [
+            nid for nid, node in prepared.items()
+            if isinstance(node, dict) and node.get("class_type") == "VAEDecodeAudio"
+        ]
+        for nid in audio_nodes:
+            prepared.pop(nid, None)
+
+    if encoder == "32b":
+        for nid, node in prepared.items():
+            if isinstance(node, dict) and node.get("class_type") == "CLIPLoader":
+                node["inputs"]["clip_name"] = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+                node["inputs"]["type"] = "minimax"
+        if "135" in prepared:
+            prepared.pop("135", None)
+            for node in prepared.values():
+                if isinstance(node, dict) and isinstance(node.get("inputs"), dict):
+                    if node["inputs"].get("clip") == ["135", 0]:
+                        node["inputs"]["clip"] = ["128", 0]
+    elif encoder == "4b":
+        for nid, node in prepared.items():
+            if isinstance(node, dict) and node.get("class_type") == "CLIPLoader":
+                node["inputs"]["clip_name"] = "qwen3vl_4b_fp8_scaled.safetensors"
+                node["inputs"]["type"] = "krea2"
+        if "135" not in prepared and "128" in prepared:
+            prepared["135"] = {
+                "class_type": "ClipProjApply",
+                "inputs": {
+                    "clip": ["128", 0],
+                    "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+                },
+            }
+            for node in prepared.values():
+                if isinstance(node, dict) and isinstance(node.get("inputs"), dict):
+                    if node["inputs"].get("clip") == ["128", 0]:
+                        node["inputs"]["clip"] = ["135", 0]
+
     return prepared
 
 
@@ -879,6 +967,13 @@ def build_video_graph(job: dict) -> dict:
             frames=frames,
             variant=variant,
             sage=job.get("sage", False),
+            encoder=job.get("encoder"),
+            lora_strength=job.get("lora_strength"),
+            denoise=job.get("denoise"),
+            sampler_name=job.get("sampler_name"),
+            scheduler=job.get("scheduler"),
+            tile_size=job.get("tile_size"),
+            include_audio=job.get("include_audio", True),
         )
     template = job.get("template")
     if not isinstance(template, str) or not template.strip():

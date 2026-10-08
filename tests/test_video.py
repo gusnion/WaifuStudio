@@ -1178,6 +1178,85 @@ class BuildVideoGraphH3Tests(unittest.TestCase):
                     build_video_graph(self.job(**override))
 
 
+class H3PersonalizadoCustomOptionsTests(unittest.TestCase):
+    def job(self, **overrides):
+        data = {
+            "engine": "h3",
+            "profile": "personalizado",
+            "variant": "turbo4",
+            "image_name": "first.png",
+            "last_image_name": "last.png",
+            "prompt": "integrated_multimodal_description: test",
+            "seconds": 8,
+            "seed": 42,
+        }
+        data.update(overrides)
+        return data
+
+    def test_lora_strength_personalizado(self):
+        graph = build_video_graph(self.job(lora_strength=0.75))
+        lora_node = next(
+            n for n in graph.values()
+            if isinstance(n, dict) and n.get("class_type") == "LoraLoaderModelOnly"
+        )
+        self.assertAlmostEqual(lora_node["inputs"]["strength_model"], 0.75)
+
+    def test_sampler_scheduler_denoise_personalizado(self):
+        graph = build_video_graph(
+            self.job(sampler_name="euler", scheduler="karras", denoise=0.8)
+        )
+        sampler_node = next(
+            n for n in graph.values()
+            if isinstance(n, dict) and n.get("class_type") == "KSamplerSelect"
+        )
+        scheduler_node = next(
+            n for n in graph.values()
+            if isinstance(n, dict) and n.get("class_type") == "BasicScheduler"
+        )
+        self.assertEqual(sampler_node["inputs"]["sampler_name"], "euler")
+        self.assertEqual(scheduler_node["inputs"]["scheduler"], "karras")
+        self.assertAlmostEqual(scheduler_node["inputs"]["denoise"], 0.8)
+
+    def test_tile_size_personalizado(self):
+        graph = build_video_graph(self.job(tile_size=192))
+        vae_node = next(
+            n for n in graph.values()
+            if isinstance(n, dict) and n.get("class_type") == "VAEDecodeTiled"
+        )
+        self.assertEqual(vae_node["inputs"]["tile_size"], 192)
+
+    def test_include_audio_false_remueve_audio(self):
+        graph = build_video_graph(self.job(include_audio=False))
+        create_video_node = next(
+            n for n in graph.values()
+            if isinstance(n, dict) and n.get("class_type") == "CreateVideo"
+        )
+        self.assertNotIn("audio", create_video_node["inputs"])
+        self.assertFalse(
+            any(
+                isinstance(n, dict) and n.get("class_type") == "VAEDecodeAudio"
+                for n in graph.values()
+            )
+        )
+
+    def test_encoder_32b_personalizado(self):
+        graph = build_video_graph(self.job(encoder="32b"))
+        clip_node = next(
+            n for n in graph.values()
+            if isinstance(n, dict) and n.get("class_type") == "CLIPLoader"
+        )
+        self.assertEqual(
+            clip_node["inputs"]["clip_name"],
+            "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        )
+        self.assertFalse(
+            any(
+                isinstance(n, dict) and n.get("class_type") == "ClipProjApply"
+                for n in graph.values()
+            )
+        )
+
+
 class VideoTestCase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
