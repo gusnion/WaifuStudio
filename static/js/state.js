@@ -201,6 +201,7 @@ const state = {
   upscaleSources: [],
   upscaleSourceId: null,
   upscaleLocalFile: null,
+  localFilesOriginalPaths: new Map(),
   upscaleGallery: {
     page: 1,
     total: 1,

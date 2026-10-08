@@ -577,3 +577,5 @@ export {
   initEditorCompareInteractions,
   initCompare,
 };
+
+export { UniversalViewer } from "./universal_viewer.js";

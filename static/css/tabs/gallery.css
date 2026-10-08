@@ -255,3 +255,25 @@
   align-self: flex-start;
   margin-top: 0.3rem;
 }
+
+/* M18-13: Paginación fija inmutable y espaciado de detalle */
+.gallery-pagination-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 0.5rem 0.8rem;
+  z-index: 10;
+  margin-top: auto;
+  border-radius: 0 0 6px 6px;
+}
+
+#gallery-modal .modal-footer {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  align-items: center !important;
+}

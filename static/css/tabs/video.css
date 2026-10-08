@@ -117,3 +117,19 @@
   font-size: 0.75rem;
   padding: 0.3rem 0.45rem;
 }
+
+/* M18-12: Center-crop y aviso para referencias H3 */
+.video-ref-crop,
+#video-refs-list img,
+.video-preview-box img {
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+#video-crop-notice {
+  font-size: 0.75rem;
+  color: var(--accent);
+  margin-top: 0.35rem;
+  line-height: 1.35;
+  display: block;
+}

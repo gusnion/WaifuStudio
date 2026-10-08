@@ -362,9 +362,14 @@ async function addVideoRefs(fileList) {
     setVideoStatus(`Máximo ${VIDEO_REF_LIMIT} referencias de personaje`, true);
   }
   for (const file of files.slice(0, room)) {
+    const originalPath = file.path || file.webkitRelativePath || file.name;
+    if (state.localFilesOriginalPaths) {
+      state.localFilesOriginalPaths.set(file.name, originalPath);
+    }
     const b64 = await readFileBase64(file);
     state.videoRefs.push({
       name: file.name,
+      originalPath,
       b64,
       url: URL.createObjectURL(file),
     });
@@ -609,6 +614,20 @@ function initVideoTab() {
     addVideoRefs(event.target.files).catch((error) =>
       setVideoStatus(error.message, true)
     );
+  });
+  on("video-image", "change", (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file && state.localFilesOriginalPaths) {
+      const originalPath = file.path || file.webkitRelativePath || file.name;
+      state.localFilesOriginalPaths.set(file.name, originalPath);
+    }
+  });
+  on("video-last-image", "change", (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file && state.localFilesOriginalPaths) {
+      const originalPath = file.path || file.webkitRelativePath || file.name;
+      state.localFilesOriginalPaths.set(file.name, originalPath);
+    }
   });
   on("btn-video-clear-refs", "click", clearVideoRefs);
 }

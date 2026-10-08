@@ -107,9 +107,14 @@ async function addEditorRefs(fileList) {
     );
   }
   for (const file of files.slice(0, room)) {
+    const originalPath = file.path || file.webkitRelativePath || file.name;
+    if (state.localFilesOriginalPaths) {
+      state.localFilesOriginalPaths.set(file.name, originalPath);
+    }
     const b64 = await readFileBase64(file);
     state.editorRefs.push({
       name: file.name,
+      originalPath,
       b64,
       url: URL.createObjectURL(file),
     });
@@ -333,8 +338,10 @@ function fillEditorSizes() {
   }
   select.appendChild(option("original", "Original (1ª referencia)"));
   select.appendChild(option("manual", "Manual"));
-  if ([...select.options].some((item) => item.value === previous)) {
+  if (previous && [...select.options].some((item) => item.value === previous)) {
     select.value = previous;
+  } else {
+    select.value = "original";
   }
   applyEditorSizeSelection();
 }

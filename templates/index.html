@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/static/css/tabs/editor.css">
   <link rel="stylesheet" href="/static/css/tabs/upscaler.css">
   <link rel="stylesheet" href="/static/css/tabs/gallery.css">
+  <link rel="stylesheet" href="/static/css/tabs/test_lab.css">
 </head>
 <body>
   <header class="topbar">
@@ -21,13 +22,29 @@
       <button id="tab-editor" class="tab" type="button">Editor</button>
       <button id="tab-upscaler" class="tab" type="button">Upscaler</button>
       <button id="tab-gallery" class="tab" type="button">Galería</button>
+      <button id="tab-test" class="tab" type="button">TEST</button>
     </nav>
-    <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
+    <div class="topbar-actions">
+      <button id="btn-universal-reload" class="topbar-btn" type="button" title="Recargar pestaña actual" aria-label="Recargar pestaña actual">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      </button>
+      <div class="language-selector-wrap">
+        <button id="btn-language-selector" class="topbar-btn" type="button" title="Seleccionar idioma" aria-label="Idioma">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="lang-current-label">ES</span>
+        </button>
+        <div id="language-dropdown" class="language-dropdown hidden">
+          <button type="button" class="lang-option active" data-lang="es">Español (ES)</button>
+          <button type="button" class="lang-option" data-lang="en">English (EN)</button>
+        </div>
+      </div>
+      <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
+    </div>
   </header>
 
   <main>
-    <section id="panel-image" class="panel active">
-      <aside class="controls image-controls">
+    <section id="panel-image" class="panel tab-canonical-layout active">
+      <aside class="controls image-controls tab-sidebar">
         <div class="controls-column controls-column-primary">
           <div class="generate-block">
             <div class="generate-row">
@@ -100,7 +117,7 @@
           </details>
 
           <details id="section-params" class="advanced panel-section" data-section="params">
-            <summary>Opciones de generación</summary>
+            <summary>Opciones de generación <button type="button" class="btn-help" data-help="Configuración de muestreo, pasos, CFG y dimensiones de la imagen.">?</button></summary>
             <div class="section-body">
               <div class="grid-2">
                 <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
@@ -110,10 +127,35 @@
                 <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
               </div>
               <div id="section-size" class="section-subblock">
-                <label class="field">
-                  <span>Tamaño</span>
-                  <select id="size"></select>
-                </label>
+                <div class="grid-2">
+                  <label class="field">
+                    <span>Orientación</span>
+                    <select id="image-res-orientation">
+                      <option value="vertical">Vertical (9:16)</option>
+                      <option value="horizontal">Horizontal (16:9)</option>
+                      <option value="square" selected>Cuadrado (1:1)</option>
+                      <option value="h3_vertical">H3 Vertical</option>
+                      <option value="h3_horizontal">H3 Horizontal</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Calidad</span>
+                    <select id="image-res-quality">
+                      <option value="sd">SD</option>
+                      <option value="hd">HD</option>
+                      <option value="fhd" selected>FHD (1024)</option>
+                      <option value="qhd">QHD</option>
+                      <option value="2k">2K</option>
+                    </select>
+                  </label>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+                  <span id="image-res-badge" class="field-hint" style="font-weight: 500;">1024 × 1024 (FHD)</span>
+                  <label class="field field-inline" style="margin: 0; padding: 0;">
+                    <span style="font-size: 0.72rem; text-transform: none;">Ajuste rápido</span>
+                    <select id="size" style="width: auto; padding: 0.2rem 0.4rem; font-size: 0.75rem;"></select>
+                  </label>
+                </div>
                 <div id="manual-size" class="grid-2 hidden">
                   <label class="field"><span>Ancho</span><input id="width" type="number" value="1024" step="8" min="64" max="4096"></label>
                   <label class="field"><span>Alto</span><input id="height" type="number" value="1024" step="8" min="64" max="4096"></label>
@@ -132,15 +174,15 @@
 
         <div class="controls-column controls-column-zones">
           <label class="field prompt-general-field">
-            <span>Prompt general</span>
+            <span>Prompt general <button type="button" class="btn-help" data-help="Describe la escena en lenguaje natural: sujeto, estilo, entorno o acción. Se descompone automáticamente en tags danbooru por zonas.">?</button></span>
             <textarea id="prompt-general" rows="3" placeholder="Describe en lenguaje natural: escena, personaje, acción, estilo…"></textarea>
           </label>
 
           <div class="zone-toolbar">
             <div class="enhance-row">
               <button id="btn-enhance" type="button">Generar prompt</button>
-              <span id="llm-status" class="llm-status" title="">LLM: …</span>
-              <label class="inline-field">
+              <span id="llm-status" class="llm-status hidden" style="display: none !important;" title="">LLM: …</span>
+              <label class="inline-field control-inline">
                 <span>Fuerza</span>
                 <select id="enhance-strength">
                   <option value="fiel">Fiel</option>
@@ -204,10 +246,10 @@
         </div>
       </aside>
 
-      <section class="gallery-panel">
+      <section class="gallery-panel tab-viewport">
         <div class="gallery-header">
           <h2>Galería</h2>
-          <button id="btn-reload" type="button">Recargar</button>
+          <button id="btn-reload" class="local-reload-btn" type="button">Recargar</button>
         </div>
         <div id="image-preview" class="image-preview" title="Ampliar imagen">
           <img id="image-preview-img" class="hidden" alt="Generación seleccionada">
@@ -240,8 +282,8 @@
       </section>
     </section>
 
-    <section id="panel-video" class="panel">
-      <aside class="controls">
+    <section id="panel-video" class="panel tab-canonical-layout">
+      <aside class="controls tab-sidebar">
         <div class="generate-row">
           <button id="btn-video-generate" class="primary" type="button">Generar video</button>
           <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
@@ -259,8 +301,8 @@
         </select>
 
         <!-- BLOQUE 1: Entradas y Modo de Generación -->
-        <fieldset class="video-block" id="video-block-mode">
-          <legend>1. Entradas y Modo</legend>
+        <fieldset class="video-block control-card" id="video-block-mode">
+          <legend>1. Entradas y Modo <button type="button" class="btn-help" data-help="A más resolución de entrada, más detalle facial. Para vertical usa 9:16 (~1008×1792); para horizontal 16:9 (~1792×1008). Referencias se recortan centradas si difiere el ratio.">?</button></legend>
           <label class="field" id="video-mode-field">
             <span>Modo</span>
             <select id="video-mode">
@@ -275,6 +317,7 @@
             <span id="video-image-label">Imagen inicial (first frame)</span>
             <input id="video-image" type="file" accept="image/png,image/jpeg,image/webp">
             <p id="video-input-hint" class="field-hint">A más resolución de entrada, más detalle facial. Para vertical usa 9:16 (~1008×1792); para horizontal 16:9 (~1792×1008).</p>
+            <p id="video-crop-notice" class="field-hint">ℹ️ La imagen de referencia se recortará centrada para adaptarse al ratio de vídeo.</p>
           </label>
 
           <label class="field" id="video-last-image-field" style="display: none">
@@ -305,17 +348,17 @@
         </fieldset>
 
         <!-- BLOQUE 2: Prompt H3, Asistente y Guía Oficial -->
-        <fieldset class="video-block" id="video-block-prompt">
-          <legend>2. Prompt Cinematográfico H3</legend>
+        <fieldset class="video-block control-card" id="video-block-prompt">
+          <legend>2. Prompt Cinematográfico H3 <button type="button" class="btn-help" data-help="H3 espera tres bloques en inglés técnico: multimodal, paisaje sonoro foley y música instrumental.">?</button></legend>
           <label class="field" id="video-prompt-field">
             <span>Prompt H3</span>
             <textarea id="video-prompt" rows="4" placeholder="integrated_multimodal_description: ...&#10;overall_soundscape: ...&#10;non_diegetic_music: ..."></textarea>
           </label>
 
           <div id="video-h3-prompt-actions">
-            <div class="enhance-row" style="display: flex; gap: 0.5rem; align-items: center;">
+            <div class="enhance-row control-inline" style="display: flex; gap: 0.5rem; align-items: center;">
               <button id="btn-h3-prompt" type="button">Mejorar prompt con IA</button>
-              <label class="inline-field" style="display: flex; align-items: center; gap: 0.3rem;">
+              <label class="inline-field control-inline" style="display: flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 0.78rem;">Fuerza</span>
                 <select id="video-h3-prompt-strength">
                   <option value="fiel">Fiel</option>
@@ -365,8 +408,8 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         </fieldset>
 
         <!-- BLOQUE 3: Configuración de Render y Perfiles -->
-        <fieldset class="video-block" id="video-block-settings">
-          <legend>3. Configuración y Rendimiento</legend>
+        <fieldset class="video-block control-card" id="video-block-settings">
+          <legend>3. Configuración y Rendimiento <button type="button" class="btn-help" data-help="Perfil de render, duración y resolución óptima (8 s recomendado).">?</button></legend>
           <div class="grid-2">
             <label class="field" id="video-h3-profile-field">
               <span>Perfil de Calidad</span>
@@ -499,10 +542,10 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
 
       </aside>
 
-      <section class="gallery-panel">
+      <section class="gallery-panel tab-viewport">
         <div class="gallery-header">
           <h2>Galería de video</h2>
-          <button id="btn-video-reload" type="button">Recargar</button>
+          <button id="btn-video-reload" class="local-reload-btn" type="button">Recargar</button>
         </div>
         <div class="video-preview-box">
           <video id="video-preview" class="hidden" controls preload="metadata"></video>
@@ -527,8 +570,8 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
       </section>
     </section>
 
-    <section id="panel-editor" class="panel">
-      <aside class="controls">
+    <section id="panel-editor" class="panel tab-canonical-layout">
+      <aside class="controls tab-sidebar">
         <div class="generate-row">
           <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
           <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
@@ -587,9 +630,9 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         </label>
       </aside>
 
-      <section class="gallery-panel">
+      <section class="gallery-panel tab-viewport">
         <div class="gallery-header">
-          <h2>Editor (Qwen-Image 2.1)</h2>
+          <h2>Editor (Qwen-Image 2.1) <button type="button" class="btn-help" data-help="Edición de imágenes con IA. Usa tamaño Original (1ª ref) y CFG=1 para óptimos resultados certificados.">?</button></h2>
         </div>
         <div id="editor-preview" class="image-preview">
           <img id="editor-preview-img" class="hidden" alt="Imagen del editor">
@@ -628,8 +671,8 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
       </section>
     </section>
 
-    <section id="panel-upscaler" class="panel">
-      <aside class="controls">
+    <section id="panel-upscaler" class="panel tab-canonical-layout">
+      <aside class="controls tab-sidebar">
         <div class="generate-row">
           <button id="btn-upscale" class="primary" type="button">Escalar</button>
           <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
@@ -701,16 +744,26 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         </label>
       </aside>
 
-      <section class="gallery-panel">
+      <section class="gallery-panel tab-viewport">
         <div class="gallery-header">
-          <h2>Origen</h2>
+          <h2>Origen <button type="button" class="btn-help" data-help="Escala imágenes con RealESRGAN x2 o interpola fotogramas en vídeos con RIFE conservando el audio original.">?</button></h2>
         </div>
         <div id="upscale-preview" class="image-preview" title="Ampliar imagen">
           <img id="upscale-preview-img" class="hidden" alt="Imagen seleccionada">
           <video id="upscale-preview-video" class="hidden" controls preload="metadata"></video>
+          <div id="upscale-compare" class="image-compare hidden">
+            <div id="upscale-compare-stage" class="image-compare-stage">
+              <img id="upscale-compare-before" class="image-compare-img" alt="Antes" draggable="false">
+              <img id="upscale-compare-after" class="image-compare-img" alt="Después" draggable="false">
+            </div>
+            <div id="upscale-compare-handle" class="image-compare-handle" role="slider" tabindex="0" aria-label="Comparación antes/después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+              <span id="upscale-compare-ratio" class="image-compare-ratio">50%</span>
+            </div>
+          </div>
           <span id="upscale-preview-empty" class="empty">Sin generaciones de imagen</span>
         </div>
         <div class="viewer-toolbar upscaler-viewer-toolbar">
+          <button id="btn-upscale-compare" type="button" aria-pressed="false" disabled>Comparar</button>
           <button id="btn-toggle-upscale-thumbs" type="button" title="Ocultar/mostrar miniaturas" aria-pressed="true">Miniaturas</button>
         </div>
         <section id="upscaler-gallery" class="upscaler-gallery">
@@ -741,14 +794,90 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         <button id="btn-gallery-clean-failed" type="button" title="Limpiar generaciones fallidas">Limpiar fallidas</button>
         <button id="btn-manage-custom-tags" type="button" title="Gestionar tags personalizadas">Tags personalizadas</button>
         <button id="btn-gallery-refresh" type="button" title="Refrescar la galería">Refrescar</button>
+      </div>
+      <div id="gallery-grid" class="gallery-grid"></div>
+      <p id="gallery-empty" class="empty hidden"></p>
+      <div id="gallery-pagination-bar" class="gallery-pagination-bar">
         <div class="viewer-pager gallery-pager">
           <button id="gallery-prev" type="button" aria-label="Página anterior" disabled>‹</button>
           <span id="gallery-info">página 1 de 1</span>
           <button id="gallery-next" type="button" aria-label="Página siguiente" disabled>›</button>
         </div>
       </div>
-      <div id="gallery-grid" class="gallery-grid"></div>
-      <p id="gallery-empty" class="empty hidden"></p>
+    </section>
+
+    <section id="panel-test" class="panel tab-canonical-layout">
+      <aside class="controls tab-sidebar test-sidebar">
+        <!-- BLOQUE 1: Selector Dual de Resolución -->
+        <fieldset class="control-card" id="test-card-res">
+          <legend>
+            1. Selector Dual (Orientación + Calidad)
+            <button type="button" class="btn-help" data-help="Calcula automáticamente el ancho y alto óptimos según el aspect ratio seleccionado y la calidad deseada.">?</button>
+          </legend>
+          <label class="field">
+            <span>Orientación</span>
+            <select id="test-res-orientation">
+              <option value="vertical" selected>Vertical (9:16)</option>
+              <option value="horizontal">Horizontal (16:9)</option>
+              <option value="square">Cuadrado (1:1)</option>
+              <option value="h3_vertical">H3 Vertical (9:16)</option>
+              <option value="h3_horizontal">H3 Horizontal (16:9)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Calidad Relativa</span>
+            <select id="test-res-quality">
+              <option value="sd">SD (Rápido)</option>
+              <option value="hd">HD (Balanceado)</option>
+              <option value="fhd" selected>FHD (1024 Óptimo)</option>
+              <option value="qhd">QHD (Detalle)</option>
+              <option value="2k">2K (Máximo)</option>
+            </select>
+          </label>
+          <div class="field">
+            <span>Dimensiones Resultantes</span>
+            <span id="test-res-badge" class="test-case-badge" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">832 × 1472 (FHD)</span>
+          </div>
+        </fieldset>
+
+        <!-- BLOQUE 2: Control Inline y Fuerza -->
+        <fieldset class="control-card" id="test-card-inline">
+          <legend>
+            2. Alineación Rígida (.control-inline)
+            <button type="button" class="btn-help" data-help="Garantiza que las etiquetas flotantes como FUERZA queden alineadas en una sola línea horizontal con sus selectores y botones.">?</button>
+          </legend>
+          <div class="control-inline" style="margin-top: 0.25rem;">
+            <span style="font-size: 0.78rem; font-weight: bold; color: var(--muted); text-transform: uppercase;">FUERZA</span>
+            <select style="flex: 1;">
+              <option value="fiel">Fiel</option>
+              <option value="balanceado" selected>Balanceado</option>
+              <option value="creativo">Creativo</option>
+            </select>
+            <button type="button" class="primary" style="padding: 0.45rem 0.7rem;">IA</button>
+          </div>
+          <p class="field-hint" style="margin-top: 0.2rem;">Etiqueta, selector y botón en la misma fila sin saltos de línea erráticos.</p>
+        </fieldset>
+
+        <!-- BLOQUE 3: Acciones Sandbox y Visor -->
+        <fieldset class="control-card" id="test-card-viewer">
+          <legend>
+            3. Banco de Pruebas de Visor
+            <button type="button" class="btn-help" data-help="Prueba interactiva del zoom 8x, split comparador con recorte y tira dinámica de miniaturas calculada con ResizeObserver.">?</button>
+          </legend>
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <button id="btn-test-zoom" type="button">Probar Zoom 2.5× / 1×</button>
+            <button id="btn-test-compare" type="button">Probar Split Comparación</button>
+            <button id="btn-test-add-thumbs" type="button">Añadir 4 Miniaturas (ResizeObserver)</button>
+          </div>
+          <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid var(--border);">
+            <span id="test-sandbox-status" class="test-status-pill">● Laboratorio listo</span>
+          </div>
+        </fieldset>
+      </aside>
+
+      <div class="tab-viewport test-viewport">
+        <div id="test-viewer-container" class="test-viewer-box"></div>
+      </div>
     </section>
   </main>
 

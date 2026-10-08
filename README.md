@@ -8,10 +8,13 @@ filtros NSFW/SFW.
 
 ## Características
 
-### Arquitectura Modular (v1.7.0)
-- **Backend FastAPI modular (`app/routes/`)**: endpoints segregados por dominio funcional (`characters`, `editor`, `gallery`, `image`, `jobs`, `models`, `presets`, `prompt`, `system`, `tags`, `upscale`, `video`) con orquestador central delgado en `app/server.py` (<250 líneas).
-- **Frontend nativo con ES Modules (`static/js/`)**: arquitectura desacoplada en navegador con `<script type="module">` (`main.js`, `state.js`, `dom.js`, `api.js`, `components/` y `tabs/`) sin necesidad de bundlers, NodeJS ni dependencias de build.
-- **Estilos CSS modulares (`static/css/`)**: orden de cascada nativo dividido en `base.css` (variables y layout), `components.css` (UI interactiva) y `tabs/*.css` (específicos de cada pestaña).
+### Arquitectura UI/UX y Frontend Canónico (v1.8.0)
+- **Plantilla Canónica de Pestaña (`TabTemplate`)**: Estandarización de 2 columnas inmutable (Sidebar de controles con auto-scroll a la izquierda + Viewport de previsualización ocupando el 100% del alto y ancho disponible sin espacios muertos).
+- **Visor Modular Unificado (`UniversalViewer`)**: Núcleo JS centralizado para zoom 8x con paneo, split slider de comparación antes/después, barra de herramientas contextual y miniaturas dinámicas con `ResizeObserver` sin hueco negro.
+- **Shell Global y Control Universal**: Botón universal de recarga en el header (`#btn-universal-reload`), selector de idiomas con menú accesible (`#btn-language-selector`), tarjetas de control normalizadas (`ControlCards`) y sistema de ayuda contextual con popovers flotantes (`(?)`).
+- **Backend FastAPI modular (`app/routes/`)**: endpoints segregados por dominio funcional con orquestador central delgado en `app/server.py`.
+- **Frontend nativo con ES Modules (`static/js/`)**: arquitectura desacoplada en navegador con `<script type="module">` sin bundlers ni NodeJS.
+- **Estilos CSS modulares (`static/css/`)**: estructura dividida en `base.css`, `components.css` y `tabs/*.css`.
 
 ### Imagen
 - Modelos de la familia Anima con perfil propio (encoder, VAE, sampler y resolución); soporte para modelos expandidos de 40 capas (`anima-2.9b-preview`) mediante el patcher integrado `WaifuAnimaPatch28to40`.

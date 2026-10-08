@@ -20,6 +20,7 @@ import {
   setVideoProgress,
 } from "../dom.js";
 import { api, postJson, pollJob, cancelJob } from "../api.js";
+import { ResolutionKit } from "../components/resolution_kit.js";
 import {
   collectPromptZoneTags,
   applyZonesPayload,
@@ -53,6 +54,7 @@ import {
 
 let enhanceResetTimer = null;
 let refObjectUrl = null;
+let imageResolutionKit = null;
 
 async function loadParams() {
   const data = await api("/api/params");
@@ -95,8 +97,14 @@ function applySizeSelection() {
     $("width").value = format.width;
     $("height").value = format.height;
     $("manual-size").classList.add("hidden");
+    if (imageResolutionKit) {
+      imageResolutionKit.syncFromDimensions(format.width, format.height);
+    }
   } else {
     $("manual-size").classList.remove("hidden");
+    if (imageResolutionKit) {
+      imageResolutionKit.syncFromDimensions($("width").value, $("height").value);
+    }
   }
 }
 
@@ -116,6 +124,9 @@ function setSizeFromDefaults(width, height) {
     }
   }
   applySizeSelection();
+  if (imageResolutionKit && width != null && height != null) {
+    imageResolutionKit.syncFromDimensions(width, height);
+  }
 }
 
 async function loadModels() {
@@ -510,6 +521,10 @@ async function reuseGeneration(item) {
 
 function updateReferencePreview() {
   const file = $("ref-image").files[0];
+  if (file && state.localFilesOriginalPaths) {
+    const originalPath = file.path || file.webkitRelativePath || file.name;
+    state.localFilesOriginalPaths.set(file.name, originalPath);
+  }
   if (refObjectUrl) {
     URL.revokeObjectURL(refObjectUrl);
     refObjectUrl = null;
@@ -562,6 +577,24 @@ function initImageTab() {
   on("strength", "input", (event) => {
     $("strength-value").textContent = Number(event.target.value).toFixed(2);
   });
+  const orient = $("image-res-orientation");
+  const qual = $("image-res-quality");
+  if (orient && qual) {
+    imageResolutionKit = new ResolutionKit({
+      orientationSelect: orient,
+      qualitySelect: qual,
+      widthInput: $("width"),
+      heightInput: $("height"),
+      badgeEl: $("image-res-badge"),
+      onChange: ({ width, height }) => {
+        const match = (state.formats || []).find((f) => f.width === width && f.height === height);
+        const sizeSelect = $("size");
+        if (sizeSelect) {
+          sizeSelect.value = match ? match.id : "manual";
+        }
+      },
+    });
+  }
 }
 
 export {

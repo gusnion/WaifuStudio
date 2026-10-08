@@ -58,6 +58,86 @@ body {
   gap: 0.4rem;
 }
 
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.topbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.topbar-btn:hover {
+  background: #2f3242;
+  border-color: var(--muted);
+}
+
+.topbar-btn.spin svg {
+  animation: spin-reload 0.6s linear;
+}
+
+@keyframes spin-reload {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.language-selector-wrap {
+  position: relative;
+}
+
+.language-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  z-index: 1000;
+  padding: 0.3rem 0;
+}
+
+.lang-option {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 0.4rem 0.8rem;
+  text-align: left;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  width: 100%;
+}
+
+.lang-option:hover {
+  background: var(--panel-2);
+}
+
+.lang-option.active {
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.local-reload-btn {
+  display: none !important;
+}
+
 main {
   flex: 1 1 auto;
   min-height: 0;

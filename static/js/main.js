@@ -21,6 +21,9 @@ import { initVideoH3, loadH3Profiles } from "./tabs/video_h3.js";
 import { initEditorTab, updateEditorControls, updateEditorMode, loadEditorStatus, loadEditorGallery } from "./tabs/editor.js";
 import { initUpscalerTab, applyUpscaleKind, loadUpscaleGallery, loadUpscaleModels } from "./tabs/upscaler.js";
 import { initGalleryTab, loadGalleryTab, closeGalleryModal, closeCustomTagsModal } from "./tabs/gallery.js";
+import { initHeader } from "./components/header.js";
+import { initTooltipHelp } from "./components/tooltip_help.js";
+import { initTestLab } from "./tabs/test_lab.js";
 
 function switchTab(tab) {
   const image = tab === "image";
@@ -28,16 +31,24 @@ function switchTab(tab) {
   const editor = tab === "editor";
   const upscaler = tab === "upscaler";
   const gallery = tab === "gallery";
+  const test = tab === "test";
   $("tab-image").classList.toggle("active", image);
   $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
   $("tab-upscaler").classList.toggle("active", upscaler);
   $("tab-gallery").classList.toggle("active", gallery);
+  const tabTestEl = $("tab-test");
+  if (tabTestEl) tabTestEl.classList.toggle("active", test);
   $("panel-image").classList.toggle("active", image);
   $("panel-video").classList.toggle("active", video);
   $("panel-editor").classList.toggle("active", editor);
   $("panel-upscaler").classList.toggle("active", upscaler);
   $("panel-gallery").classList.toggle("active", gallery);
+  const panelTestEl = $("panel-test");
+  if (panelTestEl) panelTestEl.classList.toggle("active", test);
+  if (test) {
+    initTestLab();
+  }
   if (upscaler) {
     applyUpscaleKind();
     loadUpscaleGallery(1).catch((error) => setUpscaleStatus(error.message, true));
@@ -105,6 +116,10 @@ function bind() {
   on("tab-editor", "click", () => { switchTab("editor"); updateEditorMode(); });
   on("tab-upscaler", "click", () => switchTab("upscaler"));
   on("tab-gallery", "click", () => switchTab("gallery"));
+  const tabTest = $("tab-test");
+  if (tabTest) {
+    on("tab-test", "click", () => switchTab("test"));
+  }
   on("btn-seed-random", "click", () => toggleSeedRandom());
   on("btn-video-seed-random", "click", () => toggleSeedRandom(setVideoStatus));
   on("btn-editor-seed-random", "click", () => toggleSeedRandom(setEditorStatus));
@@ -119,6 +134,7 @@ function bind() {
       closeOcModal();
     }
   });
+  initHeader(); initTooltipHelp();
   initCompare(); initLightbox(); initPromptZones(); initPromptPopover();
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();

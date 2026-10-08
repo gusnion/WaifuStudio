@@ -1315,3 +1315,267 @@ input[type="checkbox"] {
 .custom-tag-item-del:hover {
   background: rgba(239, 68, 68, 0.15);
 }
+
+/* =========================================================================
+   M18: Plantilla Canónica (TabTemplate), ControlCards, Tooltips y Visor
+   ========================================================================= */
+
+/* TabTemplate: 2 columnas estandarizadas */
+.tab-canonical-layout.active {
+  display: grid !important;
+  grid-template-columns: 400px 1fr !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  gap: 1rem !important;
+  box-sizing: border-box !important;
+}
+
+.tab-canonical-layout:not(.active) {
+  display: none !important;
+}
+
+.tab-sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.8rem !important;
+  overflow-y: auto !important;
+  padding-right: 0.4rem !important;
+  min-width: 0 !important;
+}
+
+.tab-viewport {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* ControlCards: Contenedor con borde y cabecera numerada */
+.control-card,
+.video-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 0 0 0.75rem 0;
+  background: #1c1f26;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.control-card > legend,
+.control-card > summary,
+.control-card .card-header,
+.video-block > legend {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Micro-componente Ayuda (?) y Popover Flotante */
+.btn-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--muted);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: bold;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  vertical-align: middle;
+  margin-left: 0.35rem;
+}
+
+.btn-help:hover,
+.btn-help:focus {
+  color: #fff;
+  border-color: var(--accent);
+  background: rgba(224, 86, 122, 0.2);
+}
+
+.tooltip-popover {
+  position: fixed;
+  z-index: 9999;
+  max-width: 290px;
+  padding: 0.5rem 0.75rem;
+  background: #181a22;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.tooltip-popover.visible {
+  opacity: 1;
+}
+
+/* Alineación Horizontal Rígida (.control-inline) */
+.control-inline {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  flex-wrap: nowrap !important;
+}
+
+.control-inline > span,
+.control-inline > label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* UniversalViewer Layout y Herramientas */
+.universal-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.uv-stage-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: #0d0e12;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.uv-stage-wrap.panning {
+  cursor: grab;
+}
+
+.uv-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transform-origin: center center;
+  transition: transform 0.05s ease-out;
+}
+
+.uv-img,
+.uv-video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.uv-compare {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.uv-compare-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.uv-compare-before,
+.uv-compare-after {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.uv-compare-after {
+  clip-path: inset(0 0 0 50%);
+}
+
+.uv-compare-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  background: var(--accent);
+  cursor: ew-resize;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.uv-compare-ratio {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.uv-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.uv-thumbs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0.5rem 0 0.2rem;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.uv-thumb-item {
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  object-fit: cover;
+  transition: border-color 0.15s;
+}
+
+.uv-thumb-item:hover {
+  border-color: var(--muted);
+}
+
+.uv-thumb-item.active {
+  border-color: var(--accent);
+}

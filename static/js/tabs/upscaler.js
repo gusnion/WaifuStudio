@@ -226,12 +226,17 @@ async function useUpscaleLocalFile(file) {
   if (!file) {
     return;
   }
+  const originalPath = file.path || file.webkitRelativePath || file.name;
+  if (state.localFilesOriginalPaths) {
+    state.localFilesOriginalPaths.set(file.name, originalPath);
+  }
   const b64 = await readFileBase64(file);
   if (state.upscaleLocalFile) {
     URL.revokeObjectURL(state.upscaleLocalFile.url);
   }
   state.upscaleLocalFile = {
     name: file.name,
+    originalPath,
     b64,
     url: URL.createObjectURL(file),
   };
@@ -464,6 +469,97 @@ function initUpscalerTab() {
       openLightbox(url, `Generación #${item.id}`);
     }
   });
+
+  // M18-11: Comparador interactivo en Upscaler
+  let upscaleCompareActive = false;
+  let upscaleCompareRatio = 0.5;
+  let upscaleCompareDragging = false;
+
+  const applyUpscaleCompare = () => {
+    const compare = $("upscale-compare");
+    const after = $("upscale-compare-after");
+    const handle = $("upscale-compare-handle");
+    const label = $("upscale-compare-ratio");
+    if (!compare || !after || !handle) return;
+    const percent = Math.round(upscaleCompareRatio * 100);
+    after.style.clipPath = `inset(0 0 0 ${percent}%)`;
+    handle.style.left = `${percent}%`;
+    handle.setAttribute("aria-valuenow", String(percent));
+    if (label) label.textContent = `${percent}%`;
+  };
+
+  const btnCompare = $("btn-upscale-compare");
+  if (btnCompare) {
+    btnCompare.addEventListener("click", () => {
+      upscaleCompareActive = !upscaleCompareActive;
+      const compare = $("upscale-compare");
+      const img = $("upscale-preview-img");
+      if (upscaleCompareActive) {
+        const isVideo = upscaleSourceKind() === "video";
+        const local = !isVideo ? state.upscaleLocalFile : null;
+        const item = local ? null : selectedUpscaleSource();
+        const sourceUrl = local ? local.url : isVideo ? videoViewUrl(item) : imageViewUrl(item);
+        const resultItem = (state.upscaleGallery.items || [])[0];
+        const resultUrl = resultItem ? imageViewUrl(resultItem) : sourceUrl;
+        const beforeImg = $("upscale-compare-before");
+        const afterImg = $("upscale-compare-after");
+        if (beforeImg) beforeImg.src = sourceUrl || "";
+        if (afterImg) afterImg.src = resultUrl || "";
+        if (compare) compare.classList.remove("hidden");
+        if (img) img.classList.add("hidden");
+        btnCompare.textContent = "Cerrar comparación";
+        btnCompare.setAttribute("aria-pressed", "true");
+        applyUpscaleCompare();
+      } else {
+        if (compare) compare.classList.add("hidden");
+        if (img) img.classList.remove("hidden");
+        btnCompare.textContent = "Comparar";
+        btnCompare.setAttribute("aria-pressed", "false");
+      }
+    });
+  }
+
+  const compareHandle = $("upscale-compare-handle");
+  if (compareHandle) {
+    compareHandle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const delta = e.key === "ArrowLeft" ? -0.02 : 0.02;
+        upscaleCompareRatio = Math.max(0.01, Math.min(0.99, upscaleCompareRatio + delta));
+        applyUpscaleCompare();
+      } else if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        upscaleCompareRatio = e.key === "Home" ? 0.01 : 0.99;
+        applyUpscaleCompare();
+      }
+    });
+
+    compareHandle.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      e.preventDefault();
+      upscaleCompareDragging = true;
+      if (compareHandle.setPointerCapture) {
+        compareHandle.setPointerCapture(e.pointerId);
+      }
+    });
+
+    compareHandle.addEventListener("pointermove", (e) => {
+      if (!upscaleCompareDragging) return;
+      const stage = $("upscale-compare-stage");
+      if (!stage) return;
+      const rect = stage.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      let ratio = (e.clientX - rect.left) / rect.width;
+      upscaleCompareRatio = Math.max(0.01, Math.min(0.99, ratio));
+      applyUpscaleCompare();
+    });
+
+    const endDrag = () => {
+      upscaleCompareDragging = false;
+    };
+    compareHandle.addEventListener("pointerup", endDrag);
+    compareHandle.addEventListener("pointercancel", endDrag);
+  }
 }
 
 export {
