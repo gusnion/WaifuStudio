@@ -140,6 +140,13 @@ class ServerTestCase(unittest.TestCase):
         server_module._JOBS.clear()
         self.addCleanup(server_module._JOBS.clear)
 
+    def get_static_js(self) -> str:
+        js_dir = Path(__file__).resolve().parent.parent / "static" / "js"
+        parts = []
+        for p in sorted(js_dir.rglob("*.js")):
+            parts.append(p.read_text(encoding="utf-8"))
+        return "\n".join(parts)
+
     def make_client(self, **kwargs) -> TestClient:
         kwargs.setdefault("config", self.config)
         kwargs.setdefault("store", self.store)
@@ -827,7 +834,7 @@ class LoraLibraryUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_incluye_crud_biblioteca(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "putJson",
             "loadLoraLibrary",
@@ -1905,7 +1912,7 @@ class PromptGeneralUiStaticTests(ServerTestCase):
         )
 
     def test_app_js_genera_desde_prompt_general_y_fusiona(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "enhancePrompt",
             'const generalField = $("prompt-general");',
@@ -3797,7 +3804,7 @@ class IndexTests(ServerTestCase):
         response = self.make_client().get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("WAIFU", response.text)
-        self.assertIn("/static/app.js", response.text)
+        self.assertIn("/static/js/main.js", response.text)
         self.assertIn("OC Maker", response.text)
         self.assertIn("Video", response.text)
 
@@ -3840,7 +3847,7 @@ class IndexTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_incluye_endpoints_y_features(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "/api/params",
             "/api/formats",
@@ -3880,7 +3887,7 @@ class CacheHeaderTests(ServerTestCase):
         index = client.get("/")
         self.assertEqual(index.status_code, 200)
         self.assertEqual(index.headers.get("cache-control"), "no-store")
-        script = client.get("/static/app.js")
+        script = client.get("/static/js/main.js")
         self.assertEqual(script.status_code, 200)
         self.assertEqual(script.headers.get("cache-control"), "no-store")
         models = client.get("/api/models")
@@ -3890,7 +3897,7 @@ class CacheHeaderTests(ServerTestCase):
 
 class StartupHardeningUiStaticTests(ServerTestCase):
     def test_app_js_blindado_por_secciones(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "REQUIRED_IDS",
             "UI desactualizada: recarga con Ctrl+F5",
@@ -3904,12 +3911,12 @@ class StartupHardeningUiStaticTests(ServerTestCase):
     def test_required_ids_todos_presentes_en_index_html(self):
         client = self.make_client()
         html = client.get("/").text
-        app_js = client.get("/static/app.js").text
+        main_js = client.get("/static/js/main.js").text
         import re
 
         html_ids = set(re.findall(r'id=["\']([^"\']+)["\']', html))
-        match = re.search(r"const REQUIRED_IDS = \[(.*?)\];", app_js, re.DOTALL)
-        self.assertIsNotNone(match, "REQUIRED_IDS debe estar declarado en app.js")
+        match = re.search(r"const REQUIRED_IDS = \[(.*?)\];", main_js, re.DOTALL)
+        self.assertIsNotNone(match, "REQUIRED_IDS debe estar declarado en main.js")
         req_ids = [
             s.strip().strip('"\'')
             for s in match.group(1).split(",")
@@ -3942,7 +3949,7 @@ class CharacterProfileUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_compone_oc_via_profile(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "OC_TRAIT_GROUPS",
             "/api/characters/${character.id}/profile",
@@ -4343,7 +4350,7 @@ class EditorUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_incluye_editor_y_guarda(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "/api/editor/status",
             "/api/editor/generate",
@@ -4388,7 +4395,7 @@ class EditorUiStaticTests(ServerTestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
-        script = self.make_client().get("/static/app.js").text
+        script = self.get_static_js()
         for marker in (
             "function setEditorCompareEnabled",
             "function updateEditorCompare",
@@ -4422,7 +4429,7 @@ class LightboxUiStaticTests(ServerTestCase):
         self.assertEqual(text.count('id="lightbox-img"'), 1)
 
     def test_app_js_expansion_y_zoom_del_lightbox(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "function openLightbox",
             "function zoomLightbox",
@@ -4450,7 +4457,7 @@ class SeedDiceUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_dado_compartido_y_roll_por_pestana(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             'applyRandomSeed("video-seed")',
             'applyRandomSeed("editor-seed")',
@@ -4470,7 +4477,7 @@ class DescribeRefUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_flujo_describir_referencia(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "describeRefFromDisk",
             "describeSelectedRefFile",
@@ -5390,7 +5397,7 @@ class H3GuideUiStaticTests(ServerTestCase):
         )
 
     def test_app_js_incluye_guia_y_plantilla_h3(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "H3_PROMPT_TEMPLATE",
             "H3_GUIDE_TEXT",
@@ -5410,7 +5417,7 @@ class H3GuideUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_improve_h3_prompt_envia_image_b64(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         self.assertIn('$("video-image")', text)
         self.assertIn("image_b64", text)
         self.assertIn('postJson("/api/video/h3_prompt"', text)
@@ -5538,7 +5545,7 @@ class UpscaleUiStaticTests(ServerTestCase):
         self.assertLess(text.index('id="tab-editor"'), text.index('id="tab-upscaler"'))
 
     def test_app_js_incluye_upscaler(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "/api/upscale/models",
             'postJson("/api/upscale"',
@@ -5611,7 +5618,7 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
         self.assertNotIn("839054188", text)
 
     def test_app_js_fija_defaults_de_arranque(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "const STARTUP_DEFAULTS = {",
             'model: "one-obsession-anima-v40"',
@@ -5691,11 +5698,11 @@ class GalleryTabUiStaticTests(ServerTestCase):
         self.assertLess(
             index.index('id="gallery-filter"'), index.index('id="btn-gallery-refresh"')
         )
-        script = self.make_client().get("/static/app.js").text
+        script = self.get_static_js()
         self.assertIn('on("btn-gallery-refresh", "click"', script)
 
     def test_app_js_incluye_pestana_galeria(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "GALLERY_PAGE_SIZE",
             "state.galleryTab",
@@ -5753,7 +5760,7 @@ class GalleryTabUiStaticTests(ServerTestCase):
         )
 
     def test_app_js_incluye_acciones_modal_galeria(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "function useGalleryItemAsReference",
             "function animateGalleryItem",
@@ -5792,7 +5799,7 @@ class ZoneCatalogSearchUiStaticTests(ServerTestCase):
     """Búsqueda del popover de zonas sobre el catálogo completo vía /api/tags."""
 
     def test_app_js_busqueda_catalogo(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "/api/tags?q=",
             "Catálogo completo",
@@ -5823,7 +5830,7 @@ class UnifiedDescribeUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_marcadores(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             'mode = "unified"',
             "visionLastPayload",
@@ -5836,7 +5843,7 @@ class UnifiedDescribeUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_etiquetas_de_estado_llm(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             'ready: ["LLM: listo", "is-ok"]',
             'loading: ["LLM: cargando…", "is-warn"]',
@@ -5869,7 +5876,7 @@ class TrainAutoCaptionUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_js_marcadores(self):
-        text = self.make_client().get("/static/app.js").text
+        text = self.get_static_js()
         for marker in (
             "train-auto-tags",
             "tag_threshold",
@@ -6042,7 +6049,7 @@ class GalleryUiPhase3Tests(ServerTestCase):
                 self.assertIn(marker, html)
 
     def test_app_js_phase3_markers(self):
-        script = self.make_client().get("/static/app.js").text
+        script = self.get_static_js()
         for marker in (
             "function setImageCompareEnabled",
             "function setImageCompareSlot2",
