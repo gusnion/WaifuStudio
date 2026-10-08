@@ -2070,6 +2070,28 @@ input[type="checkbox"] {
   color: var(--error);
 }
 
+.video-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.video-block > legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.h3-guide-templates-section button {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.45rem;
+}
+
 .panel-section > summary {
   display: flex;
   align-items: center;

@@ -49,7 +49,17 @@ from app.h3_presets import (
     validate_h3_size,
 )
 
-EXPECTED_IDS = ("referencia", "calidad", "ligero", "vdn", "ref2va")
+EXPECTED_IDS = (
+    "rapido",
+    "estandar",
+    "calidad",
+    "ultra",
+    "personalizado",
+    "ref2va",
+    "referencia",
+    "vdn",
+    "ligero",
+)
 EXPECTED_FRAMES = {5: 124, 8: 192, 10: 243, 12: 294, 15: 362}
 EXPECTED_VARIANTS = (
     {
@@ -74,14 +84,24 @@ EXPECTED_VARIANTS = (
 VARIANT_LORAS_DIR = APP_ROOT / "ComfyUI" / "models" / "loras"
 
 EXPECTED_ASSETS = {
-    "referencia": {
-        "template": "h3_fl2va_vertical.api.json",
+    "rapido": {
+        "template": "h3_fl2va_calidad.api.json",
         "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
         "vae_video": "minimax_h3_video_vae_fp16.safetensors",
         "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
-        "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
-        "projection": None,
-        "seconds_recomendados": [8],
+        "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+        "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "seconds_recomendados": [5, 8, 10],
+    },
+    "estandar": {
+        "template": "h3_vdn_8step.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+        "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "lora": None,
+        "seconds_recomendados": [5, 8, 10, 12],
     },
     "calidad": {
         "template": "h3_fl2va_calidad.api.json",
@@ -92,14 +112,41 @@ EXPECTED_ASSETS = {
         "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
         "seconds_recomendados": [8, 10, 12],
     },
-    "ligero": {
-        "template": "h3_fl2va_ligero.api.json",
-        "dit": "minimax_h3_fl2va_pruned-w4a8_convrot_pruned.safetensors",
-        "vae_video": "minimax_h3_video_vae_int8_convrot.safetensors",
+    "ultra": {
+        "template": "h3_fl2va_vertical.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "projection": None,
+        "seconds_recomendados": [8],
+    },
+    "personalizado": {
+        "template": "h3_fl2va_calidad.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
         "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
         "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
         "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
-        "seconds_recomendados": [8, 10, 12, 15],
+        "seconds_recomendados": [5, 8, 10, 12, 15],
+    },
+    "referencia": {
+        "template": "h3_fl2va_vertical.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "projection": None,
+        "seconds_recomendados": [8],
+    },
+    "ligero": {
+        "template": "h3_fl2va_calidad.api.json",
+        "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+        "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+        "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+        "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+        "seconds_recomendados": [5, 8, 10, 12],
     },
     "vdn": {
         "template": "h3_vdn_8step.api.json",
@@ -187,11 +234,11 @@ class RegistryFileTests(unittest.TestCase):
         resolutions = h3_resolutions()
         self.assertEqual(
             [(r["width"], r["height"]) for r in resolutions["vertical"]],
-            [(576, 1024), (768, 1344)],
+            [(480, 864), (576, 1024), (768, 1344), (896, 1600), (1152, 2048)],
         )
         self.assertEqual(
             [(r["width"], r["height"]) for r in resolutions["horizontal"]],
-            [(1024, 576), (1344, 768)],
+            [(864, 480), (1024, 576), (1344, 768), (1600, 896), (2048, 1152)],
         )
         for aspect in ("vertical", "horizontal"):
             for size in resolutions[aspect]:
@@ -229,7 +276,7 @@ class RegistryFileTests(unittest.TestCase):
                 expected_extra = set()
                 if profile["projection"]:
                     expected_extra.add("135")
-                if profile["id"] in {"vdn", "ref2va"}:
+                if profile["id"] in {"vdn", "ref2va", "estandar"}:
                     expected_extra.add("136")
                 if profile["id"] == "ref2va":
                     expected_extra.update({"142", "143"})
@@ -257,7 +304,7 @@ class RegistryFileTests(unittest.TestCase):
 
     def test_clip_proyectado_alimenta_minimax(self):
         catalog = {profile["id"]: profile for profile in list_h3_profiles()}
-        for profile_id in ("calidad", "ligero", "vdn", "ref2va"):
+        for profile_id in ("rapido", "estandar", "calidad", "personalizado", "ligero", "vdn", "ref2va"):
             with self.subTest(profile_id=profile_id):
                 profile = catalog[profile_id]
                 graph = load_graph(h3_template_path(profile))
@@ -284,15 +331,15 @@ class ListAndResolveTests(unittest.TestCase):
     def test_list_en_orden_y_copia(self):
         listed = list_h3_profiles()
         self.assertEqual([item["id"] for item in listed], list(EXPECTED_IDS))
-        listed[0]["seconds_recomendados"].append(5)
-        self.assertEqual(list_h3_profiles()[0]["seconds_recomendados"], [8])
+        listed[0]["seconds_recomendados"].append(99)
+        self.assertEqual(list_h3_profiles()[0]["seconds_recomendados"], [5, 8, 10])
 
     def test_catalog_copia(self):
         catalog = h3_catalog()
         self.assertEqual([item["id"] for item in catalog["profiles"]], list(EXPECTED_IDS))
         self.assertEqual(catalog["seconds"], list(H3_SECONDS))
         catalog["profiles"][0]["label"] = "x"
-        self.assertEqual(list_h3_profiles()[0]["label"], "Referencia")
+        self.assertEqual(list_h3_profiles()[0]["label"], "Rápido")
 
     def test_resolve_ausente_o_vacio_es_referencia(self):
         for value in (None, "", "  "):
@@ -416,8 +463,8 @@ class SizeTests(unittest.TestCase):
         self.assertEqual(validate_h3_size(768, 1344, "vertical"), (768, 1344))
 
     def test_area_excedida(self):
-        self.assertEqual(H3_MAX_PIXELS, 768 * 1344)
-        for width, height in ((2048, 576), (1344, 1024), (1024, 1344)):
+        self.assertEqual(H3_MAX_PIXELS, 1152 * 2048)
+        for width, height in ((2048, 2048), (2560, 1440), (4096, 2160)):
             with self.subTest(width=width, height=height):
                 self.assertGreater(width * height, H3_MAX_PIXELS)
                 with self.assertRaises(EngineError):
@@ -615,8 +662,18 @@ class LoadH3PresetsTests(unittest.TestCase):
 
 class H3ProfileVariantCompatibilityTests(unittest.TestCase):
     def test_compatible_variants_mapping(self):
+        self.assertEqual(PROFILE_COMPATIBLE_VARIANTS["estandar"], {"vdn8"})
         self.assertEqual(PROFILE_COMPATIBLE_VARIANTS["vdn"], {"vdn8"})
         self.assertEqual(PROFILE_COMPATIBLE_VARIANTS["ref2va"], {"vdn8"})
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["rapido"], {"turbo4", "turbo8"}
+        )
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["ultra"], {"turbo4", "turbo8"}
+        )
+        self.assertEqual(
+            PROFILE_COMPATIBLE_VARIANTS["personalizado"], {"turbo4", "turbo8", "vdn8"}
+        )
         self.assertEqual(
             PROFILE_COMPATIBLE_VARIANTS["referencia"], {"turbo4", "turbo8"}
         )
@@ -629,8 +686,16 @@ class H3ProfileVariantCompatibilityTests(unittest.TestCase):
 
     def test_validate_h3_profile_variant_success(self):
         valid = [
+            ("estandar", "vdn8"),
             ("vdn", "vdn8"),
             ("ref2va", "vdn8"),
+            ("rapido", "turbo4"),
+            ("rapido", "turbo8"),
+            ("ultra", "turbo4"),
+            ("ultra", "turbo8"),
+            ("personalizado", "turbo4"),
+            ("personalizado", "turbo8"),
+            ("personalizado", "vdn8"),
             ("referencia", "turbo4"),
             ("referencia", "turbo8"),
             ("calidad", "turbo4"),

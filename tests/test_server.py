@@ -5415,6 +5415,25 @@ class H3GuideUiStaticTests(ServerTestCase):
         self.assertIn("image_b64", text)
         self.assertIn('postJson("/api/video/h3_prompt"', text)
 
+    def test_m16_video_redesign_controls_and_templates_present(self):
+        html = self.make_client().get("/").text
+        for marker in (
+            'id="video-block-mode"',
+            'id="video-block-prompt"',
+            'id="video-block-settings"',
+            'id="video-v2v-box"',
+            'id="video-v2v-input"',
+            'id="video-v2v-preview"',
+            'id="video-h3-aspect"',
+            'id="video-h3-prompt-strength"',
+            'id="video-custom-settings-panel"',
+            'id="btn-h3-template-portrait"',
+            'id="btn-h3-template-walk"',
+            'id="btn-h3-template-action"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+
 
 class H3PromptServerTests(ServerTestCase):
     H3_OUTPUT = (

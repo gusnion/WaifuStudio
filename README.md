@@ -23,13 +23,13 @@ filtros NSFW/SFW.
   opcionales; si faltan, la UI lo indica).
 
 ### Vídeo
-- Motor MiniMax H3 con tres modos certificados: **I2V** (solo frame inicial), **FLF2V** (inicial + final) y **Ref2VA** (hasta 4 imágenes de referencia de personaje/estilo para conservar identidad sin fijar la pose inicial).
-- Aceleración de vanguardia con **VideoDeltaNet (VDN-H3)**: atención híbrida lineal bidireccional + sliding window que genera vídeo completo en solo **8 pasos** (tanto en I2V/FLF2V como en Ref2VA) con máxima fidelidad de movimiento en la RTX 3060 (12 GB).
-- Perfiles optimizados: **VDN (8-Pasos Ultra Rápido)**, **Ref2VA (Referencias)**, **Calidad**, **Ligero** y **Referencia**, con variantes turbo4/turbo8/vdn8, toggle SageAttention y audio nativo.
-- Duración flexible: clips nativos de 5 a 15 s y **encadenado continuo para vídeos largos** (20, 24, 25, 30 s) con ensamblado automático de segmentos mediante FFmpeg y audio continuo.
-- Inyección directa por filesystem (`ComfyUI/input/`) que elimina latencias de transferencia en servidor local.
-- «Mejorar prompt (H3)»: asistencia con LLM VLM gestionado (Qwen3.5-9B), con visión en first frame para I2V y **análisis multirreferencia con tags `<Picture i>` para Ref2VA**.
-- Guía H3 insertable en el prompt.
+- Motor MiniMax H3 universal con cuatro modos certificados: **I2V** (solo frame inicial), **FLF2V** (inicial + final), **Ref2VA** (hasta 4 imágenes de referencia de personaje para conservar identidad sin fijar pose) y **V2V (Video-to-Video)** (vídeo guía de movimiento, baile o coreografía con extracción automática de fotogramas y audio).
+- Perfiles de calidad universales: **Rápido** (Turbo 4 pasos · ClipProj 8B · ideal 3060 12GB), **Estándar** (Turbo 8 pasos · ClipProj 8B), **Calidad** (Turbo 8 pasos · ClipProj 32B), **Ultra** (VDN 8 pasos nativo de alta fidelidad) y **Personalizado** (control manual de encoder, pasos, SageAttention y semilla).
+- Resoluciones nativas completas: selectores para **Vertical (9:16)** y **Horizontal (16:9)** en **SD (~480p)**, **HD (~720p nativo recomendado)**, **FHD (~1080p)**, **QHD (~1440p)** y **2K**, con badges de VRAM/RAM requerida e indicación clara de memoria sin reescalados encubiertos.
+- Aceleración con **VideoDeltaNet (VDN-H3)**: atención híbrida lineal bidireccional + sliding window que genera vídeo completo en solo **8 pasos** (I2V/FLF2V/Ref2VA/V2V).
+- Duración flexible: clips nativos de 5 a 15 s y **encadenado continuo para vídeos largos** (20, 25, 30 s) con ensamblado automático de segmentos mediante FFmpeg y audio continuo.
+- «Mejorar prompt (H3)»: asistencia multimodal con LLM/VLM gestionado (Qwen3.5-9B), **salida obligatoria en inglés cinematográfico técnico**, directiva de estricto apego al primer fotograma y selector de fuerza: **Fiel** (sin elementos inventados), **Balanceado** y **Creativo**.
+- Guía H3 oficial ampliada con parámetros cinematográficos técnicos (cámara, iluminación, foley, diálogo con `<d>[Language] ...</d>`, música) y **plantillas rápidas a 1 clic** (Retrato anime, Caminata costa, Escena dinámica, Estructura base).
 
 ### Editor
 - Qwen-Image 2.1 Uncensored (GGUF Q4_K_M + encoder Qwen3-VL-8B int8 + VAE propio).

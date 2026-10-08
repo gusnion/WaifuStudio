@@ -256,12 +256,24 @@ class H3PromptRouteTests(ServerVideoTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
 
-    def test_llm_sin_bloques_400(self):
-        response = self.make_client(llm=FakeLLM("solo texto")).post(
-            "/api/video/h3_prompt", json={"text": "camina"}
+    def test_strength_invalido_400(self):
+        response = self.make_client(llm=FakeLLM(self.H3_OUTPUT)).post(
+            "/api/video/h3_prompt", json={"text": "camina", "strength": "desconocido"}
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
+        self.assertIn("strength invalido", response.json()["error"])
+
+    def test_strength_presets_ok(self):
+        for st in ("fiel", "balanceado", "creativo"):
+            with self.subTest(strength=st):
+                llm = FakeLLM(self.H3_OUTPUT)
+                response = self.make_client(llm=llm).post(
+                    "/api/video/h3_prompt", json={"text": "camina", "strength": st}
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"h3_prompt": self.H3_OUTPUT})
+                self.assertIn(f"Modo: {st}", llm.calls[0][1])
 
     def test_ok_con_image_b64_envia_multimodal(self):
         llm = FakeLLM(self.H3_OUTPUT)
@@ -498,7 +510,7 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         base = {"engine": "h3", "last_image_b64": PNG_B64, "prompt": "p"}
         for override in (
             {"width": 600, "height": 1024},
-            {"width": 2048, "height": 576},
+            {"width": 4096, "height": 1024},
             {"width": 1024, "height": 1024},
             {"width": 576},
             {"height": 1024},
@@ -515,7 +527,7 @@ class VideoGenerateValidationTests(ServerVideoTestCase):
         client.post("/api/video/generate", json=self.payload(**base, seconds=6))
         client.post(
             "/api/video/generate",
-            json=self.payload(**base, width=2048, height=576),
+            json=self.payload(**base, width=4096, height=1024),
         )
         client.post("/api/video/generate", json=self.payload(**base, variant="nope"))
         client.post("/api/video/generate", json=self.payload(**base, sage="si"))
@@ -635,16 +647,26 @@ class H3ProfilesApiTests(ServerVideoTestCase):
         self.assertEqual(data["profiles"], data["items"])
         self.assertEqual(
             [item["id"] for item in data["items"]],
-            ["referencia", "calidad", "ligero", "vdn", "ref2va"],
+            [
+                "rapido",
+                "estandar",
+                "calidad",
+                "ultra",
+                "personalizado",
+                "ref2va",
+                "referencia",
+                "vdn",
+                "ligero",
+            ],
         )
         self.assertEqual(data["seconds"], [5, 8, 10, 12, 15, 20, 24, 25, 30])
         self.assertEqual(
-            data["resolutions"]["vertical"],
-            [{"width": 576, "height": 1024}, {"width": 768, "height": 1344}],
+            [(r["width"], r["height"]) for r in data["resolutions"]["vertical"]],
+            [(480, 864), (576, 1024), (768, 1344), (896, 1600), (1152, 2048)],
         )
         self.assertEqual(
-            data["resolutions"]["horizontal"],
-            [{"width": 1024, "height": 576}, {"width": 1344, "height": 768}],
+            [(r["width"], r["height"]) for r in data["resolutions"]["horizontal"]],
+            [(864, 480), (1024, 576), (1344, 768), (1600, 896), (2048, 1152)],
         )
         for item in data["items"]:
             with self.subTest(profile=item["id"]):
@@ -662,12 +684,13 @@ class H3ProfilesApiTests(ServerVideoTestCase):
                     "seconds_recomendados",
                 ):
                     self.assertIn(field, item)
-        self.assertIsNone(data["items"][0]["projection"])
-        self.assertEqual(data["items"][1]["label"], "Calidad")
+        by_id = {item["id"]: item for item in data["items"]}
+        self.assertIsNone(by_id["ultra"]["projection"])
+        self.assertEqual(by_id["calidad"]["label"], "Calidad")
         self.assertEqual(
-            data["items"][1]["projection"], "mmh3-4b-ClipProj-v3.1.safetensors"
+            by_id["calidad"]["projection"], "mmh3-4b-ClipProj-v3.1.safetensors"
         )
-        self.assertEqual(data["items"][2]["seconds_recomendados"], [8, 10, 12, 15])
+        self.assertEqual(by_id["calidad"]["seconds_recomendados"], [8, 10, 12])
 
     def test_variantes_expuestas(self):
         data = self.make_client().get("/api/video/h3_profiles").json()

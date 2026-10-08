@@ -1738,12 +1738,20 @@ def create_app(
         images_b64 = payload.get("images_b64")
         if images_b64 is not None and not isinstance(images_b64, list):
             images_b64 = None
+        raw_strength = payload.get("strength")
+        strength = str(raw_strength or "balanceado").strip().lower()
+        if strength not in ("fiel", "balanceado", "creativo"):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "strength invalido; usar fiel|balanceado|creativo"},
+            )
         return write_h3_prompt(
             payload.get("text"),
             rating=str(payload.get("rating") or "nsfw"),
             llm=llm,
             image_b64=image_b64,
             images_b64=images_b64,
+            strength=strength,
         )
 
     @app.get("/api/vision/status")
@@ -2050,10 +2058,10 @@ def create_app(
         if engine_kind not in ("wan", "h3"):
             raise EngineError("engine invalido; usar wan|h3")
         mode = payload.get("mode") or ("ref2va" if payload.get("profile") == "ref2va" else "i2v")
-        if mode not in ("i2v", "flf2v", "ref2va"):
-            raise EngineError("mode invalido; usar i2v|flf2v|ref2va")
-        if mode == "ref2va" and engine_kind != "h3":
-            raise EngineError("ref2va solo es compatible con motor h3")
+        if mode not in ("i2v", "flf2v", "ref2va", "v2v"):
+            raise EngineError("mode invalido; usar i2v|flf2v|ref2va|v2v")
+        if mode in ("ref2va", "v2v") and engine_kind != "h3":
+            raise EngineError(f"{mode} solo es compatible con motor h3")
         aspect = payload.get("aspect") or "vertical"
         if aspect not in ASPECTS:
             raise EngineError("aspect invalido; usar vertical|horizontal")
@@ -2090,7 +2098,7 @@ def create_app(
                 raw_preset = raw_preset.strip()
             if raw_preset not in (None, "", PRESET_MANUAL):
                 raise EngineError("preset de video solo aplica a engine wan")
-            req_profile = payload.get("profile") or ("ref2va" if mode == "ref2va" else None)
+            req_profile = payload.get("profile") or ("ref2va" if mode in ("ref2va", "v2v") else None)
             h3_profile = resolve_h3_profile(req_profile)
             raw_variant = payload.get("variant")
             if h3_profile["id"] in ("vdn", "ref2va") and (
@@ -2113,9 +2121,9 @@ def create_app(
             if raw_seconds is None:
                 raw_seconds = h3_profile["seconds_recomendados"][0]
             seconds = float(require_h3_seconds(raw_seconds))
-            if mode == "ref2va" and seconds > 15:
+            if mode in ("ref2va", "v2v") and seconds > 15:
                 raise EngineError(
-                    "El modo Ref2VA esta optimizado para clips de identidad continua <= 15 s (recomendado: 8 s)"
+                    f"El modo {mode.upper()} esta optimizado para clips de identidad continua <= 15 s (recomendado: 8 s)"
                 )
             if seconds > 15 and video_module.find_ffmpeg() is None:
                 raise EngineError(
@@ -2132,9 +2140,15 @@ def create_app(
             aspect = h3_aspect(width, height)
             hint = None
         ref_images_b64 = payload.get("ref_images_b64") or []
-        if mode == "ref2va":
-            if not ref_images_b64 and not payload.get("image_b64"):
-                raise EngineError("ref2va requiere al menos una imagen de referencia")
+        ref_video_b64 = payload.get("ref_video_b64") or payload.get("video_b64")
+        if mode == "v2v":
+            if not ref_video_b64:
+                raise EngineError("v2v requiere un video de referencia (ref_video_b64)")
+            first_raw = _decode_image_b64(payload.get("image_b64"), "image") if payload.get("image_b64") else None
+            last_raw = None
+        elif mode == "ref2va":
+            if not ref_images_b64 and not payload.get("image_b64") and not ref_video_b64:
+                raise EngineError("ref2va requiere al menos una imagen o video de referencia")
             first_raw = _decode_image_b64(payload.get("image_b64"), "image") if payload.get("image_b64") else None
             last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image") if payload.get("last_image_b64") else None
         else:
@@ -2182,17 +2196,26 @@ def create_app(
                     input_dir, ref_bytes, filename=f"ref_{ref_batch_id}_{i}.png"
                 )
                 ref_image_names.append(ref_name)
+        ref_video_name = None
+        if ref_video_b64:
+            ref_vid_bytes = _decode_image_b64(ref_video_b64, "ref_video")
+            ref_vid_id = uuid.uuid4().hex
+            ref_video_name = f"ref_vid_{ref_vid_id}.mp4"
+            (input_dir / ref_video_name).write_bytes(ref_vid_bytes)
         image_name = _write_input_png(input_dir, first_raw) if first_raw is not None else None
         last_image_name = (
             _write_input_png(input_dir, last_raw) if last_raw is not None else None
         )
-        if mode == "ref2va":
+        if mode in ("ref2va", "v2v"):
             if not image_name and ref_image_names:
                 image_name = ref_image_names[0]
             if not last_image_name and len(ref_image_names) > 1:
                 last_image_name = ref_image_names[1]
         if engine_kind == "h3":
-            template = h3_template_path(h3_profile)
+            if mode == "v2v":
+                template = h3_template_path(resolve_h3_profile("ref2va"))
+            else:
+                template = h3_template_path(h3_profile)
         elif mode == "flf2v":
             template = WAN_FLF_TEMPLATE_PATH
         else:
@@ -2215,6 +2238,7 @@ def create_app(
             "image": image_name,
             "last_image": last_image_name,
             "ref_images": ref_image_names,
+            "ref_video": ref_video_name,
             "preset": PRESET_MANUAL if profile is None else profile["preset"],
             **profile_fields,
         }
@@ -2240,6 +2264,7 @@ def create_app(
             "image_name": image_name,
             "last_image_name": last_image_name,
             "ref_image_names": ref_image_names,
+            "ref_video_name": ref_video_name,
             "motion_positive": motion_positive,
             "motion_negative": motion_negative,
             "prompt": prompt,

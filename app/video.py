@@ -661,6 +661,7 @@ def prepare_h3_graph(
     first_image_name: str | None = None,
     last_image_name: str | None = None,
     ref_image_names: list[str] | None = None,
+    ref_video_name: str | None = None,
     prompt: str,
     seed: int,
     width: int = 576,
@@ -731,8 +732,8 @@ def prepare_h3_graph(
             refs.append(first_image_name)
             if last_image_name:
                 refs.append(last_image_name)
-        if not refs:
-            raise EngineError("ref2va requiere al menos una imagen de referencia")
+        if not refs and not ref_video_name:
+            raise EngineError("ref2va requiere al menos una imagen o video de referencia")
         refs = refs[:4]
 
         for k in range(1, 5):
@@ -747,6 +748,26 @@ def prepare_h3_graph(
             else:
                 prepared.pop(node_id, None)
                 to_ref_video.pop(slot, None)
+
+        if ref_video_name:
+            ref_vid = _require_text(ref_video_name, "h3: ref_video_name")
+            load_vid_id = "144"
+            get_comp_id = "145"
+            prepared[load_vid_id] = {
+                "class_type": "LoadVideo",
+                "inputs": {"file": ref_vid},
+            }
+            prepared[get_comp_id] = {
+                "class_type": "GetVideoComponents",
+                "inputs": {"video": [load_vid_id, 0]},
+            }
+            to_ref_video["ref_video_1"] = [get_comp_id, 0]
+            to_ref_video["ref_video_audio_1"] = [get_comp_id, 1]
+        else:
+            to_ref_video.pop("ref_video_1", None)
+            to_ref_video.pop("ref_video_audio_1", None)
+            prepared.pop("144", None)
+            prepared.pop("145", None)
 
         for field in ("prompt", "width", "height"):
             _require_field(to_ref_video, field, ref_node_id)
@@ -844,11 +865,13 @@ def build_video_graph(job: dict) -> dict:
         variant = job.get("variant")
         if variant is None and profile.get("lora") is None:
             variant = "vdn8"
+        ref_video_name = job.get("ref_video_name") or job.get("video_name")
         return prepare_h3_graph(
             graph,
             first_image_name=job.get("image_name"),
             last_image_name=job.get("last_image_name"),
             ref_image_names=job.get("ref_image_names"),
+            ref_video_name=ref_video_name,
             prompt=job.get("prompt"),
             seed=seed,
             width=width,

@@ -1,6 +1,6 @@
 {
   "schema_version": "h3_presets/v1",
-  "descripcion": "Perfiles de video MiniMax H3 FL2VA (24 fps, length 5+17n): plantilla, modelo DiT, VAEs de video/audio, encoder con proyeccion (o null) y LoRA. 'referencia' reproduce el certificado actual (Qwen3-VL-32B, sin proyeccion); 'calidad' y 'ligero' usan el encoder 4B con ClipProj. Las variantes (LoRA + pasos; default turbo4) y los segundos permitidos, junto con las resoluciones (vertical y su espejo horizontal), son comunes al catalogo.",
+  "descripcion": "Perfiles de video MiniMax H3 FL2VA / Ref2VA / V2V (24 fps, length 5+17n): catalogo universal con perfiles Rapido, Estandar, Calidad, Ultra, Personalizado y Ref2VA. Resoluciones normalizadas en SD, HD, FHD, QHD y 2K con orientacion independiente.",
   "seconds": [5, 8, 10, 12, 15, 20, 24, 25, 30],
   "variants": [
     {
@@ -24,32 +24,86 @@
   ],
   "resoluciones": {
     "vertical": [
-      {"width": 576, "height": 1024},
-      {"width": 768, "height": 1344}
+      {
+        "id": "sd",
+        "label": "SD (~480p)",
+        "width": 480,
+        "height": 864,
+        "vram_hint": "VRAM: 8 GB | RAM: 16 GB"
+      },
+      {
+        "id": "hd",
+        "label": "HD (~720p)",
+        "width": 576,
+        "height": 1024,
+        "vram_hint": "VRAM: 10-12 GB | RAM: 32 GB"
+      },
+      {
+        "id": "fhd",
+        "label": "FHD (~1080p)",
+        "width": 768,
+        "height": 1344,
+        "vram_hint": "VRAM: 12-16 GB | RAM: 32 GB"
+      },
+      {
+        "id": "qhd",
+        "label": "QHD (~1440p)",
+        "width": 896,
+        "height": 1600,
+        "vram_hint": "VRAM: 16-20 GB | RAM: 48 GB"
+      },
+      {
+        "id": "2k",
+        "label": "2K (~2048p)",
+        "width": 1152,
+        "height": 2048,
+        "vram_hint": "VRAM: 24 GB+ | RAM: 64 GB"
+      }
     ],
     "horizontal": [
-      {"width": 1024, "height": 576},
-      {"width": 1344, "height": 768}
+      {
+        "id": "sd",
+        "label": "SD (~480p)",
+        "width": 864,
+        "height": 480,
+        "vram_hint": "VRAM: 8 GB | RAM: 16 GB"
+      },
+      {
+        "id": "hd",
+        "label": "HD (~720p)",
+        "width": 1024,
+        "height": 576,
+        "vram_hint": "VRAM: 10-12 GB | RAM: 32 GB"
+      },
+      {
+        "id": "fhd",
+        "label": "FHD (~1080p)",
+        "width": 1344,
+        "height": 768,
+        "vram_hint": "VRAM: 12-16 GB | RAM: 32 GB"
+      },
+      {
+        "id": "qhd",
+        "label": "QHD (~1440p)",
+        "width": 1600,
+        "height": 896,
+        "vram_hint": "VRAM: 16-20 GB | RAM: 48 GB"
+      },
+      {
+        "id": "2k",
+        "label": "2K (~2048p)",
+        "width": 2048,
+        "height": 1152,
+        "vram_hint": "VRAM: 24 GB+ | RAM: 64 GB"
+      }
     ]
   },
   "perfiles": [
     {
-      "id": "referencia",
-      "label": "Referencia",
-      "note": "certificado actual: encoder 32B sin proyección y VAE vídeo fp16; máxima fidelidad",
-      "template": "h3_fl2va_vertical.api.json",
-      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
-      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
-      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
-      "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
-      "projection": null,
-      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
-      "seconds_recomendados": [8]
-    },
-    {
-      "id": "calidad",
-      "label": "Calidad",
-      "note": "provisional: DiT int8 + ClipProj 4B; el encoder 4B libera ~7 GB frente al 32B",
+      "id": "rapido",
+      "label": "Rápido",
+      "note": "Turbo 4 pasos con Text Encoder 4B; velocidad extrema y menor tiempo de render",
+      "vram_hint": "VRAM recomendada: 8 GB | RAM: 16 GB",
       "template": "h3_fl2va_calidad.api.json",
       "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
       "vae_video": "minimax_h3_video_vae_fp16.safetensors",
@@ -57,25 +111,13 @@
       "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
       "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
       "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
-      "seconds_recomendados": [8, 10, 12]
+      "seconds_recomendados": [5, 8, 10]
     },
     {
-      "id": "ligero",
-      "label": "Ligero",
-      "note": "provisional: DiT int4 + VAE vídeo int8 + ClipProj 4B; menor VRAM",
-      "template": "h3_fl2va_ligero.api.json",
-      "dit": "minimax_h3_fl2va_pruned-w4a8_convrot_pruned.safetensors",
-      "vae_video": "minimax_h3_video_vae_int8_convrot.safetensors",
-      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
-      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
-      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
-      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
-      "seconds_recomendados": [8, 10, 12, 15]
-    },
-    {
-      "id": "vdn",
-      "label": "VDN (8-Pasos Ultra Rápido)",
-      "note": "Video Delta Net: atención híbrida + 8 pasos, optimizado para RTX 3060",
+      "id": "estandar",
+      "label": "Estándar",
+      "note": "Video Delta Net (VDN) 8 pasos + Text Encoder 4B; balance perfecto calidad/VRAM para RTX 3060",
+      "vram_hint": "VRAM recomendada: 10-12 GB | RAM: 32 GB",
       "template": "h3_vdn_8step.api.json",
       "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
       "vae_video": "minimax_h3_video_vae_fp16.safetensors",
@@ -86,9 +128,52 @@
       "seconds_recomendados": [5, 8, 10, 12]
     },
     {
+      "id": "calidad",
+      "label": "Calidad",
+      "note": "Turbo con ClipProj 4B y DiT INT8; alta fidelidad de texturas y movimiento fluido",
+      "vram_hint": "VRAM recomendada: 10-12 GB | RAM: 32 GB",
+      "template": "h3_fl2va_calidad.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [8, 10, 12]
+    },
+    {
+      "id": "ultra",
+      "label": "Ultra",
+      "note": "Text Encoder multimodal Qwen3-VL 32B completo (AWQ) sin proyeccion; maxima comprension semantica",
+      "vram_hint": "VRAM recomendada: 16-24 GB | RAM: 32-64 GB",
+      "template": "h3_fl2va_vertical.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "projection": null,
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [8]
+    },
+    {
+      "id": "personalizado",
+      "label": "Personalizado",
+      "note": "Control manual abierto de Text Encoder, variante de pasos, optimizaciones y semillas",
+      "vram_hint": "VRAM/RAM segun seleccion de componentes",
+      "template": "h3_fl2va_calidad.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [5, 8, 10, 12, 15]
+    },
+    {
       "id": "ref2va",
       "label": "Ref2VA (Referencias)",
-      "note": "Acondicionamiento por imágenes de referencia para conservar identidad de personaje",
+      "note": "Acondicionamiento por imagenes de referencia (<Picture 1>..<Picture 4>) para preservar identidad del personaje",
+      "vram_hint": "VRAM recomendada: 10-12 GB | RAM: 32 GB",
       "template": "h3_ref2va.api.json",
       "dit": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
       "vae_video": "minimax_h3_video_vae_fp16.safetensors",
@@ -97,6 +182,48 @@
       "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
       "lora": null,
       "seconds_recomendados": [8]
+    },
+    {
+      "id": "referencia",
+      "label": "Referencia (Legacy)",
+      "note": "Alias compatible con perfil Ultra (encoder 32B sin proyeccion)",
+      "vram_hint": "VRAM recomendada: 16-24 GB | RAM: 32-64 GB",
+      "template": "h3_fl2va_vertical.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "projection": null,
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [8]
+    },
+    {
+      "id": "vdn",
+      "label": "VDN (Legacy)",
+      "note": "Alias compatible con perfil Estandar (VDN 8 pasos)",
+      "vram_hint": "VRAM recomendada: 10-12 GB | RAM: 32 GB",
+      "template": "h3_vdn_8step.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": null,
+      "seconds_recomendados": [5, 8, 10, 12]
+    },
+    {
+      "id": "ligero",
+      "label": "Ligero (Legacy)",
+      "note": "Alias compatible con perfil Rapido (encoder 4B + turbo4)",
+      "vram_hint": "VRAM recomendada: 8 GB | RAM: 16 GB",
+      "template": "h3_fl2va_calidad.api.json",
+      "dit": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+      "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+      "encoder": "qwen3vl_4b_fp8_scaled.safetensors",
+      "projection": "mmh3-4b-ClipProj-v3.1.safetensors",
+      "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "seconds_recomendados": [5, 8, 10, 12]
     }
   ]
 }

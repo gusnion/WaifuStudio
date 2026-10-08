@@ -33,13 +33,17 @@ H3_FRAME_STEP = 17
 H3_MIN_FRAMES = 124
 H3_MAX_FRAMES = 362
 H3_SIZE_STEP = 32
-H3_MAX_PIXELS = 768 * 1344
+H3_MAX_PIXELS = 1152 * 2048
 
 PROFILE_COMPATIBLE_VARIANTS: dict[str, set[str]] = {
+    "estandar": {"vdn8"},
     "vdn": {"vdn8"},
     "ref2va": {"vdn8"},
-    "referencia": {"turbo4", "turbo8"},
+    "rapido": {"turbo4", "turbo8"},
     "calidad": {"turbo4", "turbo8"},
+    "ultra": {"turbo4", "turbo8"},
+    "personalizado": {"turbo4", "turbo8", "vdn8"},
+    "referencia": {"turbo4", "turbo8"},
     "ligero": {"turbo4", "turbo8"},
 }
 
@@ -116,12 +120,12 @@ def _parse_seconds_catalog(value: Any) -> list[int]:
     return seconds
 
 
-def _parse_resolution(value: Any, aspect: str) -> dict[str, int]:
+def _parse_resolution(value: Any, aspect: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise EngineError(
             f"catalogo H3: resolucion {aspect!r} invalida: {value!r}"
         )
-    sizes: dict[str, int] = {}
+    sizes: dict[str, Any] = {}
     for name in ("width", "height"):
         size = value.get(name)
         if (
@@ -147,6 +151,12 @@ def _parse_resolution(value: Any, aspect: str) -> dict[str, int]:
         raise EngineError(
             f"catalogo H3: resolucion horizontal invalida: {value!r}"
         )
+    if "id" in value and isinstance(value["id"], str):
+        sizes["id"] = value["id"].strip()
+    if "label" in value and isinstance(value["label"], str):
+        sizes["label"] = value["label"].strip()
+    if "vram_hint" in value and isinstance(value["vram_hint"], str):
+        sizes["vram_hint"] = value["vram_hint"].strip()
     return sizes
 
 
@@ -282,10 +292,14 @@ def _parse_profile(
             f"perfil H3 {profile_id!r}: seconds_recomendados debe ir en orden: "
             f"{recommended!r}"
         )
+    vram_hint = entry.get("vram_hint")
+    if vram_hint is not None and isinstance(vram_hint, str):
+        vram_hint = vram_hint.strip()
     return {
         "id": profile_id,
         "label": label.strip(),
         "note": note,
+        "vram_hint": vram_hint,
         "template": template.strip(),
         **assets,
         "encoder": encoder,
@@ -432,9 +446,9 @@ def resolve_h3_variant(
     EngineError si ``variant`` no es texto o si el id no existe en el catalogo.
     """
     is_vdn_like = False
-    if isinstance(profile, str) and profile.strip() in ("vdn", "ref2va"):
+    if isinstance(profile, str) and profile.strip() in ("vdn", "estandar", "ref2va"):
         is_vdn_like = True
-    elif isinstance(profile, dict) and profile.get("id") in ("vdn", "ref2va"):
+    elif isinstance(profile, dict) and profile.get("id") in ("vdn", "estandar", "ref2va"):
         is_vdn_like = True
     default_v = "vdn8" if is_vdn_like else DEFAULT_VARIANT
     if variant is None:
@@ -574,13 +588,16 @@ def validate_h3_size(
 
 
 def h3_default_size(aspect: object = "vertical") -> tuple[int, int]:
-    """Primera resolucion del catalogo para el aspecto dado."""
+    """Resolucion HD por defecto (576x1024 / 1024x576) para el aspecto dado."""
     if aspect not in H3_ASPECTS:
         raise EngineError(
             f"h3: aspect invalido {aspect!r}; usar vertical|horizontal"
         )
-    size = h3_resolutions()[aspect][0]
-    return size["width"], size["height"]
+    sizes = h3_resolutions()[aspect]
+    for s in sizes:
+        if s.get("id") == "hd" or (s["width"], s["height"]) in ((576, 1024), (1024, 576)):
+            return s["width"], s["height"]
+    return sizes[0]["width"], sizes[0]["height"]
 
 
 __all__ = [

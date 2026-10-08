@@ -248,114 +248,183 @@
           </div>
           <p id="video-progress-text" class="progress-text">paso -/-</p>
         </div>
-        <label class="field">
-          <span>Motor</span>
-          <select id="video-engine">
-            <option value="h3" selected>MiniMax H3 FL2VA · 8 s · 24 fps</option>
-          </select>
-        </label>
-        <label class="field" id="video-mode-field">
-          <span>Modo</span>
-          <select id="video-mode">
-            <option value="i2v">I2V · solo imagen inicial</option>
-            <option value="flf2v">FLF2V · imagen inicial + final</option>
-            <option value="ref2va">Ref2VA · referencias de personaje (R2V)</option>
-          </select>
-        </label>
+        <select id="video-engine" class="hidden" style="display: none;">
+          <option value="h3" selected>MiniMax H3 FL2VA · 24 fps</option>
+        </select>
 
-        <label class="field" id="video-image-field">
-          <span>Imagen inicial (first frame)</span>
-          <input id="video-image" type="file" accept="image/png">
-          <p id="video-input-hint" class="field-hint">Consejo: genera la imagen de entrada con el mismo aspecto y más resolución que el vídeo (p. ej. VIDEO 9:16 XL 1008×1792 para vertical, VIDEO 16:9 XL 1792×1008 para horizontal). A más resolución de entrada, más detalle en cara y ojos.</p>
-        </label>
-        <label class="field" id="video-last-image-field" style="display: none">
-          <span>Imagen final (last frame)</span>
-          <input id="video-last-image" type="file" accept="image/png">
-        </label>
-
-        <div id="video-refs-box" class="field" style="display: none">
-          <span>Imágenes de referencia del personaje (hasta 4)</span>
-          <div class="video-refs-actions" style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
-            <input id="video-refs-input" type="file" accept="image/*" multiple style="display: none">
-            <button id="btn-video-add-refs" type="button">Añadir referencias (máx. 4)</button>
-            <button id="btn-video-clear-refs" type="button">Limpiar referencias</button>
-          </div>
-          <div id="video-refs-list" class="editor-refs video-refs-list" style="margin-top: 0.5rem;"></div>
-          <p class="field-hint">Hasta 4 imágenes del personaje para acondicionar rasgos, ropa y colores sin fijar la pose.</p>
-        </div>
-
-        <label class="field" id="video-prompt-field">
-          <span>Prompt H3 (FL2VA)</span>
-          <textarea id="video-prompt" rows="3" placeholder="integrated_multimodal_description: ..."></textarea>
-        </label>
-
-        <div id="video-h3-prompt-actions">
-          <div class="enhance-row">
-            <button id="btn-h3-prompt" type="button">Mejorar prompt (H3)</button>
-          </div>
-          <p id="h3-prompt-status" class="field-hint"></p>
-        </div>
-
-        <details id="video-h3-guide" class="advanced">
-          <summary>Guía de prompt H3</summary>
-          <div class="section-body">
-            <p class="field-hint">H3 espera tres bloques, en una sola toma continua (sin cortes):</p>
-            <pre class="h3-guide-code">integrated_multimodal_description: &lt;sujeto, vestuario, entorno, luz, cámara y movimiento restringido&gt;
-overall_soundscape: &lt;ambiente y efectos; diálogo solo si aplica&gt;
-non_diegetic_music: &lt;música o None&gt;</pre>
-            <ul class="h3-guide-tips">
-              <li>Diálogo con idioma explícito: <code>&lt;d&gt;[Español] texto&lt;/d&gt;</code>.</li>
-              <li>Declara un speaker id estable antes de las voces (p. ej. <code>speaker_1</code>).</li>
-              <li>Un diálogo no debe llenar más de ~2/3 de su plano.</li>
-              <li>Una toma continua por generación: sin cortes.</li>
-              <li>También aplica a FL2VA (primer y último frame).</li>
-            </ul>
-            <div class="h3-guide-actions">
-              <button id="btn-h3-insert-template" type="button">Insertar plantilla</button>
-              <button id="btn-h3-copy-guide" type="button">Copiar guía</button>
-            </div>
-            <p id="h3-guide-status" class="field-hint"></p>
-          </div>
-        </details>
-
-        <div class="grid-2">
-          <label class="field" id="video-h3-profile-field">
-            <span>Perfil (H3)</span>
-            <select id="video-h3-profile"></select>
-            <p id="video-h3-profile-note" class="field-hint"></p>
-          </label>
-          <label class="field" id="video-h3-seconds-field">
-            <span>Duración (H3)</span>
-            <select id="video-h3-seconds" name="video-seconds">
-              <option value="5">5 s</option>
-              <option value="8" selected>8 s</option>
-              <option value="10">10 s</option>
-              <option value="12">12 s</option>
-              <option value="15">15 s</option>
-              <option value="20">20 s</option>
-              <option value="25">25 s</option>
-              <option value="30">30 s</option>
+        <!-- BLOQUE 1: Entradas y Modo de Generación -->
+        <fieldset class="video-block" id="video-block-mode">
+          <legend>1. Entradas y Modo</legend>
+          <label class="field" id="video-mode-field">
+            <span>Modo</span>
+            <select id="video-mode">
+              <option value="i2v" selected>I2V · Imagen a Video (First Frame)</option>
+              <option value="flf2v">FLF2V · Imagen inicial + final</option>
+              <option value="ref2va">Ref2VA · Referencias de personaje (R2V)</option>
+              <option value="v2v">V2V · Video de referencia (Video-to-Video)</option>
             </select>
-            <p id="video-h3-seconds-info" class="field-hint"></p>
           </label>
-          <label class="field" id="video-h3-size-field">
-            <span>Resolución (H3)</span>
-            <select id="video-h3-size"></select>
-            <p id="video-h3-size-info" class="field-hint"></p>
+
+          <label class="field" id="video-image-field">
+            <span id="video-image-label">Imagen inicial (first frame)</span>
+            <input id="video-image" type="file" accept="image/png,image/jpeg,image/webp">
+            <p id="video-input-hint" class="field-hint">A más resolución de entrada, más detalle facial. Para vertical usa 9:16 (~1008×1792); para horizontal 16:9 (~1792×1008).</p>
           </label>
-          <label class="field" id="video-h3-variant-field">
-            <span>Pasos (H3)</span>
-            <select id="video-h3-variant"></select>
+
+          <label class="field" id="video-last-image-field" style="display: none">
+            <span>Imagen final (last frame)</span>
+            <input id="video-last-image" type="file" accept="image/png,image/jpeg,image/webp">
+            <p class="field-hint">Acondiciona el último fotograma para transición fluida.</p>
           </label>
-          <label class="field field-inline" id="video-h3-sage-field">
-            <span>Sage Attention</span>
-            <input id="video-h3-sage" type="checkbox">
+
+          <div id="video-refs-box" class="field" style="display: none">
+            <span>Imágenes de referencia del personaje (hasta 4)</span>
+            <div class="video-refs-actions" style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+              <input id="video-refs-input" type="file" accept="image/*" multiple style="display: none">
+              <button id="btn-video-add-refs" type="button">Añadir referencias (máx. 4)</button>
+              <button id="btn-video-clear-refs" type="button">Limpiar referencias</button>
+            </div>
+            <div id="video-refs-list" class="editor-refs video-refs-list" style="margin-top: 0.5rem;"></div>
+            <p class="field-hint">Hasta 4 imágenes del personaje para acondicionar rasgos, ropa y colores sin fijar la pose.</p>
+          </div>
+
+          <div id="video-v2v-box" class="field" style="display: none">
+            <span>Video de referencia (V2V)</span>
+            <input id="video-v2v-input" type="file" accept="video/mp4,video/webm,video/quicktime">
+            <p class="field-hint">Video guía de movimiento, baile o coreografía para transferir dinámica al personaje.</p>
+            <div id="video-v2v-preview-wrap" class="hidden" style="margin-top: 0.4rem;">
+              <video id="video-v2v-preview" controls muted style="max-width: 100%; max-height: 140px; border-radius: 6px; border: 1px solid var(--border);"></video>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- BLOQUE 2: Prompt H3, Asistente y Guía Oficial -->
+        <fieldset class="video-block" id="video-block-prompt">
+          <legend>2. Prompt Cinematográfico H3</legend>
+          <label class="field" id="video-prompt-field">
+            <span>Prompt H3</span>
+            <textarea id="video-prompt" rows="4" placeholder="integrated_multimodal_description: ...&#10;overall_soundscape: ...&#10;non_diegetic_music: ..."></textarea>
           </label>
-          <label class="field">
-            <span>Seed</span>
-            <input id="video-seed" type="number" value="42">
-          </label>
-        </div>
+
+          <div id="video-h3-prompt-actions">
+            <div class="enhance-row" style="display: flex; gap: 0.5rem; align-items: center;">
+              <button id="btn-h3-prompt" type="button">Mejorar prompt con IA</button>
+              <label class="inline-field" style="display: flex; align-items: center; gap: 0.3rem;">
+                <span style="font-size: 0.78rem;">Fuerza</span>
+                <select id="video-h3-prompt-strength">
+                  <option value="fiel">Fiel</option>
+                  <option value="balanceado" selected>Balanceado</option>
+                  <option value="creativo">Creativo</option>
+                </select>
+              </label>
+            </div>
+            <p id="h3-prompt-status" class="field-hint"></p>
+          </div>
+
+          <details id="video-h3-guide" class="advanced panel-section">
+            <summary>Guía de prompt H3 (MiniMax Anime Standard)</summary>
+            <div class="section-body">
+              <p class="field-hint">H3 espera tres bloques en inglés técnico, en una sola toma continua por generación (sin cortes, también aplica a FL2VA):</p>
+              <pre class="h3-guide-code">integrated_multimodal_description: &lt;sujeto, vestuario, entorno, iluminación, cámara y movimiento continuo&gt;
+overall_soundscape: &lt;diseño sonoro foley, ambiente y diálogo si aplica&gt;
+non_diegetic_music: &lt;música instrumental o None&gt;</pre>
+              
+              <div class="h3-guide-accordion-sub" style="font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem;">
+                <strong style="color: var(--text);">Parámetros Cinematográficos Oficiales:</strong>
+                <ul class="h3-guide-tips" style="margin-top: 0.25rem;">
+                  <li><strong>Cámara y Tomas:</strong> <code>close-up shot</code> (primer plano), <code>medium shot</code> (plano medio), <code>full body shot</code> (entero), <code>low angle shot</code> (contrapicado), <code>slow pan right/left</code> (paneo), <code>slow dolly in</code> (acercamiento suave), <code>subtle handheld camera movement</code>. Mantener una sola toma continua: sin cortes.</li>
+                  <li><strong>Iluminación:</strong> <code>volumetric lighting / god rays</code> (rayos solares), <code>golden hour warm sunlight</code> (atardecer dorado), <code>cinematic rim lighting</code> (luz de contorno), <code>neon reflections on wet asphalt</code>, <code>soft diffused indoor lighting</code>.</li>
+                  <li><strong>Foley & Sonido:</strong> <code>gentle breeze rustling leaves</code>, <code>subtle footsteps on wooden floor</code>, <code>distant ocean waves crashing</code>, <code>soft rain tapping on window glass</code>.</li>
+                  <li><strong>Diálogo:</strong> Con idioma explícito <code>&lt;d&gt;[Español] texto&lt;/d&gt;</code> y un speaker id estable antes de las voces (ej. <code>speaker_1</code>); no llenar más de ~2/3 de su plano.</li>
+                  <li><strong>Música:</strong> <code>None</code> o estilo instrumental (ej. <code>gentle acoustic guitar and piano theme</code>, <code>melancholic anime violin melody</code>).</li>
+                  <li><strong>Referencias (Ref2VA):</strong> Citar elementos con <code>&lt;Picture 1&gt;</code>, <code>&lt;Picture 2&gt;</code> para anclar identidad.</li>
+                </ul>
+              </div>
+
+              <div class="h3-guide-templates-section" style="margin-top: 0.5rem;">
+                <span style="font-size: 0.78rem; font-weight: bold; color: var(--text);">Plantillas Rápidas a 1 Clic:</span>
+                <div class="h3-guide-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin-top: 0.3rem;">
+                  <button id="btn-h3-template-portrait" type="button" title="Retrato con luz dorada y brisa suave">Retrato Anime</button>
+                  <button id="btn-h3-template-walk" type="button" title="Toma continua caminando junto al mar">Caminata Costa</button>
+                  <button id="btn-h3-template-action" type="button" title="Toma dinámica con movimiento de cámara">Escena Dinámica</button>
+                  <button id="btn-h3-insert-template" type="button" title="Plantilla base en blanco">Insertar plantilla</button>
+                </div>
+              </div>
+              <div class="h3-guide-actions" style="margin-top: 0.4rem;">
+                <button id="btn-h3-copy-guide" type="button">Copiar guía</button>
+              </div>
+              <p id="h3-guide-status" class="field-hint"></p>
+            </div>
+          </details>
+        </fieldset>
+
+        <!-- BLOQUE 3: Configuración de Render y Perfiles -->
+        <fieldset class="video-block" id="video-block-settings">
+          <legend>3. Configuración y Rendimiento</legend>
+          <div class="grid-2">
+            <label class="field" id="video-h3-profile-field">
+              <span>Perfil de Calidad</span>
+              <select id="video-h3-profile"></select>
+              <p id="video-h3-profile-note" class="field-hint"></p>
+            </label>
+
+            <label class="field" id="video-h3-seconds-field">
+              <span>Duración</span>
+              <select id="video-h3-seconds" name="video-seconds">
+                <option value="5">5 s</option>
+                <option value="8" selected>8 s (Recomendado)</option>
+                <option value="10">10 s</option>
+                <option value="12">12 s</option>
+                <option value="15">15 s</option>
+                <option value="20">20 s</option>
+                <option value="25">25 s</option>
+                <option value="30">30 s</option>
+              </select>
+              <p id="video-h3-seconds-info" class="field-hint"></p>
+            </label>
+
+            <label class="field" id="video-h3-aspect-field">
+              <span>Orientación</span>
+              <select id="video-h3-aspect">
+                <option value="vertical" selected>Vertical (9:16)</option>
+                <option value="horizontal">Horizontal (16:9)</option>
+              </select>
+            </label>
+
+            <label class="field" id="video-h3-size-field">
+              <span>Resolución</span>
+              <select id="video-h3-size"></select>
+            </label>
+          </div>
+
+          <!-- Badge dinámico de resolución y advertencia de VRAM -->
+          <div id="video-h3-res-badge-wrap" style="margin-top: 0.25rem;">
+            <p id="video-h3-size-info" class="field-hint" style="font-size: 0.78rem; font-weight: 500;"></p>
+            <p id="video-h3-vram-warning" class="field-hint hidden" style="color: var(--warning, #e6a23c); font-size: 0.75rem; font-weight: bold;"></p>
+          </div>
+
+          <!-- Panel condicional para modo 'personalizado' -->
+          <div id="video-custom-settings-panel" class="hidden" style="margin-top: 0.6rem; padding: 0.5rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 6px;">
+            <span style="font-size: 0.78rem; font-weight: bold; color: var(--text);">Ajustes Avanzados Personalizados</span>
+            <div class="grid-2" style="margin-top: 0.35rem;">
+              <label class="field" id="video-h3-variant-field">
+                <span>Pasos de Generación</span>
+                <select id="video-h3-variant"></select>
+              </label>
+              <label class="field field-inline" id="video-h3-sage-field">
+                <span>Sage Attention</span>
+                <input id="video-h3-sage" type="checkbox">
+              </label>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top: 0.5rem;">
+            <label class="field">
+              <span>Seed</span>
+              <input id="video-seed" type="number" value="42">
+            </label>
+          </div>
+        </fieldset>
 
       </aside>
 

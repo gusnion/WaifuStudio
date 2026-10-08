@@ -13,7 +13,9 @@ from typing import Any
 from app.engine import EngineError
 from app.enhancer import load_local_llm as enhancer_load_local_llm
 from app.h3_prompt import (
+    DEFAULT_H3_STRENGTH,
     H3_BLOCKS,
+    H3_STRENGTH_PRESETS,
     SYS_PROMPT_H3,
     SYS_PROMPT_H3_REF2VA,
     SYS_PROMPT_H3_VISION,
@@ -24,21 +26,27 @@ from app.h3_prompt import (
 
 GOLDEN_SYS_PROMPT_H3 = (
     "Eres el escritor de prompts del generador de video anime MiniMax H3 (FL2VA) local.\n"
-    "Recibes en lenguaje natural (espanol) lo que debe verse y oirse, y el rating activo.\n"
+    "Recibes la descripcion de la escena en lenguaje natural (habitualmente en espanol) y el rating activo.\n"
+    "REGLA DE IDIOMA MANDATORIA: Los tres bloques DEBEN escribirse SIEMPRE EN INGLES CINEMATOGRAFICO "
+    "TECNICO PROFESIONAL (anime cinematography standard), sin importar el idioma de entrada. "
+    "NUNCA escribas la descripcion visual en espanol. (El dialogo dentro de <d>[Language] ...</d> "
+    "puede conservar el idioma especificado si aplica).\n"
+    "REGLA DE FIDELIDAD ESTRICTA: Apegarse estrictamente a lo pedido por el usuario. "
+    "Prohibido inventar personajes adicionales, objetos no solicitados o cambios drasticos de entorno.\n"
     "Devuelve EXACTAMENTE tres bloques, uno por linea y en este orden, sin preambulo, "
-    "sin comillas y sin explicaciones:\n"
+    "sin comillas, sin vinetas y sin explicaciones:\n"
     "integrated_multimodal_description: <sujeto, vestuario, entorno, luz, camara y "
     "movimiento restringido; una sola toma continua, sin cortes>\n"
-    "overall_soundscape: <ambiente y efectos; dialogo solo si aplica>\n"
+    "overall_soundscape: <ambiente y efectos foley; dialogo solo si aplica>\n"
     "non_diegetic_music: <musica o None>\n"
-    "- el dialogo va con idioma explicito: <d>[Espanol] texto</d>, con un speaker id "
+    "- el dialogo va con idioma explicito: <d>[Language] texto</d>, con un speaker id "
     "estable declarado antes de las voces (p. ej. speaker_1) y sin llenar mas de ~2/3 "
     "de su plano;\n"
     "- si rating=nsfw se explicito con el acto y el movimiento, sin eufemismos; NUNCA "
     "describas ni pidas censura (nada de mosaic/bar censor);\n"
     "- HARD RULE: todos los personajes son adultos (21+); nunca menores ni los terminos "
     "child, teen, loli o young-looking;\n"
-    "- las lineas internas de contexto (escena/rating) son referencia: nunca las copies "
+    "- las lineas internas de contexto (escena/rating/modo) son referencia: nunca las copies "
     "literalmente;\n"
     "- responde SOLO con los tres bloques."
 )
@@ -153,9 +161,30 @@ class WriteH3PromptTests(unittest.TestCase):
         self.assertEqual(len(llm.calls), 1)
         system, user = llm.calls[0]
         self.assertEqual(system, SYS_PROMPT_H3)
-        self.assertTrue(user.startswith("escena: la chica camina junto al mar"))
+        self.assertIn("Modo: balanceado", user)
+        self.assertIn("escena: la chica camina junto al mar", user)
         self.assertIn("rating: sfw", user)
-        self.assertIn("Devuelve solo los tres bloques del prompt H3.", user)
+        self.assertIn("Devuelve solo los tres bloques del prompt H3 en inglés.", user)
+
+    def test_strength_presets(self):
+        for strength, expected_temp in (("fiel", 0.3), ("balanceado", 0.7), ("creativo", 0.95)):
+            with self.subTest(strength=strength):
+                recorded_kwargs: dict[str, Any] = {}
+
+                def spy_llm(sys_p: str, usr_p: Any, **kwargs: Any) -> str:
+                    recorded_kwargs.update(kwargs)
+                    return H3_OUTPUT
+
+                res = write_h3_prompt(self.ESCENA, strength=strength, llm=spy_llm)
+                self.assertEqual(res, {"h3_prompt": H3_OUTPUT})
+                self.assertEqual(recorded_kwargs.get("temperature"), expected_temp)
+                self.assertEqual(recorded_kwargs.get("max_tokens"), 512)
+
+    def test_strength_invalido_lanza_engine_error(self):
+        for bad in ("invalido", "ultra", "", None):
+            with self.subTest(bad=bad):
+                with self.assertRaises(EngineError):
+                    write_h3_prompt(self.ESCENA, strength=bad, llm=FakeLLM())
 
     def test_rating_por_defecto_nsfw(self):
         llm = FakeLLM()

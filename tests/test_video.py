@@ -11,7 +11,7 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
-from app.config import EngineConfig
+from app.config import APP_ROOT, EngineConfig
 from app.engine import ComfyEngine, EngineError, load_graph
 from app.h3_presets import h3_frames_for_seconds, h3_template_path, resolve_h3_profile
 from app.motion import MOTION_NEGATIVE
@@ -943,12 +943,29 @@ class PrepareH3Tests(unittest.TestCase):
             with self.subTest(frames=frames):
                 with self.assertRaises(EngineError):
                     prepare_h3_graph(self.graph, **(base | {"frames": frames}))
-        for width, height in ((600, 1024), (2048, 576), (1024, 1024), (576, 1024.0)):
+        for width, height in ((600, 1024), (4096, 1024), (1024, 1024), (576, 1024.0)):
             with self.subTest(width=width, height=height):
                 with self.assertRaises(EngineError):
                     prepare_h3_graph(
                         self.graph, **(base | {"width": width, "height": height})
                     )
+
+    def test_v2v_inserta_load_video_y_get_components(self):
+        ref2va_graph = load_graph(APP_ROOT / "workflows" / "h3_ref2va.api.json")
+        prepared = prepare_h3_graph(
+            ref2va_graph,
+            ref_video_name="dance_clip.mp4",
+            prompt="<Video 1> dance motion replacement",
+            seed=42,
+        )
+        self.assertIn("144", prepared)
+        self.assertEqual(prepared["144"]["class_type"], "LoadVideo")
+        self.assertEqual(prepared["144"]["inputs"]["file"], "dance_clip.mp4")
+        self.assertIn("145", prepared)
+        self.assertEqual(prepared["145"]["class_type"], "GetVideoComponents")
+        self.assertEqual(prepared["145"]["inputs"]["video"], ["144", 0])
+        self.assertEqual(prepared["131"]["inputs"]["ref_video_1"], ["145", 0])
+        self.assertEqual(prepared["131"]["inputs"]["ref_video_audio_1"], ["145", 1])
 
 
 class BuildVideoGraphTests(unittest.TestCase):

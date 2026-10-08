@@ -69,18 +69,38 @@ const H3_PROMPT_TEMPLATE = [
   "non_diegetic_music: None",
 ].join("\n");
 
+const H3_TEMPLATE_PORTRAIT = [
+  "integrated_multimodal_description: A cinematic close-up shot of an anime woman with detailed silver hair gently fluttering in the wind, soft golden hour sunlight illuminating her face with delicate rim lighting, serene expression, subtle handheld camera movement, continuous single-take shot, no jump cuts.",
+  "overall_soundscape: Soft gentle breeze rustling in the background, distant ambient nature sounds. No dialogue.",
+  "non_diegetic_music: Gentle acoustic guitar and warm melancholic piano melody.",
+].join("\n");
+
+const H3_TEMPLATE_WALK = [
+  "integrated_multimodal_description: A medium shot of an anime character slowly walking along a sunlit coastal promenade, gentle sea breeze moving their light jacket, soft cinematic lighting, smooth slow dolly forward camera tracking, continuous single-take shot, no jump cuts.",
+  "overall_soundscape: Rhythmic footsteps on smooth stone pavement, distant gentle ocean waves and wind. No dialogue.",
+  "non_diegetic_music: Nostalgic anime instrumental piano theme.",
+].join("\n");
+
+const H3_TEMPLATE_ACTION = [
+  "integrated_multimodal_description: A dynamic full-body anime sequence, character landing gracefully and turning with flowing hair, volumetric lighting streaks, fast but smooth tracking camera pan, high energy motion, continuous single-take shot, no jump cuts.",
+  "overall_soundscape: Swoosh of fast movement, crisp landing impact foley, rush of air. No dialogue.",
+  "non_diegetic_music: Energetic anime synthwave beat with driving percussion.",
+].join("\n");
+
 const H3_GUIDE_TEXT = [
-  "Guía de prompt H3 (MiniMax):",
+  "Guía de prompt H3 (MiniMax Anime Standard):",
   "",
+  "ESTRUCTURA DE TRES BLOQUES (OBLIGATORIA EN INGLÉS TÉCNICO):",
   H3_PROMPT_TEMPLATE,
   "",
-  "Una toma continua por generación, sin cortes.",
-  "integrated_multimodal_description: sujeto, vestuario, entorno, luz, cámara y movimiento restringido.",
-  "overall_soundscape: ambiente y efectos; diálogo solo si aplica con <d>[Idioma] texto</d>.",
-  "Declara un speaker id estable antes de las voces (p. ej. speaker_1).",
-  "Un diálogo no debe llenar más de ~2/3 de su plano.",
-  "non_diegetic_music: música o None.",
-  "También aplica a FL2VA (primer y último frame).",
+  "REGLAS OFICIALES:",
+  "1. Una sola toma continua sin cortes ni transiciones bruscas.",
+  "2. Parámetros de cámara: close-up shot, medium shot, full body shot, low angle, slow pan, slow dolly in.",
+  "3. Iluminación cinematográfica: volumetric lighting, golden hour sunlight, rim lighting, neon reflection.",
+  "4. Sonido Foley & Ambiente: rustling leaves, subtle footsteps, distant ocean waves, soft rain.",
+  "5. Diálogo: Declarar speaker y sintaxis <d>[Idioma] texto</d> (máx 2/3 de duración).",
+  "6. Música no diegética: None o descripción instrumental (piano, acoustic guitar, anime synthwave).",
+  "7. Referencias (Ref2VA): Identificar con <Picture 1>, <Picture 2>, etc.",
 ].join("\n");
 
 const VIDEO_REF_LIMIT = 4;
@@ -2594,16 +2614,24 @@ async function reuseVideoGeneration(item) {
 }
 
 function startNewVideo() {
-  $("video-engine").value = STARTUP_DEFAULTS.video_engine;
-  $("video-mode").value = "i2v";
+  if ($("video-engine")) $("video-engine").value = "h3";
+  if ($("video-mode")) $("video-mode").value = "i2v";
   $("video-seed").value = $("video-seed").defaultValue || "42";
   $("video-prompt").value = "";
   $("video-image").value = "";
-  $("video-last-image").value = "";
+  if ($("video-last-image")) $("video-last-image").value = "";
+  const v2vInput = $("video-v2v-input");
+  if (v2vInput) v2vInput.value = "";
+  const v2vWrap = $("video-v2v-preview-wrap");
+  if (v2vWrap) v2vWrap.classList.add("hidden");
+  const v2vPreview = $("video-v2v-preview");
+  if (v2vPreview) v2vPreview.src = "";
   clearVideoRefs();
-  setSelectValue($("video-h3-profile"), "calidad");
+  setSelectValue($("video-h3-profile"), "estandar");
+  if ($("video-h3-aspect")) setSelectValue($("video-h3-aspect"), "vertical");
+  fillH3Sizes();
   updateH3Variants();
-  setSelectValue($("video-h3-variant"), "turbo4");
+  setSelectValue($("video-h3-variant"), "turbo8");
   $("video-h3-sage").checked = false;
   setSelectValue($("video-h3-seconds"), String(defaultH3Seconds()));
   state.videoNegativeTouched = false;
@@ -2738,6 +2766,8 @@ async function improveH3Prompt() {
   try {
     const ratingEl = $("video-rating");
     const mode = $("video-mode") ? $("video-mode").value : "i2v";
+    const strengthEl = $("video-h3-prompt-strength");
+    const strength = (strengthEl && strengthEl.value) || "balanceado";
     let image_b64 = null;
     let images_b64 = null;
     if (mode === "ref2va" && state.videoRefs && state.videoRefs.length > 0) {
@@ -2758,6 +2788,7 @@ async function improveH3Prompt() {
     const reqBody = {
       text,
       rating: (ratingEl && ratingEl.value) || "nsfw",
+      strength,
     };
     if (images_b64) {
       reqBody.images_b64 = images_b64;
@@ -2813,6 +2844,13 @@ async function generateVideo() {
       setVideoStatus("Ref2VA requiere al menos una imagen de referencia", true);
       return;
     }
+  } else if (mode === "v2v") {
+    const v2vInput = $("video-v2v-input");
+    const v2vFile = v2vInput && v2vInput.files && v2vInput.files[0];
+    if (!v2vFile) {
+      setVideoStatus("V2V requiere un archivo de video de referencia (.mp4, .webm)", true);
+      return;
+    }
   } else {
     const file = $("video-image").files[0];
     if (!file) {
@@ -2833,6 +2871,14 @@ async function generateVideo() {
         const raw = r.b64 || "";
         return raw.includes(",") ? raw.split(",", 2)[1] : raw;
       });
+    } else if (mode === "v2v") {
+      const v2vInput = $("video-v2v-input");
+      const v2vFile = v2vInput.files[0];
+      payload.ref_video_b64 = await readFileBase64(v2vFile);
+      const firstImg = $("video-image") && $("video-image").files && $("video-image").files[0];
+      if (firstImg) {
+        payload.image_b64 = await readFileBase64(firstImg);
+      }
     } else {
       const file = $("video-image").files[0];
       payload.image_b64 = await readFileBase64(file);
@@ -2910,30 +2956,40 @@ function h3FramesForSeconds(seconds) {
 }
 
 function defaultH3Seconds() {
-  const profile = state.videoH3Profiles.find((item) => item.id === "calidad");
+  const profile = state.videoH3Profiles.find((item) => item.id === "estandar" || item.id === "calidad");
   const recommended = (profile && profile.seconds_recomendados) || [];
   return recommended.length ? recommended[0] : state.videoH3Seconds[0] || 8;
 }
 
 function fillH3Sizes() {
   const select = $("video-h3-size");
+  if (!select) return;
+  const aspect = ($("video-h3-aspect") && $("video-h3-aspect").value) || "vertical";
   const previous = select.value;
   select.replaceChildren();
-  for (const aspect of ["vertical", "horizontal"]) {
-    for (const size of state.videoH3Resolutions[aspect] || []) {
-      select.appendChild(
-        option(
-          `${size.width}x${size.height}`,
-          `${size.width}×${size.height} ${aspect}`
-        )
-      );
+  const list = (state.videoH3Resolutions && state.videoH3Resolutions[aspect]) || [];
+  for (const size of list) {
+    const idUpper = (size.id || "").toUpperCase();
+    const label = size.label ? `${idUpper} · ${size.label}` : `${idUpper} · ${size.width}×${size.height}`;
+    select.appendChild(
+      option(`${size.width}x${size.height}`, label)
+    );
+  }
+  if (previous && Array.from(select.options).some((o) => o.value === previous)) {
+    select.value = previous;
+  } else {
+    const hdOpt = Array.from(select.options).find((o) => o.textContent.startsWith("HD"));
+    if (hdOpt) {
+      select.value = hdOpt.value;
     }
   }
-  setSelectValue(select, previous);
+  updateH3Notes();
 }
 
 function selectedH3Size() {
-  const parts = $("video-h3-size").value.split("x");
+  const el = $("video-h3-size");
+  if (!el || !el.value) return null;
+  const parts = el.value.split("x");
   const width = Number(parts[0]);
   const height = Number(parts[1]);
   return Number.isFinite(width) && Number.isFinite(height)
@@ -2944,37 +3000,73 @@ function selectedH3Size() {
 function updateH3Notes() {
   const profile = selectedH3Profile();
   const note = $("video-h3-profile-note");
-  if (!profile) {
-    note.textContent = "Cargando perfiles…";
-  } else {
-    const encoder = profile.projection
-      ? `ClipProj ${profile.projection}`
-      : "encoder 32B sin proyección";
-    const recommended = (profile.seconds_recomendados || []).join("/");
-    note.textContent = `${profile.note} · ${encoder}` +
-      (recommended ? ` · recomendado: ${recommended} s` : "");
+  if (note) {
+    if (!profile) {
+      note.textContent = "Cargando perfiles…";
+    } else {
+      let desc = profile.note || "";
+      if (profile.vram_hint) {
+        desc += ` · ${profile.vram_hint}`;
+      }
+      note.textContent = desc;
+    }
   }
-  const seconds = Number($("video-h3-seconds").value);
-  $("video-h3-seconds-info").textContent = Number.isFinite(seconds)
-    ? `≈ ${seconds} s → ${h3FramesForSeconds(seconds)} frames (${H3_FPS} fps)`
-    : "";
+
+  const customPanel = $("video-custom-settings-panel");
+  if (customPanel) {
+    const isCustom = profile && profile.id === "personalizado";
+    customPanel.classList.toggle("hidden", !isCustom);
+  }
+
+  const seconds = Number($("video-h3-seconds") ? $("video-h3-seconds").value : 8);
+  const secondsInfo = $("video-h3-seconds-info");
+  if (secondsInfo) {
+    secondsInfo.textContent = Number.isFinite(seconds)
+      ? `≈ ${seconds} s → ${h3FramesForSeconds(seconds)} frames (${H3_FPS} fps)`
+      : "";
+  }
+
   const size = selectedH3Size();
-  $("video-h3-size-info").textContent = size
-    ? `múltiplos de 32 · máx 768×1344 · grid 5+17n`
-    : "";
+  const sizeInfo = $("video-h3-size-info");
+  const vramWarning = $("video-h3-vram-warning");
+  if (size) {
+    const aspect = ($("video-h3-aspect") && $("video-h3-aspect").value) || "vertical";
+    const list = (state.videoH3Resolutions && state.videoH3Resolutions[aspect]) || [];
+    const found = list.find((item) => item.width === size.width && item.height === size.height);
+    const vramHint = (found && found.vram_hint) || "12GB VRAM";
+    if (sizeInfo) {
+      sizeInfo.textContent = `Resolución nativa: ${size.width}×${size.height} · ${vramHint}`;
+    }
+    const isHighRes = found && ["fhd", "qhd", "2k"].includes(found.id);
+    if (vramWarning) {
+      if (isHighRes) {
+        vramWarning.textContent = "⚠️ En GPUs de 12GB (como RTX 3060), esta resolución puede requerir >16GB VRAM y generar error Out Of Memory (OOM). Si ocurre, usa HD o reduce la duración.";
+        vramWarning.classList.remove("hidden");
+      } else {
+        vramWarning.textContent = "";
+        vramWarning.classList.add("hidden");
+      }
+    }
+  } else if (sizeInfo) {
+    sizeInfo.textContent = "";
+  }
 }
 
 const PROFILE_COMPATIBLE_VARIANTS = {
-  vdn: ["vdn8"],
-  ref2va: ["vdn8"],
-  referencia: ["turbo4", "turbo8"],
+  rapido: ["turbo4", "turbo8"],
+  estandar: ["turbo4", "turbo8"],
   calidad: ["turbo4", "turbo8"],
+  ultra: ["vdn8"],
+  personalizado: ["turbo4", "turbo8", "vdn8"],
+  ref2va: ["vdn8"],
+  vdn: ["vdn8"],
+  referencia: ["turbo4", "turbo8"],
   ligero: ["turbo4", "turbo8"],
 };
 
 function updateH3Variants() {
   const profileEl = $("video-h3-profile");
-  const profile = profileEl ? profileEl.value : "calidad";
+  const profile = profileEl ? profileEl.value : "estandar";
   const allowed = PROFILE_COMPATIBLE_VARIANTS[profile] || ["turbo4", "turbo8"];
   const variantSelect = $("video-h3-variant");
   if (!variantSelect) return;
@@ -2989,7 +3081,7 @@ function updateH3Variants() {
   }
   if (allowed.includes(currentVal)) {
     variantSelect.value = currentVal;
-  } else if (profile === "vdn") {
+  } else if (profile === "ultra" || profile === "vdn" || profile === "ref2va") {
     variantSelect.value = "vdn8";
   } else if (allowed.length > 0) {
     variantSelect.value = allowed[0];
@@ -3020,7 +3112,9 @@ async function loadH3Profiles() {
   for (const profile of state.videoH3Profiles) {
     let label = profile.label || profile.id;
     if (profile.available === false) {
-      label = profile.id === "vdn" ? "VDN (8-Pasos · Requiere Pesos)" : `${label} (No disponible)`;
+      label = profile.id === "ultra" || profile.id === "vdn"
+        ? "Ultra (8-Pasos VDN · Requiere Pesos)"
+        : `${label} (No disponible)`;
     }
     const opt = option(profile.id, label);
     if (profile.available === false) {
@@ -3028,7 +3122,7 @@ async function loadH3Profiles() {
     }
     profileSelect.appendChild(opt);
   }
-  setSelectValue(profileSelect, "calidad");
+  setSelectValue(profileSelect, "estandar");
   updateH3Variants();
   const secondsSelect = $("video-h3-seconds");
   secondsSelect.replaceChildren();
@@ -3036,7 +3130,7 @@ async function loadH3Profiles() {
     secondsSelect.appendChild(option(String(seconds), `${seconds} s`));
   }
   fillH3Sizes();
-  setSelectValue($("video-h3-variant"), "turbo4");
+  setSelectValue($("video-h3-variant"), "turbo8");
   setSelectValue(secondsSelect, String(defaultH3Seconds()));
   updateH3Notes();
 }
@@ -3044,33 +3138,42 @@ async function loadH3Profiles() {
 function applyVideoEngine() {
   const isWan = $("video-engine") ? $("video-engine").value === "wan" : false;
   const mode = $("video-mode") ? $("video-mode").value : "i2v";
-  const showFirst = mode !== "ref2va";
+  const showFirst = mode === "i2v" || mode === "flf2v" || mode === "v2v";
   const showLast = mode === "flf2v";
   const showRefs = mode === "ref2va";
+  const showV2V = mode === "v2v";
+
   if ($("video-mode-field")) $("video-mode-field").style.display = "";
-  if ($("video-image-field")) $("video-image-field").style.display = showFirst ? "" : "none";
-  const lastField = $("video-last-image-field") || $("video-last-field");
+  if ($("video-image-field")) {
+    $("video-image-field").style.display = showFirst ? "" : "none";
+    const imgLabel = $("video-image-label");
+    if (imgLabel) {
+      imgLabel.textContent = mode === "v2v"
+        ? "Imagen de inicio / estilo (opcional)"
+        : "Imagen inicial (first frame)";
+    }
+  }
+  const lastField = $("video-last-image-field");
   if (lastField) lastField.style.display = showLast ? "" : "none";
   const refsBox = $("video-refs-box");
   if (refsBox) {
     refsBox.classList.remove("hidden");
     refsBox.style.display = showRefs ? "" : "none";
   }
-  if ($("video-prompt-field")) $("video-prompt-field").style.display = isWan ? "none" : "";
-  if ($("video-h3-prompt-actions")) $("video-h3-prompt-actions").style.display = isWan ? "none" : "";
-  $("video-h3-guide").style.display = isWan ? "none" : "";
-  for (const id of ["video-h3-profile-field", "video-h3-seconds-field", "video-h3-size-field", "video-h3-variant-field", "video-h3-sage-field"]) {
-    const el = $(id);
-    if (el) el.style.display = isWan ? "none" : "";
+  const v2vBox = $("video-v2v-box");
+  if (v2vBox) {
+    v2vBox.classList.remove("hidden");
+    v2vBox.style.display = showV2V ? "" : "none";
   }
-  for (const id of ["video-h3-profile", "video-h3-seconds", "video-h3-size", "video-h3-variant", "video-h3-sage"]) {
-    const el = $(id);
-    if (el) el.disabled = isWan;
-  }
+
+  if ($("video-h3-guide")) $("video-h3-guide").style.display = isWan ? "none" : "";
+
   if (mode === "ref2va") {
     setSelectValue($("video-h3-profile"), "ref2va");
-    updateH3Variants();
+  } else if ($("video-h3-profile") && $("video-h3-profile").value === "ref2va") {
+    setSelectValue($("video-h3-profile"), "estandar");
   }
+  updateH3Variants();
   updateH3Notes();
 }
 
@@ -6752,6 +6855,7 @@ const REQUIRED_IDS = [
   "video-h3-profile-note",
   "video-h3-seconds",
   "video-h3-seconds-info",
+  "video-h3-aspect",
   "video-h3-size",
   "video-h3-size-info",
   "video-h3-variant",
@@ -6763,7 +6867,9 @@ const REQUIRED_IDS = [
   "video-input-hint",
   "video-h3-prompt-actions",
   "btn-h3-prompt",
+  "video-h3-prompt-strength",
   "h3-prompt-status",
+  "video-v2v-input",
   "enhance-hint",
   "video-preview",
   "video-preview-empty",
@@ -7190,9 +7296,46 @@ function bind() {
   on("video-mode", "change", applyVideoEngine);
   on("video-h3-profile", "change", onH3ProfileChange);
   on("video-h3-seconds", "change", updateH3Notes);
+  on("video-h3-aspect", "change", fillH3Sizes);
   on("video-h3-size", "change", updateH3Notes);
   on("btn-h3-insert-template", "click", insertH3Template);
+  on("btn-h3-template-portrait", "click", () => {
+    const area = $("video-prompt");
+    if (area) {
+      area.value = H3_TEMPLATE_PORTRAIT;
+      area.focus();
+      setH3GuideStatus("Plantilla 'Retrato Anime' insertada");
+    }
+  });
+  on("btn-h3-template-walk", "click", () => {
+    const area = $("video-prompt");
+    if (area) {
+      area.value = H3_TEMPLATE_WALK;
+      area.focus();
+      setH3GuideStatus("Plantilla 'Caminata Costa' insertada");
+    }
+  });
+  on("btn-h3-template-action", "click", () => {
+    const area = $("video-prompt");
+    if (area) {
+      area.value = H3_TEMPLATE_ACTION;
+      area.focus();
+      setH3GuideStatus("Plantilla 'Escena Dinámica' insertada");
+    }
+  });
   on("btn-h3-copy-guide", "click", copyH3Guide);
+  on("video-v2v-input", "change", (event) => {
+    const file = event.target.files && event.target.files[0];
+    const wrap = $("video-v2v-preview-wrap");
+    const preview = $("video-v2v-preview");
+    if (file && preview && wrap) {
+      preview.src = URL.createObjectURL(file);
+      wrap.classList.remove("hidden");
+    } else if (preview && wrap) {
+      preview.src = "";
+      wrap.classList.add("hidden");
+    }
+  });
   on("btn-video-add-refs", "click", () => {
     const input = $("video-refs-input");
     if (input) input.click();
