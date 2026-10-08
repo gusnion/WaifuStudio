@@ -5,7 +5,14 @@ $port = 8765
 $portText = "$env:WAIFU_APP_PORT".Trim()
 if ($portText) { $port = [int]$portText }
 
-# 1. Comprobar si el servidor está corriendo; si no, avisar o arrancarlo
+# 1. Comprobar si el Engine (ComfyUI) está corriendo; si no, arrancarlo
+$engineListener = Get-NetTCPConnection -LocalPort 8288 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if (!$engineListener) {
+    Write-Host "Iniciando Engine ComfyUI (8288) en segundo plano..." -ForegroundColor Cyan
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\start_engine.ps1`"" -WindowStyle Minimized
+}
+
+# 2. Comprobar si el servidor WaifuStudio está corriendo; si no, arrancarlo
 $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if (!$listener) {
     Write-Host "Iniciando servidor WaifuStudio en segundo plano..." -ForegroundColor Cyan

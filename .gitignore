@@ -21,3 +21,7 @@ tools/kohya/venv/
 
 # Runtime llama.cpp stock (binarios CUDA descargados; no se versionan)
 tools/llama.cpp/
+
+# Accesos directos de Windows
+*.lnk
+
