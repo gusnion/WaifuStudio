@@ -19,6 +19,8 @@ from app.enhancer import LLM_URL_ENV
 from app.llm_server import (
     DEFAULT_PORT,
     DEFAULT_THREADS,
+    LEGACY_MMPROJ_REL,
+    LEGACY_MODEL_REL,
     MMPROJ_ENV,
     MMPROJ_REL,
     MODEL_ENV,
@@ -168,6 +170,16 @@ class MissingFilesTests(ManagerTestCase):
         self.assertEqual(status["mode"], "managed")
         self.assertEqual(status["state"], "unavailable")
         self.assertIn("download_llm.py", status["detail"])
+
+    def test_fallback_a_modelo_legacy_si_nuevo_no_existe(self):
+        for relative in (SERVER_REL, LEGACY_MODEL_REL, LEGACY_MMPROJ_REL):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake")
+        manager = self.make_manager()
+        self.assertTrue(manager.installed())
+        self.assertEqual(manager.model_path, self.root / LEGACY_MODEL_REL)
+        self.assertEqual(manager.mmproj_path, self.root / LEGACY_MMPROJ_REL)
 
 
 class StatusProbeTests(ManagerTestCase):

@@ -58,6 +58,11 @@ class StartLlmScriptTests(unittest.TestCase):
         self.assertIn("Qwen3.5-9B-abliterated-Q4_K_M.gguf", self.text)
         self.assertIn("mmproj-F16.gguf", self.text)
 
+    def test_modelo_y_mmproj_captioning(self):
+        self.assertIn("qwen35-9b-nsfw-captioning", self.text)
+        self.assertIn("qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf", self.text)
+        self.assertIn("qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf", self.text)
+
     def test_sin_restos_del_27b(self):
         for marker in (
             "qwen38-27b",

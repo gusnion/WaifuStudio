@@ -32,10 +32,18 @@ MMPROJ_ENV = "WAIFU_LLM_MMPROJ"
 THREADS_ENV = "WAIFU_LLM_THREADS"
 SERVER_REL = "tools/llama.cpp/llama-server.exe"
 MODEL_REL = (
+    "ComfyUI/models/llm/qwen35-9b-nsfw-captioning/"
+    "qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf"
+)
+MMPROJ_REL = (
+    "ComfyUI/models/llm/qwen35-9b-nsfw-captioning/"
+    "qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf"
+)
+LEGACY_MODEL_REL = (
     "ComfyUI/models/llm/qwen35-9b-abliterated/"
     "Qwen3.5-9B-abliterated-Q4_K_M.gguf"
 )
-MMPROJ_REL = "ComfyUI/models/llm/qwen35-9b-abliterated/mmproj-F16.gguf"
+LEGACY_MMPROJ_REL = "ComfyUI/models/llm/qwen35-9b-abliterated/mmproj-F16.gguf"
 LOG_REL = "data/llm-server.log"
 DEFAULT_PORT = 8290
 DEFAULT_THREADS = max(4, min(8, (os.cpu_count() or 8) // 2))
@@ -144,16 +152,28 @@ class LlamaServerManager:
             if server_path is not None
             else self.root / SERVER_REL
         )
-        self.model_path = (
-            Path(model_path)
-            if model_path is not None
-            else _env_path(MODEL_ENV, self.root / MODEL_REL, self.root)
-        )
-        self.mmproj_path = (
-            Path(mmproj_path)
-            if mmproj_path is not None
-            else _env_path(MMPROJ_ENV, self.root / MMPROJ_REL, self.root)
-        )
+        if model_path is not None:
+            self.model_path = Path(model_path)
+        elif os.environ.get(MODEL_ENV, "").strip():
+            self.model_path = _env_path(MODEL_ENV, self.root / MODEL_REL, self.root)
+        else:
+            primary = self.root / MODEL_REL
+            legacy = self.root / LEGACY_MODEL_REL
+            self.model_path = (
+                primary if primary.is_file() or not legacy.is_file() else legacy
+            )
+        if mmproj_path is not None:
+            self.mmproj_path = Path(mmproj_path)
+        elif os.environ.get(MMPROJ_ENV, "").strip():
+            self.mmproj_path = _env_path(MMPROJ_ENV, self.root / MMPROJ_REL, self.root)
+        else:
+            primary_mm = self.root / MMPROJ_REL
+            legacy_mm = self.root / LEGACY_MMPROJ_REL
+            self.mmproj_path = (
+                primary_mm
+                if primary_mm.is_file() or not legacy_mm.is_file()
+                else legacy_mm
+            )
         self.log_path = Path(log_path) if log_path is not None else self.root / LOG_REL
         self.timeout_s = float(timeout_s)
         self.poll_s = float(poll_s)
@@ -404,6 +424,8 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_THREADS",
     "DOWNLOAD_HINT",
+    "LEGACY_MMPROJ_REL",
+    "LEGACY_MODEL_REL",
     "LLM_URL_ENV",
     "LOG_REL",
     "MMPROJ_ENV",

@@ -19,9 +19,25 @@ $nglText = "$env:WAIFU_LLM_NGL".Trim()
 if ($nglText) { $ngl = [int]$nglText }
 
 $serverExe = Join-Path $StackRoot 'tools\llama.cpp\llama-server.exe'
-$modelDir = Join-Path $StackRoot 'ComfyUI\models\llm\qwen35-9b-abliterated'
-$modelPath = Join-Path $modelDir 'Qwen3.5-9B-abliterated-Q4_K_M.gguf'
-$mmprojPath = Join-Path $modelDir 'mmproj-F16.gguf'
+
+$newModelDir = Join-Path $StackRoot 'ComfyUI\models\llm\qwen35-9b-nsfw-captioning'
+$newModelPath = Join-Path $newModelDir 'qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf'
+$newMmprojPath = Join-Path $newModelDir 'qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf'
+
+$legacyModelDir = Join-Path $StackRoot 'ComfyUI\models\llm\qwen35-9b-abliterated'
+$legacyModelPath = Join-Path $legacyModelDir 'Qwen3.5-9B-abliterated-Q4_K_M.gguf'
+$legacyMmprojPath = Join-Path $legacyModelDir 'mmproj-F16.gguf'
+
+if ((Test-Path -LiteralPath $newModelPath) -and (Test-Path -LiteralPath $newMmprojPath)) {
+    $modelPath = $newModelPath
+    $mmprojPath = $newMmprojPath
+} elseif ((Test-Path -LiteralPath $legacyModelPath) -and (Test-Path -LiteralPath $legacyMmprojPath)) {
+    $modelPath = $legacyModelPath
+    $mmprojPath = $legacyMmprojPath
+} else {
+    $modelPath = $newModelPath
+    $mmprojPath = $newMmprojPath
+}
 
 $missing = @()
 if (!(Test-Path -LiteralPath $serverExe)) { $missing += "llama-server.exe: $serverExe" }

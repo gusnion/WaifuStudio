@@ -24,9 +24,17 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 SERVER = APP_ROOT / "tools" / "llama.cpp" / "llama-server.exe"
-MODEL_DIR = APP_ROOT / "ComfyUI" / "models" / "llm" / "qwen35-9b-abliterated"
-MODEL = MODEL_DIR / "Qwen3.5-9B-abliterated-Q4_K_M.gguf"
-MMPROJ = MODEL_DIR / "mmproj-F16.gguf"
+NEW_MODEL_DIR = APP_ROOT / "ComfyUI" / "models" / "llm" / "qwen35-9b-nsfw-captioning"
+NEW_MODEL = NEW_MODEL_DIR / "qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf"
+NEW_MMPROJ = NEW_MODEL_DIR / "qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf"
+
+LEGACY_MODEL_DIR = APP_ROOT / "ComfyUI" / "models" / "llm" / "qwen35-9b-abliterated"
+LEGACY_MODEL = LEGACY_MODEL_DIR / "Qwen3.5-9B-abliterated-Q4_K_M.gguf"
+LEGACY_MMPROJ = LEGACY_MODEL_DIR / "mmproj-F16.gguf"
+
+MODEL_DIR = NEW_MODEL_DIR if NEW_MODEL.is_file() else LEGACY_MODEL_DIR
+MODEL = NEW_MODEL if NEW_MODEL.is_file() else (LEGACY_MODEL if LEGACY_MODEL.is_file() else NEW_MODEL)
+MMPROJ = NEW_MMPROJ if NEW_MMPROJ.is_file() else (LEGACY_MMPROJ if LEGACY_MMPROJ.is_file() else NEW_MMPROJ)
 LOG_PATH = APP_ROOT / "data" / "llm-smoke.log"
 
 TEXT_SYSTEM = "You output danbooru-style tags in English, comma separated, one line."
