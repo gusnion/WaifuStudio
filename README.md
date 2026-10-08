@@ -77,7 +77,8 @@ Uso diario:
 
 ```
 1) INICIAR_ENGINE.bat     (déjalo abierto; escucha en 127.0.0.1:8288)
-2) INICIAR_WAIFU.bat      (abre la app en http://127.0.0.1:8765)
+2) INICIAR_WAIFU.bat      (arranca el backend en http://127.0.0.1:8765)
+3) ABRIR_APP.bat          (opcional: abre la app en ventana ultraligera dedicada, ~100 MB RAM)
 ```
 
 - El LLM es automático: la app arranca y para sola su servidor de texto/visión (~5 s la primera
