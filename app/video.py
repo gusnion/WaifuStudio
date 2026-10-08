@@ -1120,6 +1120,11 @@ def run_video_generation(
             final_mp4_name = f"{gen_id}.mp4"
             final_mp4_path = gallery_dir / final_mp4_name
             concat_videos(segment_clips, final_mp4_path)
+            for seg in segment_clips:
+                try:
+                    seg.unlink(missing_ok=True)
+                except OSError:
+                    pass
             names = [final_mp4_name]
         else:
             graph = build_video_graph(job)
@@ -1134,7 +1139,10 @@ def run_video_generation(
             names = []
             for path in paths:
                 target = gallery_dir / path.name
-                shutil.copy2(path, target)
+                try:
+                    shutil.move(str(path), str(target))
+                except Exception:
+                    shutil.copy2(path, target)
                 names.append(target.name)
 
         store.update(gen_id, status="done", outputs=names, kind="video")

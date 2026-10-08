@@ -508,7 +508,10 @@ def run_generation(
         names: list[str] = []
         for path in paths:
             target = gallery_dir / path.name
-            shutil.copy2(path, target)
+            try:
+                shutil.move(str(path), str(target))
+            except Exception:
+                shutil.copy2(path, target)
             names.append(target.name)
         store.update(gen_id, status="done", outputs=names)
         job["outputs"] = names
@@ -771,6 +774,14 @@ def create_app(
         if start_worker:
             st.fail_stale()
             queue.start()
+            try:
+                inp_dir = cfg.comfy_input_dir
+                if inp_dir.exists():
+                    for f in inp_dir.glob("*.png"):
+                        if len(f.stem) == 32 or f.name.startswith("ref_"):
+                            f.unlink(missing_ok=True)
+            except Exception:
+                pass
             if not _atexit_registered:
                 _atexit_registered = True
                 atexit.register(_manager().stop)

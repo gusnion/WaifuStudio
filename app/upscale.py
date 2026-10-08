@@ -665,7 +665,10 @@ def run_upscale(
         names: list[str] = []
         for path in paths:
             target = gallery_dir / path.name
-            shutil.copy2(path, target)
+            try:
+                shutil.move(str(path), str(target))
+            except Exception:
+                shutil.copy2(path, target)
             names.append(target.name)
         store.update(gen_id, status="done", outputs=names, kind="image")
         job["outputs"] = names
@@ -781,7 +784,10 @@ def run_video_upscale(
         names: list[str] = []
         for path in paths:
             target = gallery_dir / path.name
-            shutil.copy2(path, target)
+            try:
+                shutil.move(str(path), str(target))
+            except Exception:
+                shutil.copy2(path, target)
             names.append(target.name)
         store.update(gen_id, status="done", outputs=names, kind="video")
         job["outputs"] = names
@@ -891,7 +897,10 @@ def run_fps(
         names: list[str] = []
         for path in paths:
             target = gallery_dir / path.name
-            shutil.copy2(path, target)
+            try:
+                shutil.move(str(path), str(target))
+            except Exception:
+                shutil.copy2(path, target)
             names.append(target.name)
         store.update(gen_id, status="done", outputs=names, kind="video")
         job["outputs"] = names
