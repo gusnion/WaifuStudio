@@ -4,7 +4,7 @@
 // Dependencias: static/js/state.js y static/js/dom.js.
 
 import { state } from "./state.js";
-import { $, setStatus, setVideoStatus, setEditorStatus, setUpscaleStatus } from "./dom.js";
+import { $, setStatus, setVideoStatus, setEditorStatus, setUpscaleStatus, setProgress } from "./dom.js";
 
 async function api(path, options = {}) {
   const response = await fetch(path, options);
@@ -67,7 +67,7 @@ async function cancelJob(event) {
 async function pollJob(
   jobId,
   statusFn = setStatus,
-  onDone = reloadImageViewerFirstPage,
+  onDone = null,
   progressFn = setProgress,
   manageCancel = true,
   cancelButtonId = "btn-cancel"
@@ -89,16 +89,22 @@ async function pollJob(
       }
       if (job.status === "error") {
         statusFn(`Error: ${job.error || "desconocido"}`, true);
-        await onDone(job);
+        if (onDone) {
+          await onDone(job);
+        }
         return;
       }
       if (job.status === "cancelled") {
         statusFn("Cancelado");
-        await onDone(job);
+        if (onDone) {
+          await onDone(job);
+        }
         return;
       }
       statusFn("Listo");
-      await onDone(job);
+      if (onDone) {
+        await onDone(job);
+      }
       return;
     }
   } finally {

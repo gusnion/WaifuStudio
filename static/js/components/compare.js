@@ -23,6 +23,11 @@ let editorCompareView = { scale: 1, x: 0, y: 0, ratio: 0.5, beforeUrl: "", after
 let editorComparePan = null;
 let editorCompareHandleDrag = false;
 
+const IMAGE_COMPARE_MAX_SCALE = 8;
+const IMAGE_COMPARE_DRAG_THRESHOLD = 4;
+const EDITOR_COMPARE_MAX_SCALE = 8;
+const EDITOR_COMPARE_DRAG_THRESHOLD = 4;
+
 function editorCurrentPreviewUrl() {
   return state.editorResultUrl || (state.editorRefs.length ? state.editorRefs[0].url : "") || ($("editor-preview-img") ? $("editor-preview-img").getAttribute("src") : "");
 }

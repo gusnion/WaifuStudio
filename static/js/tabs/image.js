@@ -26,6 +26,7 @@ import {
   renderZoneEditor,
   resetPromptZones,
   updateGenerateState,
+  composePrompt,
 } from "../components/prompt_zones.js";
 import {
   readLorasPayload,
