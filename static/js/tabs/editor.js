@@ -1,5 +1,7 @@
 // WaifuStudio — Pestaña de Editor (Qwen-Image 2.1)
-// editor.js: edición interactiva, inpaint/outpaint, referencias y galería del editor.
+// Qué hace: lienzo interactivo, inpaint/outpaint, capas de referencia y minigalería.
+// Qué no hace: no interfiere con los modelos de Anima de la pestaña de imagen.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import {
   state,

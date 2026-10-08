@@ -1,7 +1,8 @@
-"""Rutas de edición y generación con Qwen-Image 2.1 (/api/editor/status, /api/editor/generate).
+"""Rutas de edición y generación con Qwen-Image 2.1 (/api/editor).
 
-Gestiona verificación de modelos del editor y el encolado de jobs de edición / inpaint.
-Depende de app.editor_models, app.editor, app.routes.image y el registro de jobs.
+Qué hace: gestiona verificación de modelos del editor y el encolado de jobs de inpaint/outpaint.
+Qué no hace: no ejecuta sampling de imagen Anima ni pipelines de vídeo.
+Dependencias: app.editor_models, app.editor, app.routes.image y el registro de jobs.
 """
 
 from __future__ import annotations

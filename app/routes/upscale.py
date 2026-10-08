@@ -1,7 +1,8 @@
 """Rutas de escalado e interpolación de vídeo (/api/upscale/models, /api/upscale).
 
-Gestiona modelos de escalado, interpolación RIFE y encolado de jobs de upscale.
-Depende de app.upscale, app.routes.image y el registro de jobs.
+Qué hace: gestiona modelos de escalado, interpolación RIFE y encolado de jobs de upscale.
+Qué no hace: no genera fotogramas base ni gestiona checkpoints de difusión.
+Dependencias: app.upscale, app.routes.image y el registro de jobs.
 """
 
 from __future__ import annotations

@@ -1,0 +1,473 @@
+/* WaifuStudio — Estilos de la Pestaña Imagen
+ * Qué hace: panel de controles de imagen, visores, miniaturas, prompt y editor de zonas.
+ * Qué no hace: no define componentes compartidos ni estilos de otras pestañas.
+ * Dependencias: static/css/base.css y static/css/components.css.
+ */
+
+/* Panel Imagen: panel lateral en 2 columnas (1: generación, 2: prompt) */
+#panel-image.active {
+  grid-template-columns: minmax(620px, 780px) minmax(0, 1fr);
+}
+
+.controls.image-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.image-controls .controls-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+}
+
+.image-controls .controls-column-primary {
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.image-controls .controls-column-zones {
+  overflow-y: auto;
+}
+
+.generate-block,
+.zone-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.zone-toolbar {
+  flex: 0 0 auto;
+}
+
+.prompt-general-field {
+  flex: 0 0 auto;
+}
+
+.prompt-general-field textarea {
+  font-size: 0.82rem;
+  min-height: 64px;
+}
+
+.zones-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+#zone-editor {
+  max-height: min(60vh, 640px);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.zone-popover-count {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 900px) {
+  #panel-image.active {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .controls.image-controls {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    overflow: visible;
+  }
+
+  .image-controls .controls-column-primary,
+  .image-controls .controls-column-zones {
+    overflow: visible;
+  }
+}
+
+.prompt-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.image-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 120px;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: #0e0f13;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: default;
+}
+
+.image-preview.has-image {
+  cursor: zoom-in;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-preview video {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.viewer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.viewer-toolbar #btn-new-generation,
+.viewer-toolbar #btn-describe-image,
+.viewer-toolbar #btn-save-to-oc,
+.viewer-toolbar #btn-download-image {
+  flex: 0 0 auto;
+}
+
+.viewer-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.viewer-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.image-thumbs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 120px));
+  justify-content: start;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  flex: 0 0 auto;
+}
+
+.image-thumb {
+  padding: 0;
+  overflow: hidden;
+  background: #0e0f13;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.image-thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 320 / 576;
+  object-fit: cover;
+}
+
+.image-thumb.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(224, 86, 122, 0.35);
+}
+
+.image-thumb .thumb-missing,
+.video-thumb .thumb-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 320 / 576;
+  padding: 0.3rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.prompt-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.55rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.zone-preview {
+  min-height: 1.6rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.zone-tag.zone-quality {
+  color: #f5c542;
+}
+
+.zone-tag.zone-safety {
+  color: #ff7a7a;
+}
+
+.zone-tag.zone-subject {
+  color: #7dd3fc;
+}
+
+.zone-tag.zone-character {
+  color: #c084fc;
+}
+
+.zone-tag.zone-general {
+  color: #86efac;
+}
+
+.zone-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.zone-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.zone-swatch {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}
+
+.zone-swatch.zone-quality {
+  background: #f5c542;
+}
+
+.zone-swatch.zone-safety {
+  background: #ff7a7a;
+}
+
+.zone-swatch.zone-subject {
+  background: #7dd3fc;
+}
+
+.zone-swatch.zone-character {
+  background: #c084fc;
+}
+
+.zone-swatch.zone-general {
+  background: #86efac;
+}
+
+.enhance-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.enhance-row .inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.enhance-row .inline-field > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ref-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ref-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.panel-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.panel-section > .section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.55rem;
+}
+
+.section-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.panel-section .prompt-zones {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.zone-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.zone-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.zone-block-quality {
+  border-left: 3px solid #f5c542;
+}
+
+.zone-block-safety {
+  border-left: 3px solid #ff7a7a;
+}
+
+.zone-block-subject {
+  border-left: 3px solid #7dd3fc;
+}
+
+.zone-block-character {
+  border-left: 3px solid #c084fc;
+}
+
+.zone-block-general {
+  border-left: 3px solid #86efac;
+}
+
+.zone-block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.zone-block-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.zone-block-count {
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.zone-add {
+  margin-left: auto;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.zone-editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.zone-quick {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.zone-quick-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.zone-quick-add {
+  flex: none;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.zone-chip-text {
+  word-break: break-word;
+}
+
+.zone-subblock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 0.3rem;
+}
+
+.zone-subblock-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#prompt-final {
+  min-height: 64px;
+  font-size: 0.8rem;
+}
+
+#btn-copy-prompt {
+  align-self: flex-start;
+}
+
+#btn-lora-modal {
+  width: 100%;
+}

@@ -1,5 +1,7 @@
 // WaifuStudio — Punto de Entrada y Orquestación Principal
-// main.js: arranque de la app, orquestación de pestañas, atajos y REQUIRED_IDS.
+// Qué hace: arranque initApp, atajos globales, REQUIRED_IDS y registro de pestañas.
+// Qué no hace: no implementa lógica de generación ni manejo interno de pestañas.
+// Dependencias: static/js/state.js, static/js/dom.js, tabs/* y components/*.
 
 import { state, PANEL_SECTIONS } from "./state.js";
 import { $, on, setStatus, setVideoStatus, setEditorStatus, setUpscaleStatus, showUiBanner, initSeedRandom, toggleSeedRandom, panelSectionKey, readStoredSection, storeSection, initPanelSections } from "./dom.js";

@@ -1,0 +1,257 @@
+/* WaifuStudio — Estilos de la Pestaña Galería
+ * Qué hace: barra de búsqueda, grilla de medios, tarjetas de galería, badges y modal de detalle.
+ * Qué no hace: no define controles de generación ni estilos de otras pestañas.
+ * Dependencias: static/css/base.css y static/css/components.css.
+ */
+
+.gallery-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+
+.gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.gallery-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.8rem;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.card {
+  margin: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card img,
+.card video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 320 / 576;
+  object-fit: contain;
+  background: #0e0f13;
+}
+
+.card-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 320 / 576;
+  color: var(--muted);
+  background: #0e0f13;
+}
+
+.card figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.card figcaption strong {
+  color: var(--text);
+}
+
+.card .meta {
+  color: var(--accent);
+}
+
+.gallery-modal-box {
+  width: min(960px, 100%);
+}
+
+.gallery-modal-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 0.6rem 1rem;
+  background: #0e0f13;
+  overflow: hidden;
+}
+
+.gallery-modal-media img,
+.gallery-modal-media video {
+  max-width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.gallery-modal-prompt {
+  margin: 0;
+  max-height: 16vh;
+  overflow-y: auto;
+  padding: 0.6rem 1rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.card-actions .card-action {
+  margin-top: 0;
+}
+
+#panel-gallery.active {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.gallery-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.gallery-filter-field {
+  max-width: 180px;
+}
+
+.gallery-search-field {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+  height: 100%;
+  flex: 1 1 auto;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.gallery-card:hover,
+.gallery-card:focus-visible {
+  border-color: var(--accent);
+}
+
+.gallery-card-media {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #0e0f13;
+}
+
+.gallery-card-media img,
+.gallery-card-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gallery-card-media .thumb-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.gallery-badge {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  padding: 0.08rem 0.42rem;
+  background: rgba(0, 0, 0, 0.68);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gallery-card-prompt {
+  display: block;
+  padding: 0 0.55rem;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-card-status {
+  display: block;
+  padding: 0 0.55rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.gallery-card-status.error {
+  color: var(--error);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.card img {
+  cursor: zoom-in;
+}
+
+.card-action {
+  align-self: flex-start;
+  margin-top: 0.3rem;
+}

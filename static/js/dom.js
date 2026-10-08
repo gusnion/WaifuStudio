@@ -1,5 +1,7 @@
 // WaifuStudio — Helpers de DOM, UI y Eventos
-// dom.js: selectores, toasts, helpers de control y formato.
+// Qué hace: utilidades $, on, setStatus, toasts, modales genéricos y panel sections.
+// Qué no hace: no almacena estado de dominio ni realiza llamadas HTTP a la API.
+// Dependencias: ninguna (utilidades nativas del navegador).
 
 import { state, SEED_RANDOM_KEY, SEED_RANDOM_MAX, PANEL_SECTIONS } from "./state.js";
 

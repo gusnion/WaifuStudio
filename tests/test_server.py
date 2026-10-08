@@ -147,6 +147,24 @@ class ServerTestCase(unittest.TestCase):
             parts.append(p.read_text(encoding="utf-8"))
         return "\n".join(parts)
 
+    def get_static_css(self, client: TestClient | None = None) -> str:
+        cli = client or self.make_client()
+        css_paths = [
+            "/static/css/base.css",
+            "/static/css/components.css",
+            "/static/css/tabs/image.css",
+            "/static/css/tabs/video.css",
+            "/static/css/tabs/editor.css",
+            "/static/css/tabs/upscaler.css",
+            "/static/css/tabs/gallery.css",
+        ]
+        parts = []
+        for p in css_paths:
+            res = cli.get(p)
+            self.assertEqual(res.status_code, 200, f"Error cargando {p}")
+            parts.append(res.text.replace("\r\n", "\n"))
+        return "\n".join(parts)
+
     def make_client(self, **kwargs) -> TestClient:
         kwargs.setdefault("config", self.config)
         kwargs.setdefault("store", self.store)
@@ -3890,6 +3908,9 @@ class CacheHeaderTests(ServerTestCase):
         script = client.get("/static/js/main.js")
         self.assertEqual(script.status_code, 200)
         self.assertEqual(script.headers.get("cache-control"), "no-store")
+        css = client.get("/static/css/base.css")
+        self.assertEqual(css.status_code, 200)
+        self.assertEqual(css.headers.get("cache-control"), "no-store")
         models = client.get("/api/models")
         self.assertEqual(models.status_code, 200)
         self.assertNotIn("cache-control", models.headers)
@@ -5781,7 +5802,21 @@ class ScrollbarUiStaticTests(ServerTestCase):
     """Barras de scroll ocultas en toda la app sin perder rueda/teclado."""
 
     def test_app_css_oculta_barras_sin_desactivar_scroll(self):
-        text = self.make_client().get("/static/app.css").text
+        client = self.make_client()
+        html = client.get("/").text
+        self.assertNotIn("/static/app.css", html)
+        for link in (
+            "/static/css/base.css",
+            "/static/css/components.css",
+            "/static/css/tabs/image.css",
+            "/static/css/tabs/video.css",
+            "/static/css/tabs/editor.css",
+            "/static/css/tabs/upscaler.css",
+            "/static/css/tabs/gallery.css",
+        ):
+            with self.subTest(link=link):
+                self.assertIn(f'href="{link}"', html)
+        text = self.get_static_css(client)
         self.assertIn(
             "* {\n  scrollbar-width: none;\n  -ms-overflow-style: none;\n}", text
         )
@@ -5811,7 +5846,7 @@ class ZoneCatalogSearchUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_css_titulo_catalogo(self):
-        text = self.make_client().get("/static/app.css").text
+        text = self.get_static_css()
         self.assertIn(".zone-catalog-title", text)
 
 
@@ -5857,7 +5892,7 @@ class UnifiedDescribeUiStaticTests(ServerTestCase):
                 self.assertIn(marker, text)
 
     def test_app_css_llm_status(self):
-        text = self.make_client().get("/static/app.css").text
+        text = self.get_static_css()
         self.assertIn(".llm-status", text)
 
 
@@ -6086,7 +6121,7 @@ class GalleryUiPhase3Tests(ServerTestCase):
                 self.assertIn(marker, script)
 
     def test_app_css_gallery_and_custom_tags_classes(self):
-        css = self.make_client().get("/static/app.css").text
+        css = self.get_static_css()
         for marker in (
             ".image-compare",
             ".gallery-search-field",

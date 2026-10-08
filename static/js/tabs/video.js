@@ -1,5 +1,7 @@
 // WaifuStudio — Pestaña de Generación de Vídeo
-// video.js: modos I2V, FLF2V, Ref2VA, V2V con VideoDeltaNet, galería y ejecución.
+// Qué hace: modos I2V, FLF2V, Ref2VA y V2V con VideoDeltaNet, perfiles y ejecución.
+// Qué no hace: no realiza inpainting estático ni entrena checkpoints de vídeo.
+// Dependencias: static/js/state.js, static/js/dom.js, static/js/api.js y tabs/video_h3.js.
 
 import {
   state,

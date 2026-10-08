@@ -1,7 +1,8 @@
-"""Rutas de presets y metadatos de generación (/api/params, /api/formats, /api/video/presets, /api/video/h3_profiles).
+"""Rutas de presets y metadatos de generación (/api/params, /api/formats, /api/video/*).
 
-Expone parámetros de muestreo, formatos de imagen, presets de video Wan y perfiles H3.
-Depende de app.params, app.formats, app.video_presets y app.h3_presets.
+Qué hace: expone parámetros de muestreo, formatos de imagen, presets de video y perfiles H3.
+Qué no hace: no ejecuta generación ni almacena configuraciones de usuario.
+Dependencias: app.params, app.formats, app.video_presets y app.h3_presets.
 """
 
 from __future__ import annotations

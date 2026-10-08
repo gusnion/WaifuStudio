@@ -1,0 +1,119 @@
+/* WaifuStudio — Estilos de la Pestaña Video
+ * Qué hace: visor de video, tira de miniaturas, bloques de perfiles H3 y guías de prompt.
+ * Qué no hace: no afecta a otras pestañas ni altera componentes base.
+ * Dependencias: static/css/base.css y static/css/components.css.
+ */
+
+.video-preview-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 120px;
+  width: 100%;
+  overflow: hidden;
+  background: #0e0f13;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.video-preview-box video {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.video-thumbs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 120px));
+  justify-content: start;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  flex: 0 0 auto;
+}
+
+.video-thumb {
+  padding: 0;
+  overflow: hidden;
+  background: #0e0f13;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.video-thumb video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 320 / 576;
+  object-fit: cover;
+}
+
+.video-thumb.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(224, 86, 122, 0.35);
+}
+
+.h3-guide-code {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.h3-guide-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.h3-guide-tips code {
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
+.h3-guide-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.h3-guide-actions button {
+  flex: 1;
+}
+
+#h3-guide-status.error,
+#h3-prompt-status.error {
+  color: var(--error);
+}
+
+.video-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.video-block > legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.h3-guide-templates-section button {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.45rem;
+}

@@ -1,7 +1,8 @@
 """Rutas de galería y entrega de archivos multimedia (/api/gallery, /media, /api/download, /api/refs).
 
-Gestiona la visualización, descarga, borrado y limpieza de generaciones, referencias y medios de OCs.
-Depende de app.store.Store, configuración de rutas y FileResponse.
+Qué hace: gestiona la visualización, descarga, borrado y servicio de estáticos de galería y OCs.
+Qué no hace: no genera nuevos medios ni modifica parámetros de generación.
+Dependencias: app.store.Store, configuración de rutas y FileResponse.
 """
 
 from __future__ import annotations

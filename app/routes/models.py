@@ -1,7 +1,8 @@
-"""Rutas de modelos base y catálogo de LoRAs (/api/models, /api/loras).
+"""Rutas de catálogo de modelos y LoRAs (/api/models, /api/loras).
 
-Gestiona la consulta de modelos disponibles, altas, edición, subida y borrado de LoRAs.
-Depende de app.registry.ModelRegistry y app.loras.
+Qué hace: gestiona la consulta de modelos disponibles, altas, edición y catálogo de LoRAs.
+Qué no hace: no realiza inferencia ni carga pesos directamente en memoria GPU.
+Dependencias: app.registry.ModelRegistry y app.loras.
 """
 
 from __future__ import annotations

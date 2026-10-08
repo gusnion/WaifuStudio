@@ -1,7 +1,8 @@
 """Rutas de jobs y estado de ejecución (/api/jobs).
 
-Gestiona la consulta de progreso/estado y la cancelación de jobs activos.
-Depende de app.jobs.JobQueue, app.store.Store y el registro en memoria _JOBS.
+Qué hace: gestiona la consulta de progreso/estado y la cancelación de jobs activos.
+Qué no hace: no crea nuevos trabajos ni orquesta flujos de inferencia.
+Dependencias: app.jobs.JobQueue, app.store.Store y el registro en memoria _JOBS.
 """
 
 from __future__ import annotations

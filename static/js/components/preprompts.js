@@ -1,5 +1,7 @@
 // WaifuStudio — Modal y Gestión de Preprompts Personalizados
-// preprompts.js: CRUD de preprompts de usuario en data/registry/preprompts.json.
+// Qué hace: modal CRUD para crear, actualizar y borrar preprompts de usuario.
+// Qué no hace: no compone el prompt final ni procesa tags del catálogo.
+// Dependencias: static/js/dom.js y static/js/api.js.
 
 import { state } from "../state.js";
 import { $, on, setStatus, setSelectValue } from "../dom.js";

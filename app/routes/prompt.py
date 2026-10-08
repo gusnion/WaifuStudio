@@ -1,7 +1,8 @@
 """Rutas de manipulación de prompts, enriquecimiento con LLM y visión.
 
-Gestiona /api/negative, /api/prompt/*, /api/enhance, /api/motion, /api/video/h3_prompt,
-/api/vision/* y /api/llm/status, además del ciclo de vida del LlamaServerManager.
+Qué hace: gestiona /api/negative, /api/prompt/*, enhance, motion, prompt H3, vision y LLM status.
+Qué no hace: no genera imágenes ni vídeos finales en ComfyUI.
+Dependencias: app.prompt, app.vision, app.llm y app.video.
 """
 
 from __future__ import annotations

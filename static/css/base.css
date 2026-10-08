@@ -1,0 +1,107 @@
+/* WaifuStudio — Estilos Base y Layout Principal
+ * Qué hace: variables :root, tipografía, reset de scrollbars, estructura de paneles y topbar.
+ * Qué no hace: no define componentes interactivos ni vistas particulares de pestañas.
+ * Dependencias: ninguna (hoja de estilos raíz cargada en primer lugar).
+ */
+
+:root {
+  --bg: #14151a;
+  --panel: #1d1f27;
+  --panel-2: #242633;
+  --border: #343747;
+  --text: #e8e9f0;
+  --muted: #9aa0b4;
+  --accent: #e0567a;
+  --accent-2: #7a5cff;
+  --error: #ff7a7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.6rem 1rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+}
+
+main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.panel {
+  display: none;
+  height: 100%;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.panel.active {
+  display: flex;
+}
+
+#panel-image.active,
+#panel-video.active,
+#panel-editor.active,
+#panel-upscaler.active {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}

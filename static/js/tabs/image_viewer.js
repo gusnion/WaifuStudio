@@ -1,5 +1,7 @@
 // WaifuStudio — Visor y Mini-Galería de Imagen
-// image_viewer.js: visualizador central de resultados, mini-tiras y paginación.
+// Qué hace: visor principal de imágenes generadas, tira de miniaturas y paginación.
+// Qué no hace: no gestiona la lógica de sampling ni realiza peticiones de generación.
+// Dependencias: static/js/state.js y static/js/dom.js.
 
 import { state, IMAGE_PAGE_SIZE } from "../state.js";
 import { $, on, setStatus, formatGalleryDate, isVideoUrl, downloadUrlFor, toggleThumbs } from "../dom.js";

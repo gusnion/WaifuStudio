@@ -1,5 +1,7 @@
 // WaifuStudio — Gestor de Zonas de Prompt
-// prompt_zones.js: estructura de tags por zonas, composición y edición de prompt.
+// Qué hace: composición estructurada de prompt por zonas (calidad, sujeto, personaje).
+// Qué no hace: no contacta con la API de generación ni gestiona modelos.
+// Dependencias: static/js/state.js, static/js/dom.js y components/prompt_popover.js.
 
 import {
   state,

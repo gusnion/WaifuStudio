@@ -1,5 +1,7 @@
 // WaifuStudio — Pestaña de Upscaler e Interpolación
-// upscaler.js: escalado de imagen (UltraSharp/DAT) e interpolación RIFE.
+// Qué hace: escalado de imagen con UltraSharp/DAT e interpolación de vídeo con RIFE.
+// Qué no hace: no genera fotogramas base ni gestiona checkpoints de difusión.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state, UPSCALE_GALLERY_PAGE_SIZE } from "../state.js";
 import {

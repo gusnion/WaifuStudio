@@ -1,5 +1,7 @@
 // WaifuStudio — Selector y Biblioteca de LoRAs
-// loras.js: modal de selección de LoRAs, sliders de peso y CRUD de biblioteca.
+// Qué hace: modal de selección de LoRAs, ajuste de pesos y CRUD de biblioteca.
+// Qué no hace: no aplica pesos al sampling ni ejecuta el pipeline de inferencia.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state } from "../state.js";
 import { $, on, setStatus, readFileBase64 } from "../dom.js";

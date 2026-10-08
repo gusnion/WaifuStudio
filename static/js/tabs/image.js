@@ -1,5 +1,7 @@
 // WaifuStudio — Pestaña de Generación de Imagen
-// image.js: selección de modelo, sampling, I2I ref, ejecución y asistentes.
+// Qué hace: selección de checkpoint Anima, sliders de sampling, I2I y ejecución.
+// Qué no hace: no procesa vídeo Wan/H3 ni tareas de inpainting del editor.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import {
   state,

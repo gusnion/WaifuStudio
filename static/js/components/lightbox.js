@@ -1,5 +1,7 @@
 // WaifuStudio — Visor Lightbox Fullscreen con Zoom y Pan
-// lightbox.js: visor modal con drag, wheel zoom hasta 8x y reset.
+// Qué hace: visor modal a pantalla completa con navegación por rueda de ratón y zoom 8x.
+// Qué no hace: no procesa descargas ni altera metadatos de las imágenes.
+// Dependencias: static/js/dom.js.
 
 import { LIGHTBOX_MAX_SCALE, LIGHTBOX_DRAG_CLICK_MS, LIGHTBOX_DRAG_THRESHOLD } from "../state.js";
 import { $, on } from "../dom.js";

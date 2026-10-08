@@ -1,5 +1,7 @@
 // WaifuStudio — Pestaña de Galería Principal
-// gallery.js: grilla de creaciones, filtros, búsqueda, detalle modal y tags custom.
+// Qué hace: visualización de creaciones, filtros por modelo, búsqueda por tags y borrado.
+// Qué no hace: no genera nuevos medios ni entrena modelos LoRA.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state, GALLERY_PAGE_SIZE } from "../state.js";
 import {

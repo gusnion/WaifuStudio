@@ -1,5 +1,7 @@
 // WaifuStudio — Asistente de Prompt y Perfiles H3
-// video_h3.js: plantillas H3, guía oficial MiniMax, cálculo de segundos/resolución y profiles.
+// Qué hace: plantillas de movimiento, perfiles de resolución H3 y cálculo de frames.
+// Qué no hace: no encola trabajos ni interactúa directamente con ComfyUI.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import {
   state,

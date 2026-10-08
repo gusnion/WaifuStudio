@@ -1,5 +1,7 @@
 // WaifuStudio — Comparador Interactivo Antes/Después
-// compare.js: visor split con drag handle, zoom 8x y pan para imagen y editor.
+// Qué hace: visor dividido con handle de arrastre, zoom 8x y pan para imagen y editor.
+// Qué no hace: no inicia trabajos de generación ni gestiona peticiones de API.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/tabs/image_viewer.js.
 
 import { state, COMPARE_MAX_SCALE, COMPARE_DRAG_CLICK_MS, COMPARE_DRAG_THRESHOLD } from "../state.js";
 import { $, on, setEditorStatus } from "../dom.js";

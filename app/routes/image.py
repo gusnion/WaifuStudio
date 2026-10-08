@@ -1,7 +1,8 @@
 """Rutas y ejecución de generación de imágenes (/api/generate).
 
-Gestiona la validación de peticiones de generación y el runner de KSampler.
-Depende de app.engine, app.graphs, app.enhancer y el registro de modelos.
+Qué hace: gestiona la validación de peticiones de generación y el runner de KSampler.
+Qué no hace: no maneja generación de vídeo Wan/H3 ni tareas del editor inpainting.
+Dependencias: app.engine, app.graphs, app.enhancer y el registro de modelos.
 """
 
 from __future__ import annotations

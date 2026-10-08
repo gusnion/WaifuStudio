@@ -1,7 +1,8 @@
 """Rutas de personajes / OC Maker (/api/characters).
 
-Gestiona creación, edición, perfiles, referencias, hojas (sheet) y entrenamiento de OCs.
-Depende de app.characters.CharacterStore, app.sheet y app.trainer.
+Qué hace: gestiona creación, edición, perfiles, referencias, sheets y entrenamiento de OCs.
+Qué no hace: no ejecuta directamente el entrenamiento de LoRA ni tareas de inferencia.
+Dependencias: app.characters.CharacterStore, app.sheet y app.trainer.
 """
 
 from __future__ import annotations

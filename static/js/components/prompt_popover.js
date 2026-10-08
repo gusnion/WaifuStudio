@@ -1,5 +1,7 @@
 // WaifuStudio — Popover de Inserción de Tags y Catálogo
-// prompt_popover.js: búsqueda en catálogo, sugerencias por grupo y selección rápida.
+// Qué hace: búsqueda en catálogo de tags, sugerencias por grupo y selección rápida.
+// Qué no hace: no modifica directamente los campos de texto ni genera imágenes.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import {
   state,

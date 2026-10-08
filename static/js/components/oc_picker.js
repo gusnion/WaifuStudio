@@ -1,5 +1,7 @@
-// WaifuStudio — Selector y Modal de OC (Original Character)
-// oc_picker.js: creación, edición, catálogo de rasgos y persistencia de OCs.
+// WaifuStudio — Selector y Modal de OCs (Original Characters)
+// Qué hace: creación, edición, catálogo de rasgos y persistencia de personajes.
+// Qué no hace: no ejecuta entrenamientos ni renderiza hojas de contacto (sheets).
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state, GROUP_LABELS, OC_TRAIT_GROUPS } from "../state.js";
 import { $, on, setStatus, setSelectValue, readFileBase64, option, showUiBanner } from "../dom.js";

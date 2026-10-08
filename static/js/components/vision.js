@@ -1,5 +1,7 @@
 // WaifuStudio — Modal y Asistente de Visión (Qwen2.5-VL / WD14)
-// vision.js: etiquetado automático, descripción de referencias y análisis multimodal.
+// Qué hace: descripción de imágenes de referencia, extracción de tags y análisis visual.
+// Qué no hace: no arranca el servidor LLM ni genera imágenes en ComfyUI.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state } from "../state.js";
 import { $, on, setStatus, readFileBase64, writeClipboard } from "../dom.js";

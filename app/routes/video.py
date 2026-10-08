@@ -1,7 +1,8 @@
 """Ruta de generación de vídeo (/api/video/generate).
 
-Gestiona la validación y encolado de jobs de vídeo para Wan y H3.
-Depende de app.video, app.h3_presets, app.motion, app.routes.image y el registro de jobs.
+Qué hace: gestiona la validación y encolado de jobs de vídeo para Wan y VideoDeltaNet H3.
+Qué no hace: no realiza generación de imágenes fijas ni edición por inpaint.
+Dependencias: app.video, app.h3_presets, app.motion, app.routes.image y el registro de jobs.
 """
 
 from __future__ import annotations

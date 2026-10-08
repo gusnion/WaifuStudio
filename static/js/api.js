@@ -1,5 +1,7 @@
 // WaifuStudio — Cliente HTTP y Polling de Trabajos
-// api.js: fetch centralizado, postJson, putJson, pollJob, cancelJob.
+// Qué hace: fetch centralizado, postJson, putJson, pollJob y cancelJob.
+// Qué no hace: no maneja estado de UI local ni manipulación directa del DOM.
+// Dependencias: static/js/state.js y static/js/dom.js.
 
 import { state } from "./state.js";
 import { $, setStatus, setVideoStatus, setEditorStatus, setUpscaleStatus } from "./dom.js";

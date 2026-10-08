@@ -1,5 +1,7 @@
 // WaifuStudio — Modal de Entrenamiento LoRA para OCs
-// oc_train.js: selección de imágenes de entrenamiento, parámetros de LoRA y ejecución.
+// Qué hace: selección de imágenes de entrenamiento, parámetros y llamada a /train.
+// Qué no hace: no almacena personajes ni genera prompts de inferencia.
+// Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state, TRAIN_PAGE, TRAIN_MIN, TRAIN_MAX, TRAIN_TRIGGER_RE } from "../state.js";
 import { $, on } from "../dom.js";

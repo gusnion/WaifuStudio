@@ -1,5 +1,7 @@
 // WaifuStudio — Estado Reactivo Global y Constantes
-// state.js: un único objeto compartido `state` y constantes declarativas.
+// Qué hace: exporta el objeto compartido state y constantes declarativas de la UI.
+// Qué no hace: no interactúa directamente con el DOM ni emite peticiones de red.
+// Dependencias: ninguna (almacén de datos reactivo en memoria).
 
 const GROUP_LABELS = {
   hair: "Pelo",

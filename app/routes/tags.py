@@ -1,7 +1,8 @@
 """Rutas de tags, rasgos OC y preprompts (/api/preprompts, /api/traits, /api/tags).
 
-Gestiona el catálogo de tags danbooru/e621, tags personalizadas, rasgos de personajes y preprompts.
-Depende de app.tags, app.oc_traits y app.preprompts.
+Qué hace: gestiona el catálogo de tags danbooru/e621, tags custom, rasgos OC y preprompts.
+Qué no hace: no compone el prompt final de generación ni ejecuta inferencia.
+Dependencias: app.tags, app.oc_traits y app.preprompts.
 """
 
 from __future__ import annotations
