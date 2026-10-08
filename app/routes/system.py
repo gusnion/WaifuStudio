@@ -1,8 +1,8 @@
-"""Rutas del sistema y UI web (/, /health, /api/system/*).
+"""Rutas del sistema y UI web (GET /).
 
-Qué hace: sirve la plantilla principal HTML de la interfaz, diagnóstico y healthcheck.
-Qué no hace: no procesa generación de medios ni lógica de catálogos.
-Dependencias: Jinja2Templates, app.config.EngineConfig y app.health.
+Qué hace: sirve la plantilla principal HTML de la interfaz (templates/index.html).
+Qué no hace: no procesa generación de medios ni lógica de catálogos (la salud del sistema opera vía CLI python -m app.health).
+Dependencias: Jinja2Templates, app.config.APP_ROOT.
 """
 
 from __future__ import annotations
