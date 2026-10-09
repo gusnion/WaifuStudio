@@ -28,6 +28,7 @@ INSTALAR.bat
 ```
 1) INICIAR_ENGINE.bat      (déjalo abierto)
 2) INICIAR_WAIFU.bat       (abre http://127.0.0.1:8765)
+3) ABRIR_APP.bat           (opcional: modo ventana ultraligera dedicada, ~100 MB RAM)
 ```
 
 El LLM es automático: la app arranca y para sola su servidor de texto/visión (~5 s la primera
@@ -37,10 +38,10 @@ LLM listo).
 
 ## 3b) LLM único (incluido, ~6,5 GB)
 
-Todas las tareas de texto e imagen→texto usan **Qwen3.5-9B-abliterated (Q4_K_M) + mmproj-F16**
-(~6,1 GiB), servido por `llama.cpp` stock b11146 en **CPU** (`-ngl 0`: 0 VRAM, no compite con
-ComfyUI). El instalador baja el GGUF y el mmproj por defecto (entradas `required` de
-`manifest.models.json`); la app los usa solos, sin `.bat`.
+Todas las tareas de texto e imagen→texto usan **Qwen3.5-9B NSFW Captioning v5 (Q4_K_M) + mmproj-Q8_0**
+(~6,25 GiB), servido por `llama.cpp` stock b11146 en **CPU** (`-ngl 0`: 0 VRAM, no compite con
+ComfyUI). El instalador baja el GGUF, el mmproj y el runtime por defecto (ejecutando
+`scripts/download_llm.py`); la app los usa solos, sin `.bat`.
 
 Como alternativa (o para completar/reverificar el paquete, incluido el runtime
 `tools/llama.cpp/`, que no se versiona) existe el descargador con verificación SHA256:
@@ -49,10 +50,10 @@ Como alternativa (o para completar/reverificar el paquete, incluido el runtime
 & .\.venv\Scripts\python.exe scripts\download_llm.py
 ```
 
-- Destinos: `ComfyUI/models/llm/qwen35-9b-abliterated/` y `tools/llama.cpp/`.
+- Destinos: `ComfyUI/models/llm/qwen35-9b-nsfw-captioning/` y `tools/llama.cpp/`.
 - `WAIFU_LLM_PORT/MODEL/MMPROJ/THREADS` ajustan el servidor gestionado; `WAIFU_LLM_URL` fuerza
   un servidor externo.
-- Estado en la UI (badge «LLM:») o `GET /api/llm/status`. Pines y hashes:
+- Estado en la UI o `GET /api/llm/status`. Pines y hashes:
   `install/manifest/manifest.llm.json`.
 
 ## 4) Qué NO se incluye

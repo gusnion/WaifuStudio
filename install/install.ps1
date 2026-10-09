@@ -478,7 +478,7 @@ function Confirm-RecommendedModels {
     if ($Yes) { return $true }
     $summary = Get-RecommendedSummary
     Write-Host ''
-    Write-Host 'Modelos recomendados (Anima + MiniMax H3 + Qwen-Image 2.1 + Upscaler/RIFE)' -ForegroundColor Cyan
+    Write-Host 'Modelos recomendados (Anima + MiniMax H3 + Qwen-Image 2.1 + Upscaler/RIFE + LLM Qwen3.5-9B)' -ForegroundColor Cyan
     Write-Host ("  {0} archivos, ~{1} GB de descarga (SSD SATA recomendado)." -f $summary.Count, $summary.Gb)
     $answer = Read-Host '¿Instalar modelos recomendados? [S/n]'
     if ($answer -match '^(n|no)$') {
@@ -524,6 +524,15 @@ function Register-RecommendedModels {
     Write-Ok ("data\registry\models.json: {0} modelo(s) recomendado(s) registrados" -f $added)
 }
 
+function Install-Llm {
+    if ($SkipModels) { return }
+    $downloadScript = Join-Path $Root 'scripts\download_llm.py'
+    if (Test-Path -LiteralPath $downloadScript) {
+        Write-Step 'LLM y runtime llama.cpp (scripts\download_llm.py)'
+        Invoke-Tool -Label 'download_llm' -Command $VenvPython -ToolArgs @($downloadScript)
+    }
+}
+
 Write-Host ''
 Write-Host 'WAIFU installer' -ForegroundColor Cyan
 Write-Host ("Raiz: {0}" -f $Root)
@@ -543,6 +552,7 @@ $installRecommended = Confirm-RecommendedModels
 if (-not $installRecommended) { $SkipModels = $true }
 Install-Models
 Register-RecommendedModels
+Install-Llm
 Write-Environment
 Invoke-FinalVerification
 
@@ -554,6 +564,7 @@ if ($script:Pending.Count -gt 0) {
 Write-Host 'Instalacion terminada. Siguientes pasos:' -ForegroundColor Green
 Write-Host '  1) INICIAR_ENGINE.bat  (dejalo abierto)'
 Write-Host '  2) INICIAR_WAIFU.bat   (abre http://127.0.0.1:8765)'
-Write-Host '  3) LoRAs propias: pestana Imagen > Elegir LoRAs > Gestionar biblioteca'
+Write-Host '  3) ABRIR_APP.bat       (opcional: abre ventana ligera dedicada ~100 MB RAM)'
+Write-Host '  4) LoRAs propias: pestana Imagen > Elegir LoRAs > Gestionar biblioteca'
 if ($script:Pending.Count -gt 0) { exit 2 }
 exit 0

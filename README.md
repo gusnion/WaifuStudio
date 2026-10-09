@@ -105,12 +105,12 @@ El instalador descarga y verifica la parte automática del set recomendado (~106
 ### LLM único (incluido, ~6,5 GB)
 
 WAIFU usa un solo modelo para todas las tareas de texto e imagen→texto:
-**Qwen3.5-9B-abliterated (Q4_K_M) + mmproj-F16**, servido por `llama-server` stock b11146 en
-**CPU** (~6,1 GiB, 0 VRAM: no compite con ComfyUI por la GPU). Sin `.bat`: la app arranca el
-servidor en el primer uso (~5 s de carga) y lo para al cerrar; el badge «LLM:» de la UI
-muestra el estado.
+**Qwen3.5-9B NSFW Captioning v5 (Q4_K_M) + mmproj-Q8_0**, servido por `llama-server` stock b11146 en
+**CPU** (~6,25 GiB, 0 VRAM: no compite con ComfyUI por la GPU). Afinado por oldhag88 para captioning
+anime/NSFW, booru tags y razonamiento explicativo (CoT). Sin `.bat`: la app arranca el servidor
+en el primer uso (~5 s de carga) y lo para al cerrar; gestionado automáticamente.
 
-El instalador baja el GGUF y el mmproj por defecto (entradas `required`). Para descargar o
+El instalador baja el GGUF, el mmproj y el runtime por defecto. Para descargar o
 reverificar el paquete completo (incluido el runtime `llama.cpp` en `tools/llama.cpp/`, no
 versionado), o si la app indica «no instalado»:
 
@@ -150,6 +150,16 @@ Para habilitar la aceleración extrema de vídeo en 8 pasos con **VideoDeltaNet 
 
 Las LoRAs de terceros no se incluyen. Se añaden desde la app: pestaña Imagen → «Elegir LoRAs»
 → «Gestionar biblioteca» (archivo relativo a `ComfyUI\models\loras`, trigger y peso).
+
+## Verificación y Diagnóstico
+
+```powershell
+# Suite de pruebas unitarias offline (1,522 tests):
+& .\.venv\Scripts\python.exe -m unittest discover -s tests
+
+# Diagnóstico de rutas, configuración y servicios:
+& .\.venv\Scripts\python.exe -m app.health
+```
 
 ## Privacidad
 

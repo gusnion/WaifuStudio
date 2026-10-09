@@ -12,7 +12,7 @@
     "Los pesos de Anima son de licencia no comercial: el instalador los descarga desde el origen y no se re-empaquetan.",
     "Las LoRAs de usuario (Reika Saimin, Shuuko) y la de Civitai (Miku) no son redistribuibles: el instalador no las descarga por defecto. Reika Kurashiki_2 (legacy animagine) queda como aporte opcional fuera del registro.",
     "Editor M10: qwen-image-2.1-UC-* usa los nombres reales del par UC (registry/editor_models-v1.json). El VAE UC (vae/qwen_image_2.1_vae_bf16.safetensors) NO pisa el VAE de Anima (vae/qwen_image_vae.safetensors).",
-    "LLM M12: el modelo unico es Qwen3.5-9B-abliterated (texto Q4_K_M, lukey03) + mmproj-F16 (unsloth), servido por llama-server stock en CPU (-ngl 0); la app lo arranca y para sola. Los modelos M11 (Qwen3.8-27B) y legacy (Qwen2.5-7B/VL) se retiraron el 2026-09-30 (pesos borrados; detalle en .agents/CONTEXT)."
+    "LLM M18: el modelo unico es Qwen3.5-9B NSFW Captioning v5 (texto Q4_K_M, oldhag88/mradermacher) + mmproj-Q8_0, servido por llama-server stock en CPU (-ngl 0); la app lo arranca y para sola. Los modelos anteriores se retiraron (detalle en .agents/CONTEXT)."
   ],
   "models": [
     {
@@ -323,16 +323,16 @@
       "notes": "Variante -mlp no referenciada; retirada el 2026-09-26 en F2 (sha256 completo del lfs oid de HF)."
     },
     {
-      "id": "llm-qwen35-9b-abliterated-q4-k-m",
-      "filename": "Qwen3.5-9B-abliterated-Q4_K_M.gguf",
-      "subdir": "llm/qwen35-9b-abliterated",
-      "bytes": 5627044704,
-      "sha256": "dba64d0e5cce0739e27535ee0a6b75249eb8006ce8b2d6c060e20750035c4695",
-      "url": "https://huggingface.co/lukey03/Qwen3.5-9B-abliterated-GGUF/resolve/dac35c6385d79a6a9fe113d7a3b730348791d37f/Qwen3.5-9B-abliterated-Q4_K_M.gguf",
-      "revision": "dac35c6385d79a6a9fe113d7a3b730348791d37f",
-      "license": "Apache-2.0 (base Qwen/Qwen3.5-9B; abliterado = uso personal bajo responsabilidad del usuario)",
+      "id": "llm-qwen35-9b-nsfw-captioning-v5-q4-k-m",
+      "filename": "qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf",
+      "subdir": "llm/qwen35-9b-nsfw-captioning",
+      "bytes": 5629109152,
+      "sha256": "2484d1dd959571635770774d00bf11d96b3d09b63cdb62cf71843127e5e2a7de",
+      "url": "https://huggingface.co/mradermacher/qwen3.5-9b-nsfw-captioning-v5-GGUF/resolve/main/qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf",
+      "revision": "main",
+      "license": "Apache-2.0 (base Qwen/Qwen3.5-9B; fine-tune oldhag88)",
       "required": true,
-      "notes": "Modelo unico LLM/VL M12 (texto abliterado qwen35, Q4_K_M, sin MTP); la app arranca llama-server en CPU (-ngl 0) sola. Definicion completa: install/manifest/manifest.llm.json."
+      "notes": "Modelo unico LLM/VL M18 (texto Q4_K_M afinado para booru tags anime/NSFW y CoT explicativo); la app arranca llama-server en CPU (-ngl 0) sola. Definicion completa: install/manifest/manifest.llm.json."
     },
     {
       "id": "realesrgan-x2",
@@ -570,16 +570,16 @@
       "notes": "Etiquetas del tagger WD14 (misma raiz de nombre que el .onnx); opcional."
     },
     {
-      "id": "llm-qwen35-9b-abliterated-mmproj-f16",
-      "filename": "mmproj-F16.gguf",
-      "subdir": "llm/qwen35-9b-abliterated",
-      "bytes": 918166080,
-      "sha256": "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/mmproj-F16.gguf",
-      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "id": "llm-qwen35-9b-nsfw-captioning-v5-mmproj-q8_0",
+      "filename": "qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf",
+      "subdir": "llm/qwen35-9b-nsfw-captioning",
+      "bytes": 624229344,
+      "sha256": "044e3191299783cc4feb5d05d255d05cec4a0b7a4f70cdcdd29026a512cf9b35",
+      "url": "https://huggingface.co/mradermacher/qwen3.5-9b-nsfw-captioning-v5-GGUF/resolve/main/qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf",
+      "revision": "main",
       "required": true,
-      "license": "Apache-2.0 (mismo master Qwen3.5-9B; torre de vision intacta)",
-      "notes": "Proyector de vision F16 stock (unsloth); empareja con el texto abliterado (la abliteracion no toca la vision). Requerido para «Describir»."
+      "license": "Apache-2.0 (mismo master Qwen3.5-9B; visual.merger afinado emparejado)",
+      "notes": "Proyector de vision Q8_0 (mradermacher/oldhag88) afinado para emparejar con el modelo captioning v5. Requerido para «Describir»."
     }
   ]
 }

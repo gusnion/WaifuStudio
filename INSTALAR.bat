@@ -15,6 +15,7 @@ if "%EXITCODE%"=="0" (
   echo Listo. Para usar WAIFU:
   echo    1) INICIAR_ENGINE.bat   (dejalo abierto)
   echo    2) INICIAR_WAIFU.bat    (abre http://127.0.0.1:8765)
+  echo    3) ABRIR_APP.bat        (opcional: modo ventana ligera dedicada ~100 MB RAM)
 ) else (
   echo El instalador termino con codigo %EXITCODE%. Revisa los mensajes de arriba.
 )
