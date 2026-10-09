@@ -659,13 +659,40 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         <!-- BLOQUE 3: Configuración y Dimensiones -->
         <fieldset class="control-card" id="editor-block-params">
           <legend>3. Configuración y Dimensiones <button type="button" class="btn-help" data-help="Tamaño Original (1ª ref) y CFG=1 son óptimos para edición precisa certificada con Qwen-Image 2.1.">?</button></legend>
-          <label class="field">
-            <span>Tamaño</span>
-            <select id="editor-size"></select>
-          </label>
-          <div id="editor-manual-size" class="grid-2 hidden">
-            <label class="field"><span>Ancho</span><input id="editor-width" type="number" value="1024" step="16" min="512" max="2048"></label>
-            <label class="field"><span>Alto</span><input id="editor-height" type="number" value="1024" step="16" min="512" max="2048"></label>
+          <div id="editor-section-size" class="section-subblock">
+            <div class="grid-2">
+              <label class="field">
+                <span>Orientación</span>
+                <select id="editor-res-orientation">
+                  <option value="vertical">Vertical (9:16)</option>
+                  <option value="horizontal">Horizontal (16:9)</option>
+                  <option value="square" selected>Cuadrado (1:1)</option>
+                  <option value="h3_vertical">H3 Vertical</option>
+                  <option value="h3_horizontal">H3 Horizontal</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Calidad</span>
+                <select id="editor-res-quality">
+                  <option value="sd">SD</option>
+                  <option value="hd">HD</option>
+                  <option value="fhd" selected>FHD (1024)</option>
+                  <option value="qhd">QHD</option>
+                  <option value="2k">2K</option>
+                </select>
+              </label>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+              <span id="editor-res-badge" class="field-hint" style="font-weight: 500;">1024 × 1024 (FHD)</span>
+              <label class="field field-inline" style="margin: 0; padding: 0;">
+                <span style="font-size: 0.72rem; text-transform: none;">Ajuste rápido</span>
+                <select id="editor-size" style="width: auto; padding: 0.2rem 0.4rem; font-size: 0.75rem;"></select>
+              </label>
+            </div>
+            <div id="editor-manual-size" class="grid-2 hidden">
+              <label class="field"><span>Ancho</span><input id="editor-width" type="number" value="1024" step="16" min="512" max="2048"></label>
+              <label class="field"><span>Alto</span><input id="editor-height" type="number" value="1024" step="16" min="512" max="2048"></label>
+            </div>
           </div>
           <p class="field-hint">Presets de la app (512-2048, múltiplos de 16) o Manual.</p>
           <div class="grid-2">

@@ -42,6 +42,9 @@ import {
 import { reloadImageViewerFirstPage, selectedImageView, imageViewUrl } from "./image_viewer.js";
 import { loadGalleryTab, openGalleryModal } from "./gallery.js";
 import { switchTab } from "../main.js";
+import { ResolutionKit } from "../components/resolution_kit.js";
+
+let editorResolutionKit = null;
 
 
 function setEditorBanner(installed) {
@@ -289,6 +292,9 @@ function applyEditorMetadata(meta) {
     $("editor-width").value = String(width);
     $("editor-height").value = String(height);
   }
+  if (editorResolutionKit) {
+    editorResolutionKit.syncFromDimensions(width, height);
+  }
   applyEditorSizeSelection();
 }
 
@@ -349,8 +355,32 @@ function fillEditorSizes() {
 
 function applyEditorSizeSelection() {
   const select = $("editor-size");
-  const manual = !select || select.value === "manual";
+  const val = select ? select.value : "manual";
+  const manual = val === "manual";
   $("editor-manual-size").classList.toggle("hidden", !manual);
+  if (val === "original") {
+    const badge = $("editor-res-badge");
+    if (badge) {
+      badge.textContent = "Original (1ª ref)";
+    }
+  } else if (!manual) {
+    const preset = state.formatsById ? state.formatsById[val] : null;
+    if (preset) {
+      $("editor-width").value = String(preset.width);
+      $("editor-height").value = String(preset.height);
+      if (editorResolutionKit) {
+        editorResolutionKit.syncFromDimensions(preset.width, preset.height);
+      }
+    }
+  } else {
+    if (editorResolutionKit) {
+      const w = Number($("editor-width").value);
+      const h = Number($("editor-height").value);
+      if (w && h) {
+        editorResolutionKit.syncFromDimensions(w, h);
+      }
+    }
+  }
 }
 
 function renderEditorGallery() {
@@ -515,9 +545,11 @@ async function generateEditor() {
     sizePayload = { original: true };
   } else {
     const preset =
-      sizeChoice && sizeChoice !== "manual" ? state.formatsById[sizeChoice] : null;
-    const width = preset ? preset.width : Math.trunc(Number($("editor-width").value));
-    const height = preset ? preset.height : Math.trunc(Number($("editor-height").value));
+      sizeChoice && sizeChoice !== "manual" ? (state.formatsById ? state.formatsById[sizeChoice] : null) : null;
+    const rawWidth = preset ? preset.width : Math.trunc(Number($("editor-width").value));
+    const rawHeight = preset ? preset.height : Math.trunc(Number($("editor-height").value));
+    const width = Math.round(rawWidth / 16) * 16;
+    const height = Math.round(rawHeight / 16) * 16;
     if (!validEditorSize(width) || !validEditorSize(height)) {
       setEditorStatus(
         `Medidas fuera de [${EDITOR_SIZE_MIN}, ${EDITOR_SIZE_MAX}] o no múltiplos de ${EDITOR_SIZE_STEP}`,
@@ -587,6 +619,43 @@ function initEditorTab() {
   });
   on("btn-editor-generate", "click", generateEditor);
   on("editor-size", "change", applyEditorSizeSelection);
+
+  const orient = $("editor-res-orientation");
+  const qual = $("editor-res-quality");
+  if (orient && qual) {
+    editorResolutionKit = new ResolutionKit({
+      orientationSelect: orient,
+      qualitySelect: qual,
+      widthInput: $("editor-width"),
+      heightInput: $("editor-height"),
+      badgeEl: $("editor-res-badge"),
+      defaultOrientation: "square",
+      defaultQuality: "fhd",
+      onChange: ({ width, height }) => {
+        const w16 = Math.round(width / 16) * 16;
+        const h16 = Math.round(height / 16) * 16;
+        if ($("editor-width")) $("editor-width").value = String(w16);
+        if ($("editor-height")) $("editor-height").value = String(h16);
+        const match = (state.formats || []).find((f) => f.width === w16 && f.height === h16);
+        const sizeSelect = $("editor-size");
+        if (sizeSelect) {
+          sizeSelect.value = match ? match.id : "manual";
+        }
+        applyEditorSizeSelection();
+      },
+    });
+  }
+
+  on("editor-width", "input", () => {
+    if (editorResolutionKit) {
+      editorResolutionKit.syncFromDimensions($("editor-width").value, $("editor-height").value);
+    }
+  });
+  on("editor-height", "input", () => {
+    if (editorResolutionKit) {
+      editorResolutionKit.syncFromDimensions($("editor-width").value, $("editor-height").value);
+    }
+  });
   on("btn-editor-open-gallery", "click", openEditorResultInGallery);
   on("btn-editor-compare", "click", () =>
     setEditorCompareEnabled(!editorCompareActive)
