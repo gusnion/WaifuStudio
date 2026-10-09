@@ -61,188 +61,208 @@
             </div>
           </div>
 
-          <label class="field">
-            <span>Modelo</span>
-            <select id="model"></select>
-          </label>
+          <!-- BLOQUE 1: Modelo y Estilo -->
+          <fieldset class="control-card" id="image-block-model">
+            <legend>1. Modelo y Estilo <button type="button" class="btn-help" data-help="Elige el modelo Anima base, preprompt de estilo, clasificación de contenido y LoRAs instaladas.">?</button></legend>
+            <label class="field">
+              <span>Modelo</span>
+              <select id="model"></select>
+            </label>
 
-          <div class="field">
-            <span>Preprompt</span>
-            <div class="preprompt-row">
-              <select id="preprompt"></select>
-              <button id="btn-preprompt-manage" type="button">Gestionar</button>
+            <div class="field">
+              <span>Preprompt</span>
+              <div class="preprompt-row">
+                <select id="preprompt"></select>
+                <button id="btn-preprompt-manage" type="button">Gestionar</button>
+              </div>
             </div>
-          </div>
 
-          <label class="field">
-            <span>Rating</span>
-            <select id="rating">
-              <option value="sfw">sfw</option>
-              <option value="nsfw" selected>nsfw</option>
-            </select>
-          </label>
+            <label class="field">
+              <span>Rating</span>
+              <select id="rating">
+                <option value="sfw">sfw</option>
+                <option value="nsfw" selected>nsfw</option>
+              </select>
+            </label>
 
-          <details id="section-loras" class="advanced panel-section" data-section="loras">
-            <summary>LoRAs (<span id="loras-count">0</span>)</summary>
-            <div class="section-body">
-              <div class="lora-actions">
-                <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
-                <button id="btn-lora-manage" type="button">Gestionar biblioteca</button>
+            <details id="section-loras" class="advanced panel-section" data-section="loras">
+              <summary>LoRAs (<span id="loras-count">0</span>)</summary>
+              <div class="section-body">
+                <div class="lora-actions">
+                  <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
+                  <button id="btn-lora-manage" type="button">Gestionar biblioteca</button>
+                </div>
+                <div id="loras-list" class="lora-chips"></div>
               </div>
-              <div id="loras-list" class="lora-chips"></div>
-            </div>
-          </details>
+            </details>
+          </fieldset>
 
-          <details id="section-ref" class="advanced panel-section" data-section="ref">
-            <summary>Imagen de referencia</summary>
-            <div class="section-body">
-              <label class="field">
-                <span>Imagen de referencia (PNG)</span>
-                <input id="ref-image" type="file" accept="image/png">
-              </label>
-              <div id="ref-preview" class="ref-preview hidden">
-                <img id="ref-thumb" alt="Referencia seleccionada">
-                <button id="btn-ref-clear" type="button">Quitar</button>
+          <!-- BLOQUE 2: Imagen de Referencia -->
+          <fieldset class="control-card" id="image-block-ref">
+            <legend>2. Referencia IPAdapter <button type="button" class="btn-help" data-help="Guía la generación usando una imagen de referencia con IPAdapter. Ajusta la fuerza de influencia.">?</button></legend>
+            <details id="section-ref" class="advanced panel-section" data-section="ref">
+              <summary>Imagen de referencia</summary>
+              <div class="section-body">
+                <label class="field">
+                  <span>Imagen de referencia (PNG)</span>
+                  <input id="ref-image" type="file" accept="image/png">
+                </label>
+                <div id="ref-preview" class="ref-preview hidden">
+                  <img id="ref-thumb" alt="Referencia seleccionada">
+                  <button id="btn-ref-clear" type="button">Quitar</button>
+                </div>
+                <div class="enhance-row">
+                  <button id="btn-describe-ref" type="button">Describir imagen</button>
+                  <input id="describe-file" type="file" accept="image/*" class="hidden">
+                </div>
+                <p class="field-hint">Elige una imagen de tu disco y añade su descripción (tags + caption) al prompt, igual que «Describir» en la galería.</p>
+                <label class="field">
+                  <span>Fuerza <output id="strength-value">0.60</output></span>
+                  <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
+                </label>
               </div>
-              <div class="enhance-row">
-                <button id="btn-describe-ref" type="button">Describir imagen</button>
-                <input id="describe-file" type="file" accept="image/*" class="hidden">
-              </div>
-              <p class="field-hint">Elige una imagen de tu disco y añade su descripción (tags + caption) al prompt, igual que «Describir» en la galería.</p>
-              <label class="field">
-                <span>Fuerza <output id="strength-value">0.60</output></span>
-                <input id="strength" type="range" min="0.05" max="1" step="0.05" value="0.6">
-              </label>
-            </div>
-          </details>
+            </details>
+          </fieldset>
 
-          <details id="section-params" class="advanced panel-section" data-section="params">
-            <summary>Opciones de generación <button type="button" class="btn-help" data-help="Configuración de muestreo, pasos, CFG y dimensiones de la imagen.">?</button></summary>
-            <div class="section-body">
-              <div class="grid-2">
-                <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
-                <label class="field"><span>Pasos</span><input id="steps" type="number" value="30" min="1"></label>
-                <label class="field"><span>CFG</span><input id="cfg" type="number" value="6" step="0.1"></label>
-                <label class="field"><span>Sampler</span><select id="sampler"></select></label>
-                <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
-              </div>
-              <div id="section-size" class="section-subblock">
+          <!-- BLOQUE 3: Parámetros y Dimensiones -->
+          <fieldset class="control-card" id="image-block-params">
+            <legend>3. Muestreo y Dimensiones <button type="button" class="btn-help" data-help="Configuración de muestreo (Seed, Pasos, CFG, Sampler) y selector dual de resolución.">?</button></legend>
+            <details id="section-params" class="advanced panel-section" data-section="params">
+              <summary>Opciones de generación <button type="button" class="btn-help" data-help="Configuración de muestreo, pasos, CFG y dimensiones de la imagen.">?</button></summary>
+              <div class="section-body">
                 <div class="grid-2">
-                  <label class="field">
-                    <span>Orientación</span>
-                    <select id="image-res-orientation">
-                      <option value="vertical">Vertical (9:16)</option>
-                      <option value="horizontal">Horizontal (16:9)</option>
-                      <option value="square" selected>Cuadrado (1:1)</option>
-                      <option value="h3_vertical">H3 Vertical</option>
-                      <option value="h3_horizontal">H3 Horizontal</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Calidad</span>
-                    <select id="image-res-quality">
-                      <option value="sd">SD</option>
-                      <option value="hd">HD</option>
-                      <option value="fhd" selected>FHD (1024)</option>
-                      <option value="qhd">QHD</option>
-                      <option value="2k">2K</option>
-                    </select>
-                  </label>
+                  <label class="field"><span>Seed</span><input id="seed" type="number" value="42"></label>
+                  <label class="field"><span>Pasos</span><input id="steps" type="number" value="30" min="1"></label>
+                  <label class="field"><span>CFG</span><input id="cfg" type="number" value="6" step="0.1"></label>
+                  <label class="field"><span>Sampler</span><select id="sampler"></select></label>
+                  <label class="field"><span>Scheduler</span><select id="scheduler"></select></label>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
-                  <span id="image-res-badge" class="field-hint" style="font-weight: 500;">1024 × 1024 (FHD)</span>
-                  <label class="field field-inline" style="margin: 0; padding: 0;">
-                    <span style="font-size: 0.72rem; text-transform: none;">Ajuste rápido</span>
-                    <select id="size" style="width: auto; padding: 0.2rem 0.4rem; font-size: 0.75rem;"></select>
-                  </label>
+                <div id="section-size" class="section-subblock">
+                  <div class="grid-2">
+                    <label class="field">
+                      <span>Orientación</span>
+                      <select id="image-res-orientation">
+                        <option value="vertical">Vertical (9:16)</option>
+                        <option value="horizontal">Horizontal (16:9)</option>
+                        <option value="square" selected>Cuadrado (1:1)</option>
+                        <option value="h3_vertical">H3 Vertical</option>
+                        <option value="h3_horizontal">H3 Horizontal</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Calidad</span>
+                      <select id="image-res-quality">
+                        <option value="sd">SD</option>
+                        <option value="hd">HD</option>
+                        <option value="fhd" selected>FHD (1024)</option>
+                        <option value="qhd">QHD</option>
+                        <option value="2k">2K</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+                    <span id="image-res-badge" class="field-hint" style="font-weight: 500;">1024 × 1024 (FHD)</span>
+                    <label class="field field-inline" style="margin: 0; padding: 0;">
+                      <span style="font-size: 0.72rem; text-transform: none;">Ajuste rápido</span>
+                      <select id="size" style="width: auto; padding: 0.2rem 0.4rem; font-size: 0.75rem;"></select>
+                    </label>
+                  </div>
+                  <div id="manual-size" class="grid-2 hidden">
+                    <label class="field"><span>Ancho</span><input id="width" type="number" value="1024" step="8" min="64" max="4096"></label>
+                    <label class="field"><span>Alto</span><input id="height" type="number" value="1024" step="8" min="64" max="4096"></label>
+                  </div>
                 </div>
-                <div id="manual-size" class="grid-2 hidden">
-                  <label class="field"><span>Ancho</span><input id="width" type="number" value="1024" step="8" min="64" max="4096"></label>
-                  <label class="field"><span>Alto</span><input id="height" type="number" value="1024" step="8" min="64" max="4096"></label>
-                </div>
+                <details id="section-negative" class="advanced panel-section" data-section="negative">
+                  <summary>Negativo (avanzado)</summary>
+                  <div class="section-body">
+                    <textarea id="negative" rows="3" placeholder="worst quality, low quality, ...">worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name</textarea>
+                    <button id="btn-negative-restore" type="button">Restaurar</button>
+                  </div>
+                </details>
               </div>
-              <details id="section-negative" class="advanced panel-section" data-section="negative">
-                <summary>Negativo (avanzado)</summary>
-                <div class="section-body">
-                  <textarea id="negative" rows="3" placeholder="worst quality, low quality, ...">worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name</textarea>
-                  <button id="btn-negative-restore" type="button">Restaurar</button>
-                </div>
-              </details>
-            </div>
-          </details>
+            </details>
+          </fieldset>
         </div>
 
         <div class="controls-column controls-column-zones">
-          <label class="field prompt-general-field">
-            <span>Prompt general <button type="button" class="btn-help" data-help="Describe la escena en lenguaje natural: sujeto, estilo, entorno o acción. Se descompone automáticamente en tags danbooru por zonas.">?</button></span>
-            <textarea id="prompt-general" rows="3" placeholder="Describe en lenguaje natural: escena, personaje, acción, estilo…"></textarea>
-          </label>
+          <!-- BLOQUE 4: Prompt y Asistente IA -->
+          <fieldset class="control-card" id="image-block-prompt">
+            <legend>4. Prompt y Asistente <button type="button" class="btn-help" data-help="Describe la escena en lenguaje natural: sujeto, estilo, entorno o acción. Se descompone automáticamente en tags danbooru por zonas.">?</button></legend>
+            <label class="field prompt-general-field">
+              <span>Prompt general</span>
+              <textarea id="prompt-general" rows="3" placeholder="Describe en lenguaje natural: escena, personaje, acción, estilo…"></textarea>
+            </label>
 
-          <div class="zone-toolbar">
-            <div class="enhance-row">
-              <button id="btn-enhance" type="button">Generar prompt</button>
-              <span id="llm-status" class="llm-status hidden" style="display: none !important;" title="">LLM: …</span>
-              <label class="inline-field control-inline">
-                <span>Fuerza</span>
-                <select id="enhance-strength">
-                  <option value="fiel">Fiel</option>
-                  <option value="balanceado" selected>Balanceado</option>
-                  <option value="creativo">Creativo</option>
-                </select>
-              </label>
+            <div class="zone-toolbar">
+              <div class="enhance-row">
+                <button id="btn-enhance" type="button">Generar prompt</button>
+                <span id="llm-status" class="llm-status hidden" style="display: none !important;" title="">LLM: …</span>
+                <label class="inline-field control-inline">
+                  <span>Fuerza</span>
+                  <select id="enhance-strength">
+                    <option value="fiel">Fiel</option>
+                    <option value="balanceado" selected>Balanceado</option>
+                    <option value="creativo">Creativo</option>
+                  </select>
+                </label>
+              </div>
+              <p id="enhance-hint" class="field-hint">Escribe la escena en lenguaje natural: se convierte en tags danbooru por zona. Tus tags ya insertadas se respetan (no se repiten).</p>
             </div>
-            <p id="enhance-hint" class="field-hint">Escribe la escena en lenguaje natural: se convierte en tags danbooru por zona. Tus tags ya insertadas se respetan (no se repiten).</p>
-          </div>
+          </fieldset>
 
-          <details id="section-zones" class="advanced panel-section zones-panel" data-section="zones" open>
-            <summary>Prompt por zonas</summary>
-            <div class="section-body">
-              <div id="prompt-zones" class="prompt-zones">
-                <div id="zone-popover" class="zone-popover hidden">
-                  <div class="zone-popover-head">
-                    <strong id="zone-popover-title">Zona</strong>
-                    <button id="zone-popover-close" type="button">Cerrar</button>
-                  </div>
-                  <input id="zone-popover-search" type="search" placeholder="Buscar opciones...">
-                  <div id="zone-popover-tabs" class="zone-popover-tabs"></div>
-                  <p id="zone-popover-note" class="zone-popover-note hidden"></p>
-                  <div id="zone-popover-ocs" class="zone-popover-ocs hidden">
-                    <strong class="zone-popover-ocs-title">Mis OCs</strong>
-                    <div id="zone-ocs-list" class="zone-ocs-list"></div>
-                    <label id="zone-ocs-extras-label" class="zone-option">
-                      <input id="zone-ocs-extras" type="checkbox" checked>
-                      <span>aplicar extras del OC a General</span>
-                    </label>
-                    <label id="zone-ocs-traits-label" class="zone-option hidden">
-                      <input id="zone-ocs-traits" type="checkbox">
-                      <span>usar rasgos en vez del trigger</span>
-                    </label>
-                    <p id="zone-ocs-status" class="zone-popover-note"></p>
-                  </div>
-                  <div id="zone-popover-groups" class="zone-popover-groups"></div>
-                  <div id="zone-popover-selected" class="zone-popover-selected"></div>
-                  <form id="zone-insert-form" class="zone-insert">
-                    <input id="zone-insert-input" type="text" placeholder="Tag manual...">
-                    <button class="primary" type="submit">Añadir</button>
-                    <button id="zone-insert-cancel" type="button">Cancelar</button>
-                  </form>
-                  <div class="zone-popover-actions">
-                    <button id="zone-popover-insert" class="primary" type="button">Insertar</button>
-                    <button id="zone-popover-clear" type="button">Limpiar selección</button>
+          <!-- BLOQUE 5: Composición por Zonas -->
+          <fieldset class="control-card" id="image-block-zones">
+            <legend>5. Composición por Zonas <button type="button" class="btn-help" data-help="Organiza los tags danbooru por cuadrantes y capas de personajes u OCs.">?</button></legend>
+            <details id="section-zones" class="advanced panel-section zones-panel" data-section="zones" open>
+              <summary>Prompt por zonas</summary>
+              <div class="section-body">
+                <div id="prompt-zones" class="prompt-zones">
+                  <div id="zone-popover" class="zone-popover hidden">
+                    <div class="zone-popover-head">
+                      <strong id="zone-popover-title">Zona</strong>
+                      <button id="zone-popover-close" type="button">Cerrar</button>
+                    </div>
+                    <input id="zone-popover-search" type="search" placeholder="Buscar opciones...">
+                    <div id="zone-popover-tabs" class="zone-popover-tabs"></div>
+                    <p id="zone-popover-note" class="zone-popover-note hidden"></p>
+                    <div id="zone-popover-ocs" class="zone-popover-ocs hidden">
+                      <strong class="zone-popover-ocs-title">Mis OCs</strong>
+                      <div id="zone-ocs-list" class="zone-ocs-list"></div>
+                      <label id="zone-ocs-extras-label" class="zone-option">
+                        <input id="zone-ocs-extras" type="checkbox" checked>
+                        <span>aplicar extras del OC a General</span>
+                      </label>
+                      <label id="zone-ocs-traits-label" class="zone-option hidden">
+                        <input id="zone-ocs-traits" type="checkbox">
+                        <span>usar rasgos en vez del trigger</span>
+                      </label>
+                      <p id="zone-ocs-status" class="zone-popover-note"></p>
+                    </div>
+                    <div id="zone-popover-groups" class="zone-popover-groups"></div>
+                    <div id="zone-popover-selected" class="zone-popover-selected"></div>
+                    <form id="zone-insert-form" class="zone-insert">
+                      <input id="zone-insert-input" type="text" placeholder="Tag manual...">
+                      <button class="primary" type="submit">Añadir</button>
+                      <button id="zone-insert-cancel" type="button">Cancelar</button>
+                    </form>
+                    <div class="zone-popover-actions">
+                      <button id="zone-popover-insert" class="primary" type="button">Insertar</button>
+                      <button id="zone-popover-clear" type="button">Limpiar selección</button>
+                    </div>
                   </div>
                 </div>
+                <div id="zone-editor" class="zone-editor"></div>
               </div>
-              <div id="zone-editor" class="zone-editor"></div>
-            </div>
-          </details>
+            </details>
 
-          <details id="section-final-prompt" class="advanced panel-section">
-            <summary>Prompt final (solo lectura)</summary>
-            <div class="section-body">
-              <textarea id="prompt-final" rows="3" readonly></textarea>
-              <button id="btn-copy-prompt" type="button">Copiar</button>
-            </div>
-          </details>
+            <details id="section-final-prompt" class="advanced panel-section">
+              <summary>Prompt final (solo lectura)</summary>
+              <div class="section-body">
+                <textarea id="prompt-final" rows="3" readonly></textarea>
+                <button id="btn-copy-prompt" type="button">Copiar</button>
+              </div>
+            </details>
+          </fieldset>
         </div>
       </aside>
 
@@ -588,50 +608,67 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </div>
         </div>
         <p id="editor-banner" class="editor-banner">Comprobando Qwen-Image 2.1…</p>
-        <label class="field">
-          <span>Prompt</span>
-          <textarea id="editor-prompt" rows="5" placeholder="Describe qué generar o editar..."></textarea>
-        </label>
-        <label class="field">
-          <span>Modo</span>
-          <select id="editor-mode">
-            <option value="generate">Generar</option>
-            <option value="edit" selected>Editar</option>
-          </select>
-        </label>
-        <p id="editor-edit-hint" class="field-hint">En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio.</p>
-        <label class="field" id="editor-refs-field">
-          <span>Imágenes de referencia (hasta 10)</span>
-          <input id="editor-refs" type="file" accept="image/*" multiple>
-        </label>
-        <div id="editor-refs-preview" class="editor-refs"></div>
-        <p id="editor-refs-hint" class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.</p>
-        <label class="field">
-          <span>Tamaño</span>
-          <select id="editor-size"></select>
-        </label>
-        <div id="editor-manual-size" class="grid-2 hidden">
-          <label class="field"><span>Ancho</span><input id="editor-width" type="number" value="1024" step="16" min="512" max="2048"></label>
-          <label class="field"><span>Alto</span><input id="editor-height" type="number" value="1024" step="16" min="512" max="2048"></label>
-        </div>
-        <p class="field-hint">Presets de la app (512-2048, múltiplos de 16) o Manual.</p>
-        <label class="field">
-          <span>Seed</span>
-          <input id="editor-seed" type="number" value="42">
-        </label>
-        <label class="field">
-          <span>Negativo</span>
-          <textarea id="editor-negative" rows="3" placeholder="Lo que no quieres (opcional)"></textarea>
-        </label>
-        <label class="field">
-          <span>Pasos</span>
-          <input id="editor-steps" type="number" value="25" min="10" max="50">
-        </label>
-        <label class="field">
-          <span>CFG</span>
-          <input id="editor-cfg" type="number" value="1.0" min="1" max="10" step="0.1">
-          <p id="editor-cfg-note" class="field-hint hidden">Aviso: cfg mayor que 1 puede degradar la edición (el par UC está certificado con cfg 1).</p>
-        </label>
+
+        <!-- BLOQUE 1: Entradas y Modo -->
+        <fieldset class="control-card" id="editor-block-mode">
+          <legend>1. Entradas y Modo <button type="button" class="btn-help" data-help="En «Editar» se trabaja sobre la imagen seleccionada en el visor o galería. En «Generar» guían hasta 10 referencias de estilo/composición.">?</button></legend>
+          <label class="field">
+            <span>Modo</span>
+            <select id="editor-mode">
+              <option value="generate">Generar</option>
+              <option value="edit" selected>Editar</option>
+            </select>
+          </label>
+          <p id="editor-edit-hint" class="field-hint">En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio.</p>
+          <label class="field" id="editor-refs-field">
+            <span>Imágenes de referencia (hasta 10)</span>
+            <input id="editor-refs" type="file" accept="image/*" multiple>
+          </label>
+          <div id="editor-refs-preview" class="editor-refs"></div>
+          <p id="editor-refs-hint" class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.</p>
+        </fieldset>
+
+        <!-- BLOQUE 2: Instrucción de Edición -->
+        <fieldset class="control-card" id="editor-block-prompt">
+          <legend>2. Instrucción de Edición <button type="button" class="btn-help" data-help="Describe en lenguaje natural qué generar o modificar en la imagen con Qwen-Image 2.1.">?</button></legend>
+          <label class="field">
+            <span>Prompt</span>
+            <textarea id="editor-prompt" rows="4" placeholder="Describe qué generar o editar..."></textarea>
+          </label>
+          <label class="field">
+            <span>Negativo</span>
+            <textarea id="editor-negative" rows="2" placeholder="Lo que no quieres (opcional)"></textarea>
+          </label>
+        </fieldset>
+
+        <!-- BLOQUE 3: Configuración y Dimensiones -->
+        <fieldset class="control-card" id="editor-block-params">
+          <legend>3. Configuración y Dimensiones <button type="button" class="btn-help" data-help="Tamaño Original (1ª ref) y CFG=1 son óptimos para edición precisa certificada con Qwen-Image 2.1.">?</button></legend>
+          <label class="field">
+            <span>Tamaño</span>
+            <select id="editor-size"></select>
+          </label>
+          <div id="editor-manual-size" class="grid-2 hidden">
+            <label class="field"><span>Ancho</span><input id="editor-width" type="number" value="1024" step="16" min="512" max="2048"></label>
+            <label class="field"><span>Alto</span><input id="editor-height" type="number" value="1024" step="16" min="512" max="2048"></label>
+          </div>
+          <p class="field-hint">Presets de la app (512-2048, múltiplos de 16) o Manual.</p>
+          <div class="grid-2">
+            <label class="field">
+              <span>Seed</span>
+              <input id="editor-seed" type="number" value="42">
+            </label>
+            <label class="field">
+              <span>Pasos</span>
+              <input id="editor-steps" type="number" value="25" min="10" max="50">
+            </label>
+          </div>
+          <label class="field">
+            <span>CFG</span>
+            <input id="editor-cfg" type="number" value="1.0" min="1" max="10" step="0.1">
+            <p id="editor-cfg-note" class="field-hint hidden">Aviso: cfg mayor que 1 puede degradar la edición (el par UC está certificado con cfg 1).</p>
+          </label>
+        </fieldset>
       </aside>
 
       <section class="gallery-panel tab-viewport">
@@ -690,64 +727,73 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
             <p id="upscale-progress-text" class="progress-text">paso -/-</p>
           </div>
         </div>
-        <label class="field">
-          <span>Tipo de origen</span>
-          <select id="upscale-kind">
-            <option value="image">Imagen</option>
-            <option value="video">Vídeo</option>
-            <option value="fps">FPS</option>
-          </select>
-        </label>
+        <!-- BLOQUE 1: Entradas y Origen -->
+        <fieldset class="control-card" id="upscale-block-source">
+          <legend>1. Entradas y Origen <button type="button" class="btn-help" data-help="Elige si escalar imagen, vídeo o interpolar fotogramas (FPS). Selecciona una generación de la galería o un archivo local.">?</button></legend>
+          <label class="field">
+            <span>Tipo de origen</span>
+            <select id="upscale-kind">
+              <option value="image">Imagen</option>
+              <option value="video">Vídeo</option>
+              <option value="fps">FPS</option>
+            </select>
+          </label>
 
-        <div class="field" id="upscale-source-field">
-          <span id="upscale-source-label">Imagen de origen</span>
-          <p id="upscale-source-info" class="field-hint">Cargando galería…</p>
-        </div>
-        <label class="field" id="upscale-file-field">
-          <span>Archivo local (solo imagen)</span>
-          <input id="upscale-file" type="file" accept="image/*">
-        </label>
-        <p class="field-hint">Elige una miniatura de la galería o, en imagen, un archivo local (el archivo sustituye a la selección).</p>
+          <div class="field" id="upscale-source-field">
+            <span id="upscale-source-label">Imagen de origen</span>
+            <p id="upscale-source-info" class="field-hint">Cargando galería…</p>
+          </div>
+          <label class="field" id="upscale-file-field">
+            <span>Archivo local (solo imagen)</span>
+            <input id="upscale-file" type="file" accept="image/*">
+          </label>
+          <p class="field-hint">Elige una miniatura de la galería o, en imagen, un archivo local (el archivo sustituye a la selección).</p>
+        </fieldset>
 
-        <label class="field" id="upscale-model-field">
-          <span>Modelo</span>
-          <select id="upscale-model"></select>
-          <p id="upscale-model-note" class="field-hint"></p>
-        </label>
-        <p class="field-hint">RealESRGAN x2 duplica el tamaño; aplica a la imagen o al vídeo (conservando fps y audio del origen).</p>
+        <!-- BLOQUE 2: Modelo y Parámetros -->
+        <fieldset class="control-card" id="upscale-block-model">
+          <legend>2. Modelo y Parámetros <button type="button" class="btn-help" data-help="RealESRGAN x2 duplica el tamaño preservando nitidez. RIFE interpola fotogramas en vídeos para máxima fluidez.">?</button></legend>
+          <label class="field" id="upscale-model-field">
+            <span>Modelo</span>
+            <select id="upscale-model"></select>
+            <p id="upscale-model-note" class="field-hint"></p>
+          </label>
+          <p class="field-hint">RealESRGAN x2 duplica el tamaño; aplica a la imagen o al vídeo (conservando fps y audio del origen).</p>
 
-        <label class="field" id="upscale-passes-field">
-          <span>Escalado</span>
-          <select id="upscale-passes">
-            <option value="1">×2 (1 pasada)</option>
-            <option value="2">×4 (2 pasadas)</option>
-          </select>
-          <p class="field-hint">×4 encadena dos ampliaciones del modelo de ×2.</p>
-        </label>
+          <div class="grid-2">
+            <label class="field" id="upscale-passes-field">
+              <span>Escalado</span>
+              <select id="upscale-passes">
+                <option value="1">×2 (1 pasada)</option>
+                <option value="2">×4 (2 pasadas)</option>
+              </select>
+            </label>
 
-        <label class="field" id="upscale-sharpen-field">
-          <span>Mejora de detalle</span>
-          <select id="upscale-sharpen">
-            <option value="0">OFF</option>
-            <option value="1">Suave</option>
-            <option value="2">Fuerte</option>
-          </select>
+            <label class="field" id="upscale-sharpen-field">
+              <span>Mejora de detalle</span>
+              <select id="upscale-sharpen">
+                <option value="0">OFF</option>
+                <option value="1">Suave</option>
+                <option value="2">Fuerte</option>
+              </select>
+            </label>
+          </div>
           <p class="field-hint">Nitidez extra tras la ampliación (solo imagen).</p>
-        </label>
 
-        <label class="field hidden" id="upscale-ckpt-field">
-          <span>Ckpt RIFE</span>
-          <select id="upscale-ckpt"></select>
-          <p id="upscale-ckpt-note" class="field-hint"></p>
-        </label>
-        <label class="field hidden" id="upscale-multiplier-field">
-          <span>Multiplicador</span>
-          <select id="upscale-multiplier">
-            <option value="2">×2</option>
-            <option value="4">×4</option>
-          </select>
-          <p class="field-hint">Interpola los fotogramas del vídeo de origen a ×2 o ×4 fps, conservando el audio.</p>
-        </label>
+          <label class="field hidden" id="upscale-ckpt-field">
+            <span>Ckpt RIFE</span>
+            <select id="upscale-ckpt"></select>
+            <p id="upscale-ckpt-note" class="field-hint"></p>
+          </label>
+          <label class="field hidden" id="upscale-multiplier-field">
+            <span>Multiplicador</span>
+            <select id="upscale-multiplier">
+              <option value="2">×2</option>
+              <option value="4">×4</option>
+            </select>
+            <p class="field-hint">Interpola los fotogramas del vídeo de origen a ×2 o ×4 fps, conservando el audio.</p>
+          </label>
+        </fieldset>
       </aside>
 
       <section class="gallery-panel tab-viewport">

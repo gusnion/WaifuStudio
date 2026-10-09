@@ -1389,6 +1389,9 @@ input[type="checkbox"] {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .control-card > legend,
@@ -1401,6 +1404,8 @@ input[type="checkbox"] {
   padding: 0 0.4rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Micro-componente Ayuda (?) y Popover Flotante */
