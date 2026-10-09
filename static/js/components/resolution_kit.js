@@ -60,6 +60,9 @@ export class ResolutionKit {
   }
 
   getDimensions(orientation = this.orientation, quality = this.quality) {
+    if (orientation === "original") {
+      return { width: 0, height: 0, label: "Original (1ª ref)" };
+    }
     const table = RESOLUTION_TABLE[orientation] || RESOLUTION_TABLE.vertical;
     const res = table[quality] || table.fhd;
     return { width: res.width, height: res.height, label: res.label };
@@ -78,9 +81,17 @@ export class ResolutionKit {
   }
 
   syncFromDimensions(width, height) {
+    if (width === "original" || height === "original" || (width === 0 && height === 0)) {
+      this.orientation = "original";
+      if (this.orientationSelect) this.orientationSelect.value = "original";
+      if (this.qualitySelect) this.qualitySelect.disabled = true;
+      if (this.badgeEl) this.badgeEl.textContent = "Original (1ª ref)";
+      return true;
+    }
     const w = Number(width);
     const h = Number(height);
     if (!w || !h) return false;
+    if (this.qualitySelect) this.qualitySelect.disabled = false;
     for (const [orientKey, quals] of Object.entries(RESOLUTION_TABLE)) {
       for (const [qualKey, dims] of Object.entries(quals)) {
         if (dims.width === w && dims.height === h) {
@@ -114,6 +125,27 @@ export class ResolutionKit {
   }
 
   update() {
+    if (this.orientation === "original") {
+      if (this.qualitySelect) {
+        this.qualitySelect.disabled = true;
+      }
+      if (this.badgeEl) {
+        this.badgeEl.textContent = "Original (1ª ref)";
+      }
+      if (typeof this.onChange === "function") {
+        this.onChange({
+          orientation: "original",
+          quality: this.quality,
+          width: 0,
+          height: 0,
+          label: "Original (1ª ref)",
+        });
+      }
+      return;
+    }
+    if (this.qualitySelect) {
+      this.qualitySelect.disabled = false;
+    }
     const dims = this.getDimensions(this.orientation, this.quality);
     if (this.widthInput) this.widthInput.value = dims.width;
     if (this.heightInput) this.heightInput.value = dims.height;

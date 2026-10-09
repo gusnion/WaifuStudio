@@ -363,7 +363,14 @@ function applyEditorSizeSelection() {
     if (badge) {
       badge.textContent = "Original (1ª ref)";
     }
+    const qual = $("editor-res-quality");
+    if (qual) qual.disabled = true;
+    if (editorResolutionKit) {
+      editorResolutionKit.syncFromDimensions("original", "original");
+    }
   } else if (!manual) {
+    const qual = $("editor-res-quality");
+    if (qual) qual.disabled = false;
     const preset = state.formatsById ? state.formatsById[val] : null;
     if (preset) {
       $("editor-width").value = String(preset.width);
@@ -373,6 +380,8 @@ function applyEditorSizeSelection() {
       }
     }
   } else {
+    const qual = $("editor-res-quality");
+    if (qual) qual.disabled = false;
     if (editorResolutionKit) {
       const w = Number($("editor-width").value);
       const h = Number($("editor-height").value);
@@ -538,12 +547,14 @@ async function generateEditor() {
     );
     return;
   }
+  const orientSelect = $("editor-res-orientation");
   const sizeSelect = $("editor-size");
-  const sizeChoice = sizeSelect ? sizeSelect.value : "manual";
+  const isOriginal = (orientSelect && orientSelect.value === "original") || (sizeSelect && sizeSelect.value === "original");
   let sizePayload;
-  if (sizeChoice === "original") {
+  if (isOriginal) {
     sizePayload = { original: true };
   } else {
+    const sizeChoice = sizeSelect ? sizeSelect.value : "manual";
     const preset =
       sizeChoice && sizeChoice !== "manual" ? (state.formatsById ? state.formatsById[sizeChoice] : null) : null;
     const rawWidth = preset ? preset.width : Math.trunc(Number($("editor-width").value));
@@ -629,15 +640,20 @@ function initEditorTab() {
       widthInput: $("editor-width"),
       heightInput: $("editor-height"),
       badgeEl: $("editor-res-badge"),
-      defaultOrientation: "square",
+      defaultOrientation: "original",
       defaultQuality: "fhd",
-      onChange: ({ width, height }) => {
+      onChange: ({ orientation, width, height }) => {
+        const sizeSelect = $("editor-size");
+        if (orientation === "original") {
+          if (sizeSelect) sizeSelect.value = "original";
+          applyEditorSizeSelection();
+          return;
+        }
         const w16 = Math.round(width / 16) * 16;
         const h16 = Math.round(height / 16) * 16;
         if ($("editor-width")) $("editor-width").value = String(w16);
         if ($("editor-height")) $("editor-height").value = String(h16);
         const match = (state.formats || []).find((f) => f.width === w16 && f.height === h16);
-        const sizeSelect = $("editor-size");
         if (sizeSelect) {
           sizeSelect.value = match ? match.id : "manual";
         }
