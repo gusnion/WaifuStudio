@@ -6,20 +6,21 @@
 
 /* Panel Imagen: columna única canónica con acordeón PROMPTING / CONFIGURACIÓN */
 .controls.image-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 0.35rem;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-right: 0.2rem !important;
 }
 
 .image-category-card {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #14161c;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.4rem;
   overflow: hidden;
   transition: border-color 0.15s ease;
   display: flex;
@@ -27,12 +28,18 @@
   flex-shrink: 0;
 }
 
+.image-category-card:not([open]) {
+  flex: 0 0 auto !important;
+}
+
 .image-category-card[open] {
   border-color: rgba(224, 86, 122, 0.45);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1 1 auto;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  flex: 1 1 0% !important;
+  margin-bottom: 0 !important;
+  overflow: hidden !important;
 }
 
 .image-category-header {
@@ -50,6 +57,7 @@
   text-transform: uppercase !important;
   list-style: none !important;
   transition: background 0.15s ease, color 0.15s ease;
+  flex: 0 0 auto !important;
   flex-shrink: 0 !important;
 }
 
@@ -80,15 +88,15 @@
 }
 
 .image-category-body {
-  padding: 0.6rem 0.65rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  padding: 0.6rem 0.65rem 3.5rem 0.65rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.6rem !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  min-height: 0;
-  flex: 1 1 auto;
-  max-height: calc(100vh - 220px);
+  min-height: 0 !important;
+  flex: 1 1 0% !important;
+  box-sizing: border-box !important;
   scrollbar-width: thin !important;
   scrollbar-color: var(--border) transparent !important;
   -ms-overflow-style: auto !important;
