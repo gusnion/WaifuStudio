@@ -213,6 +213,7 @@ const state = {
   upscaleCompareAfterUrl: null,
   upscaleCompareSlot2: null,
   upscaleLastSourceUrl: null,
+  upscaleLastSourceId: null,
   upscaleLastResultUrl: null,
   upscaleLastResultId: null,
   galleryTab: {

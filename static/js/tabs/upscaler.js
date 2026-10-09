@@ -136,6 +136,21 @@ function resolveItemImageUrl(item) {
   return null;
 }
 
+function hasItemUpscalePair(item) {
+  if (!item) return false;
+  if (item.params && item.params.source_gen != null) return true;
+  if ((state.upscaleSources || []).some((s) => s.params && s.params.source_gen === item.id)) return true;
+  if (((state.upscaleGallery && state.upscaleGallery.items) || []).some((s) => s.params && s.params.source_gen === item.id)) return true;
+  if (
+    state.upscaleLastResultUrl &&
+    state.upscaleLastSourceUrl &&
+    (item.id === state.upscaleLastResultId || item.id === state.upscaleLastSourceId)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 let upscaleCompareActive = false;
 let upscaleCompareRatio = 0.5;
 let upscaleCompareDragging = false;
@@ -162,11 +177,19 @@ function setUpscaleCompareImages(beforeUrl, afterUrl) {
   state.upscaleCompareAfterUrl = afterUrl || null;
   const beforeImg = $("upscale-compare-before");
   const afterImg = $("upscale-compare-after");
-  if (beforeImg && beforeUrl) {
-    beforeImg.src = beforeUrl;
+  if (beforeImg) {
+    if (beforeUrl) {
+      beforeImg.src = beforeUrl;
+    } else {
+      beforeImg.removeAttribute("src");
+    }
   }
-  if (afterImg && afterUrl) {
-    afterImg.src = afterUrl;
+  if (afterImg) {
+    if (afterUrl) {
+      afterImg.src = afterUrl;
+    } else {
+      afterImg.removeAttribute("src");
+    }
   }
   applyUpscaleCompare();
 }
@@ -184,6 +207,16 @@ function getUpscaleCompareUrls() {
     return { canCompare: false, before: null, after: null };
   }
 
+  // Caso 0: Comparación interactiva con Slot 2 asignado
+  if (state.upscaleCompareSlot2 && state.upscaleCompareSlot2 !== currentUrl) {
+    return {
+      canCompare: true,
+      before: currentUrl,
+      after: state.upscaleCompareSlot2,
+      label: "Comparación interactiva",
+    };
+  }
+
   // Caso 1: Ítem seleccionado de galería con referencia de origen (generación escalada previa)
   if (item && item.params && item.params.source_gen != null) {
     const sourceGen = item.params.source_gen;
@@ -192,10 +225,10 @@ function getUpscaleCompareUrls() {
     if (sourceFile) {
       sourceUrl = `/media/${sourceGen}/${sourceFile}`;
     } else {
-      const srcItem = (state.upscaleSources || []).find((s) => s.id === sourceGen);
-      sourceUrl = srcItem
-        ? resolveItemImageUrl(srcItem)
-        : `/media/${sourceGen}/${(item.outputs && item.outputs[0]) || ""}`;
+      const srcItem =
+        (state.upscaleSources || []).find((s) => s.id === sourceGen) ||
+        (state.upscaleGallery.items || []).find((s) => s.id === sourceGen);
+      sourceUrl = srcItem ? resolveItemImageUrl(srcItem) : null;
     }
     const resultUrl = resolveItemImageUrl(item);
     if (sourceUrl && resultUrl && sourceUrl !== resultUrl) {
@@ -208,6 +241,25 @@ function getUpscaleCompareUrls() {
     }
   }
 
+  // Caso 1b: Ítem seleccionado es la imagen original que fue escalada previamente (tiene hijo escalado)
+  if (item && item.id != null) {
+    const childItem =
+      (state.upscaleSources || []).find((s) => s.params && s.params.source_gen === item.id) ||
+      (state.upscaleGallery.items || []).find((s) => s.params && s.params.source_gen === item.id);
+    if (childItem) {
+      const sourceUrl = currentUrl;
+      const childUrl = resolveItemImageUrl(childItem);
+      if (sourceUrl && childUrl && sourceUrl !== childUrl) {
+        return {
+          canCompare: true,
+          before: sourceUrl,
+          after: childUrl,
+          label: `Original (#${item.id}) vs Escalada (#${childItem.id})`,
+        };
+      }
+    }
+  }
+
   // Caso 2: Trabajo de upscale completado en la sesión actual asociado al ítem o URL activa
   if (
     state.upscaleLastSourceUrl &&
@@ -215,7 +267,8 @@ function getUpscaleCompareUrls() {
     state.upscaleLastSourceUrl !== state.upscaleLastResultUrl
   ) {
     const isMatchingResult =
-      (item && item.id === state.upscaleLastResultId) ||
+      (item && (item.id === state.upscaleLastResultId || item.id === state.upscaleLastSourceId)) ||
+      (local && local.url === state.upscaleLastSourceUrl) ||
       currentUrl === state.upscaleLastResultUrl ||
       currentUrl === state.upscaleLastSourceUrl;
     if (isMatchingResult) {
@@ -228,17 +281,7 @@ function getUpscaleCompareUrls() {
     }
   }
 
-  // Caso 3: Comparación interactiva con Slot 2 asignado
-  if (state.upscaleCompareSlot2 && state.upscaleCompareSlot2 !== currentUrl) {
-    return {
-      canCompare: true,
-      before: currentUrl,
-      after: state.upscaleCompareSlot2,
-      label: "Comparación interactiva",
-    };
-  }
-
-  // Caso 4: Contraste con otra imagen disponible en la galería o fuentes
+  // Caso 3: Contraste con otra imagen disponible en la galería o fuentes
   const otherItem =
     (state.upscaleGallery.items || []).find(
       (it) =>
@@ -265,7 +308,7 @@ function getUpscaleCompareUrls() {
     };
   }
 
-  // Caso 5: Solo hay una imagen en el visor (habilita modo comparación a la espera de otra o como Slot 1)
+  // Caso 4: Solo hay una imagen en el visor (habilita modo comparación a la espera de otra o como Slot 1)
   return {
     canCompare: true,
     before: currentUrl,
@@ -299,9 +342,11 @@ function updateUpscaleCompare() {
     btnCompare.disabled = false;
     btnCompare.textContent = "Cerrar comparación";
     btnCompare.setAttribute("aria-pressed", "true");
-    const urls = getUpscaleCompareUrls();
-    if (urls.before && urls.after) {
-      setUpscaleCompareImages(urls.before, urls.after);
+    if (!state.upscaleCompareSlot2) {
+      const urls = getUpscaleCompareUrls();
+      if (urls.before && urls.after) {
+        setUpscaleCompareImages(urls.before, urls.after);
+      }
     }
   } else {
     btnCompare.disabled = !hasImage;
@@ -363,6 +408,7 @@ function clearUpscaleSelection() {
   state.upscaleGallery.items = [];
   state.upscaleCompareSlot2 = null;
   state.upscaleLastSourceUrl = null;
+  state.upscaleLastSourceId = null;
   state.upscaleLastResultUrl = null;
   state.upscaleLastResultId = null;
   if (upscaleCompareActive) {
@@ -372,44 +418,43 @@ function clearUpscaleSelection() {
 }
 
 function selectUpscaleSource(id) {
-  if (upscaleCompareActive) {
-    const clickedItem = (state.upscaleSources || []).find((s) => s.id === Number(id));
-    if (clickedItem) {
-      if (clickedItem.params && clickedItem.params.source_gen != null) {
-        state.upscaleSourceId = Number(id);
-        state.upscaleCompareSlot2 = null;
-        const sourceGen = clickedItem.params.source_gen;
-        const sourceFile = clickedItem.params.source_file;
-        let beforeUrl = null;
-        if (sourceFile) {
-          beforeUrl = `/media/${sourceGen}/${sourceFile}`;
-        } else {
-          const srcItem = (state.upscaleSources || []).find((s) => s.id === sourceGen);
-          beforeUrl = srcItem ? resolveItemImageUrl(srcItem) : null;
-        }
-        const afterUrl = resolveItemImageUrl(clickedItem);
-        if (beforeUrl && afterUrl && beforeUrl !== afterUrl) {
-          setUpscaleCompareImages(beforeUrl, afterUrl);
-          setUpscaleStatus(`Comparando original (#${sourceGen}) vs escalada (#${clickedItem.id})`);
-          renderUpscaleGallery();
-          return;
-        }
-      }
+  const targetId = id == null ? null : Number(id);
+  const clickedItem = (state.upscaleSources || []).find((s) => s.id === targetId);
 
-      const clickedUrl = resolveItemImageUrl(clickedItem);
-      if (clickedUrl) {
-        state.upscaleCompareSlot2 = clickedUrl;
-        const currentUrls = getUpscaleCompareUrls();
-        const beforeUrl = currentUrls.before || clickedUrl;
-        setUpscaleCompareImages(beforeUrl, clickedUrl);
-        setUpscaleStatus(`Comparando con generación #${clickedItem.id}`);
+  clearUpscaleLocalFile(true);
+
+  if (upscaleCompareActive && clickedItem) {
+    const prevSourceId = state.upscaleSourceId;
+    const prevBeforeUrl = state.upscaleCompareBeforeUrl;
+
+    // 1) Si el nuevo ítem tiene su propio par de upscale (es escalado o es original de un escalado):
+    if (hasItemUpscalePair(clickedItem)) {
+      state.upscaleSourceId = targetId;
+      state.upscaleCompareSlot2 = null;
+      const itemUrls = getUpscaleCompareUrls();
+      if (itemUrls.canCompare && itemUrls.before && itemUrls.after && itemUrls.before !== itemUrls.after && !itemUrls.solo) {
+        setUpscaleCompareImages(itemUrls.before, itemUrls.after);
+        setUpscaleStatus(`Comparando: ${itemUrls.label || "antes vs después"}`);
         renderUpscaleGallery();
         return;
       }
     }
+
+    // 2) Si no tiene par propio de upscale, actúa como Slot 2 interactivo frente a la imagen previa:
+    const prevItem = (state.upscaleSources || []).find((s) => s.id === prevSourceId);
+    const prevUrl = prevBeforeUrl || (prevItem ? resolveItemImageUrl(prevItem) : null);
+    const clickedUrl = resolveItemImageUrl(clickedItem);
+    if (prevUrl && clickedUrl && prevUrl !== clickedUrl) {
+      state.upscaleSourceId = prevSourceId != null ? prevSourceId : targetId;
+      state.upscaleCompareSlot2 = clickedUrl;
+      setUpscaleCompareImages(prevUrl, clickedUrl);
+      setUpscaleStatus(`Comparando #${prevSourceId || "origen"} vs #${clickedItem.id}`);
+      renderUpscaleGallery();
+      return;
+    }
   }
-  clearUpscaleLocalFile(true);
-  state.upscaleSourceId = id == null ? null : Number(id);
+
+  state.upscaleSourceId = targetId;
   state.upscaleCompareSlot2 = null;
   renderUpscaleGallery();
   updateUpscaleSourceView();
@@ -650,21 +695,25 @@ function applyUpscaleKind() {
 
 async function finishUpscale(job) {
   await reloadImageViewerFirstPage();
-  state.upscaleSourceId = state.imageViewer.selectedId;
   const sourceBeforeUrl = state.upscaleLocalFile ? state.upscaleLocalFile.url : (state.upscaleLastSourceUrl || null);
+  const sourceBeforeId = state.upscaleLastSourceId || state.upscaleSourceId;
   if (state.upscaleLocalFile) {
     state.upscaleLocalFile = null;
     const input = $("upscale-file");
     if (input) input.value = "";
   }
   await loadUpscaleGallery(1);
-  const resultItem = (state.upscaleGallery.items || []).find((it) => it.id === state.upscaleSourceId) || (state.upscaleGallery.items || [])[0];
+  const resultItem = (state.upscaleGallery.items || []).find((it) => it.id === state.imageViewer.selectedId) || (state.upscaleGallery.items || [])[0];
+  if (resultItem) {
+    state.upscaleSourceId = resultItem.id;
+  }
   const resultUrl = resultItem ? resolveItemImageUrl(resultItem) : (job && job.outputs && job.outputs[0] && job.outputs[0].url);
-  if (resultUrl) {
+  if (resultUrl && resultItem) {
     state.upscaleLastResultUrl = resultUrl;
-    state.upscaleLastResultId = resultItem ? resultItem.id : state.upscaleSourceId;
+    state.upscaleLastResultId = resultItem.id;
     if (sourceBeforeUrl) {
       state.upscaleLastSourceUrl = sourceBeforeUrl;
+      state.upscaleLastSourceId = sourceBeforeId;
     }
   }
   updateUpscaleSourceView();
@@ -747,6 +796,7 @@ async function generateUpscale() {
     }
     const sourceBeforeUrl = local ? local.url : resolveItemImageUrl(source);
     state.upscaleLastSourceUrl = sourceBeforeUrl;
+    state.upscaleLastSourceId = source ? source.id : null;
     state.upscaleLastResultUrl = null;
     state.upscaleLastResultId = null;
   }
