@@ -196,7 +196,7 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 10;
+  z-index: 1000 !important;
 }
 
 .modal.hidden {
@@ -858,7 +858,7 @@ input[type="checkbox"] {
 .lightbox {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 2000 !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -886,7 +886,7 @@ input[type="checkbox"] {
   position: absolute;
   top: 1rem;
   right: 1.2rem;
-  z-index: 2;
+  z-index: 2010 !important;
   font-size: 1.4rem;
   line-height: 1;
 }
@@ -1372,7 +1372,7 @@ input[type="checkbox"] {
 .generate-block {
   position: sticky !important;
   top: 0 !important;
-  z-index: 30 !important;
+  z-index: 15 !important;
   background: var(--bg) !important;
   display: flex !important;
   flex-direction: column !important;
