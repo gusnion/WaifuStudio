@@ -124,11 +124,21 @@
   margin-top: 0;
 }
 
+#panel-gallery {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 #panel-gallery.active {
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 100%;
 }
 
 .gallery-toolbar {
@@ -138,26 +148,43 @@
   gap: 0.6rem;
   flex: 0 0 auto;
   flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .gallery-filter-field {
+  flex: 0 0 auto;
   max-width: 180px;
 }
 
 .gallery-search-field {
   flex: 1 1 200px;
   max-width: 320px;
+  min-width: 0;
+}
+
+.gallery-toolbar #btn-gallery-clean-failed {
+  margin-left: auto;
 }
 
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.6rem;
-  height: 100%;
-  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 0%;
   align-content: start;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+.gallery-grid.hidden {
+  display: none !important;
 }
 
 .gallery-card {
@@ -171,6 +198,9 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .gallery-card:hover,
@@ -224,6 +254,9 @@
   font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .gallery-card-status {
@@ -235,6 +268,22 @@
 
 .gallery-card-status.error {
   color: var(--error);
+}
+
+#gallery-empty {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: center;
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+#gallery-empty.hidden {
+  display: none !important;
 }
 
 .pager {
@@ -258,17 +307,32 @@
 
 /* M18-13: Paginación fija inmutable y espaciado de detalle */
 .gallery-pagination-bar {
-  position: sticky;
-  bottom: 0;
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: var(--panel);
   border-top: 1px solid var(--border);
   padding: 0.5rem 0.8rem;
   z-index: 10;
-  margin-top: auto;
   border-radius: 0 0 6px 6px;
+  flex: 0 0 auto;
+}
+
+.gallery-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+#gallery-info {
+  display: inline-block;
+  min-width: 125px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 #gallery-modal .modal-footer {

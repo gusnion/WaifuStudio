@@ -6135,6 +6135,23 @@ class GalleryUiPhase3Tests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, css)
 
+    def test_galeria_layout_inmutable_full_width(self):
+        css = self.get_static_css()
+        for marker in (
+            "#panel-gallery",
+            ".gallery-pagination-bar",
+            "scrollbar-gutter: stable;",
+            "overflow-y: scroll;",
+            "min-width: 125px;",
+            ".gallery-grid.hidden",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, css)
+
+        js = self.get_static_js()
+        self.assertIn('grid.classList.add("hidden");', js)
+        self.assertIn('grid.classList.remove("hidden");', js)
+
 
 if __name__ == "__main__":
     unittest.main()

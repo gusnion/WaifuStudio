@@ -147,12 +147,20 @@ main {
 .panel {
   display: none;
   height: 100%;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 100%;
   gap: 1rem;
   padding: 1rem;
 }
 
 .panel.active {
   display: flex;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 100%;
 }
 
 #panel-image.active,

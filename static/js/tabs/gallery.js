@@ -77,6 +77,7 @@ function renderGalleryTab() {
   const empty = $("gallery-empty");
   const gallery = state.galleryTab;
   grid.replaceChildren();
+  grid.scrollTop = 0;
   if (!gallery.items.length) {
     empty.textContent =
       gallery.kind === "video"
@@ -85,8 +86,10 @@ function renderGalleryTab() {
         ? "Sin imágenes."
         : "Sin generaciones.";
     empty.classList.remove("hidden");
+    grid.classList.add("hidden");
   } else {
     empty.classList.add("hidden");
+    grid.classList.remove("hidden");
   }
   for (const item of gallery.items) {
     const card = document.createElement("button");
