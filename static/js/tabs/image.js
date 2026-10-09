@@ -595,6 +595,21 @@ function initImageTab() {
       },
     });
   }
+
+  const catPrompting = $("image-cat-prompting");
+  const catConfig = $("image-cat-config");
+  if (catPrompting && catConfig) {
+    catPrompting.addEventListener("toggle", () => {
+      if (catPrompting.open) {
+        catConfig.open = false;
+      }
+    });
+    catConfig.addEventListener("toggle", () => {
+      if (catConfig.open) {
+        catPrompting.open = false;
+      }
+    });
+  }
 }
 
 export {

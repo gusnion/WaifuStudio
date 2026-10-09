@@ -4,37 +4,78 @@
  * Dependencias: static/css/base.css y static/css/components.css.
  */
 
-/* Panel Imagen: panel lateral en 2 columnas (1: generación, 2: prompt) */
-#panel-image.active {
-  grid-template-columns: minmax(620px, 780px) minmax(0, 1fr);
-}
-
+/* Panel Imagen: columna única canónica con acordeón PROMPTING / CONFIGURACIÓN */
 .controls.image-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.7rem;
-  align-items: start;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.image-controls .controls-column {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  align-self: stretch;
-  min-width: 0;
+  gap: 0.6rem;
+  height: 100%;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.35rem;
 }
 
-.image-controls .controls-column-primary {
-  overflow-y: auto;
-  padding-right: 0.3rem;
+.image-category-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #14161c;
+  margin-bottom: 0.65rem;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
 }
 
-.image-controls .controls-column-zones {
-  overflow-y: auto;
+.image-category-card[open] {
+  border-color: rgba(224, 86, 122, 0.45);
+}
+
+.image-category-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0.65rem 0.85rem !important;
+  background: #1c1f26 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  color: var(--text) !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  list-style: none !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.image-category-header::-webkit-details-marker {
+  display: none !important;
+}
+
+.image-category-card[open] > .image-category-header {
+  color: var(--accent) !important;
+  background: #232732 !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.image-category-header:hover {
+  background: #262b36 !important;
+  color: var(--accent) !important;
+}
+
+.category-indicator {
+  font-size: 0.72rem;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+
+.image-category-card[open] .category-indicator {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.image-category-body {
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .generate-block,
@@ -84,13 +125,7 @@
   }
 
   .controls.image-controls {
-    grid-template-columns: minmax(0, 1fr);
     height: auto;
-    overflow: visible;
-  }
-
-  .image-controls .controls-column-primary,
-  .image-controls .controls-column-zones {
     overflow: visible;
   }
 }
