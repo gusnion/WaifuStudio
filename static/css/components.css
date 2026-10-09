@@ -1343,6 +1343,29 @@ input[type="checkbox"] {
   overflow-y: auto !important;
   padding-right: 0.4rem !important;
   min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--border) transparent !important;
+  -ms-overflow-style: auto !important;
+}
+
+.tab-sidebar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+}
+
+.tab-sidebar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.tab-sidebar::-webkit-scrollbar-thumb {
+  background: var(--border) !important;
+  border-radius: 4px !important;
+}
+
+.tab-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent) !important;
 }
 
 /* Módulo Superior de Generación: Permanente e Independiente del Scroll en Todas las Pestañas */
