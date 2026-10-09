@@ -113,6 +113,10 @@ function option(value, text) {
   return el;
 }
 
+function emptyOption(text = "—") {
+  return option("", text);
+}
+
 function setSelectValue(select, value) {
   if (!value) {
     return;
@@ -284,6 +288,22 @@ function initPanelSections() {
   }
 }
 
+function getThumbsCapacity(containerOrId, minWidth = 95, gap = 8) {
+  const el = typeof containerOrId === "string" ? $(containerOrId) : containerOrId;
+  let width = 0;
+  if (el) {
+    width = el.clientWidth || (el.getBoundingClientRect ? el.getBoundingClientRect().width : 0) || 0;
+    if (!width && el.parentElement) {
+      width = el.parentElement.clientWidth || (el.parentElement.getBoundingClientRect ? el.parentElement.getBoundingClientRect().width : 0) || 0;
+    }
+  }
+  if (!width && typeof window !== "undefined") {
+    width = Math.max(400, (window.innerWidth || 1200) - 440);
+  }
+  const count = Math.floor((width + gap) / (minWidth + gap));
+  return Math.max(4, Math.min(24, count || 8));
+}
+
 export {
   $,
   on,
@@ -298,6 +318,7 @@ export {
   setUpscaleProgress,
   refFilename,
   option,
+  emptyOption,
   setSelectValue,
   readFileBase64,
   readStoredSeedRandom,
@@ -312,6 +333,7 @@ export {
   downloadUrlFor,
   writeClipboard,
   toggleThumbs,
+  getThumbsCapacity,
   panelSectionKey,
   readStoredSection,
   storeSection,

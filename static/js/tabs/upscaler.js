@@ -16,6 +16,7 @@ import {
   readFileBase64,
   setProgress,
   setUpscaleStatus,
+  getThumbsCapacity,
 } from "../dom.js";
 import { api, postJson, pollJob, cancelJob } from "../api.js";
 import { openLightbox } from "../components/lightbox.js";
@@ -485,15 +486,17 @@ function renderUpscaleGallery() {
 async function loadUpscaleGallery(page = 1) {
   const kind = upscaleSourceKind();
   const gallery = state.upscaleGallery;
+  const pageSize = getThumbsCapacity("upscale-gallery-thumbs");
+  gallery.pageSize = pageSize;
   const wanted = Math.max(1, Math.trunc(Number(page)) || 1);
-  const offset = (wanted - 1) * UPSCALE_GALLERY_PAGE_SIZE;
+  const offset = (wanted - 1) * pageSize;
   const data = await api(
-    `/api/gallery?kind=${kind}&limit=${UPSCALE_GALLERY_PAGE_SIZE}&offset=${offset}`
+    `/api/gallery?kind=${kind}&limit=${pageSize}&offset=${offset}`
   );
   const items = data.items || [];
   const count = Number(data.count);
   const total = Number.isFinite(count) && count > 0 ? count : items.length;
-  gallery.total = Math.max(1, Math.ceil(total / UPSCALE_GALLERY_PAGE_SIZE));
+  gallery.total = Math.max(1, Math.ceil(total / pageSize));
   if (wanted > gallery.total) {
     return await loadUpscaleGallery(gallery.total);
   }

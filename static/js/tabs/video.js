@@ -22,6 +22,7 @@ import {
   toggleThumbs,
   setSelectValue,
   setVideoProgress,
+  getThumbsCapacity,
 } from "../dom.js";
 import { api, postJson, pollJob, cancelJob } from "../api.js";
 import {
@@ -148,16 +149,18 @@ function renderVideoViewer() {
 
 async function loadVideoViewer({ selectNewest = false } = {}) {
   const viewer = state.videoViewer;
+  const pageSize = getThumbsCapacity("video-thumbs");
+  viewer.pageSize = pageSize;
   viewer.page = Math.max(1, viewer.page);
-  const offset = (viewer.page - 1) * VIDEO_PAGE_SIZE;
+  const offset = (viewer.page - 1) * pageSize;
   try {
     const data = await api(
-      `/api/gallery?kind=video&limit=${VIDEO_PAGE_SIZE}&offset=${offset}`
+      `/api/gallery?kind=video&limit=${pageSize}&offset=${offset}`
     );
     const raw = data.items || [];
     const count = Number(data.count);
     const total = Number.isFinite(count) && count > 0 ? count : raw.length;
-    viewer.total = Math.max(1, Math.ceil(total / VIDEO_PAGE_SIZE));
+    viewer.total = Math.max(1, Math.ceil(total / pageSize));
     if (viewer.page > viewer.total) {
       viewer.page = viewer.total;
       return await loadVideoViewer({ selectNewest });

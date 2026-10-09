@@ -49,9 +49,18 @@ function switchTab(tab) {
   if (test) {
     initTestLab();
   }
+  if (image) {
+    loadImageViewer().catch((error) => setStatus(error.message, true));
+  }
+  if (video) {
+    loadVideoViewer().catch((error) => setVideoStatus(error.message, true));
+  }
+  if (editor) {
+    loadEditorGallery(state.editorGallery.page || 1).catch((error) => setEditorStatus(error.message, true));
+  }
   if (upscaler) {
     applyUpscaleKind();
-    loadUpscaleGallery(1).catch((error) => setUpscaleStatus(error.message, true));
+    loadUpscaleGallery(state.upscaleGallery.page || 1).catch((error) => setUpscaleStatus(error.message, true));
   }
   if (gallery && !state.galleryTab.items.length) {
     loadGalleryTab(1).catch((error) => setStatus(error.message, true));
@@ -198,6 +207,22 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+let resizeThumbsTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeThumbsTimer);
+  resizeThumbsTimer = setTimeout(() => {
+    if ($("panel-image")?.classList.contains("active")) {
+      loadImageViewer().catch(() => {});
+    } else if ($("panel-video")?.classList.contains("active")) {
+      loadVideoViewer().catch(() => {});
+    } else if ($("panel-editor")?.classList.contains("active")) {
+      loadEditorGallery(state.editorGallery.page || 1).catch(() => {});
+    } else if ($("panel-upscaler")?.classList.contains("active")) {
+      loadUpscaleGallery(state.upscaleGallery.page || 1).catch(() => {});
+    }
+  }, 250);
+});
 
 export {
   switchTab,

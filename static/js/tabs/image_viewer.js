@@ -4,7 +4,7 @@
 // Dependencias: static/js/state.js y static/js/dom.js.
 
 import { state, IMAGE_PAGE_SIZE } from "../state.js";
-import { $, on, setStatus, formatGalleryDate, isVideoUrl, downloadUrlFor, toggleThumbs } from "../dom.js";
+import { $, on, setStatus, formatGalleryDate, isVideoUrl, downloadUrlFor, toggleThumbs, getThumbsCapacity } from "../dom.js";
 import { api } from "../api.js";
 import { openLightbox } from "../components/lightbox.js";
 import { setImageCompareSlot2, applyImageCompare, imageCompareActive, setImageCompareEnabled } from "../components/compare.js";
@@ -146,16 +146,18 @@ function renderImageViewer() {
 
 async function loadImageViewer({ selectNewest = false } = {}) {
   const viewer = state.imageViewer;
+  const pageSize = getThumbsCapacity("image-thumbs");
+  viewer.pageSize = pageSize;
   viewer.page = Math.max(1, viewer.page);
-  const offset = (viewer.page - 1) * IMAGE_PAGE_SIZE;
+  const offset = (viewer.page - 1) * pageSize;
   try {
     const data = await api(
-      `/api/gallery?kind=image&limit=${IMAGE_PAGE_SIZE}&offset=${offset}`
+      `/api/gallery?kind=image&limit=${pageSize}&offset=${offset}`
     );
     const raw = data.items || [];
     const count = Number(data.count);
     const total = Number.isFinite(count) && count > 0 ? count : raw.length;
-    viewer.total = Math.max(1, Math.ceil(total / IMAGE_PAGE_SIZE));
+    viewer.total = Math.max(1, Math.ceil(total / pageSize));
     if (viewer.page > viewer.total) {
       viewer.page = viewer.total;
       return await loadImageViewer({ selectNewest });

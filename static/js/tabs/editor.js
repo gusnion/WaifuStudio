@@ -25,6 +25,7 @@ import {
   setProgress,
   refFilename,
   downloadUrlFor,
+  getThumbsCapacity,
 } from "../dom.js";
 import { api, postJson, pollJob } from "../api.js";
 import { openLightbox } from "../components/lightbox.js";
@@ -409,16 +410,18 @@ function renderEditorGallery() {
 
 async function loadEditorGallery(page = 1) {
   const viewer = state.editorGallery;
+  const pageSize = getThumbsCapacity("editor-gallery-thumbs");
+  viewer.pageSize = pageSize;
   const wanted = Math.max(1, Math.trunc(Number(page)) || 1);
-  const offset = (wanted - 1) * EDITOR_GALLERY_PAGE_SIZE;
+  const offset = (wanted - 1) * pageSize;
   try {
     const data = await api(
-      `/api/gallery?kind=image&limit=${EDITOR_GALLERY_PAGE_SIZE}&offset=${offset}`
+      `/api/gallery?kind=image&limit=${pageSize}&offset=${offset}`
     );
     const items = data.items || [];
     const count = Number(data.count);
     const total = Number.isFinite(count) && count > 0 ? count : items.length;
-    viewer.total = Math.max(1, Math.ceil(total / EDITOR_GALLERY_PAGE_SIZE));
+    viewer.total = Math.max(1, Math.ceil(total / pageSize));
     if (wanted > viewer.total) {
       return await loadEditorGallery(viewer.total);
     }

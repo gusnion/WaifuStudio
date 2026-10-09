@@ -167,8 +167,9 @@
 
 .image-thumbs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 120px));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+  width: 100%;
+  box-sizing: border-box;
   gap: 0.5rem;
   margin-top: 0.6rem;
   flex: 0 0 auto;

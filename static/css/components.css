@@ -1596,3 +1596,15 @@ input[type="checkbox"] {
 .uv-thumb-item.active {
   border-color: var(--accent);
 }
+
+/* Miniaturas fluidas en todas las pestañas (100% ancho, auto-fill sin hueco negro) */
+.image-thumbs,
+.video-thumbs {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)) !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  gap: 0.5rem !important;
+  margin-top: 0.6rem !important;
+  flex: 0 0 auto !important;
+}
