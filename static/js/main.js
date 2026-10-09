@@ -19,7 +19,7 @@ import { initImageViewer, loadImageViewer } from "./tabs/image_viewer.js";
 import { initVideoTab, applyVideoEngine, loadVideoViewer } from "./tabs/video.js";
 import { initVideoH3, loadH3Profiles } from "./tabs/video_h3.js";
 import { initEditorTab, updateEditorControls, updateEditorMode, loadEditorStatus, loadEditorGallery } from "./tabs/editor.js";
-import { initUpscalerTab, applyUpscaleKind, loadUpscaleGallery, loadUpscaleModels } from "./tabs/upscaler.js";
+import { initUpscalerTab, applyUpscaleKind, loadUpscaleGallery, loadUpscaleModels, upscaleCompareActive, setUpscaleCompareActive } from "./tabs/upscaler.js";
 import { initGalleryTab, loadGalleryTab, closeGalleryModal, closeCustomTagsModal } from "./tabs/gallery.js";
 import { initHeader } from "./components/header.js";
 import { initTooltipHelp } from "./components/tooltip_help.js";
@@ -82,6 +82,7 @@ const REQUIRED_IDS = [
   "upscale-model-field", "upscale-model", "upscale-model-note", "upscale-ckpt-field", "upscale-ckpt", "upscale-ckpt-note",
   "upscale-multiplier-field", "upscale-multiplier", "btn-upscale", "btn-upscale-cancel", "upscale-status", "upscale-progress",
   "upscale-progress-fill", "upscale-progress-text", "upscale-preview", "upscale-preview-img", "upscale-preview-video", "upscale-preview-empty",
+  "btn-upscale-compare", "upscale-compare", "upscale-compare-stage", "upscale-compare-before", "upscale-compare-after", "upscale-compare-handle", "upscale-compare-ratio",
   "btn-toggle-upscale-thumbs", "tab-gallery", "panel-gallery", "gallery-filter", "gallery-tag-search", "btn-gallery-clean-failed",
   "btn-manage-custom-tags", "btn-gallery-refresh", "gallery-grid", "gallery-empty", "gallery-prev", "gallery-info",
   "gallery-next", "gallery-modal", "gallery-modal-media", "gallery-modal-info", "gallery-modal-prompt", "btn-gallery-use-ref",
@@ -128,6 +129,7 @@ function bind() {
       closeLightbox(); closeGalleryModal(); closeCustomTagsModal();
       if (imageCompareActive) setImageCompareEnabled(false);
       if (editorCompareActive || editorCompareSelecting) setEditorCompareEnabled(false);
+      if (upscaleCompareActive) setUpscaleCompareActive(false);
       closeVisionModal(); closePrepromptModal(); closeLoraLibrary(); closeLoraModal();
       const trainModal = $("oc-train-modal");
       if (trainModal && !trainModal.classList.contains("hidden")) { closeTrainModal(); return; }

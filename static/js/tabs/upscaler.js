@@ -107,9 +107,13 @@ function selectedUpscaleSource() {
   );
 }
 
-function clearUpscaleLocalFile() {
+function clearUpscaleLocalFile(revoke = true) {
   if (state.upscaleLocalFile) {
-    URL.revokeObjectURL(state.upscaleLocalFile.url);
+    if (revoke && state.upscaleLocalFile.url !== state.upscaleLastSourceUrl) {
+      try {
+        URL.revokeObjectURL(state.upscaleLocalFile.url);
+      } catch (_err) {}
+    }
     state.upscaleLocalFile = null;
   }
   const input = $("upscale-file");
@@ -118,19 +122,301 @@ function clearUpscaleLocalFile() {
   }
 }
 
+function resolveItemImageUrl(item) {
+  if (!item) return null;
+  const viewUrl = imageViewUrl(item);
+  if (viewUrl) return viewUrl;
+  const urls = (item && item.urls) || [];
+  if (urls.length && !isVideoUrl(urls[0])) return urls[0];
+  const outs = (item && item.outputs) || [];
+  if (outs.length && outs[0] && !isVideoUrl(outs[0])) {
+    return `/media/${item.id}/${outs[0]}`;
+  }
+  return null;
+}
+
+let upscaleCompareActive = false;
+let upscaleCompareRatio = 0.5;
+let upscaleCompareDragging = false;
+
+function isUpscaleCompareActive() {
+  return upscaleCompareActive;
+}
+
+function applyUpscaleCompare() {
+  const compare = $("upscale-compare");
+  const after = $("upscale-compare-after");
+  const handle = $("upscale-compare-handle");
+  const label = $("upscale-compare-ratio");
+  if (!compare || !after || !handle) return;
+  const percent = Math.round(upscaleCompareRatio * 100);
+  after.style.clipPath = `inset(0 0 0 ${percent}%)`;
+  handle.style.left = `${percent}%`;
+  handle.setAttribute("aria-valuenow", String(percent));
+  if (label) label.textContent = `${percent}%`;
+}
+
+function setUpscaleCompareImages(beforeUrl, afterUrl) {
+  state.upscaleCompareBeforeUrl = beforeUrl || null;
+  state.upscaleCompareAfterUrl = afterUrl || null;
+  const beforeImg = $("upscale-compare-before");
+  const afterImg = $("upscale-compare-after");
+  if (beforeImg && beforeUrl) {
+    beforeImg.src = beforeUrl;
+  }
+  if (afterImg && afterUrl) {
+    afterImg.src = afterUrl;
+  }
+  applyUpscaleCompare();
+}
+
+function getUpscaleCompareUrls() {
+  if (upscaleSourceKind() === "video") {
+    return { canCompare: false, before: null, after: null };
+  }
+
+  const local = state.upscaleLocalFile;
+  const item = local ? null : selectedUpscaleSource();
+  const currentUrl = local ? local.url : resolveItemImageUrl(item);
+
+  if (!currentUrl) {
+    return { canCompare: false, before: null, after: null };
+  }
+
+  // Caso 1: Ítem seleccionado de galería con referencia de origen (generación escalada previa)
+  if (item && item.params && item.params.source_gen != null) {
+    const sourceGen = item.params.source_gen;
+    const sourceFile = item.params.source_file;
+    let sourceUrl = null;
+    if (sourceFile) {
+      sourceUrl = `/media/${sourceGen}/${sourceFile}`;
+    } else {
+      const srcItem = (state.upscaleSources || []).find((s) => s.id === sourceGen);
+      sourceUrl = srcItem
+        ? resolveItemImageUrl(srcItem)
+        : `/media/${sourceGen}/${(item.outputs && item.outputs[0]) || ""}`;
+    }
+    const resultUrl = resolveItemImageUrl(item);
+    if (sourceUrl && resultUrl && sourceUrl !== resultUrl) {
+      return {
+        canCompare: true,
+        before: sourceUrl,
+        after: resultUrl,
+        label: `Original (#${sourceGen}) vs Escalada (#${item.id})`,
+      };
+    }
+  }
+
+  // Caso 2: Trabajo de upscale completado en la sesión actual asociado al ítem o URL activa
+  if (
+    state.upscaleLastSourceUrl &&
+    state.upscaleLastResultUrl &&
+    state.upscaleLastSourceUrl !== state.upscaleLastResultUrl
+  ) {
+    const isMatchingResult =
+      (item && item.id === state.upscaleLastResultId) ||
+      currentUrl === state.upscaleLastResultUrl ||
+      currentUrl === state.upscaleLastSourceUrl;
+    if (isMatchingResult) {
+      return {
+        canCompare: true,
+        before: state.upscaleLastSourceUrl,
+        after: state.upscaleLastResultUrl,
+        label: "Origen vs Resultado escalado",
+      };
+    }
+  }
+
+  // Caso 3: Comparación interactiva con Slot 2 asignado
+  if (state.upscaleCompareSlot2 && state.upscaleCompareSlot2 !== currentUrl) {
+    return {
+      canCompare: true,
+      before: currentUrl,
+      after: state.upscaleCompareSlot2,
+      label: "Comparación interactiva",
+    };
+  }
+
+  // Caso 4: Contraste con otra imagen disponible en la galería o fuentes
+  const otherItem =
+    (state.upscaleGallery.items || []).find(
+      (it) =>
+        it &&
+        (item ? it.id !== item.id : true) &&
+        resolveItemImageUrl(it) &&
+        resolveItemImageUrl(it) !== currentUrl
+    ) ||
+    (state.upscaleSources || []).find(
+      (it) =>
+        it &&
+        (item ? it.id !== item.id : true) &&
+        resolveItemImageUrl(it) &&
+        resolveItemImageUrl(it) !== currentUrl
+    );
+
+  if (otherItem) {
+    const otherUrl = resolveItemImageUrl(otherItem);
+    return {
+      canCompare: true,
+      before: currentUrl,
+      after: otherUrl,
+      label: `#${item ? item.id : "local"} vs #${otherItem.id}`,
+    };
+  }
+
+  // Caso 5: Solo hay una imagen en el visor (habilita modo comparación a la espera de otra o como Slot 1)
+  return {
+    canCompare: true,
+    before: currentUrl,
+    after: currentUrl,
+    label: "Selecciona otra miniatura para contrastar",
+    solo: true,
+  };
+}
+
+function updateUpscaleCompare() {
+  const btnCompare = $("btn-upscale-compare");
+  if (!btnCompare) return;
+
+  if (upscaleSourceKind() === "video") {
+    if (upscaleCompareActive) {
+      setUpscaleCompareActive(false);
+    }
+    btnCompare.disabled = true;
+    btnCompare.textContent = "Comparar";
+    btnCompare.setAttribute("aria-pressed", "false");
+    return;
+  }
+
+  const isVideo = upscaleSourceKind() === "video";
+  const local = !isVideo ? state.upscaleLocalFile : null;
+  const item = local ? null : selectedUpscaleSource();
+  const currentUrl = local ? local.url : resolveItemImageUrl(item);
+  const hasImage = Boolean(currentUrl);
+
+  if (upscaleCompareActive) {
+    btnCompare.disabled = false;
+    btnCompare.textContent = "Cerrar comparación";
+    btnCompare.setAttribute("aria-pressed", "true");
+    const urls = getUpscaleCompareUrls();
+    if (urls.before && urls.after) {
+      setUpscaleCompareImages(urls.before, urls.after);
+    }
+  } else {
+    btnCompare.disabled = !hasImage;
+    btnCompare.textContent = "Comparar";
+    btnCompare.setAttribute("aria-pressed", "false");
+  }
+}
+
+function updateUpscaleActions() {
+  updateUpscaleCompare();
+}
+
+function setUpscaleCompareActive(active) {
+  upscaleCompareActive = Boolean(active);
+  state.upscaleCompareActive = upscaleCompareActive;
+  const compare = $("upscale-compare");
+  const img = $("upscale-preview-img");
+  const btnCompare = $("btn-upscale-compare");
+
+  if (upscaleCompareActive) {
+    const urls = getUpscaleCompareUrls();
+    if (!urls.canCompare || !urls.before) {
+      upscaleCompareActive = false;
+      state.upscaleCompareActive = false;
+      return;
+    }
+    setUpscaleCompareImages(urls.before, urls.after || urls.before);
+    if (compare) compare.classList.remove("hidden");
+    if (img) img.classList.add("hidden");
+    $("upscale-preview").classList.add("has-image");
+    if (btnCompare) {
+      btnCompare.textContent = "Cerrar comparación";
+      btnCompare.setAttribute("aria-pressed", "true");
+      btnCompare.disabled = false;
+    }
+    if (urls.solo) {
+      setUpscaleStatus("Selecciona otra miniatura de la galería o carga un archivo para comparar");
+    } else if (urls.label) {
+      setUpscaleStatus(`Comparando: ${urls.label}`);
+    }
+    applyUpscaleCompare();
+  } else {
+    if (compare) compare.classList.add("hidden");
+    state.upscaleCompareSlot2 = null;
+    updateUpscaleSourceView();
+    if (btnCompare) {
+      btnCompare.textContent = "Comparar";
+      btnCompare.setAttribute("aria-pressed", "false");
+    }
+    updateUpscaleActions();
+  }
+}
+
 function clearUpscaleSelection() {
-  clearUpscaleLocalFile();
+  clearUpscaleLocalFile(true);
   state.upscaleSources = [];
   state.upscaleSourceId = null;
   state.upscaleGallery.page = 1;
   state.upscaleGallery.items = [];
+  state.upscaleCompareSlot2 = null;
+  state.upscaleLastSourceUrl = null;
+  state.upscaleLastResultUrl = null;
+  state.upscaleLastResultId = null;
+  if (upscaleCompareActive) {
+    setUpscaleCompareActive(false);
+  }
+  updateUpscaleActions();
 }
 
 function selectUpscaleSource(id) {
-  clearUpscaleLocalFile();
+  if (upscaleCompareActive) {
+    const clickedItem = (state.upscaleSources || []).find((s) => s.id === Number(id));
+    if (clickedItem) {
+      if (clickedItem.params && clickedItem.params.source_gen != null) {
+        state.upscaleSourceId = Number(id);
+        state.upscaleCompareSlot2 = null;
+        const sourceGen = clickedItem.params.source_gen;
+        const sourceFile = clickedItem.params.source_file;
+        let beforeUrl = null;
+        if (sourceFile) {
+          beforeUrl = `/media/${sourceGen}/${sourceFile}`;
+        } else {
+          const srcItem = (state.upscaleSources || []).find((s) => s.id === sourceGen);
+          beforeUrl = srcItem ? resolveItemImageUrl(srcItem) : null;
+        }
+        const afterUrl = resolveItemImageUrl(clickedItem);
+        if (beforeUrl && afterUrl && beforeUrl !== afterUrl) {
+          setUpscaleCompareImages(beforeUrl, afterUrl);
+          setUpscaleStatus(`Comparando original (#${sourceGen}) vs escalada (#${clickedItem.id})`);
+          renderUpscaleGallery();
+          return;
+        }
+      }
+
+      const clickedUrl = resolveItemImageUrl(clickedItem);
+      if (clickedUrl) {
+        state.upscaleCompareSlot2 = clickedUrl;
+        const currentUrls = getUpscaleCompareUrls();
+        const beforeUrl = currentUrls.before || clickedUrl;
+        setUpscaleCompareImages(beforeUrl, clickedUrl);
+        setUpscaleStatus(`Comparando con generación #${clickedItem.id}`);
+        renderUpscaleGallery();
+        return;
+      }
+    }
+  }
+  clearUpscaleLocalFile(true);
   state.upscaleSourceId = id == null ? null : Number(id);
+  state.upscaleCompareSlot2 = null;
   renderUpscaleGallery();
   updateUpscaleSourceView();
+}
+
+function selectUpscaleGalleryItem(itemOrId) {
+  const id = typeof itemOrId === "object" && itemOrId !== null ? itemOrId.id : itemOrId;
+  return selectUpscaleSource(id);
 }
 
 function renderUpscaleGallery() {
@@ -220,6 +506,7 @@ async function loadUpscaleGallery(page = 1) {
   state.upscaleSources = [...merged.values()].sort((a, b) => b.id - a.id);
   renderUpscaleGallery();
   updateUpscaleSourceView();
+  updateUpscaleActions();
 }
 
 async function useUpscaleLocalFile(file) {
@@ -231,9 +518,7 @@ async function useUpscaleLocalFile(file) {
     state.localFilesOriginalPaths.set(file.name, originalPath);
   }
   const b64 = await readFileBase64(file);
-  if (state.upscaleLocalFile) {
-    URL.revokeObjectURL(state.upscaleLocalFile.url);
-  }
+  clearUpscaleLocalFile(true);
   state.upscaleLocalFile = {
     name: file.name,
     originalPath,
@@ -241,6 +526,10 @@ async function useUpscaleLocalFile(file) {
     url: URL.createObjectURL(file),
   };
   state.upscaleSourceId = null;
+  state.upscaleCompareSlot2 = null;
+  if (upscaleCompareActive) {
+    setUpscaleCompareActive(false);
+  }
   renderUpscaleGallery();
   updateUpscaleSourceView();
   setUpscaleStatus(`Archivo local: ${file.name}`);
@@ -250,52 +539,70 @@ function updateUpscaleSourceView() {
   const isVideo = upscaleSourceKind() === "video";
   const local = !isVideo ? state.upscaleLocalFile : null;
   const item = local ? null : selectedUpscaleSource();
-  const url = local ? local.url : isVideo ? videoViewUrl(item) : imageViewUrl(item);
+  const url = local ? local.url : isVideo ? videoViewUrl(item) : resolveItemImageUrl(item);
   const img = $("upscale-preview-img");
   const video = $("upscale-preview-video");
   const empty = $("upscale-preview-empty");
-  if (url && isVideo) {
-    if (video.getAttribute("src") !== url) {
-      video.pause();
-      video.setAttribute("src", url);
-      video.load();
-    }
-    video.classList.remove("hidden");
+  const compare = $("upscale-compare");
+
+  if (upscaleCompareActive && !isVideo) {
+    if (compare) compare.classList.remove("hidden");
     img.removeAttribute("src");
     img.alt = "";
     img.classList.add("hidden");
-    empty.classList.add("hidden");
-  } else if (url) {
-    img.src = url;
-    img.alt = local
-      ? local.name
-      : item.prompt
-      ? `#${item.id} ${item.prompt}`
-      : `Generación #${item.id}`;
-    img.classList.remove("hidden");
     video.pause();
     video.removeAttribute("src");
     video.classList.add("hidden");
     empty.classList.add("hidden");
   } else {
-    img.removeAttribute("src");
-    img.alt = "";
-    img.classList.add("hidden");
-    video.pause();
-    video.removeAttribute("src");
-    video.classList.add("hidden");
-    empty.classList.remove("hidden");
-    if (item) {
-      empty.textContent =
-        item.status === "error" ? "Origen sin resultado (error)" : "Origen sin resultado";
+    if (compare) compare.classList.add("hidden");
+    if (url && isVideo) {
+      if (video.getAttribute("src") !== url) {
+        video.pause();
+        video.setAttribute("src", url);
+        video.load();
+      }
+      video.classList.remove("hidden");
+      img.removeAttribute("src");
+      img.alt = "";
+      img.classList.add("hidden");
+      empty.classList.add("hidden");
+    } else if (url) {
+      img.src = url;
+      img.alt = local
+        ? local.name
+        : item.prompt
+        ? `#${item.id} ${item.prompt}`
+        : `Generación #${item.id}`;
+      img.classList.remove("hidden");
+      video.pause();
+      video.removeAttribute("src");
+      video.classList.add("hidden");
+      empty.classList.add("hidden");
     } else {
-      empty.textContent = isVideo
-        ? "Sin generaciones de vídeo"
-        : "Sin generaciones de imagen";
+      img.removeAttribute("src");
+      img.alt = "";
+      img.classList.add("hidden");
+      video.pause();
+      video.removeAttribute("src");
+      video.classList.add("hidden");
+      empty.classList.remove("hidden");
+      if (item) {
+        empty.textContent =
+          item.status === "error" ? "Origen sin resultado (error)" : "Origen sin resultado";
+      } else {
+        empty.textContent = isVideo
+          ? "Sin generaciones de vídeo"
+          : "Sin generaciones de imagen";
+      }
     }
   }
-  $("upscale-preview").classList.toggle("has-image", Boolean(url) && !isVideo);
-  $("upscale-preview").title = isVideo ? "Origen de vídeo" : "Ampliar imagen";
+  $("upscale-preview").classList.toggle("has-image", (Boolean(url) || upscaleCompareActive) && !isVideo);
+  $("upscale-preview").title = isVideo
+    ? "Origen de vídeo"
+    : upscaleCompareActive
+    ? "Comparación antes/después"
+    : "Ampliar imagen";
   const baseLabel = isVideo ? "Vídeo de origen" : "Imagen de origen";
   if (local) {
     $("upscale-source-label").textContent = `${baseLabel} — Archivo local: ${local.name}`;
@@ -316,12 +623,17 @@ function updateUpscaleSourceView() {
     : isVideo
     ? "Elige una miniatura de la galería o genera un vídeo en la pestaña Vídeo"
     : "Elige una miniatura o un archivo local";
+
+  updateUpscaleActions();
 }
 
 function applyUpscaleKind() {
   const kind = upscaleKind();
   const isFps = kind === "fps";
   const isVideo = kind !== "image";
+  if (isVideo && upscaleCompareActive) {
+    setUpscaleCompareActive(false);
+  }
   $("upscale-model-field").classList.toggle("hidden", isFps);
   $("upscale-ckpt-field").classList.toggle("hidden", !isFps);
   $("upscale-multiplier-field").classList.toggle("hidden", !isFps);
@@ -330,12 +642,30 @@ function applyUpscaleKind() {
   $("upscale-sharpen-field").classList.toggle("hidden", isVideo);
   $("btn-upscale").textContent = isFps ? "Interpolar" : "Escalar";
   updateUpscaleSourceView();
+  updateUpscaleActions();
 }
 
-async function finishUpscale() {
+async function finishUpscale(job) {
   await reloadImageViewerFirstPage();
   state.upscaleSourceId = state.imageViewer.selectedId;
+  const sourceBeforeUrl = state.upscaleLocalFile ? state.upscaleLocalFile.url : (state.upscaleLastSourceUrl || null);
+  if (state.upscaleLocalFile) {
+    state.upscaleLocalFile = null;
+    const input = $("upscale-file");
+    if (input) input.value = "";
+  }
   await loadUpscaleGallery(1);
+  const resultItem = (state.upscaleGallery.items || []).find((it) => it.id === state.upscaleSourceId) || (state.upscaleGallery.items || [])[0];
+  const resultUrl = resultItem ? resolveItemImageUrl(resultItem) : (job && job.outputs && job.outputs[0] && job.outputs[0].url);
+  if (resultUrl) {
+    state.upscaleLastResultUrl = resultUrl;
+    state.upscaleLastResultId = resultItem ? resultItem.id : state.upscaleSourceId;
+    if (sourceBeforeUrl) {
+      state.upscaleLastSourceUrl = sourceBeforeUrl;
+    }
+  }
+  updateUpscaleSourceView();
+  updateUpscaleActions();
 }
 
 async function finishVideoUpscale() {
@@ -412,6 +742,10 @@ async function generateUpscale() {
     } else {
       payload.source_gen = source.id;
     }
+    const sourceBeforeUrl = local ? local.url : resolveItemImageUrl(source);
+    state.upscaleLastSourceUrl = sourceBeforeUrl;
+    state.upscaleLastResultUrl = null;
+    state.upscaleLastResultId = null;
   }
   state.busy = true;
   $("btn-upscale").disabled = true;
@@ -463,61 +797,19 @@ function initUpscalerTab() {
   on("btn-upscale", "click", generateUpscale);
   on("btn-upscale-cancel", "click", cancelJob);
   on("upscale-preview", "click", () => {
+    if (upscaleCompareActive) {
+      return;
+    }
     const item = selectedUpscaleSource();
-    const url = imageViewUrl(item);
+    const url = resolveItemImageUrl(item);
     if (url) {
       openLightbox(url, `Generación #${item.id}`);
     }
   });
 
-  // M18-11: Comparador interactivo en Upscaler
-  let upscaleCompareActive = false;
-  let upscaleCompareRatio = 0.5;
-  let upscaleCompareDragging = false;
-
-  const applyUpscaleCompare = () => {
-    const compare = $("upscale-compare");
-    const after = $("upscale-compare-after");
-    const handle = $("upscale-compare-handle");
-    const label = $("upscale-compare-ratio");
-    if (!compare || !after || !handle) return;
-    const percent = Math.round(upscaleCompareRatio * 100);
-    after.style.clipPath = `inset(0 0 0 ${percent}%)`;
-    handle.style.left = `${percent}%`;
-    handle.setAttribute("aria-valuenow", String(percent));
-    if (label) label.textContent = `${percent}%`;
-  };
-
-  const btnCompare = $("btn-upscale-compare");
-  if (btnCompare) {
-    btnCompare.addEventListener("click", () => {
-      upscaleCompareActive = !upscaleCompareActive;
-      const compare = $("upscale-compare");
-      const img = $("upscale-preview-img");
-      if (upscaleCompareActive) {
-        const isVideo = upscaleSourceKind() === "video";
-        const local = !isVideo ? state.upscaleLocalFile : null;
-        const item = local ? null : selectedUpscaleSource();
-        const sourceUrl = local ? local.url : isVideo ? videoViewUrl(item) : imageViewUrl(item);
-        const resultItem = (state.upscaleGallery.items || [])[0];
-        const resultUrl = resultItem ? imageViewUrl(resultItem) : sourceUrl;
-        const beforeImg = $("upscale-compare-before");
-        const afterImg = $("upscale-compare-after");
-        if (beforeImg) beforeImg.src = sourceUrl || "";
-        if (afterImg) afterImg.src = resultUrl || "";
-        if (compare) compare.classList.remove("hidden");
-        if (img) img.classList.add("hidden");
-        btnCompare.textContent = "Cerrar comparación";
-        btnCompare.setAttribute("aria-pressed", "true");
-        applyUpscaleCompare();
-      } else {
-        if (compare) compare.classList.add("hidden");
-        if (img) img.classList.remove("hidden");
-        btnCompare.textContent = "Comparar";
-        btnCompare.setAttribute("aria-pressed", "false");
-      }
-    });
-  }
+  on("btn-upscale-compare", "click", () => {
+    setUpscaleCompareActive(!upscaleCompareActive);
+  });
 
   const compareHandle = $("upscale-compare-handle");
   if (compareHandle) {
@@ -537,9 +829,12 @@ function initUpscalerTab() {
     compareHandle.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 && e.pointerType === "mouse") return;
       e.preventDefault();
+      e.stopPropagation();
       upscaleCompareDragging = true;
       if (compareHandle.setPointerCapture) {
-        compareHandle.setPointerCapture(e.pointerId);
+        try {
+          compareHandle.setPointerCapture(e.pointerId);
+        } catch (_err) {}
       }
     });
 
@@ -554,12 +849,47 @@ function initUpscalerTab() {
       applyUpscaleCompare();
     });
 
-    const endDrag = () => {
-      upscaleCompareDragging = false;
+    const endDrag = (e) => {
+      if (upscaleCompareDragging) {
+        upscaleCompareDragging = false;
+        if (compareHandle.releasePointerCapture && e && e.pointerId) {
+          try {
+            compareHandle.releasePointerCapture(e.pointerId);
+          } catch (_err) {}
+        }
+      }
     };
     compareHandle.addEventListener("pointerup", endDrag);
     compareHandle.addEventListener("pointercancel", endDrag);
   }
+
+  const compareStage = $("upscale-compare-stage");
+  if (compareStage) {
+    compareStage.addEventListener("pointerdown", (e) => {
+      if (e.target === compareHandle || (compareHandle && compareHandle.contains(e.target))) return;
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      const rect = compareStage.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      let ratio = (e.clientX - rect.left) / rect.width;
+      upscaleCompareRatio = Math.max(0.01, Math.min(0.99, ratio));
+      applyUpscaleCompare();
+    });
+  }
+
+  const compareEl = $("upscale-compare");
+  if (compareEl) {
+    compareEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    if (upscaleCompareActive) {
+      applyUpscaleCompare();
+    }
+  });
+
+  updateUpscaleActions();
 }
 
 export {
@@ -576,10 +906,18 @@ export {
   clearUpscaleLocalFile,
   clearUpscaleSelection,
   selectUpscaleSource,
+  selectUpscaleGalleryItem,
   renderUpscaleGallery,
   loadUpscaleGallery,
   useUpscaleLocalFile,
   updateUpscaleSourceView,
+  updateUpscaleActions,
+  updateUpscaleCompare,
+  getUpscaleCompareUrls,
+  resolveItemImageUrl,
+  setUpscaleCompareActive,
+  isUpscaleCompareActive,
+  upscaleCompareActive,
   applyUpscaleKind,
   finishUpscale,
   finishVideoUpscale,

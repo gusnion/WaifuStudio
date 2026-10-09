@@ -4435,6 +4435,59 @@ class EditorUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, script)
 
+    def test_upscaler_comparador_ui(self):
+        html = self.make_client().get("/").text
+        for marker in (
+            'id="btn-upscale-compare"',
+            'id="upscale-compare"',
+            'id="upscale-compare-stage"',
+            'id="upscale-compare-before"',
+            'id="upscale-compare-after"',
+            'id="upscale-compare-handle"',
+            'id="upscale-compare-ratio"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+        script = self.get_static_js()
+        for marker in (
+            "function updateUpscaleCompare",
+            "function updateUpscaleActions",
+            "function getUpscaleCompareUrls",
+            "function setUpscaleCompareActive",
+            "function setUpscaleCompareImages",
+            "function applyUpscaleCompare",
+            "function selectUpscaleGalleryItem",
+            'on("btn-upscale-compare", "click"',
+            '"btn-upscale-compare",',
+            '"upscale-compare",',
+            '"upscale-compare-stage",',
+            '"upscale-compare-before",',
+            '"upscale-compare-after",',
+            '"upscale-compare-handle",',
+            '"upscale-compare-ratio",',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, script)
+
+    def test_upscaler_comparador_logica_node(self):
+        import shutil
+        import subprocess
+        from pathlib import Path
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("node no disponible")
+        test_script = Path(__file__).resolve().parent / "test_upscale_compare_logic.mjs"
+        self.assertTrue(test_script.is_file(), f"No existe {test_script}")
+        res = subprocess.run(
+            [node_bin, str(test_script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+        )
+        self.assertEqual(res.returncode, 0, f"Fallo test de logica upscaler compare:\n{res.stdout}\n{res.stderr}")
+
 
 class LightboxUiStaticTests(ServerTestCase):
     def test_index_lightbox_sin_ids_duplicados(self):
