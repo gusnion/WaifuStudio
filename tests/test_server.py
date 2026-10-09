@@ -6205,6 +6205,25 @@ class GalleryUiPhase3Tests(ServerTestCase):
         self.assertIn('grid.classList.add("hidden");', js)
         self.assertIn('grid.classList.remove("hidden");', js)
 
+    def test_generate_block_permanente_en_todas_las_pestanas(self):
+        css = self.get_static_css()
+        for marker in (
+            ".generate-block",
+            "position: sticky",
+            "top: 0",
+            "background: var(--bg)",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, css)
+
+        html = self.make_client().get("/").text
+        # Verificar que generate-block está presente en las 4 pestañas de generación
+        self.assertIn('<button id="btn-generate"', html)
+        self.assertIn('<button id="btn-video-generate"', html)
+        self.assertIn('<button id="btn-editor-generate"', html)
+        self.assertIn('<button id="btn-upscale"', html)
+        self.assertEqual(html.count('class="generate-block"'), 4)
+
 
 if __name__ == "__main__":
     unittest.main()

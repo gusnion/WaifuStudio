@@ -284,17 +284,19 @@
 
     <section id="panel-video" class="panel tab-canonical-layout">
       <aside class="controls tab-sidebar">
-        <div class="generate-row">
-          <button id="btn-video-generate" class="primary" type="button">Generar video</button>
-          <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
-          <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
-        </div>
-        <p id="video-status" class="status">Listo</p>
-        <div id="video-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="video-progress-fill" class="progress-fill"></div>
+        <div class="generate-block">
+          <div class="generate-row">
+            <button id="btn-video-generate" class="primary" type="button">Generar video</button>
+            <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
+            <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
           </div>
-          <p id="video-progress-text" class="progress-text">paso -/-</p>
+          <p id="video-status" class="status">Listo</p>
+          <div id="video-progress" class="progress hidden">
+            <div class="progress-track">
+              <div id="video-progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="video-progress-text" class="progress-text">paso -/-</p>
+          </div>
         </div>
         <select id="video-engine" class="hidden" style="display: none;">
           <option value="h3" selected>MiniMax H3 FL2VA · 24 fps</option>
@@ -572,16 +574,18 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
 
     <section id="panel-editor" class="panel tab-canonical-layout">
       <aside class="controls tab-sidebar">
-        <div class="generate-row">
-          <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
-          <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
-        </div>
-        <p id="editor-status" class="status">Listo</p>
-        <div id="editor-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="editor-progress-fill" class="progress-fill"></div>
+        <div class="generate-block">
+          <div class="generate-row">
+            <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
+            <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
           </div>
-          <p id="editor-progress-text" class="progress-text">paso -/-</p>
+          <p id="editor-status" class="status">Listo</p>
+          <div id="editor-progress" class="progress hidden">
+            <div class="progress-track">
+              <div id="editor-progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="editor-progress-text" class="progress-text">paso -/-</p>
+          </div>
         </div>
         <p id="editor-banner" class="editor-banner">Comprobando Qwen-Image 2.1…</p>
         <label class="field">
@@ -673,16 +677,18 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
 
     <section id="panel-upscaler" class="panel tab-canonical-layout">
       <aside class="controls tab-sidebar">
-        <div class="generate-row">
-          <button id="btn-upscale" class="primary" type="button">Escalar</button>
-          <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
-        </div>
-        <p id="upscale-status" class="status">Listo</p>
-        <div id="upscale-progress" class="progress hidden">
-          <div class="progress-track">
-            <div id="upscale-progress-fill" class="progress-fill"></div>
+        <div class="generate-block">
+          <div class="generate-row">
+            <button id="btn-upscale" class="primary" type="button">Escalar</button>
+            <button id="btn-upscale-cancel" class="hidden" type="button">Cancelar</button>
           </div>
-          <p id="upscale-progress-text" class="progress-text">paso -/-</p>
+          <p id="upscale-status" class="status">Listo</p>
+          <div id="upscale-progress" class="progress hidden">
+            <div class="progress-track">
+              <div id="upscale-progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="upscale-progress-text" class="progress-text">paso -/-</p>
+          </div>
         </div>
         <label class="field">
           <span>Tipo de origen</span>

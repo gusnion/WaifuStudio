@@ -1345,6 +1345,23 @@ input[type="checkbox"] {
   min-width: 0 !important;
 }
 
+/* Módulo Superior de Generación: Permanente e Independiente del Scroll en Todas las Pestañas */
+.generate-block {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  background: var(--bg) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+  padding: 0.2rem 0 0.65rem 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0.4rem !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  flex-shrink: 0 !important;
+}
+
 .tab-viewport {
   flex: 1 1 0% !important;
   min-width: 0 !important;
