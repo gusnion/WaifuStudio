@@ -336,6 +336,15 @@ async def api_generate(request: Request, payload: dict = Body(...)) -> Any:
     params = payload.get("params") or {}
     if not isinstance(params, dict):
         return JSONResponse(status_code=400, content={"error": "params invalido"})
+    params = dict(params)
+    defaults = entry.defaults if isinstance(entry.defaults, dict) else {}
+    has_reference = bool(payload.get("ref_image_b64"))
+    for key in PARAM_KEYS:
+        if has_reference and key in ("width", "height"):
+            # img2img hereda el tamano de la referencia; no lo pisa el default.
+            continue
+        if params.get(key) is None and defaults.get(key) is not None:
+            params[key] = defaults[key]
     raw_loras = payload.get("loras")
     loras = validate_selection([] if raw_loras is None else raw_loras)
     size = payload.get("size")

@@ -270,7 +270,7 @@ The following items are planned or under evaluation. They are not promises, not 
 
 Version 2.0 is a stabilization and documentation pass over the original application. The remediation, test work and agent-oriented groundwork were continued with **DeepSeek V4.1 Flash 1017** using **DSH**.
 
-The offline suite currently runs 1,613 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
+The offline suite currently runs 1,614 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
 
 ## Support
 

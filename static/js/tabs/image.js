@@ -191,28 +191,17 @@ async function applyModel(modelId) {
   select.value =
     model.preprompt && data.names.includes(model.preprompt) ? model.preprompt : data.default;
   const defaults = model.defaults || {};
+  const hasDefaultSize = defaults.width != null && defaults.height != null;
   $("steps").value = defaults.steps != null ? defaults.steps : 30;
   $("cfg").value = defaults.cfg != null ? defaults.cfg : 6.0;
   setSelectValue($("sampler"), defaults.sampler_name || "euler");
   setSelectValue($("scheduler"), defaults.scheduler || "normal");
   setSizeFromDefaults(
-    defaults.width != null ? defaults.width : 1024,
-    defaults.height != null ? defaults.height : 1024
+    hasDefaultSize ? defaults.width : 1024,
+    hasDefaultSize ? defaults.height : 1024
   );
   if ($("seed")) {
     $("seed").value = defaults.seed != null ? defaults.seed : 42;
-  }
-  const sizeSquare = $("size-square");
-  if (sizeSquare) {
-    if (sizeSquare.type === "radio" || sizeSquare.type === "checkbox") {
-      sizeSquare.checked = true;
-    } else {
-      sizeSquare.value = "cuadro_hd";
-    }
-  }
-  const imageSize = $("image-size");
-  if (imageSize) {
-    imageSize.value = "1024x1024";
   }
   await loadLoras();
   if (!state.negativeTouched) {

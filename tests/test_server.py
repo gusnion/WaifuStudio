@@ -2123,6 +2123,21 @@ class GenerateSizeTests(ServerTestCase):
         self.assertEqual(job["params"]["height"], 1344)
         self.assertEqual(job["params"]["seed"], 1)
 
+    def test_defaults_del_modelo_se_aplican_si_faltan(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/generate", json=self.payload()
+        )
+        self.assertEqual(response.status_code, 200)
+        params = queue.jobs[0]["params"]
+        self.assertEqual(params["steps"], 20)
+        self.assertEqual(params["cfg"], 4.0)
+        self.assertEqual(params["sampler_name"], "euler")
+        self.assertEqual(params["scheduler"], "sgm_uniform")
+        self.assertEqual(params["width"], 320)
+        self.assertEqual(params["height"], 576)
+        self.assertEqual(params["seed"], 1)
+
     def test_size_desconocido_o_no_str_400(self):
         for size in ("no-existe", 5, ["cuadro_hd"], {"id": "cuadro_hd"}):
             with self.subTest(size=size):
