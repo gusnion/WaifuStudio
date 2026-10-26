@@ -10,17 +10,18 @@ Trabaja siempre en español, de forma concisa y directa, sin emojis, verificando
 
 ## 1. Qué es WaifuStudio y Arquitectura de Ejecución
 
-Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**, cero bundlers ni telemetría) que utiliza **ComfyUI v0.37.4** como engine desacoplado:
+Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**, cero bundlers ni telemetría) que utiliza **ComfyUI v0.42.5** como engine desacoplado:
 - **App Web**: `http://127.0.0.1:8765` (`WAIFU_APP_PORT`). Lanzador ligero en ventana dedicada (~100 MB RAM): `start.bat` (`scripts/open_window.ps1`).
 - **Engine ComfyUI**: `http://127.0.0.1:8288` (`WAIFU_COMFY_URL`), cola estrictamente monohilo FIFO (`app/jobs.py`) dimensionada para **1 GPU desde 8–12 GB VRAM (RTX 3060+)**.
 - **LLM / Visión en CPU (`:8290`)**: `Qwen3.5-9B NSFW Captioning v5` (`Q4_K_M` + `mmproj-Q8_0`) servido por `tools/llama.cpp/llama-server.exe` con `-ngl 0` (100% CPU, 0 VRAM). La app lo arranca y detiene automáticamente mediante `app/llm_server.py`.
-- **6 Pestañas**:
-  1. **Imagen**: Difusión **Anima 2.9B** (UNETs) y checkpoints **SDXL / Illustrious** con `LoraLoader` dual (`model+clip` para checkpoints, `LoraLoaderModelOnly` para Anima), auto-detección de arquitectura de LoRAs por tensores (`infer_lora_family`) e inyección automática de *triggers*.
-  2. **Vídeo**: **MiniMax H3 + VideoDeltaNet (VDN-H3 8 pasos)** en modos I2V, FLF2V, Ref2VA (hasta 4 referencias) y V2V (transferencia de movimiento).
+- **7 Pestañas**:
+  1. **Imagen**: checkpoints **Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok** (SDXL) con `LoraLoader` dual, auto-detección de arquitectura de LoRAs por tensores (`infer_lora_family`) e inyección automática de *triggers*.
+  2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos) y Quality (30 pasos), LightX2V y audio MMAudio.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
   4. **Upscaler**: **RealESRGAN x2/x4** (imagen/vídeo) + **RIFE** (interpolación FPS) con visor comparador interactivo antes/después.
   5. **Galería**: Persistencia en SQLite (`data/waifu.db`, modo WAL) y copias seguras (`shutil.copy2`) en `data/gallery/<id>/`.
-  6. **TEST**: Sandbox aislado para validación de componentes UI (`TabTemplate`, `ControlCards`, `UniversalViewer`, `ResolutionKit`, `TooltipHelp`).
+  6. **Timeline**: secuenciador de clips e imágenes con export MP4.
+  7. **Addons**: importa ZIP validado, instala desactivado y activa por slot exclusivo.
 
 ---
 
@@ -33,7 +34,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
    - Instala `uv` local en `tools\uv\` y CPython `3.12.12` portable en `python\cpython-3.12.12-windows-x86_64-none\`.
    - Verifica `.venv\pyvenv.cfg`: si existe un `.venv` previo apuntando a un Python del sistema del usuario, lo elimina y recrea herméticamente.
 2. **Orden de Dependencias GPU**:
-   - Clona `ComfyUI` (`v0.37.4`), instala los *custom nodes* (`ComfyUI-GGUF` fork *leejet*, `ComfyUI-KJNodes`, `ComfyUI-Frame-Interpolation`, `ComfyUI-ClipProj`, `ComfyUI-VDN-H3-Plus` y el nodo local `tools/custom_nodes/waifu_anima_patch`) junto con sus `requirements.txt` / `requirements-no-cupy.txt`, y **al final** fuerza `torch==2.11.0+cu130`, `torchvision==0.26.0+cu130`, `torchaudio==2.11.0+cu130`, `triton_windows==3.8.0.post28` y `SageAttention` (este último en bloque `try/catch` no bloqueante para compatibilidad con RTX 5000 Blackwell).
+   - Clona `ComfyUI` (`v0.42.5`), instala los *custom nodes* (`ComfyUI-GGUF` fork *leejet*, `ComfyUI-KJNodes`, `ComfyUI-Frame-Interpolation`, `ComfyUI-ClipProj`, `ComfyUI-VDN-H3-Plus`, `ComfyUI-VideoHelperSuite`, `ComfyUI-MMAudio` y el nodo local `tools/custom_nodes/waifu_anima_patch`) junto con sus `requirements.txt` / `requirements-no-cupy.txt`, y **al final** fuerza `torch==2.11.0+cu130`, `torchvision==0.26.0+cu130`, `torchaudio==2.11.0+cu130`, `triton_windows==3.8.0.post28` y `SageAttention` (este último en bloque `try/catch` no bloqueante para compatibilidad con RTX 5000 Blackwell).
 3. **Banderas útiles de `install\install.ps1` (o pasadas a `install.bat`)**:
    - `install.bat` (interactivo: instala engine + LLM + pregunta si descargar ~100 GB de modelos recomendados + VDN-H3).
    - `install.bat -SkipModels` (instala solo Engine + App + LLM ~15 GB; requiere >= 25 GB libres; ideal para usuarios que usarán sus propios checkpoints SDXL/Anima).
@@ -55,7 +56,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.613 tests offline en CPU (~58 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.628 tests offline en CPU (~61 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```
