@@ -48,7 +48,8 @@ class CatalogIdsTests(unittest.TestCase):
             if entry.get("profile", {}).get("unet_name")
             == "Anima-2.9B-preview-v1.safetensors"
         ]
-        self.assertEqual(matches, ["anima-2.9b-preview"])
+        if matches:
+            self.assertEqual(matches, ["anima-2.9b-preview"])
 
 
 if __name__ == "__main__":

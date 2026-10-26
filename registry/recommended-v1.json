@@ -1,101 +1,100 @@
 {
   "version": 1,
-  "note": "Recomendado para empezar (el repo NO incluye pesos ni LoRAs): Anima para imagen, MiniMax H3 para video, Qwen-Image 2.1 UC para el Editor y RealESRGAN x2/RIFE para el Upscaler. El instalador descarga el set automatico (~106 GB) y deja anotados los 2 modelos Anima de Civitai como aporte manual.",
+  "note": "Set oficial 2.x para la app base: Animagine XL 4.0 Opt (anime), RealVisXL V5 (realista/materiales) y Juggernaut XL Ragnarok (props/escenas). Los pesos no se redistribuyen: el instalador o el usuario los descargan.",
   "engines": {
-    "image": ["anima-2.9b-preview", "anima-official-aesthetic-v11", "one-obsession-anima-v40"],
-    "video": ["h3 (perfiles Referencia/Calidad/Ligero; turbo LoRA incluida)"],
-    "editor": ["qwen-image-2.1 UC (GGUF Q4_K_M + encoder int8 ConvRot + VAE bf16)"],
-    "upscaler": ["real-esrgan-x2 (imagen)", "rife (FPS)"]
+    "image": [
+      "animagine-xl-4-opt",
+      "realvisxl-v50",
+      "juggernaut-xl-ragnarok"
+    ],
+    "editor": [
+      "qwen-image-2.1 UC (GGUF Q4_K_M + TE int8 + VAE 2.1)"
+    ],
+    "upscaler": [
+      "real-esrgan-x2 (imagen)",
+      "rife (FPS)"
+    ],
+    "video": [
+      "wan 2.2 (perfil Fast/Quality, pendiente de instalacion)"
+    ]
   },
   "models": [
     {
-      "id": "anima-2.9b-preview",
-      "family": "anima",
-      "display_name": "Anima 2.9B Preview v1",
+      "id": "animagine-xl-4-opt",
+      "family": "sdxl",
+      "display_name": "Animagine XL 4.0 Opt",
       "profile": {
-        "unet_name": "Anima-2.9B-preview-v1.safetensors",
-        "clip_name": "qwen_3_06b_base.safetensors",
-        "clip_type": "stable_diffusion",
-        "vae_name": "qwen_image_vae.safetensors"
+        "unet_name": "animagine-xl-4.0-opt.safetensors",
+        "clip_name": "__checkpoint__",
+        "clip_type": "checkpoint",
+        "vae_name": "__checkpoint__"
       },
-      "source": "huggingface.co/Gazingstars123/Anima-2.9B",
-      "license": "Anima License (CircleStone Labs LLC) - no comercial",
-      "preprompt": "glossy",
+      "source": "https://huggingface.co/cagliostrolab/animagine-xl-4.0",
+      "license": "Fair AI Public License 1.0-SD (comercial con condiciones)",
+      "preprompt": "animagine",
       "defaults": {
-        "steps": 30,
-        "cfg": 6.0,
-        "sampler_name": "euler",
+        "steps": 28,
+        "cfg": 5.0,
+        "sampler_name": "euler_ancestral",
         "scheduler": "normal",
-        "width": 1024,
-        "height": 1024
+        "width": 832,
+        "height": 1216,
+        "seed": 42
       },
-      "notes": "Modelo Anima 2.9B descargado automaticamente por el instalador."
+      "notes": "sha256=6327ECA98BFB6538DD7A4EDCE22484A1BBC57A8CFF6B11D075D40DA1AFB847AC | bytes=6938350040"
     },
     {
-      "id": "anima-official-aesthetic-v11",
-      "family": "anima",
-      "display_name": "Anima [Official] aesthetic v1.1",
+      "id": "realvisxl-v50",
+      "family": "sdxl",
+      "display_name": "RealVisXL V5.0 (Baked VAE)",
       "profile": {
-        "unet_name": "anima_aestheticV11.safetensors",
-        "clip_name": "qwen_3_06b_base.safetensors",
-        "clip_type": "stable_diffusion",
-        "vae_name": "qwen_image_vae.safetensors"
+        "unet_name": "realvisxlV50_v50Bakedvae_full_fp16.safetensors",
+        "clip_name": "__checkpoint__",
+        "clip_type": "checkpoint",
+        "vae_name": "__checkpoint__"
       },
-      "source": "civitai.com/models/2458426 v3126581 (aporte manual)",
-      "license": "Anima License (CircleStone Labs LLC) - no comercial",
-      "preprompt": "glossy",
+      "source": "https://civitai.com/models/139562?modelVersionId=789646",
+      "license": "OpenRAIL++-M; atribucion requerida (allowNoCredit=false)",
+      "preprompt": "ninguno",
       "defaults": {
         "steps": 30,
-        "cfg": 6.0,
-        "sampler_name": "euler",
-        "scheduler": "normal",
+        "cfg": 4.5,
+        "sampler_name": "dpmpp_sde",
+        "scheduler": "karras",
         "width": 1024,
-        "height": 1024
+        "height": 1024,
+        "seed": 42
       },
-      "notes": "Recomendado (28 bloques). sha256=3C1868387A3A1FF504BBB87C33678321965EAD381FCF87AFBD0264DAA600C082 | 4182230656 bytes | dest: ComfyUI/models/diffusion_models/anima_aestheticV11.safetensors"
+      "notes": "sha256=6A35A7855770AE9820A3C931D4964C3817B6D9E3C6F9C4DABB5B3A94E5643B80 | bytes=6938065488 | creador recomienda 832x1216 o 1024x1024"
     },
     {
-      "id": "one-obsession-anima-v40",
-      "family": "anima",
-      "display_name": "One obsession_Anima v4.0",
+      "id": "juggernaut-xl-ragnarok",
+      "family": "sdxl",
+      "display_name": "Juggernaut XL Ragnarok",
       "profile": {
-        "unet_name": "oneObsessionAnima_v40.safetensors",
-        "clip_name": "qwen_3_06b_base.safetensors",
-        "clip_type": "stable_diffusion",
-        "vae_name": "qwen_image_vae.safetensors"
+        "unet_name": "juggernautXL_ragnarok.safetensors",
+        "clip_name": "__checkpoint__",
+        "clip_type": "checkpoint",
+        "vae_name": "__checkpoint__"
       },
-      "source": "civitai.com/models/2695493 v3301424 (aporte manual)",
-      "license": "Anima License (CircleStone Labs LLC) - no comercial",
-      "preprompt": "glossy",
+      "source": "https://civitai.com/models/133005?modelVersionId=1759168",
+      "license": "OpenRAIL++-M; flags Image/RentCivit; el autor pide shoutout",
+      "preprompt": "ninguno",
       "defaults": {
-        "steps": 30,
-        "cfg": 6.0,
-        "sampler_name": "euler",
-        "scheduler": "normal",
-        "width": 1024,
-        "height": 1024
+        "steps": 32,
+        "cfg": 4.0,
+        "sampler_name": "dpmpp_2m_sde",
+        "scheduler": "karras",
+        "width": 832,
+        "height": 1216,
+        "seed": 42
       },
-      "notes": "Recomendado (40 bloques, mas detalle; los LoRA de Anima base de 28 bloques rinden mejor en el modelo de 28). sha256=2ACBD9F1D53845833FC8D5093FC11CC32C3E613A476097B8FAE9BA2B59ED677B | 4182229969 bytes | dest: ComfyUI/models/diffusion_models/oneObsessionAnima_v40.safetensors"
+      "notes": "sha256=DD08FA32F98D05A2443CA1419E46DF1575A0811F6E3B246D9DD47FF20F5EB66A | bytes=7105350162 | el creador tambien acepta 1024x1024"
     }
   ],
-  "manual_downloads": [
-    {
-      "id": "anima-official-aesthetic-v11",
-      "where": "Civitai models/2458426 v3126581",
-      "dest": "ComfyUI/models/diffusion_models/anima_aestheticV11.safetensors",
-      "sha256": "3C1868387A3A1FF504BBB87C33678321965EAD381FCF87AFBD0264DAA600C082",
-      "bytes": 4182230656
-    },
-    {
-      "id": "one-obsession-anima-v40",
-      "where": "Civitai models/2695493 v3301424",
-      "dest": "ComfyUI/models/diffusion_models/oneObsessionAnima_v40.safetensors",
-      "sha256": "2ACBD9F1D53845833FC8D5093FC11CC32C3E613A476097B8FAE9BA2B59ED677B",
-      "bytes": 4182229969
-    }
-  ],
+  "manual_downloads": [],
   "starter_loras": {
-    "note": "El repo no incluye LoRAs de terceros. Anade las tuyas desde Imagen > Elegir LoRAs > Gestionar biblioteca (nombre, archivo en ComfyUI/models/loras, trigger y peso). Para Anima busca LoRAs con base 'Anima' en Civitai/HuggingFace; para video H3 la turbo LoRA ya viene en el set recomendado.",
+    "note": "El repo no incluye LoRAs de terceros. Anade las tuyas desde Imagen > Elegir LoRAs > Gestionar biblioteca. Usa solo LoRAs compatibles con SDXL (no Anima, no Flux).",
     "entries": []
   }
 }

@@ -482,9 +482,9 @@
       "url": "https://huggingface.co/cagliostrolab/animagine-xl-4.0/resolve/2b7c1b397761bf5bd3cc42e5b39ec99314a75a96/animagine-xl-4.0-opt.safetensors",
       "revision": "2b7c1b397761bf5bd3cc42e5b39ec99314a75a96",
       "license": "Fair AI Public License 1.0-SD (sin archivar en disco)",
-      "required": false,
-      "obsolete": true,
-      "notes": "SDXL legacy sin referencias en el producto; retirado el 2026-09-26 en F2; sha256 del manifiesto legacy."
+      "required": true,
+      "obsolete": false,
+      "notes": "Set oficial 2.x (anime limpio): sha256 y bytes verificados en la descarga del 2026-10-26; descarga prevista por el instalador."
     },
     {
       "id": "xinsir-controlnet-openpose-sdxl",
