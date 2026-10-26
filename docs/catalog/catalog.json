@@ -1,0 +1,89 @@
+{
+  "schema": "waifu.catalog/v1",
+  "generated": "2026-10-26",
+  "models": [
+    {
+      "id": "animagine-xl-4-opt",
+      "family": "sdxl",
+      "file": "checkpoints/animagine-xl-4.0-opt.safetensors",
+      "license": "Fair AI Public License 1.0-SD",
+      "verified": true
+    },
+    {
+      "id": "realvisxl-v50",
+      "family": "sdxl",
+      "file": "checkpoints/realvisxlV50_v50Bakedvae_full_fp16.safetensors",
+      "license": "OpenRAIL++-M; attribution required",
+      "verified": true
+    },
+    {
+      "id": "juggernaut-xl-ragnarok",
+      "family": "sdxl",
+      "file": "checkpoints/juggernautXL_ragnarok.safetensors",
+      "license": "OpenRAIL++-M",
+      "verified": true
+    },
+    {
+      "id": "wan2.2-i2v-a14b-highnoise-q4-k-s",
+      "family": "wan",
+      "file": "diffusion_models/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf",
+      "sha256": "8fc5f726ccf1214e43c6a599bdef1e63daf7fab06e71fb74081416c4b9ce200b",
+      "bytes": 8748151296,
+      "license": "Apache-2.0",
+      "verified": true
+    },
+    {
+      "id": "wan2.2-i2v-a14b-lownoise-q4-k-s",
+      "family": "wan",
+      "file": "diffusion_models/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf",
+      "sha256": "54e2313ef7fbb169e72ab1d7cecdc90a04db01097c86f9f39097b8caacea50fb",
+      "bytes": 8748151296,
+      "license": "Apache-2.0",
+      "verified": true
+    },
+    {
+      "id": "wan2.1-vae",
+      "family": "wan",
+      "file": "vae/wan_2.1_vae.safetensors",
+      "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+      "bytes": 253815318,
+      "license": "Apache-2.0",
+      "verified": true
+    },
+    {
+      "id": "umt5-xxl-encoder-q5-k-m",
+      "family": "wan",
+      "file": "text_encoders/umt5-xxl-encoder-Q5_K_M.gguf",
+      "sha256": "eaea358bb438c5d211721a4feecc162000e3636e9cb96f51e216f1f44ebd12ce",
+      "bytes": 4145878880,
+      "license": "Apache-2.0",
+      "verified": true
+    },
+    {
+      "id": "wan2.2-lightx2v-high",
+      "family": "wan",
+      "file": "loras/wan22_lightx2v_high.safetensors",
+      "sha256": "887c3bdeb74e83859c920438e16ca31f39ab18ce189abc5f0e36f8348c5bbb19",
+      "bytes": 634645944,
+      "license": "Apache-2.0",
+      "verified": true
+    },
+    {
+      "id": "wan2.2-lightx2v-low",
+      "family": "wan",
+      "file": "loras/wan22_lightx2v_low.safetensors",
+      "sha256": "8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1",
+      "bytes": 739472104,
+      "license": "Apache-2.0",
+      "verified": true
+    }
+  ],
+  "addons": [],
+  "addon_schema": {
+    "id": "slug",
+    "name": "string",
+    "version": "semver",
+    "requires_core": "2.x",
+    "slots": ["image", "editor", "video", "upscaler", "timeline", "gallery"]
+  }
+}

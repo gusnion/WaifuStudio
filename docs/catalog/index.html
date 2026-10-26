@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WAIFU STUDIO · Catálogo verificado</title>
+  <style>
+    :root { color-scheme: dark light; font-family: system-ui, sans-serif; }
+    body { margin: 0; padding: 2rem; background: #14151a; color: #e8e9f0; }
+    main { max-width: 960px; margin: auto; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0 2rem; }
+    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #343747; font-size: 0.88rem; }
+    code { color: #f0a6bd; }
+    a { color: #f0a6bd; }
+    .ok { color: #7bd88f; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Catálogo verificado</h1>
+    <p>Lista de modelos con hashes comprobados y el esquema de addons. El JSON es descargable e importable por herramientas externas.</p>
+    <p><a href="catalog.json" download>Descargar catalog.json</a> · <a href="../agent-guides/README.md">Guías de agente</a></p>
+    <table>
+      <thead><tr><th>ID</th><th>Familia</th><th>Archivo</th><th>SHA256</th><th>Estado</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="ok">Los addons se importan con <code>POST /api/addons/import</code> (ZIP con <code>addon.json</code>).</p>
+  </main>
+  <script>
+    fetch("catalog.json").then((r) => r.json()).then((data) => {
+      const rows = document.getElementById("rows");
+      for (const model of data.models) {
+        const tr = document.createElement("tr");
+        for (const value of [model.id, model.family, model.file, model.sha256 || "—", model.verified ? "verificado" : "pendiente"]) {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.appendChild(td);
+        }
+        rows.appendChild(tr);
+      }
+    });
+  </script>
+</body>
+</html>
