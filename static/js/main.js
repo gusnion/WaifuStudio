@@ -23,6 +23,7 @@ import { initUpscalerTab, applyUpscaleKind, loadUpscaleGallery, loadUpscaleModel
 import { initGalleryTab, loadGalleryTab, closeGalleryModal, closeCustomTagsModal } from "./tabs/gallery.js";
 import { initHeader } from "./components/header.js";
 import { initFirstRun } from "./components/first_run.js";
+import { initTheme } from "./components/theme.js";
 import { initTooltipHelp } from "./components/tooltip_help.js";
 import { initTimelineTab, refreshTimelineMedia } from "./tabs/timeline.js";
 import { initAddons, loadAddons } from "./tabs/addons.js";
@@ -181,7 +182,7 @@ function bind() {
       closeOcModal();
     }
   });
-  initHeader(); initI18n(); initTooltipHelp(); initFirstRun();
+  initHeader(); initI18n(); initTooltipHelp(); initFirstRun(); initTheme();
   initCompare(); initLightbox(); initPromptZones(); initPromptPopover();
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();

@@ -1,0 +1,89 @@
+/* Capa 1: primitivas. Capa 2: semánticas. Capa 3: uso por componente. */
+
+:root {
+  --color-ink-950: #14151a;
+  --color-ink-900: #1d1f27;
+  --color-ink-800: #242633;
+  --color-ink-700: #343747;
+  --color-ink-100: #e8e9f0;
+  --color-ink-400: #9aa0b4;
+  --color-rose-500: #e0567a;
+  --color-violet-500: #7a5cff;
+  --color-white: #ffffff;
+  --color-paper-50: #f6f7fb;
+  --color-paper-100: #eef0f6;
+  --color-paper-200: #d9ddea;
+  --color-paper-700: #3b4052;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+}
+
+:root,
+html[data-theme="dark"] {
+  --surface-canvas: var(--color-ink-950);
+  --surface-panel: var(--color-ink-900);
+  --surface-raised: var(--color-ink-800);
+  --border-default: var(--color-ink-700);
+  --text-primary: var(--color-ink-100);
+  --text-muted: var(--color-ink-400);
+  --accent-default: var(--color-rose-500);
+  --accent-secondary: var(--color-violet-500);
+  --bg: var(--surface-canvas);
+  --panel: var(--surface-panel);
+  --panel-2: var(--surface-raised);
+  --border: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-muted);
+  --accent: var(--accent-default);
+  --accent-2: var(--accent-secondary);
+}
+
+html[data-theme="light"] {
+  --surface-canvas: var(--color-paper-50);
+  --surface-panel: var(--color-white);
+  --surface-raised: var(--color-paper-100);
+  --border-default: var(--color-paper-200);
+  --text-primary: #1d2230;
+  --text-muted: #4b5265;
+  --accent-default: #b51d4a;
+  --accent-secondary: #5138c8;
+  --bg: var(--surface-canvas);
+  --panel: var(--surface-panel);
+  --panel-2: var(--surface-raised);
+  --border: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-muted);
+  --accent: var(--accent-default);
+  --accent-2: var(--accent-secondary);
+}
+
+html[data-theme="light"] body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+html[data-theme="light"] .tab.active {
+  background: var(--color-paper-100);
+  color: var(--text);
+}
+
+html[data-theme="light"] .first-run-banner {
+  background: #fff7dd;
+  border-color: #b58a1b;
+  color: var(--text);
+}
+
+html[data-theme="light"] .topbar-btn:hover {
+  background: var(--color-paper-100);
+}
+

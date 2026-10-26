@@ -8,6 +8,7 @@
   <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
   <meta name="theme-color" content="#14151a">
   <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/tokens.css">
   <link rel="stylesheet" href="/static/css/components.css">
   <link rel="stylesheet" href="/static/css/tabs/image.css">
   <link rel="stylesheet" href="/static/css/tabs/video.css">
@@ -31,6 +32,9 @@
       <button id="tab-guide" class="tab" data-tab="guide" type="button">📖 Guía</button>
     </nav>
     <div class="topbar-actions">
+      <button id="btn-theme-toggle" class="topbar-btn" type="button" title="Cambiar tema" aria-label="Cambiar tema">
+        <span id="theme-toggle-icon" aria-hidden="true">◐</span>
+      </button>
       <button id="btn-universal-reload" class="topbar-btn" type="button" title="Recargar pestaña actual" aria-label="Recargar pestaña actual">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
       </button>
