@@ -513,6 +513,8 @@ class ResolveWanProfileTests(unittest.TestCase):
                         "scheduler": WAN_DEFAULT_SCHEDULER,
                         "steps": WAN_DEFAULT_STEPS,
                         "shift": WAN_DEFAULT_SHIFT,
+                        "cfg": None,
+                        "lora_strength": None,
                         "width": 768,
                         "height": 432,
                     },

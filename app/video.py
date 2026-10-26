@@ -268,6 +268,37 @@ def _patch_shift(graph: dict, shift: float) -> None:
         )
 
 
+def _patch_cfg(graph: dict, cfg: float) -> None:
+    """Aplica cfg a todos los samplers del grafo Wan."""
+    applied = 0
+    for node_id, node in graph.items():
+        if not isinstance(node, dict) or node.get("class_type") not in SAMPLER_CLASSES:
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            raise EngineError(f"nodo {node_id!r} sin inputs dict")
+        inputs["cfg"] = cfg
+        applied += 1
+    if not applied:
+        raise EngineError("grafo sin sampler: no se puede aplicar cfg")
+
+
+def _patch_wan_lora_strength(graph: dict, strength: float) -> None:
+    """Ajusta los LoraLoaderModelOnly de Wan; 0.0 deja el modelo base."""
+    applied = 0
+    for node in graph.values():
+        if not isinstance(node, dict) or node.get("class_type") != "LoraLoaderModelOnly":
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        inputs["strength_model"] = strength
+        applied += 1
+    if not applied:
+        raise EngineError("grafo Wan sin LoraLoaderModelOnly")
+
+
+
 def _progress_ws_url(config: Any) -> str:
     """WS del engine desde `comfy_url` (misma semantica que `app.server`).
 
@@ -360,6 +391,8 @@ def resolve_wan_profile(
             "scheduler": WAN_DEFAULT_SCHEDULER,
             "steps": WAN_DEFAULT_STEPS,
             "shift": WAN_DEFAULT_SHIFT,
+            "cfg": None,
+            "lora_strength": None,
             "width": ASPECTS[aspect][0],
             "height": ASPECTS[aspect][1],
         }
@@ -370,6 +403,8 @@ def resolve_wan_profile(
             "scheduler": entry["scheduler"],
             "steps": entry["steps"],
             "shift": entry["shift"],
+            "cfg": 1.0 if entry["id"] == "rapido" else 4.0,
+            "lora_strength": 1.0 if entry["id"] == "rapido" else 0.0,
             "width": entry[aspect]["width"],
             "height": entry[aspect]["height"],
         }
@@ -398,6 +433,8 @@ def prepare_wan_graph(
     scheduler: str | None = None,
     steps: int | None = None,
     shift: float | None = None,
+    cfg: float | None = None,
+    lora_strength: float | None = None,
 ) -> dict:
     """Copia el grafo Wan I2V y fija textos, imagen, tamaño y seed.
 
@@ -421,6 +458,14 @@ def prepare_wan_graph(
         steps = _require_steps(steps, "wan")
     if shift is not None:
         shift = _require_shift(shift, "wan")
+    if cfg is not None:
+        cfg = float(cfg)
+        if not math.isfinite(cfg) or cfg < 0:
+            raise EngineError(f"wan: cfg invalido: {cfg!r}")
+    if lora_strength is not None:
+        lora_strength = float(lora_strength)
+        if not math.isfinite(lora_strength) or not 0.0 <= lora_strength <= 2.0:
+            raise EngineError(f"wan: lora_strength invalido: {lora_strength!r}")
     for name, size in (("width", width), ("height", height)):
         if isinstance(size, bool) or not isinstance(size, int):
             raise EngineError(f"wan: {name} invalido: {size!r}")
@@ -452,6 +497,10 @@ def prepare_wan_graph(
         _patch_wan_split(prepared, steps)
     if shift is not None:
         _patch_shift(prepared, shift)
+    if cfg is not None:
+        _patch_cfg(prepared, cfg)
+    if lora_strength is not None:
+        _patch_wan_lora_strength(prepared, lora_strength)
     return prepared
 
 
@@ -470,6 +519,8 @@ def prepare_wan_flf_graph(
     scheduler: str | None = None,
     steps: int | None = None,
     shift: float | None = None,
+    cfg: float | None = None,
+    lora_strength: float | None = None,
 ) -> dict:
     """Copia el grafo Wan FLF2V y fija primer/último frame, textos, tamaño y seed.
 
@@ -544,6 +595,10 @@ def prepare_wan_flf_graph(
         _patch_wan_split(prepared, steps)
     if shift is not None:
         _patch_shift(prepared, shift)
+    if cfg is not None:
+        _patch_cfg(prepared, cfg)
+    if lora_strength is not None:
+        _patch_wan_lora_strength(prepared, lora_strength)
     return prepared
 
 
@@ -1015,6 +1070,8 @@ def build_video_graph(job: dict) -> dict:
             "scheduler": profile["scheduler"],
             "steps": profile["steps"],
             "shift": profile["shift"],
+            "cfg": profile.get("cfg"),
+            "lora_strength": profile.get("lora_strength"),
         }
         if mode == WAN_FLF_MODE:
             return prepare_wan_flf_graph(
