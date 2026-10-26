@@ -189,30 +189,25 @@ class PrepareEditorGraphTests(unittest.TestCase):
         encode = result[ENCODE_ID]["inputs"]
         self.assertEqual(encode["prompt"], "1girl, smile")
         self.assertEqual(encode["negative_prompt"], "low quality")
-        self.assertEqual(encode["resolution"], 768)
+        self.assertEqual(encode["resolution"], 0)
         self.assertEqual(result[LATENT_ID]["inputs"]["width"], 768)
         self.assertEqual(result[LATENT_ID]["inputs"]["height"], 512)
         self.assertEqual(result[SAMPLER_ID]["inputs"]["seed"], 7)
         self.assertEqual(graph[ENCODE_ID]["inputs"]["prompt"], "")
         self.assertEqual(graph[LATENT_ID]["inputs"]["width"], EDITOR_DEFAULT_SIZE)
 
-    def test_resolucion_de_referencias_multiplo_de_32(self):
-        for width, height, expected in (
-            (512, 512, 512),
-            (528, 512, 544),
-            (512, 1008, 1024),
-            (2048, 512, 2048),
-        ):
-            with self.subTest(width=width, height=height):
-                result = prepare_editor_graph(
-                    self.template(),
-                    prompt="1girl",
-                    width=width,
-                    height=height,
-                )
-                resolution = result[ENCODE_ID]["inputs"]["resolution"]
-                self.assertEqual(resolution, expected)
-                self.assertEqual(resolution % 32, 0)
+    def test_resolucion_cero_y_latent_del_encoder_con_refs(self):
+        result = prepare_editor_graph(
+            self.template(),
+            prompt="1girl",
+            width=768,
+            height=512,
+            ref_images=["input.png"],
+        )
+        self.assertEqual(result[ENCODE_ID]["inputs"]["resolution"], 0)
+        self.assertEqual(
+            result[SAMPLER_ID]["inputs"]["latent_image"], [ENCODE_ID, 2]
+        )
 
     def test_refs_uno_a_diez_anaden_loadimage_y_enlace(self):
         for count in (1, 5, EDITOR_REF_LIMIT):
@@ -765,7 +760,7 @@ class EditorGraphFeaturesTests(unittest.TestCase):
         self.assertEqual(sampler["denoise"], EDITOR_PRESERVE_DENOISE)
         self.assertLess(sampler["denoise"], 1.0)
 
-    def test_preserve_structure_false_conserva_empty_latent_y_denoise_1(self):
+    def test_preserve_structure_false_usa_latent_del_encoder_y_denoise_1(self):
         graph = prepare_editor_graph(
             self.template,
             prompt="test",
@@ -774,7 +769,7 @@ class EditorGraphFeaturesTests(unittest.TestCase):
         )
         sampler = graph[SAMPLER_ID]["inputs"]
         self.assertNotIn(PRESERVE_ENCODE_ID, graph)
-        self.assertEqual(sampler["latent_image"], [LATENT_ID, 0])
+        self.assertEqual(sampler["latent_image"], [ENCODE_ID, 2])
         self.assertEqual(sampler["denoise"], 1.0)
 
     def test_preserve_structure_sin_refs_conserva_empty_latent(self):

@@ -392,7 +392,7 @@ def prepare_editor_graph(
         _require_field(encode, field, encode_id)
     encode["prompt"] = prompt
     encode["negative_prompt"] = negative
-    encode["resolution"] = _reference_resolution(width, height)
+    encode["resolution"] = 0
     for key in [key for key in encode if key.startswith(REF_IMAGE_KEY_PREFIX)]:
         del encode[key]
     for node_id, node in list(prepared.items()):
@@ -444,7 +444,10 @@ def prepare_editor_graph(
         sampler["latent_image"] = [PRESERVE_ENCODE_ID, 0]
         sampler["denoise"] = EDITOR_PRESERVE_DENOISE
     else:
-        sampler["latent_image"] = [latent_id, 0]
+        if refs:
+            sampler["latent_image"] = [encode_id, 2]
+        else:
+            sampler["latent_image"] = [latent_id, 0]
         sampler["denoise"] = 1.0
 
     _apply_editor_loras(prepared, loras)
