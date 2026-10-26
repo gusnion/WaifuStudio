@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+from dataclasses import replace
 from pathlib import Path
 import re
 import shutil
@@ -32,6 +33,7 @@ from app.loras import (
     update_entry as update_lora,
 )
 from app.registry import ModelEntry, ModelProfile, ModelRegistry
+from app.params import SAMPLER_NAMES, SCHEDULER_NAMES
 
 
 from app import loras as _loras_module
@@ -575,6 +577,56 @@ def _lora_catalog() -> dict:
 
 
 router = APIRouter()
+
+DEFAULTS_KEYS = ("seed", "steps", "cfg", "sampler_name", "scheduler", "width", "height")
+
+
+def _validate_defaults(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        raise EngineError("defaults invalido; usar objeto")
+    clean: dict = {}
+    for key, value in payload.items():
+        if key not in DEFAULTS_KEYS:
+            raise EngineError(f"default desconocido: {key}")
+        if key in ("seed", "steps", "width", "height"):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise EngineError(f"{key} invalido")
+        elif key == "cfg":
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise EngineError("cfg invalido")
+            value = float(value)
+        elif key == "sampler_name" and value not in SAMPLER_NAMES:
+            raise EngineError(f"sampler_name invalido: {value!r}")
+        elif key == "scheduler" and value not in SCHEDULER_NAMES:
+            raise EngineError(f"scheduler invalido: {value!r}")
+        clean[key] = value
+    return clean
+
+
+@router.get("/api/models/{model_id}/defaults")
+async def api_model_defaults(request: Request, model_id: str) -> Any:
+    try:
+        entry = request.app.state.registry.get(model_id)
+    except EngineError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+    return {"model_id": entry.id, "defaults": dict(entry.defaults)}
+
+
+@router.put("/api/models/{model_id}/defaults")
+async def api_model_defaults_update(
+    request: Request, model_id: str, payload: dict = Body(...)
+) -> Any:
+    try:
+        entry = request.app.state.registry.get(model_id)
+        defaults = dict(entry.defaults)
+        defaults.update(_validate_defaults(payload))
+        entry = replace(entry, defaults=defaults)
+        request.app.state.registry._replace(entry)
+        path = Path(request.app.state.config.data_dir) / "registry" / "models.json"
+        request.app.state.registry.save(path)
+    except EngineError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    return {"model_id": entry.id, "defaults": dict(entry.defaults)}
 
 
 @router.get("/api/models")
