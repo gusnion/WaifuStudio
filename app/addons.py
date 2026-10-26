@@ -193,6 +193,16 @@ def set_addon_enabled(data_dir: str | Path, addon_id: str, enabled: bool) -> dic
     manifest = _read_manifest(path / MANIFEST_NAME)
     if enabled and not _compatible(manifest["requires_core"]):
         raise EngineError("requires_core incompatible con esta version")
+    if enabled:
+        own_slots = set(manifest.get("slots", []))
+        for other in list_addons(data_dir):
+            if other["id"] == addon_id or not other.get("enabled"):
+                continue
+            shared = own_slots & set(other.get("slots", []))
+            if shared:
+                raise EngineError(
+                    f"slot ocupado por {other['id']}: {', '.join(sorted(shared))}"
+                )
     _write_state(path, enabled)
     return {"id": addon_id, "enabled": bool(enabled)}
 

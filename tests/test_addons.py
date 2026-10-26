@@ -69,6 +69,17 @@ class AddonManagerTests(unittest.TestCase):
         with self.assertRaises(EngineError):
             import_addon(self.data, make_zip(MANIFEST))
 
+    def test_slots_exclusivos(self):
+        import_addon(self.data, make_zip(MANIFEST))
+        second = dict(MANIFEST, id="demo-pack-2", name="Demo 2")
+        import_addon(self.data, make_zip(second))
+        set_addon_enabled(self.data, "demo-pack", True)
+        with self.assertRaises(EngineError):
+            set_addon_enabled(self.data, "demo-pack-2", True)
+        set_addon_enabled(self.data, "demo-pack", False)
+        set_addon_enabled(self.data, "demo-pack-2", True)
+        self.assertTrue(next(item for item in list_addons(self.data) if item["id"] == "demo-pack-2")["enabled"])
+
 
 if __name__ == "__main__":
     unittest.main()
