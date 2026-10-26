@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "generated": "2026-10-26",
+  "app": "WAIFU",
+  "task": "PL-08 Wan 2.2 I2V Manifest",
+  "destination_root": "ComfyUI/models",
+  "sha256_convention": "64 hex = sha256 completo verificado en origen/descarga.",
+  "models": [
+    {
+      "id": "wan2.2-i2v-a14b-highnoise-q4-k-s",
+      "filename": "Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf",
+      "subdir": "diffusion_models",
+      "bytes": 8748151296,
+      "sha256": "8fc5f726ccf1214e43c6a599bdef1e63daf7fab06e71fb74081416c4b9ce200b",
+      "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/6c6717459277b9cd1f72579d78a0fd62a79e57dc/HighNoise/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf",
+      "revision": "6c6717459277b9cd1f72579d78a0fd62a79e57dc",
+      "license": "Apache-2.0",
+      "required": true
+    },
+    {
+      "id": "wan2.2-i2v-a14b-lownoise-q4-k-s",
+      "filename": "Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf",
+      "subdir": "diffusion_models",
+      "bytes": 8748151296,
+      "sha256": "54e2313ef7fbb169e72ab1d7cecdc90a04db01097c86f9f39097b8caacea50fb",
+      "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/6c6717459277b9cd1f72579d78a0fd62a79e57dc/LowNoise/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf",
+      "revision": "6c6717459277b9cd1f72579d78a0fd62a79e57dc",
+      "license": "Apache-2.0",
+      "required": true
+    },
+    {
+      "id": "wan2.1-vae",
+      "filename": "wan_2.1_vae.safetensors",
+      "subdir": "vae",
+      "bytes": 253815318,
+      "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+      "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/6c6717459277b9cd1f72579d78a0fd62a79e57dc/VAE/Wan2.1_VAE.safetensors",
+      "revision": "6c6717459277b9cd1f72579d78a0fd62a79e57dc",
+      "license": "Apache-2.0",
+      "required": true
+    },
+    {
+      "id": "wan2.2-lightx2v-high",
+      "filename": "wan22_lightx2v_high.safetensors",
+      "subdir": "loras",
+      "bytes": 634645944,
+      "sha256": "887c3bdeb74e83859c920438e16ca31f39ab18ce189abc5f0e36f8348c5bbb19",
+      "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/57adea585d1d21085e2dfc91ce3c7b646cdd9345/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+      "revision": "57adea585d1d21085e2dfc91ce3c7b646cdd9345",
+      "license": "Apache-2.0",
+      "required": true
+    },
+    {
+      "id": "wan2.2-lightx2v-low",
+      "filename": "wan22_lightx2v_low.safetensors",
+      "subdir": "loras",
+      "bytes": 739472104,
+      "sha256": "8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1",
+      "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/57adea585d1d21085e2dfc91ce3c7b646cdd9345/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+      "revision": "57adea585d1d21085e2dfc91ce3c7b646cdd9345",
+      "license": "Apache-2.0",
+      "required": true
+    },
+    {
+      "id": "umt5-xxl-encoder-q5-k-m",
+      "filename": "umt5-xxl-encoder-Q5_K_M.gguf",
+      "subdir": "text_encoders",
+      "bytes": 4145878880,
+      "sha256": "eaea358bb438c5d211721a4feecc162000e3636e9cb96f51e216f1f44ebd12ce",
+      "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7/umt5-xxl-encoder-Q5_K_M.gguf",
+      "revision": "b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7",
+      "license": "Apache-2.0",
+      "required": true
+    },
+    {
+      "id": "wan2.2-nsfw-high",
+      "filename": "NSFW-22-H-e8.safetensors",
+      "subdir": "loras/wan22_nsfw",
+      "bytes": 613516752,
+      "sha256": "34e2144d3cd65360f97d09ccbe03e1c39a096df6c9234af5fe3899d1b63cda39",
+      "url": "https://huggingface.co/lopi999/Wan2.2-I2V_General-NSFW-LoRA/resolve/aeef17d7fa51d753ab7d1004ddb4f218a95d756d/NSFW-22-H-e8.safetensors",
+      "revision": "aeef17d7fa51d753ab7d1004ddb4f218a95d756d",
+      "license": "sin licencia declarada (revisar antes de uso comercial)",
+      "required": false
+    },
+    {
+      "id": "wan2.2-nsfw-low",
+      "filename": "NSFW-22-L-e8.safetensors",
+      "subdir": "loras/wan22_nsfw",
+      "bytes": 613516752,
+      "sha256": "d6b783742f4d5fd63a0223ae1d5bf64fc995a6b408480ac2a00528ae0d4146db",
+      "url": "https://huggingface.co/lopi999/Wan2.2-I2V_General-NSFW-LoRA/resolve/aeef17d7fa51d753ab7d1004ddb4f218a95d756d/NSFW-22-L-e8.safetensors",
+      "revision": "aeef17d7fa51d753ab7d1004ddb4f218a95d756d",
+      "license": "sin licencia declarada (revisar antes de uso comercial)",
+      "required": false
+    },
+    {
+      "id": "wan2.2-uncensored-high",
+      "filename": "Wan2.2_LightX2V_high_n54vv.safetensors",
+      "subdir": "loras/wan22_uncensored",
+      "bytes": 1245752600,
+      "sha256": "13be3b91290212ada7f9097d7aa1c1354493004952a65794acafa0e9f66122ac",
+      "url": "https://huggingface.co/rzgar/Wan2.2_LightX2V_4Step_Uncensored/resolve/adc4ca92246994f55628e2aceef736f0a90443a8/Wan2.2_LightX2V_high_n54vv.safetensors",
+      "revision": "adc4ca92246994f55628e2aceef736f0a90443a8",
+      "license": "Apache-2.0",
+      "required": false
+    },
+    {
+      "id": "wan2.2-uncensored-low",
+      "filename": "Wan2.2_LightX2V_low_n54vv.safetensors",
+      "subdir": "loras/wan22_uncensored",
+      "bytes": 1245752600,
+      "sha256": "85fb420fdcd219c08fed2432f932179103546ac2c55a463feffecdce1c6a6f5d",
+      "url": "https://huggingface.co/rzgar/Wan2.2_LightX2V_4Step_Uncensored/resolve/adc4ca92246994f55628e2aceef736f0a90443a8/Wan2.2_LightX2V_low_n54vv.safetensors",
+      "revision": "adc4ca92246994f55628e2aceef736f0a90443a8",
+      "license": "Apache-2.0",
+      "required": false
+    },
+    {
+      "id": "mmaudio-large-44k-v2-fp16",
+      "filename": "mmaudio_large_44k_v2_fp16.safetensors",
+      "subdir": "mmaudio",
+      "bytes": 2061198424,
+      "sha256": "a61378951ba4e8bfde2e977c0ad8211a7e02e1e92fd6a5b1c258a6464c1d102f",
+      "url": "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/5984623e6b436818c6ff287ef6eec93e3e05aa3f/mmaudio_large_44k_v2_fp16.safetensors",
+      "revision": "5984623e6b436818c6ff287ef6eec93e3e05aa3f",
+      "license": "MIT",
+      "required": false
+    },
+    {
+      "id": "mmaudio-synchformer-fp16",
+      "filename": "mmaudio_synchformer_fp16.safetensors",
+      "subdir": "mmaudio",
+      "bytes": 474981098,
+      "sha256": "b8d05128c76da6ee88720a89d25a5f86c603589883d02b53f563c3c66afe3581",
+      "url": "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/5984623e6b436818c6ff287ef6eec93e3e05aa3f/mmaudio_synchformer_fp16.safetensors",
+      "revision": "5984623e6b436818c6ff287ef6eec93e3e05aa3f",
+      "license": "MIT",
+      "required": false
+    },
+    {
+      "id": "mmaudio-vae-44k-fp16",
+      "filename": "mmaudio_vae_44k_fp16.safetensors",
+      "subdir": "mmaudio",
+      "bytes": 610966060,
+      "sha256": "2598189f081bd10c86975106e5b6e2490168667429a75b52d77671283f245649",
+      "url": "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/5984623e6b436818c6ff287ef6eec93e3e05aa3f/mmaudio_vae_44k_fp16.safetensors",
+      "revision": "5984623e6b436818c6ff287ef6eec93e3e05aa3f",
+      "license": "MIT",
+      "required": false
+    },
+    {
+      "id": "apple-dfn5b-clip-vit-h-14-384-fp16",
+      "filename": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+      "subdir": "mmaudio",
+      "bytes": 1973509450,
+      "sha256": "d8ad903a79adc2b29bacfeedabfa3d78b03d36d3b4dcb885c0649fe8c5d763cb",
+      "url": "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/5984623e6b436818c6ff287ef6eec93e3e05aa3f/apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+      "revision": "5984623e6b436818c6ff287ef6eec93e3e05aa3f",
+      "license": "MIT",
+      "required": false
+    }
+  ],
+  "results": {}
+}

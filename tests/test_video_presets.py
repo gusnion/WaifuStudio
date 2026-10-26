@@ -36,8 +36,8 @@ EXPECTED = {
         "horizontal": {"width": 768, "height": 432},
         "sampler": "euler",
         "scheduler": "simple",
-        "steps": 20,
-        "shift": 8.0,
+        "steps": 4,
+        "shift": 5.0,
     },
     "calidad": {
         "label": "Calidad",
@@ -60,8 +60,8 @@ def _valid_entry() -> dict:
         "horizontal": {"width": 768, "height": 432},
         "sampler": "euler",
         "scheduler": "simple",
-        "steps": 20,
-        "shift": 8.0,
+        "steps": 4,
+        "shift": 5.0,
     }
 
 
@@ -118,7 +118,7 @@ class ListAndResolveTests(unittest.TestCase):
                     resolve_video_preset(value)
 
     def test_get_video_preset_estricto(self):
-        self.assertEqual(get_video_preset("rapido")["steps"], 20)
+        self.assertEqual(get_video_preset("rapido")["steps"], 4)
         self.assertEqual(get_video_preset(" calidad ")["sampler"], "er_sde")
         for value in ("nope", "manual", None, 5):
             with self.subTest(value=value):
@@ -127,7 +127,7 @@ class ListAndResolveTests(unittest.TestCase):
 
     def test_alias_perezoso_estilo_formats(self):
         self.assertEqual(video_presets_module.VIDEO_PRESETS["calidad"]["steps"], 30)
-        self.assertEqual(video_presets_module.PRESETS["rapido"]["steps"], 20)
+        self.assertEqual(video_presets_module.PRESETS["rapido"]["steps"], 4)
         with self.assertRaises(AttributeError):
             video_presets_module.OTRO  # noqa: B018
 

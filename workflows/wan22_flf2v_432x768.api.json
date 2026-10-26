@@ -54,7 +54,7 @@
     "class_type": "ModelSamplingSD3",
     "inputs": {
       "model": [
-        "1",
+        "20",
         0
       ],
       "shift": 8.0
@@ -64,7 +64,7 @@
     "class_type": "ModelSamplingSD3",
     "inputs": {
       "model": [
-        "2",
+        "21",
         0
       ],
       "shift": 8.0
@@ -126,8 +126,8 @@
       ],
       "add_noise": "enable",
       "noise_seed": 42,
-      "steps": 20,
-      "cfg": 4.0,
+      "steps": 4,
+      "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 0,
@@ -156,8 +156,8 @@
       ],
       "add_noise": "disable",
       "noise_seed": 0,
-      "steps": 20,
-      "cfg": 4.0,
+      "steps": 4,
+      "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 10,
@@ -197,6 +197,34 @@
       ],
       "filename_prefix": "waifu/video_flf",
       "format": "auto"
+    }
+  },
+  "20": {
+    "inputs": {
+      "lora_name": "wan22_lightx2v_high.safetensors",
+      "strength_model": 1.0,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly High"
+    }
+  },
+  "21": {
+    "inputs": {
+      "lora_name": "wan22_lightx2v_low.safetensors",
+      "strength_model": 1.0,
+      "model": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly Low"
     }
   }
 }

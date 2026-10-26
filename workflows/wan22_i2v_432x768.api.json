@@ -12,9 +12,9 @@
     }
   },
   "3": {
-    "class_type": "CLIPLoader",
+    "class_type": "CLIPLoaderGGUF",
     "inputs": {
-      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf",
       "type": "wan"
     }
   },
@@ -54,20 +54,20 @@
     "class_type": "ModelSamplingSD3",
     "inputs": {
       "model": [
-        "1",
+        "20",
         0
       ],
-      "shift": 8.0
+      "shift": 5.0
     }
   },
   "11": {
     "class_type": "ModelSamplingSD3",
     "inputs": {
       "model": [
-        "2",
+        "21",
         0
       ],
-      "shift": 8.0
+      "shift": 5.0
     }
   },
   "9": {
@@ -116,8 +116,8 @@
       ],
       "add_noise": "enable",
       "noise_seed": 42,
-      "steps": 20,
-      "cfg": 4.0,
+      "steps": 4,
+      "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 0,
@@ -146,8 +146,8 @@
       ],
       "add_noise": "disable",
       "noise_seed": 0,
-      "steps": 20,
-      "cfg": 4.0,
+      "steps": 4,
+      "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 10,
@@ -175,7 +175,11 @@
         "14",
         0
       ],
-      "fps": 16.0
+      "fps": 16.0,
+      "audio": [
+        "32",
+        0
+      ]
     }
   },
   "16": {
@@ -187,6 +191,85 @@
       ],
       "filename_prefix": "waifu/video",
       "format": "auto"
+    }
+  },
+  "20": {
+    "inputs": {
+      "lora_name": "wan22_lightx2v_high.safetensors",
+      "strength_model": 1.0,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly High"
+    }
+  },
+  "21": {
+    "inputs": {
+      "lora_name": "wan22_lightx2v_low.safetensors",
+      "strength_model": 1.0,
+      "model": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly Low"
+    }
+  },
+  "30": {
+    "inputs": {
+      "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
+      "base_precision": "fp16"
+    },
+    "class_type": "MMAudioModelLoader",
+    "_meta": {
+      "title": "MMAudio Model Loader"
+    }
+  },
+  "31": {
+    "inputs": {
+      "vae_model": "mmaudio_vae_44k_fp16.safetensors",
+      "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
+      "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+      "mode": "44k",
+      "precision": "fp16"
+    },
+    "class_type": "MMAudioFeatureUtilsLoader",
+    "_meta": {
+      "title": "MMAudio Feature Utils Loader"
+    }
+  },
+  "32": {
+    "inputs": {
+      "mmaudio_model": [
+        "30",
+        0
+      ],
+      "feature_utils": [
+        "31",
+        0
+      ],
+      "duration": 5.0,
+      "steps": 25,
+      "cfg": 4.5,
+      "seed": 42,
+      "prompt": "ambient",
+      "negative_prompt": "",
+      "mask_away_clip": false,
+      "force_offload": true,
+      "images": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "MMAudioSampler",
+    "_meta": {
+      "title": "MMAudio Sampler"
     }
   }
 }

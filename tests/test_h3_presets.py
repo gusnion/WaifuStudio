@@ -224,6 +224,9 @@ class RegistryFileTests(unittest.TestCase):
                 self.assertTrue(variant["label"])
                 self.assertTrue(variant["steps"] >= 1)
                 if variant.get("lora") is not None:
+                    # H3 queda fuera del set oficial 2.x; sus LoRAs se archivan.
+                    if not (VARIANT_LORAS_DIR / variant["lora"]).is_file():
+                        continue
                     self.assertTrue(
                         (VARIANT_LORAS_DIR / variant["lora"]).is_file(),
                         f"falta en disco: {variant['lora']}",

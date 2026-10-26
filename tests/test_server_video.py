@@ -634,7 +634,7 @@ class VideoPresetsApiTests(ServerVideoTestCase):
                     },
                 )
         self.assertEqual(items[0]["label"], "Rápido")
-        self.assertEqual(items[0]["profile"]["steps"], 20)
+        self.assertEqual(items[0]["profile"]["steps"], 4)
         self.assertEqual(items[1]["label"], "Calidad")
         self.assertEqual(items[1]["profile"]["sampler"], "er_sde")
 
@@ -886,8 +886,8 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         job = queue.jobs[0]
         self.assertEqual(job["preset"], "rapido")
         self.assertEqual(job["sampler_name"], "euler")
-        self.assertEqual(job["steps"], 20)
-        self.assertEqual(job["shift"], 8.0)
+        self.assertEqual(job["steps"], 4)
+        self.assertEqual(job["shift"], 5.0)
 
     def test_overrides_explicitos_ganan_al_preset(self):
         queue = RecordingQueue()
@@ -900,8 +900,8 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
                 "preset": "calidad",
                 "sampler_name": "euler",
                 "scheduler": "karras",
-                "steps": 20,
-                "shift": 8.0,
+                "steps": 4,
+                "shift": 5.0,
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -910,8 +910,8 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(job["preset"], "calidad")
         self.assertEqual(job["sampler_name"], "euler")
         self.assertEqual(job["scheduler"], "karras")
-        self.assertEqual(job["steps"], 20)
-        self.assertEqual(job["shift"], 8.0)
+        self.assertEqual(job["steps"], 4)
+        self.assertEqual(job["shift"], 5.0)
 
     def test_preset_manual_equivale_a_sin_preset(self):
         queue = RecordingQueue()

@@ -6,19 +6,31 @@
       "id": "rapido",
       "label": "Rápido",
       "note": "provisional hasta el A/B de M10-2a",
-      "vertical": {"width": 432, "height": 768},
-      "horizontal": {"width": 768, "height": 432},
+      "vertical": {
+        "width": 432,
+        "height": 768
+      },
+      "horizontal": {
+        "width": 768,
+        "height": 432
+      },
       "sampler": "euler",
       "scheduler": "simple",
-      "steps": 20,
-      "shift": 8.0
+      "steps": 4,
+      "shift": 5.0
     },
     {
       "id": "calidad",
       "label": "Calidad",
       "note": "provisional hasta el A/B de M10-2a",
-      "vertical": {"width": 512, "height": 896},
-      "horizontal": {"width": 896, "height": 512},
+      "vertical": {
+        "width": 512,
+        "height": 896
+      },
+      "horizontal": {
+        "width": 896,
+        "height": 512
+      },
       "sampler": "er_sde",
       "scheduler": "simple",
       "steps": 30,
