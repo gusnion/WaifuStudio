@@ -1,6 +1,6 @@
 # Avisos de terceros (THIRD_PARTY_NOTICES)
 
-Estado: 2026-10-24 (TAREA-01: Juggernaut XL Ragnarok y RealVisXL V5.0 para assets comerciales; M13: v1.3.0 — Anima Patch 28->40, Kohya Installer, Purga Wan).
+Estado: 2026-10-26 (TAREA-01 + AniDream TrueHentai v1.0; M13: v1.3.0 — Anima Patch 28->40, Kohya Installer, Purga Wan).
 Ambito: pesos, LoRAs y componentes consumidos por WAIFU. Los textos de licencias
 principales (MIT, Apache-2.0, BSD-3-Clause, GPL-3.0) estan archivados en
 `install/manifest/licenses/`.
@@ -23,6 +23,7 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | Componente | Licencia | ¿Redistribuible en el repo? | Estado |
 | --- | --- | --- | --- |
 | Anima (circlestone-labs) | circlestone-labs-non-commercial-license v1.2 | No (solo descarga desde origen con Attribution Notice) | Identificada |
+| AniDream TrueHentai v1.0 (Civitai 2895658 / v3273573) | Anima License (CircleStone Labs LLC) — no comercial; built on NVIDIA Cosmos | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-26 |
 | Juggernaut XL Ragnarok (Civitai 133005 / v1759168) | OpenRAIL++-M; flags `allowCommercialUse=Image,RentCivit`, `allowNoCredit=false`; el autor pide shoutout | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-24 |
 | RealVisXL V5.0 BakedVAE (Civitai 139562 / v789646) | OpenRAIL++-M; flags `allowCommercialUse=Image,RentCivit,Rent`, `allowNoCredit=false`; **atribucion requerida** | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-24 |
 | Wan 2.2 (DiT) | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** (`WAN_RETIRADO.md`) |
@@ -47,6 +48,9 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 - **RealVisXL V5.0 (BakedVAE)**: https://civitai.com/models/139562?modelVersionId=789646
   - Uso comercial de imagenes permitido (`Image`, `RentCivit`, `Rent`), derivados permitidos.
   - `allowNoCredit=false`; **atribucion requerida**. Los pesos no se redistribuyen.
+- **AniDream TrueHentai v1.0**: https://civitai.com/models/2895658?modelVersionId=3273573
+  - **Anima License (CircleStone Labs LLC): no comercial**; built on NVIDIA Cosmos.
+  - Pesos no redistribuibles; descarga desde Civitai.
 
 ## LoRAs personales del usuario
 
