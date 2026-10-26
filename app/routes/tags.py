@@ -16,7 +16,7 @@ from app.engine import EngineError
 from app.oc_traits import list_traits
 from app.preprompts import (
     DEFAULT_FAMILY,
-    DEFAULT_PREPROMPT,
+    default_preprompt,
     delete_custom,
     list_custom,
     list_preprompts,
@@ -53,7 +53,7 @@ async def api_preprompts(family: str = DEFAULT_FAMILY) -> dict:
         "family": family,
         "names": names,
         "custom": custom,
-        "default": DEFAULT_PREPROMPT,
+        "default": default_preprompt(family),
     }
 
 

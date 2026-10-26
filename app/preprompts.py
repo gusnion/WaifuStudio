@@ -47,6 +47,32 @@ FAMILY_PREPROMPTS: dict[str, dict[str, dict[str, str]]] = {
         },
         "ninguno": {"positive": "", "negative": ""},
     },
+    "sdxl": {
+        "ninguno": {"positive": "", "negative": ""},
+        "sdxl_default": {
+            "positive": "masterpiece, best quality, highres",
+            "negative": (
+                "worst quality, low quality, blurry, jpeg artifacts, watermark, "
+                "signature"
+            ),
+        },
+        "animagine": {
+            "positive": "masterpiece, high score, great score, absurdres",
+            "negative": (
+                "lowres, bad anatomy, bad hands, text, error, missing finger, "
+                "extra digits, fewer digits, cropped, worst quality, low quality, "
+                "low score, bad score, average score, signature, watermark, "
+                "username, blurry"
+            ),
+        },
+        "realvis": {
+            "positive": "",
+            "negative": (
+                "worst quality, low quality, illustration, 3d, 2d, painting, "
+                "cartoon, sketch"
+            ),
+        },
+    },
 }
 
 DEFAULT_FAMILY = "anima"
@@ -178,10 +204,20 @@ def delete_custom(name: str) -> bool:
 
 
 FAMILY_ALIASES = {
-    "sdxl": "anima",
-    "illustrious": "anima",
-    "pony": "anima",
+    "illustrious": "sdxl",
+    "pony": "sdxl",
 }
+
+DEFAULT_PREPROMPT_BY_FAMILY = {
+    "anima": "glossy",
+    "sdxl": "sdxl_default",
+}
+
+
+def default_preprompt(family: str) -> str:
+    """Default de preprompt de la familia, resolviendo alias."""
+    resolved = FAMILY_ALIASES.get(family, family)
+    return DEFAULT_PREPROMPT_BY_FAMILY.get(resolved, DEFAULT_PREPROMPT)
 
 
 def list_families() -> list[str]:
@@ -232,7 +268,9 @@ __all__ = [
     "CUSTOM_STORE_FILENAME",
     "DEFAULT_FAMILY",
     "DEFAULT_PREPROMPT",
+    "DEFAULT_PREPROMPT_BY_FAMILY",
     "FAMILY_PREPROMPTS",
+    "default_preprompt",
     "delete_custom",
     "get_preprompt",
     "list_custom",

@@ -14,6 +14,7 @@ from app.preprompts import (
     DEFAULT_FAMILY,
     DEFAULT_PREPROMPT,
     FAMILY_PREPROMPTS,
+    default_preprompt,
     delete_custom,
     get_preprompt,
     list_custom,
@@ -70,14 +71,24 @@ class ApiTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_list_families(self):
-        self.assertEqual(list_families(), ["anima"])
+        self.assertEqual(list_families(), ["anima", "sdxl"])
 
     def test_list_preprompts_ordenado(self):
         self.assertEqual(list_preprompts("anima"), sorted(GOLDEN))
 
-    def test_familia_sdxl_alias_soportado(self):
-        self.assertEqual(list_preprompts("sdxl"), sorted(GOLDEN))
-        self.assertEqual(get_preprompt("sdxl", "glossy"), GOLDEN["glossy"])
+    def test_familia_sdxl_tiene_preprompts_propios(self):
+        names = list_preprompts("sdxl")
+        for name in ("ninguno", "sdxl_default", "animagine", "realvis"):
+            self.assertIn(name, names)
+        self.assertNotEqual(
+            get_preprompt("sdxl", "sdxl_default")["positive"],
+            GOLDEN["glossy"]["positive"],
+        )
+
+    def test_defaults_por_familia(self):
+        self.assertEqual(default_preprompt("anima"), "glossy")
+        self.assertEqual(default_preprompt("sdxl"), "sdxl_default")
+        self.assertEqual(default_preprompt("illustrious"), "sdxl_default")
 
     def test_get_preprompt_devuelve_copia(self):
         first = get_preprompt("anima", "glossy")

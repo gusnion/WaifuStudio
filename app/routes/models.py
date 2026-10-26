@@ -308,7 +308,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             profile=profile,
             source=source,
             license="no verificada (archivo local del usuario)",
-            preprompt="glossy",
+            preprompt="sdxl_default" if model_family == "sdxl" else "glossy",
             defaults=defaults,
             notes=notes,
         )
