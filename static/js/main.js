@@ -23,7 +23,6 @@ import { initUpscalerTab, applyUpscaleKind, loadUpscaleGallery, loadUpscaleModel
 import { initGalleryTab, loadGalleryTab, closeGalleryModal, closeCustomTagsModal } from "./tabs/gallery.js";
 import { initHeader } from "./components/header.js";
 import { initTooltipHelp } from "./components/tooltip_help.js";
-import { initTestLab } from "./tabs/test_lab.js";
 import { initTimelineTab, refreshTimelineMedia } from "./tabs/timeline.js";
 import { initGuideTab } from "./tabs/guide.js";
 import { initI18n } from "./i18n.js";
@@ -36,7 +35,6 @@ function switchTab(tab) {
   const timeline = tab === "timeline";
   const gallery = tab === "gallery";
   const guide = tab === "guide";
-  const test = tab === "test";
   $("tab-image").classList.toggle("active", image);
   $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
@@ -46,8 +44,6 @@ function switchTab(tab) {
   $("tab-gallery").classList.toggle("active", gallery);
   const tabGuideEl = $("tab-guide");
   if (tabGuideEl) tabGuideEl.classList.toggle("active", guide);
-  const tabTestEl = $("tab-test");
-  if (tabTestEl) tabTestEl.classList.toggle("active", test);
 
   $("panel-image").classList.toggle("active", image);
   $("panel-video").classList.toggle("active", video);
@@ -63,14 +59,6 @@ function switchTab(tab) {
   if (panelGuideEl) {
     panelGuideEl.classList.toggle("active", guide);
     panelGuideEl.hidden = !guide;
-  }
-  const panelTestEl = $("panel-test");
-  if (panelTestEl) {
-    panelTestEl.classList.toggle("active", test);
-    panelTestEl.hidden = !test;
-  }
-  if (test) {
-    initTestLab();
   }
   if (timeline) {
     refreshTimelineMedia();
@@ -160,10 +148,6 @@ function bind() {
   const tabGuide = $("tab-guide");
   if (tabGuide) {
     on("tab-guide", "click", () => switchTab("guide"));
-  }
-  const tabTest = $("tab-test");
-  if (tabTest) {
-    on("tab-test", "click", () => switchTab("test"));
   }
   on("btn-seed-random", "click", () => toggleSeedRandom());
   on("btn-video-seed-random", "click", () => toggleSeedRandom(setVideoStatus));

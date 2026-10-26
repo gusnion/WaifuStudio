@@ -16,7 +16,6 @@
   <link rel="stylesheet" href="/static/css/tabs/timeline.css">
   <link rel="stylesheet" href="/static/css/tabs/guide.css">
   <link rel="stylesheet" href="/static/css/tabs/gallery.css">
-  <link rel="stylesheet" href="/static/css/tabs/test_lab.css">
 </head>
 <body>
   <header class="topbar">
@@ -29,7 +28,6 @@
       <button id="tab-timeline" class="tab" data-tab="timeline" type="button">🎬 Estudio <span class="beta-badge">BETA</span></button>
       <button id="tab-gallery" class="tab" type="button">Galería</button>
       <button id="tab-guide" class="tab" data-tab="guide" type="button">📖 Guía</button>
-      <button id="tab-test" class="tab hidden" data-tab="test" type="button" hidden>TEST</button>
     </nav>
     <div class="topbar-actions">
       <button id="btn-universal-reload" class="topbar-btn" type="button" title="Recargar pestaña actual" aria-label="Recargar pestaña actual">
@@ -1273,79 +1271,6 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
       </article>
     </section>
 
-    <section id="panel-test" class="panel tab-canonical-layout" hidden>
-      <aside class="controls tab-sidebar test-sidebar">
-        <!-- BLOQUE 1: Selector Dual de Resolución -->
-        <fieldset class="control-card" id="test-card-res">
-          <legend>
-            1. Selector Dual (Orientación + Calidad)
-            <button type="button" class="btn-help" data-help="Calcula automáticamente el ancho y alto óptimos según el aspect ratio seleccionado y la calidad deseada.">?</button>
-          </legend>
-          <label class="field">
-            <span>Orientación</span>
-            <select id="test-res-orientation">
-              <option value="vertical" selected>Vertical (9:16)</option>
-              <option value="horizontal">Horizontal (16:9)</option>
-              <option value="square">Cuadrado (1:1)</option>
-              <option value="h3_vertical">H3 Vertical (9:16)</option>
-              <option value="h3_horizontal">H3 Horizontal (16:9)</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Calidad Relativa</span>
-            <select id="test-res-quality">
-              <option value="sd">SD (Rápido)</option>
-              <option value="hd">HD (Balanceado)</option>
-              <option value="fhd" selected>FHD (1024 Óptimo)</option>
-              <option value="qhd">QHD (Detalle)</option>
-              <option value="2k">2K (Máximo)</option>
-            </select>
-          </label>
-          <div class="field">
-            <span>Dimensiones Resultantes</span>
-            <span id="test-res-badge" class="test-case-badge" style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">832 × 1472 (FHD)</span>
-          </div>
-        </fieldset>
-
-        <!-- BLOQUE 2: Control Inline y Fuerza -->
-        <fieldset class="control-card" id="test-card-inline">
-          <legend>
-            2. Alineación Rígida (.control-inline)
-            <button type="button" class="btn-help" data-help="Garantiza que las etiquetas flotantes como FUERZA queden alineadas en una sola línea horizontal con sus selectores y botones.">?</button>
-          </legend>
-          <div class="control-inline" style="margin-top: 0.25rem;">
-            <span style="font-size: 0.78rem; font-weight: bold; color: var(--muted); text-transform: uppercase;">FUERZA</span>
-            <select style="flex: 1;">
-              <option value="fiel">Fiel</option>
-              <option value="balanceado" selected>Balanceado</option>
-              <option value="creativo">Creativo</option>
-            </select>
-            <button type="button" class="primary" style="padding: 0.45rem 0.7rem;">IA</button>
-          </div>
-          <p class="field-hint" style="margin-top: 0.2rem;">Etiqueta, selector y botón en la misma fila sin saltos de línea erráticos.</p>
-        </fieldset>
-
-        <!-- BLOQUE 3: Acciones Sandbox y Visor -->
-        <fieldset class="control-card" id="test-card-viewer">
-          <legend>
-            3. Banco de Pruebas de Visor
-            <button type="button" class="btn-help" data-help="Prueba interactiva del zoom 8x, split comparador con recorte y tira dinámica de miniaturas calculada con ResizeObserver.">?</button>
-          </legend>
-          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
-            <button id="btn-test-zoom" type="button">Probar Zoom 2.5× / 1×</button>
-            <button id="btn-test-compare" type="button">Probar Split Comparación</button>
-            <button id="btn-test-add-thumbs" type="button">Añadir 4 Miniaturas (ResizeObserver)</button>
-          </div>
-          <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid var(--border);">
-            <span id="test-sandbox-status" class="test-status-pill">● Laboratorio listo</span>
-          </div>
-        </fieldset>
-      </aside>
-
-      <div class="tab-viewport test-viewport">
-        <div id="test-viewer-container" class="test-viewer-box"></div>
-      </div>
-    </section>
   </main>
 
   <div id="oc-modal" class="modal hidden">
