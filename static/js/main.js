@@ -28,6 +28,7 @@ import { initTooltipHelp } from "./components/tooltip_help.js";
 import { initTimelineTab, refreshTimelineMedia } from "./tabs/timeline.js";
 import { initAddons, loadAddons } from "./tabs/addons.js";
 import { initModelDefaults } from "./components/model_defaults.js";
+import { initEditorMultiview } from "./components/editor_multiview.js";
 import { initGuideTab } from "./tabs/guide.js";
 import { initI18n } from "./i18n.js";
 
@@ -189,6 +190,7 @@ function bind() {
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();
   initModelDefaults();
   initEditorTab(); initUpscalerTab(); initTimelineTab(); initGalleryTab(); initGuideTab();
+  initEditorMultiview();
   initAddons();
   return missing.length === 0;
 }

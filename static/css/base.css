@@ -10,6 +10,40 @@
   padding: 0.8rem;
 }
 
+.editor-multiview-results {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.8rem;
+}
+
+.editor-multiview-results figure {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.editor-multiview-results img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+}
+
+.editor-multiview-results figcaption {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .editor-multiview-results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .model-defaults-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
