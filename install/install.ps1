@@ -643,12 +643,14 @@ function Install-Ffmpeg {
     }
 
     Write-Step 'FFmpeg/FFprobe portables (tools\ffmpeg)'
-    $zip = Join-Path $StateDir 'ffmpeg-release-essentials.zip'
+    $zip = Join-Path $StateDir 'ffmpeg-n8.1.3-win64-gpl-8.1.zip'
     $extract = Join-Path $StateDir 'ffmpeg-extract'
-    $url = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
+    $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-25-13-00/ffmpeg-n8.1.3-24-g92611900bb-win64-gpl-8.1.zip'
+    $sha256 = '0ed7e19d34ca040c0179068ccc6cd6d7f2217d2bcbf7604e2225e271e79bee22'
+    $bytes = 193050101
     try {
         New-Item -ItemType Directory -Force -Path $StateDir, $ffmpegDir | Out-Null
-        Get-VerifiedFile -Url $url -Destination $zip -Sha256 '' -Bytes 0
+        Get-VerifiedFile -Url $url -Destination $zip -Sha256 $sha256 -Bytes $bytes
         if (Test-Path -LiteralPath $extract) {
             Remove-Item -LiteralPath $extract -Recurse -Force
         }

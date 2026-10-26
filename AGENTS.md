@@ -44,7 +44,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
    - `install.bat -SkipFfmpeg` (no descarga FFmpeg/FFprobe; Timeline/export/fade quedan deshabilitados).
 4. **Diagnóstico Rápido de Problemas de Instalación**:
    - **`torch.cuda.is_available() == False` o error de driver CUDA**: El stack usa `cu130` (CUDA 13.0). El usuario debe actualizar su **Driver NVIDIA Game Ready / Studio a versión >= 570.xx**. Verificar con `nvidia-smi`.
-   - **Faltan adaptadores de vídeo VDN-H3 (8 pasos)**: Ejecutar `& .\.venv\Scripts\python.exe scripts\download_models.py --vdn`.
+   - **Faltan modelos Wan**: verifica `install/manifest/manifest.wan.json` y ejecuta `& .\.venv\Scripts\python.exe scripts\fast_download_wan.py`.
    - **Falta el LLM o `llama-server.exe`**: Ejecutar `& .\.venv\Scripts\python.exe scripts\download_llm.py`.
    - **Modelos o LoRAs añadidos a mano no aparecen**: Colocarlos en `ComfyUI/models/checkpoints/`, `diffusion_models/` o `loras/` y pulsar el botón de recarga universal en la barra superior de la web (o invocar `GET /api/models?scan=1` / `POST /api/loras/scan`).
 
@@ -76,7 +76,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 | **Zonas de Prompt y Popover** | `components/prompt_zones.js`, `prompt_popover.js` | `prompt.py` (`/api/prompt/*`), `tags.py` | `prompt_zones.py`, `tags.py` (SQLite FTS5 91k tags) |
 | **Mejorador LLM y Visión** | `tabs/image.js`, `components/vision.js` | `prompt.py` (`/api/enhance*`, `/api/vision/*`) | `enhancer.py`, `vision.py`, `llm_server.py`, `preprompts.py` |
 | **OC Maker y Entrenador Kohya** | `components/oc_picker.js`, `oc_train.js` | `characters.py` (`/api/characters*`) | `characters.py`, `oc_traits.py`, `sheet.py`, `trainer.py` |
-| **Vídeo H3 (VDN / Ref2VA / V2V)** | `tabs/video.js`, `tabs/video_h3.js` | `video.py`, `presets.py`, `prompt.py` | `video.py`, `h3_presets.py`, `h3_prompt.py`, `motion.py` |
+| **Vídeo Wan 2.2 (I2V/FLF2V)** | `tabs/video.js` | `video.py`, `presets.py` | `video.py`, `video_presets.py` |
 | **Editor Qwen-Image 2.1 UC** | `tabs/editor.js` | `editor.py` (`/api/editor/*`) | `editor.py`, `editor_models.py` |
 | **Upscaler (RealESRGAN + RIFE)** | `tabs/upscaler.js` | `upscale.py` (`/api/upscale*`) | `upscale.py` |
 | **Galería y Medios** | `tabs/gallery.js`, `components/lightbox.js` | `gallery.py` (`/api/gallery*`, `/media/*`) | `store.py::Store` |
@@ -102,9 +102,9 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 
 ## 6. Rangos de Líneas de `templates/index.html` y Cascada CSS
 
-- **Secciones en `templates/index.html` (1.699 líneas; no leer entero)**:
-  - `L1–L49`: Header global (`#btn-universal-reload`, `#btn-language-selector`) y `<nav class="tabs">`.
-  - `L50–L324`: `#panel-image` | `L325–L614`: `#panel-video` | `L615–L787`: `#panel-editor` | `L788–L1039`: `#panel-upscaler` | `L1040–L1253`: `#panel-gallery` | `L1254–L1328`: `#panel-test`.
-  - `L1329–L1512`: Modales OC (`#oc-modal`, `#oc-save-modal`, `#oc-train-modal`) | `L1513–L1691`: Modales LoRA (`#lora-modal`, `#lora-library-modal`) | `L1692–L1699`: `#lightbox` y scripts.
+- **Secciones en `templates/index.html` (1.671 líneas; no leer entero)**:
+  - `L1–L60`: Header global y `<nav class="tabs">`.
+  - `L61–L335`: `#panel-image` | `L336–L625`: `#panel-video` | `L626–L807`: `#panel-editor` | `L808–L956`: `#panel-upscaler` | `L957–L1065`: `#panel-timeline` | `L1066–L1284`: `#panel-gallery` | `L1285–L1300`: `#panel-addons`.
+  - `L1301–L1671`: modales OC/LoRA y `#lightbox`.
 - **Orden de Cascada CSS (`static/css/`)**:
   `1. base.css` → `2. components.css` → `3. tabs/image.css` → `4. tabs/video.css` → `5. tabs/editor.css` → `6. tabs/upscaler.css` → `7. tabs/gallery.css` → `8. tabs/test_lab.css`.

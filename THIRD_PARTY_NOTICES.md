@@ -35,6 +35,7 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | MMAudio (Kijai safetensors) | MIT (repo) | Si, con avisos | Activo; `manifest.wan.json` |
 | ComfyUI-VideoHelperSuite | MIT | Si, con avisos | Activo; commit `4d907be` |
 | BigVGAN v2 44 kHz (NVIDIA) | NVIDIA license (modelo) | No se redistribuye | Descargado por MMAudio en runtime |
+| FFmpeg/FFprobe (BtbN win64-gpl 8.1) | GPL-3.0 (build GPL) | No se redistribuye | Descarga fijada por URL/SHA256; binarios separados |
 | Animagine XL 4.0 Opt | Fair AI Public License 1.0-SD | No se redistribuye | Activo; Civitai/HF |
 | `lopi999` NSFW LoRAs | Sin licencia declarada | No se redistribuye | Opcional; no usar comercialmente |
 | `rzgar` Uncensored 4-step LoRAs | Apache-2.0 | Si, con avisos | Opcional; descargado, no activo por defecto |

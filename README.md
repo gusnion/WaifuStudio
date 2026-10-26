@@ -204,7 +204,7 @@ Subfolders are scanned recursively. Organizing LoRAs as `loras/anima/...` and `l
 - **Anima LoRA** with an Anima UNET.
 - **SDXL/Illustrious/Pony LoRA** with an SDXL checkpoint.
 - Do not mix families. A LoRA trained for Anima will not work correctly on SDXL, and vice versa.
-- H3 and Wan LoRAs belong to video workflows, not the Image tab.
+- Wan LoRAs belong to video workflows, not the Image tab.
 - The app tries to read the trigger from the LoRA metadata. If it is missing, enter the trigger manually in the library.
 - Start with a weight around `0.6–0.8` for style LoRAs and `0.8–1.0` for character LoRAs. Adjust from there.
 
@@ -213,7 +213,7 @@ Subfolders are scanned recursively. Organizing LoRAs as `loras/anima/...` and `l
 - ControlNet, IP-Adapter, textual inversion and embeddings are not exposed in the Image tab.
 - There is no separate VAE selector; Anima uses its fixed encoder/VAE pair, and SDXL checkpoints carry their own.
 - Upscaler files are a separate, fixed catalog. Copying a new `.pth` into `upscale_models` does not add it to the Upscaler dropdown.
-- H3 video models and presets are not installed by dropping files into `checkpoints`.
+- Wan video models (DiT, encoder and VAE) are not installed by dropping files into `checkpoints`; use the paths in the asset table.
 
 Check the model license before publishing generated work. The Anima models are non-commercial; SDXL and Civitai models have their own terms.
 
@@ -238,7 +238,7 @@ Windows is the supported installation path. The core is standard FastAPI, ComfyU
 ## Current limits
 
 - Single GPU, FIFO queue. Long jobs block the other tabs until they finish.
-- H3 produces short segments: 15 seconds per generation, with chained output where supported.
+- Wan produces 5-second segments at 16 fps; extend a clip through the Timeline.
 - The native video upscaler processes one batch and rejects videos over 300 frames. Long videos need an external tool.
 - The Timeline is intentionally small: no playhead, trim handles, drag-and-drop or waveform editing yet.
 - No lip-sync and no automatic voice-over in this version.
@@ -270,7 +270,7 @@ The following items are planned or under evaluation. They are not promises, not 
 
 Version 2.0 is a stabilization and documentation pass over the original application. The remediation, test work and agent-oriented groundwork were continued with **DeepSeek V4.1 Flash 1017** using **DSH**.
 
-The offline suite currently runs 1,627 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
+The offline suite currently runs 1,628 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
 
 ## Support
 
@@ -283,5 +283,5 @@ Support is optional and does not unlock or restrict any part of the application.
 ## License and credits
 
 - Released under the **MIT License**. No warranties are provided.
-- Built on top of ComfyUI, MiniMax H3 VDN, Anima, Qwen and FFmpeg.
-- **Wan 2.2 workflow research and the 8 GB workflow bank**: Artelive (community contribution; integration pending).
+- Built on top of ComfyUI, Wan 2.2, Qwen and FFmpeg.
+- **Wan 2.2 workflow research and the 8 GB workflow bank**: Artelive (community contribution; Fast/Quality installed).
