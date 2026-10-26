@@ -43,6 +43,16 @@ from app.server import create_app
 from app.store import Store
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"waifu-editor-png"
+
+
+def accept_editor_license(data_dir: Path) -> None:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "editor-license.json").write_text(
+        '{"accepted": true, "version": "qwen-image-2.1-research", '
+        '"accepted_at": "2026-10-26T00:00:00+00:00"}\n',
+        encoding="utf-8",
+    )
+
 EDITOR_MODEL = "qwen-image-2.1"
 VAE_ID = "3"
 ENCODE_ID = "4"
@@ -528,6 +538,7 @@ class EditorQueueIntegrationTests(unittest.TestCase):
         self.config = make_config(self.root)
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
+        accept_editor_license(self.config.data_dir)
         self.registry = ModelRegistry.load(
             Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "models.json"
         )
@@ -863,6 +874,7 @@ class EditorRouteFeaturesTests(unittest.TestCase):
         self.config = make_config(self.root)
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
+        accept_editor_license(self.config.data_dir)
         self.registry = ModelRegistry.load(
             Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "models.json"
         )
