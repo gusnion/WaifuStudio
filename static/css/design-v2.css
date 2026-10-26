@@ -1,0 +1,47 @@
+/* Piloto de diseño v2: solo Imagen. El resto de pestañas sigue intacto. */
+
+#panel-image.design-v2 .controls {
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+  border-right: 1px solid var(--border);
+}
+
+#panel-image.design-v2 .control-card {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+#panel-image.design-v2 .control-card > legend {
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+#panel-image.design-v2 .control-card .field > span {
+  font-weight: 600;
+}
+
+#panel-image.design-v2 button.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: 0;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+#panel-image.design-v2 .tab-viewport {
+  background:
+    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 45%),
+    var(--bg);
+}
+
+#panel-image.design-v2 .image-preview {
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+html[data-theme="light"] #panel-image.design-v2 .controls {
+  background: var(--panel-2);
+}
+
+html[data-theme="light"] #panel-image.design-v2 .control-card {
+  box-shadow: 0 6px 18px rgba(30, 35, 50, 0.08);
+}
