@@ -4,6 +4,20 @@
  * Dependencias: ninguna (hoja de estilos raíz cargada en primer lugar).
  */
 
+.beta-badge {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border-strong, #667085);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  vertical-align: middle;
+  color: var(--text-secondary, #c7cbd4);
+}
+
 :root {
   --bg: #14151a;
   --panel: #1d1f27;
