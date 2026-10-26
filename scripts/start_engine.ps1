@@ -16,5 +16,5 @@ if ($listener) {
 }
 
 Set-Location (Join-Path $StackRoot 'ComfyUI')
-& (Join-Path $StackRoot '.venv\Scripts\python.exe') -s main.py --listen 127.0.0.1 --port 8288 --disable-api-nodes --disable-auto-launch
+& (Join-Path $StackRoot '.venv\Scripts\python.exe') -s main.py --listen 127.0.0.1 --port 8288 --offline --disable-auto-launch
 exit $LASTEXITCODE
