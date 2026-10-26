@@ -54,6 +54,7 @@ from app.routes.editor import (
 from app.routes.upscale import router as upscale_router
 from app.routes.video import router as video_router
 from app.routes.timeline import router as timeline_router
+from app.routes.addons import router as addons_router
 from app.routes.prompt import _ensure_vision_server, _get_manager, _manager, _manager_llm, router as prompt_router
 
 APP_HOST = "127.0.0.1"
@@ -180,6 +181,7 @@ def create_app(
     app.include_router(characters_router)
     app.include_router(presets_router)
     app.include_router(timeline_router)
+    app.include_router(addons_router)
     app.include_router(gallery_router)
     app.include_router(upscale_router)
     app.include_router(prompt_router)

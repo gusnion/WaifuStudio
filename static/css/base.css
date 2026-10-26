@@ -4,6 +4,35 @@
  * Dependencias: ninguna (hoja de estilos raíz cargada en primer lugar).
  */
 
+.addons-list {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.8rem;
+}
+
+.addon-sidebar {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.addon-card {
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.addon-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.addon-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
 .first-run-banner {
   margin: 0.6rem 1rem 0;
   padding: 0.65rem 0.8rem;

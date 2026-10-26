@@ -25,6 +25,7 @@ import { initHeader } from "./components/header.js";
 import { initFirstRun } from "./components/first_run.js";
 import { initTooltipHelp } from "./components/tooltip_help.js";
 import { initTimelineTab, refreshTimelineMedia } from "./tabs/timeline.js";
+import { initAddons, loadAddons } from "./tabs/addons.js";
 import { initGuideTab } from "./tabs/guide.js";
 import { initI18n } from "./i18n.js";
 
@@ -36,6 +37,7 @@ function switchTab(tab) {
   const timeline = tab === "timeline";
   const gallery = tab === "gallery";
   const guide = tab === "guide";
+  const addons = tab === "addons";
   $("tab-image").classList.toggle("active", image);
   $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
@@ -43,6 +45,8 @@ function switchTab(tab) {
   const tabTimelineEl = $("tab-timeline");
   if (tabTimelineEl) tabTimelineEl.classList.toggle("active", timeline);
   $("tab-gallery").classList.toggle("active", gallery);
+  const tabAddonsEl = $("tab-addons");
+  if (tabAddonsEl) tabAddonsEl.classList.toggle("active", addons);
   const tabGuideEl = $("tab-guide");
   if (tabGuideEl) tabGuideEl.classList.toggle("active", guide);
 
@@ -56,6 +60,11 @@ function switchTab(tab) {
     panelTimelineEl.hidden = !timeline;
   }
   $("panel-gallery").classList.toggle("active", gallery);
+  const panelAddonsEl = $("panel-addons");
+  if (panelAddonsEl) {
+    panelAddonsEl.classList.toggle("active", addons);
+    panelAddonsEl.hidden = !addons;
+  }
   const panelGuideEl = $("panel-guide");
   if (panelGuideEl) {
     panelGuideEl.classList.toggle("active", guide);
@@ -79,6 +88,9 @@ function switchTab(tab) {
   }
   if (gallery && !state.galleryTab.items.length) {
     loadGalleryTab(1).catch((error) => setStatus(error.message, true));
+  }
+  if (addons) {
+    loadAddons().catch((error) => setStatus(error.message, true));
   }
 }
 
@@ -146,6 +158,10 @@ function bind() {
     on("tab-timeline", "click", () => switchTab("timeline"));
   }
   on("tab-gallery", "click", () => switchTab("gallery"));
+  const tabAddons = $("tab-addons");
+  if (tabAddons) {
+    on("tab-addons", "click", () => switchTab("addons"));
+  }
   const tabGuide = $("tab-guide");
   if (tabGuide) {
     on("tab-guide", "click", () => switchTab("guide"));
@@ -170,6 +186,7 @@ function bind() {
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();
   initEditorTab(); initUpscalerTab(); initTimelineTab(); initGalleryTab(); initGuideTab();
+  initAddons();
   return missing.length === 0;
 }
 

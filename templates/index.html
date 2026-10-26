@@ -27,6 +27,7 @@
       <button id="tab-upscaler" class="tab" type="button">Upscaler</button>
       <button id="tab-timeline" class="tab" data-tab="timeline" type="button">🎬 Estudio <span class="beta-badge">BETA</span></button>
       <button id="tab-gallery" class="tab" type="button">Galería</button>
+      <button id="tab-addons" class="tab" type="button">Addons</button>
       <button id="tab-guide" class="tab" data-tab="guide" type="button">📖 Guía</button>
     </nav>
     <div class="topbar-actions">
@@ -1273,6 +1274,20 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
       </article>
     </section>
 
+    <section id="panel-addons" class="panel" hidden>
+      <div class="controls tab-sidebar">
+        <div class="addon-sidebar">
+          <h2>Addons</h2>
+          <p class="field-hint">Importa un .zip con un <code>addon.json</code> válido. Se instala desactivado; actívalo cuando quieras.</p>
+          <input id="addon-file" type="file" accept=".zip,application/zip">
+          <button id="btn-addon-import" class="primary" type="button" disabled>Import addon</button>
+          <p id="addons-status" class="status">Listo</p>
+        </div>
+      </div>
+      <div class="tab-viewport">
+        <div id="addons-list" class="addons-list"></div>
+      </div>
+    </section>
   </main>
 
   <div id="oc-modal" class="modal hidden">
