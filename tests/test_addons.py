@@ -9,7 +9,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from app.addons import import_addon, list_addons, set_addon_enabled
+from app.addons import import_addon, import_catalog, list_addons, set_addon_enabled
 from app.engine import EngineError
 
 
@@ -79,6 +79,23 @@ class AddonManagerTests(unittest.TestCase):
         set_addon_enabled(self.data, "demo-pack", False)
         set_addon_enabled(self.data, "demo-pack-2", True)
         self.assertTrue(next(item for item in list_addons(self.data) if item["id"] == "demo-pack-2")["enabled"])
+
+    def test_catalogo_compatible(self):
+        payload = {
+            "schema": "waifu.addons-catalog/v1",
+            "requires_core": "2.x",
+            "addons": [{"id": "catalog-pack", "name": "Catalog", "version": "1.0", "slots": ["image"]}],
+        }
+        result = import_catalog(self.data, payload)
+        self.assertEqual(result["count"], 1)
+        self.assertTrue((self.data / "addons" / "catalog.json").is_file())
+
+    def test_catalogo_incompatible(self):
+        with self.assertRaises(EngineError):
+            import_catalog(
+                self.data,
+                {"schema": "waifu.addons-catalog/v1", "requires_core": ">=3.0", "addons": []},
+            )
 
 
 if __name__ == "__main__":

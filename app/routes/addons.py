@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.addons import import_addon, list_addons, set_addon_enabled
+from app.addons import import_addon, import_catalog, list_addons, set_addon_enabled
 from app.engine import EngineError
 
 router = APIRouter()
@@ -26,6 +26,15 @@ async def api_addon_import(request: Request) -> Any:
     except EngineError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
     return {"ok": True, "addon": addon}
+
+
+@router.post("/api/addons/catalog")
+async def api_addon_catalog(request: Request) -> Any:
+    try:
+        payload = await request.json()
+        return import_catalog(request.app.state.config.data_dir, payload)
+    except EngineError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
 
 @router.post("/api/addons/{addon_id}/enable")

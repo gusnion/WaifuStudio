@@ -186,6 +186,50 @@ def import_addon(data_dir: str | Path, raw: bytes) -> dict[str, Any]:
     }
 
 
+def import_catalog(data_dir: str | Path, payload: object) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise EngineError("catalogo invalido; usar objeto JSON")
+    if payload.get("schema") not in ("waifu.addons-catalog/v1", None):
+        raise EngineError("schema de catalogo no soportado")
+    requires = payload.get("requires_core")
+    if not isinstance(requires, str) or not _compatible(requires):
+        raise EngineError(f"catalogo incompatible con core {__version__}")
+    entries = payload.get("addons")
+    if not isinstance(entries, list):
+        raise EngineError("addons debe ser una lista")
+    accepted = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise EngineError("entrada de catalogo invalida")
+        addon_id = entry.get("id")
+        if not isinstance(addon_id, str) or ID_RE.fullmatch(addon_id) is None:
+            raise EngineError("id de addon invalido en catalogo")
+        slots = entry.get("slots", [])
+        if not isinstance(slots, list) or any(slot not in SLOTS for slot in slots):
+            raise EngineError(f"slots invalidos en {addon_id}")
+        url = entry.get("url")
+        if url is not None and (not isinstance(url, str) or not url.startswith(("https://", "http://"))):
+            raise EngineError(f"url invalida en {addon_id}")
+        accepted.append(
+            {
+                "id": addon_id,
+                "name": str(entry.get("name") or addon_id),
+                "version": str(entry.get("version") or "0"),
+                "requires_core": str(entry.get("requires_core") or requires),
+                "slots": slots,
+                "url": url or "",
+            }
+        )
+    root = addons_root(data_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "catalog.json").write_text(
+        json.dumps({"schema": "waifu.addons-catalog/v1", "requires_core": requires, "addons": accepted}, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    return {"accepted": accepted, "count": len(accepted)}
+
+
 def set_addon_enabled(data_dir: str | Path, addon_id: str, enabled: bool) -> dict[str, Any]:
     path = addons_root(data_dir) / addon_id
     if not path.is_dir():
