@@ -1,9 +1,10 @@
 # Avisos de terceros (THIRD_PARTY_NOTICES)
 
-Estado: 2026-10-26 (TAREA-01 + AniDream TrueHentai v1.0; M13: v1.3.0 — Anima Patch 28->40, Kohya Installer, Purga Wan).
+Estado: 2026-10-26 (v2.x; Wan 2.2 reinstalado + MMAudio; H3/Anima archivados).
 Ambito: pesos, LoRAs y componentes consumidos por WAIFU. Los textos de licencias
 principales (MIT, Apache-2.0, BSD-3-Clause, GPL-3.0) estan archivados en
-`install/manifest/licenses/`.
+`install/manifest/licenses/`; los hashes de cada descarga estan en
+`install/manifest/manifest.wan.json` y `manifest.models.json`.
 
 > **Licencia del codigo**: MIT (ver `LICENSE`, © gusnion 2026). Los pesos,
 > LoRAs y componentes de terceros conservan sus propias licencias (tablas
@@ -17,8 +18,9 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 
 ## Pesos y modelos
 
-> **Retirados 2026-09-27/30**: los pesos de Wan 2.2 y del LLM M11 (Qwen3.8-27B) se borraron de disco.
-> El motor actual utiliza MiniMax H3 (perfiles Referencia, Calidad, Ligero) y LLM único Qwen3.5-9B en CPU.
+> **Archivados 2026-10-26**: H3 y Anima salieron del set oficial; sus pesos viven en
+> `G:\IA\WAIFU-personal-archive`. Wan 2.2 vuelve como motor de video activo y el
+> LLM único sigue siendo Qwen3.5-9B en CPU.
 
 | Componente | Licencia | ¿Redistribuible en el repo? | Estado |
 | --- | --- | --- | --- |
@@ -26,10 +28,16 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | AniDream TrueHentai v1.0 (Civitai 2895658 / v3273573) | Anima License (CircleStone Labs LLC) — no comercial; built on NVIDIA Cosmos | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-26 |
 | Juggernaut XL Ragnarok (Civitai 133005 / v1759168) | OpenRAIL++-M; flags `allowCommercialUse=Image,RentCivit`, `allowNoCredit=false`; el autor pide shoutout | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-24 |
 | RealVisXL V5.0 BakedVAE (Civitai 139562 / v789646) | OpenRAIL++-M; flags `allowCommercialUse=Image,RentCivit,Rent`, `allowNoCredit=false`; **atribucion requerida** | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-24 |
-| Wan 2.2 (DiT) | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** (`WAN_RETIRADO.md`) |
-| umt5 (text encoder) | Apache-2.0 | Si, con avisos | Texto archivado (`install/manifest/licenses/APACHE-2.0.txt`) |
-| Wan VAE | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** |
-| LightX2V (LoRA aceleracion) | Apache-2.0 | Si, con avisos | **Retirado 2026-09-27** |
+| Wan 2.2 (DiT I2V A14B) | Apache-2.0 | Si, con avisos | **Activo**; `manifest.wan.json` |
+| umt5 (text encoder) | Apache-2.0 | Si, con avisos | Activo; Q5_K_M en `manifest.wan.json` |
+| Wan VAE | Apache-2.0 | Si, con avisos | Activo; `manifest.wan.json` |
+| LightX2V (LoRA aceleracion) | Apache-2.0 | Si, con avisos | Activo; `manifest.wan.json` |
+| MMAudio (Kijai safetensors) | MIT (repo) | Si, con avisos | Activo; `manifest.wan.json` |
+| ComfyUI-VideoHelperSuite | MIT | Si, con avisos | Activo; commit `4d907be` |
+| BigVGAN v2 44 kHz (NVIDIA) | NVIDIA license (modelo) | No se redistribuye | Descargado por MMAudio en runtime |
+| Animagine XL 4.0 Opt | Fair AI Public License 1.0-SD | No se redistribuye | Activo; Civitai/HF |
+| `lopi999` NSFW LoRAs | Sin licencia declarada | No se redistribuye | Opcional; no usar comercialmente |
+| `rzgar` Uncensored 4-step LoRAs | Apache-2.0 | Si, con avisos | Opcional; descargado, no activo por defecto |
 | RealESRGAN (upscaler) | BSD-3-Clause | Si, con avisos | Texto archivado (`install/manifest/licenses/BSD-3-CLAUSE.txt`) |
 | MiniMax H3 (pesos empaquetados por Comfy-Org) | Licencia community de MiniMax | No se redistribuye (descarga origen) | Identificada |
 | Qwen-Image 2.1 (Editor M10, GGUF comunitario) | qwen-research (Qwen License) | No se redistribuye | Identificada |

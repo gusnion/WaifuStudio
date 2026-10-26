@@ -29,9 +29,9 @@ The application is designed around a single NVIDIA GPU and a Windows desktop. It
 | Module | Status | What it does |
 |---|---|---|
 | **Windows installer** | Available | Sets up a portable Python environment, ComfyUI, custom nodes, models, FFmpeg/FFprobe and the app shortcut. |
-| **Image and OC Maker** | Available | Anima 2.9B and SDXL/Illustrious support, prompt zones, LoRA selection, character profiles, reference images and optional LoRA training. |
+| **Image and OC Maker** | Available | Animagine XL 4.0 Opt, RealVisXL V5 and Juggernaut XL Ragnarok (SDXL), prompt zones, LoRA selection, character profiles, reference images and optional LoRA training. |
 | **Prompt assistant** | Available | Local Danbooru tag index plus an optional CPU LLM for prompt expansion and image captioning. |
-| **H3 video** | Available | Eight-step VideoDeltaNet generation in I2V, FLF2V, Ref2VA and V2V modes, with native audio and short prompt templates. |
+| **Wan 2.2 video** | Available | I2V and FLF2V with Wan 2.2 A14B Q4_K_S, LightX2V, Fast (4 steps) and Quality (30 steps) profiles, plus MMAudio audio. |
 | **Editor** | Available | Instruction-based editing with Qwen-Image 2.1, up to ten reference images and L0–L3 pose presets. Mask-based inpainting is not part of this version. |
 | **Timeline** | Available | Arrange clips and still images, set duration, apply fade/zoom, mute clips, add external audio, continue a clip with I2V/FLF2V and export MP4. It is a focused sequencer, not a full NLE. |
 | **Upscaler** | Available | Image upscaling with GAN, Hires Fix and Qwen Remaster modes, plus RCAS/Adaptive USM sharpening and RIFE interpolation. Video upscaling is limited to 300 frames per job. |
@@ -164,12 +164,12 @@ The repository does not include third-party checkpoints or LoRAs. The installer 
 
 | Asset | Folder | Format | Notes |
 |---|---|---|---|
-| SDXL checkpoint | `ComfyUI/models/checkpoints/` | `.safetensors` | Includes CLIP and VAE. Illustrious, Pony and NoobAI-style SDXL checkpoints use this path. |
-| Anima 2.9B UNET | `ComfyUI/models/diffusion_models/` | `.safetensors` | Needs the Anima text encoder and VAE listed below. |
-| Anima LoRA | `ComfyUI/models/loras/anima/` | `.safetensors` | Subfolder is optional, but helps family detection. |
-| SDXL-family LoRA | `ComfyUI/models/loras/sdxl/` | `.safetensors` | Use only with SDXL/Illustrious checkpoints. |
-| Anima text encoder | `ComfyUI/models/text_encoders/` | `.safetensors` | Expected name: `qwen_3_06b_base.safetensors`. |
-| Anima VAE | `ComfyUI/models/vae/` | `.safetensors` | Expected name: `qwen_image_vae.safetensors`. |
+| SDXL checkpoint | `ComfyUI/models/checkpoints/` | `.safetensors` | Official set: `animagine-xl-4.0-opt`, `realvisxlV50_v50Bakedvae_full_fp16`, `juggernautXL_ragnarok`. |
+| Wan 2.2 DiT | `ComfyUI/models/diffusion_models/` | `.gguf` | High/Low `Q4_K_S`; workflow uses GGUF. |
+| Wan text encoder | `ComfyUI/models/text_encoders/` | `.gguf` | `umt5-xxl-encoder-Q5_K_M.gguf`. |
+| Wan VAE | `ComfyUI/models/vae/` | `.safetensors` | `wan_2.1_vae.safetensors`. |
+| Wan LightX2V LoRA | `ComfyUI/models/loras/` | `.safetensors` | `wan22_lightx2v_high/low.safetensors`. |
+| MMAudio | `ComfyUI/models/mmaudio/` | `.safetensors` | Cuatro archivos del manifiesto Wan. |
 
 Use `.safetensors`. The automatic scanner only registers `.safetensors` files; `.ckpt` and `.pt` files are not picked up.
 
@@ -227,7 +227,7 @@ These are the hardware and software used for development and validation. They ar
 | CPU | AMD Ryzen 7 5700X, 8 cores |
 | RAM | 32 GB DDR4 |
 | OS | Windows 10 64-bit |
-| Engine | ComfyUI v0.37.4 |
+| Engine | ComfyUI v0.42.5 |
 | Python | CPython 3.12.12, isolated |
 | Inference | PyTorch 2.11.0 + CUDA 13.0 |
 
@@ -270,7 +270,7 @@ The following items are planned or under evaluation. They are not promises, not 
 
 Version 2.0 is a stabilization and documentation pass over the original application. The remediation, test work and agent-oriented groundwork were continued with **DeepSeek V4.1 Flash 1017** using **DSH**.
 
-The offline suite currently runs 1,614 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
+The offline suite currently runs 1,627 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
 
 ## Support
 
