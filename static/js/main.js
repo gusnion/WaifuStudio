@@ -22,6 +22,7 @@ import { initEditorTab, updateEditorControls, updateEditorMode, loadEditorStatus
 import { initUpscalerTab, applyUpscaleKind, loadUpscaleGallery, loadUpscaleModels, upscaleCompareActive, setUpscaleCompareActive } from "./tabs/upscaler.js";
 import { initGalleryTab, loadGalleryTab, closeGalleryModal, closeCustomTagsModal } from "./tabs/gallery.js";
 import { initHeader } from "./components/header.js";
+import { initFirstRun } from "./components/first_run.js";
 import { initTooltipHelp } from "./components/tooltip_help.js";
 import { initTimelineTab, refreshTimelineMedia } from "./tabs/timeline.js";
 import { initGuideTab } from "./tabs/guide.js";
@@ -164,7 +165,7 @@ function bind() {
       closeOcModal();
     }
   });
-  initHeader(); initI18n(); initTooltipHelp();
+  initHeader(); initI18n(); initTooltipHelp(); initFirstRun();
   initCompare(); initLightbox(); initPromptZones(); initPromptPopover();
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();

@@ -14,11 +14,17 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import APP_ROOT
+from app.first_run import first_run_report
 
 TEMPLATES_DIR = APP_ROOT / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter()
+
+
+@router.get("/api/first-run")
+async def first_run(request: Request) -> dict:
+    return first_run_report(request.app.state.config)
 
 
 @router.get("/", response_class=HTMLResponse)

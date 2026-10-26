@@ -4,6 +4,25 @@
  * Dependencias: ninguna (hoja de estilos raíz cargada en primer lugar).
  */
 
+.first-run-banner {
+  margin: 0.6rem 1rem 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #8a6d1f;
+  border-radius: 8px;
+  background: #2a2415;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.first-run-banner ul {
+  margin: 0.35rem 0 0.45rem 1rem;
+  padding: 0;
+}
+
+.first-run-banner button {
+  margin-top: 0.2rem;
+}
+
 .beta-badge {
   display: inline-block;
   margin-left: 0.3rem;
