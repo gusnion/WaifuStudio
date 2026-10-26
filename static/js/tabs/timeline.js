@@ -27,8 +27,7 @@ function setAiStatus(msg, err = false) {
   if (el) { el.textContent = msg; el.style.color = err ? "#ff5252" : "var(--accent, #ff4081)"; }
 }
 
-function calcTotalDuration() {
-  const clips = state.current.data.clips || [];
+function calcTotalDuration() {  const clips = state.current.data.clips || [];
   const total = clips.reduce((acc, c) => acc + (Number(c.duration) || 3.0), 0);
   const durEl = $("timeline-total-duration");
   if (durEl) durEl.textContent = `Duración total: ${total.toFixed(1)}s (${clips.length} clips)`;
@@ -42,6 +41,30 @@ function resolveMediaUrl(item) {
   const out = (item.outputs || [])[0];
   const name = typeof out === "string" ? out : out && out.name;
   return name && item.id ? `/media/${item.id}/${name}` : "";
+}
+
+/**
+ * El primer clip manda el perfil del proyecto. Los clips siguientes se
+ * normalizan a ese lienzo; no al reves.
+ */
+export function applyFirstClipProfile(projectData, item) {
+  if (!projectData || !item) return false;
+  const p = item.params || {};
+  let width = Number(p.width);
+  let height = Number(p.height);
+  if ((!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) &&
+      (p.aspect === "vertical" || p.aspect === "horizontal")) {
+    width = p.aspect === "vertical" ? 432 : 768;
+    height = p.aspect === "vertical" ? 768 : 432;
+  }
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+    return false;
+  }
+  projectData.width = Math.round(width);
+  projectData.height = Math.round(height);
+  const fps = Number(p.fps);
+  if (Number.isFinite(fps) && fps > 0) projectData.fps = Math.round(fps);
+  return true;
 }
 
 export function clipDurationForItem(item, metadataDuration = null) {
@@ -405,6 +428,9 @@ export async function refreshTimelineMedia() {
           _hasExplicitDuration: Boolean(hasParam || metaDuration),
         };
         state.current.data.clips.push(clip);
+        if (state.current.data.clips.length === 1) {
+          applyFirstClipProfile(state.current.data, item);
+        }
         const newIdx = state.current.data.clips.length - 1;
         selectClip(newIdx);
 
@@ -565,6 +591,12 @@ async function enqueueClipJob(jobId, kind, dur, insertIdx, msg) {
         mute: false, effect: "none",
         transition_in: "none", transition_out: "none", _hasExplicitDuration: true,
       });
+      if (state.current.data.clips.length === 1) {
+        applyFirstClipProfile(state.current.data, {
+          kind,
+          params: job.params || {},
+        });
+      }
       selectClip(insertIdx);
       setAiStatus(msg);
       saveCurrentProject();

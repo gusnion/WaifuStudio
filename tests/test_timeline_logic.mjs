@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { clipDurationForItem } from "../static/js/tabs/timeline.js";
+import { applyFirstClipProfile, clipDurationForItem } from "../static/js/tabs/timeline.js";
 
 console.log("--- Iniciando tests de lógica de Timeline (Node) ---");
 
@@ -80,6 +80,20 @@ console.log("--- Iniciando tests de lógica de Timeline (Node) ---");
     "timeline.css debe aplicar estilos tanto a video como a img de preview"
   );
   console.log("✔ Test 7: static/css/tabs/timeline.css incluye estilos para #timeline-preview-image");
+}
+
+// Test 8: el primer clip define el lienzo del proyecto (BUG-TIMELINE-11)
+{
+  const project = { width: 1280, height: 720, fps: 24 };
+  assert.equal(
+    applyFirstClipProfile(project, { kind: "video", params: { width: 432, height: 768, fps: 16 } }),
+    true
+  );
+  assert.deepEqual(project, { width: 432, height: 768, fps: 16 });
+  const project2 = { width: 1280, height: 720, fps: 24 };
+  applyFirstClipProfile(project2, { kind: "video", params: { aspect: "vertical" } });
+  assert.deepEqual(project2, { width: 432, height: 768, fps: 24 });
+  console.log("✔ Test 8: el primer clip define ancho, alto y fps del proyecto");
 }
 
 console.log("=== TODOS LOS TESTS DE TIMELINE LOGIC PASARON EXITOSAMENTE ===");
