@@ -136,6 +136,12 @@ class ServerTestCase(unittest.TestCase):
         self.config = make_config(self.root)
         self.store = Store(self.config.data_dir / "waifu.db")
         self.store.init()
+        self.config.data_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.data_dir / "editor-license.json").write_text(
+            '{"accepted": true, "version": "qwen-image-2.1-research", '
+            '"accepted_at": "2026-10-26T00:00:00+00:00"}\n',
+            encoding="utf-8",
+        )
         self.registry = ModelRegistry.load(REGISTRY_FIXTURE)
         server_module._JOBS.clear()
         self.addCleanup(server_module._JOBS.clear)
@@ -4067,7 +4073,9 @@ class EditorStatusTests(ServerTestCase):
         response = self.make_client().get("/api/editor/status")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(set(data), {"installed", "model", "expected", "note"})
+        self.assertEqual(
+            set(data), {"installed", "model", "expected", "note", "license"}
+        )
         self.assertIs(data["installed"], False)
         self.assertEqual(data["model"], "qwen-image-2.1")
         self.assertIsInstance(data["expected"], list)
@@ -4141,6 +4149,27 @@ class EditorGenerateValidationTests(ServerTestCase):
             path = self.config.comfy_root / "models" / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fake-model")
+
+    def test_generar_sin_licencia_aceptada_da_403(self):
+        self.install_editor()
+        (self.config.data_dir / "editor-license.json").unlink()
+        response = self.make_client().post(
+            "/api/editor/generate", json={"prompt": "1girl"}
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("licencia", response.json()["error"])
+        self.assertIs(response.json()["license"]["accepted"], False)
+
+    def test_aceptar_licencia_persiste(self):
+        client = self.make_client()
+        response = client.post(
+            "/api/editor/license", json={"accepted": True}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(response.json()["license"]["accepted"], True)
+        status = client.get("/api/editor/status").json()
+        self.assertIs(status["license"]["accepted"], True)
+        self.assertTrue((self.config.data_dir / "editor-license.json").is_file())
 
     def test_size_original_hereda_la_primera_referencia(self):
         self.install_editor()

@@ -96,8 +96,41 @@ async function loadEditorStatus() {
   const data = await api("/api/editor/status");
   state.editorInstalled = Boolean(data.installed);
   setEditorBanner(state.editorInstalled);
+  setEditorLicense(data.license);
   updateEditorControls();
   return data;
+}
+
+function setEditorLicense(info) {
+  state.editorLicenseAccepted = Boolean(info && info.accepted);
+  const box = $("editor-license");
+  if (box) {
+    box.classList.toggle("hidden", state.editorLicenseAccepted);
+  }
+  const check = $("editor-license-check");
+  const button = $("btn-editor-license");
+  if (check) {
+    check.checked = state.editorLicenseAccepted;
+    if (button) {
+      button.disabled = state.editorLicenseAccepted ? true : !check.checked;
+    }
+  }
+  updateEditorControls();
+}
+
+async function acceptEditorLicense() {
+  const check = $("editor-license-check");
+  if (!check || !check.checked) {
+    setEditorStatus("Marca la casilla para aceptar la licencia", true);
+    return;
+  }
+  try {
+    const data = await postJson("/api/editor/license", { accepted: true });
+    setEditorLicense(data.license);
+    setEditorStatus("Licencia de Qwen-Image 2.1 aceptada");
+  } catch (error) {
+    setEditorStatus(error.message, true);
+  }
 }
 
 function updateEditorControls() {
@@ -106,6 +139,7 @@ function updateEditorControls() {
   $("btn-editor-generate").disabled =
     state.editorBusy ||
     !state.editorInstalled ||
+    !state.editorLicenseAccepted ||
     (!hasPrompt && !hasPreset);
 }
 
@@ -636,6 +670,10 @@ function downloadEditorResult() {
 }
 
 async function generateEditor() {
+  if (!state.editorLicenseAccepted) {
+    setEditorStatus("Acepta la licencia de Qwen-Image 2.1 antes de generar", true);
+    return;
+  }
   const prompt = $("editor-prompt").value.trim();
   const posePreset = $("editor-pose-preset")?.value || "";
   if (!prompt && !posePreset) {
@@ -776,6 +814,12 @@ function initEditorTab() {
     );
   });
   on("btn-editor-generate", "click", generateEditor);
+  on("editor-license-check", "change", () => {
+    const check = $("editor-license-check");
+    const button = $("btn-editor-license");
+    if (button) button.disabled = !check?.checked;
+  });
+  on("btn-editor-license", "click", acceptEditorLicense);
   on("editor-size", "change", applyEditorSizeSelection);
   loadEditorLoras().catch(() => {});
 

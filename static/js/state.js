@@ -188,6 +188,7 @@ const state = {
   videoH3Resolutions: {},
   videoRefs: [],
   editorInstalled: false,
+  editorLicenseAccepted: false,
   editorRefs: [],
   editorBusy: false,
   editorResultUrl: null,

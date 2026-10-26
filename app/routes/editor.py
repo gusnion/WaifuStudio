@@ -30,6 +30,7 @@ from app.editor import (
     inherit_size_from_image,
 )
 from app.editor_models import editor_model
+from app.editor_license import accept_license, license_info
 from app.engine import EngineError
 from app.routes.image import _decode_image_b64, _write_input_png
 from app.routes.jobs import _JOBS
@@ -99,7 +100,20 @@ async def api_editor_status(request: Request) -> dict:
         "model": EDITOR_MODEL,
         "expected": list(EDITOR_MODEL_FILES),
         "note": EDITOR_NOTE,
+        "license": license_info(cfg.data_dir),
     }
+
+
+@router.post("/api/editor/license")
+async def api_editor_license(request: Request, payload: dict = Body(...)) -> Any:
+    """Registra la aceptacion explicita de la licencia research de Qwen 2.1."""
+    if payload.get("accepted") is not True:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "debes aceptar la licencia para usar el Editor"},
+        )
+    info = accept_license(request.app.state.config.data_dir)
+    return {"ok": True, "license": info}
 
 
 @router.get("/api/editor/pose_presets")
@@ -288,6 +302,15 @@ async def api_editor_generate(request: Request, payload: dict = Body(...)) -> An
         return JSONResponse(
             status_code=503, content={"error": "modelo no instalado (M10)"}
         )
+    license_state = license_info(cfg.data_dir)
+    if not license_state["accepted"]:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "licencia de Qwen-Image 2.1 no aceptada",
+                "license": license_state,
+            },
+        )
     if width is None:
         width = EDITOR_DEFAULT_SIZE
     if height is None:
@@ -306,6 +329,8 @@ async def api_editor_generate(request: Request, payload: dict = Body(...)) -> An
         "scheduler": scheduler,
         "preserve_structure": preserve_structure,
         "ref_images": ref_images,
+        "license": license_state["version"],
+        "license_accepted_at": license_state["accepted_at"],
     }
     if original_size:
         params["original_size"] = True
