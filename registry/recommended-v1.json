@@ -2,14 +2,14 @@
   "version": 1,
   "note": "Recomendado para empezar (el repo NO incluye pesos ni LoRAs): Anima para imagen, MiniMax H3 para video, Qwen-Image 2.1 UC para el Editor y RealESRGAN x2/RIFE para el Upscaler. El instalador descarga el set automatico (~106 GB) y deja anotados los 2 modelos Anima de Civitai como aporte manual.",
   "engines": {
-    "image": ["anima-29b-preview", "anima-official-aesthetic-v11", "one-obsession-anima-v40"],
+    "image": ["anima-2.9b-preview", "anima-official-aesthetic-v11", "one-obsession-anima-v40"],
     "video": ["h3 (perfiles Referencia/Calidad/Ligero; turbo LoRA incluida)"],
     "editor": ["qwen-image-2.1 UC (GGUF Q4_K_M + encoder int8 ConvRot + VAE bf16)"],
     "upscaler": ["real-esrgan-x2 (imagen)", "rife (FPS)"]
   },
   "models": [
     {
-      "id": "anima-29b-preview",
+      "id": "anima-2.9b-preview",
       "family": "anima",
       "display_name": "Anima 2.9B Preview v1",
       "profile": {

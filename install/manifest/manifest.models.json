@@ -77,7 +77,7 @@
       "notes": "Build INT8 ConvRot de OpenVDN stage-dmd-step-250 para ComfyUI-VDN-H3-Plus. Para el stage completo (adapters + affine), ejecutar scripts/download_models.py --vdn."
     },
     {
-      "id": "anima-29b-preview",
+      "id": "anima-2.9b-preview",
       "filename": "Anima-2.9B-preview-v1.safetensors",
       "subdir": "diffusion_models",
       "bytes": 5843204206,
@@ -89,7 +89,7 @@
       "notes": "Anima 2.9B preview v1 (flujo imagen); sha256 del manifiesto legacy verificado en disco."
     },
     {
-      "id": "anima-aesthetic-v11",
+      "id": "anima-official-aesthetic-v11",
       "filename": "anima_aestheticV11.safetensors",
       "subdir": "diffusion_models",
       "bytes": 4182230656,
