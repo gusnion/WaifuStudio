@@ -362,21 +362,19 @@
 
         <!-- BLOQUE 1: Entradas y Modo de Generación -->
         <fieldset class="video-block control-card" id="video-block-mode">
-          <legend>1. Entradas y Modo <button type="button" class="btn-help" data-help="A más resolución de entrada, más detalle facial. Para vertical usa 9:16 (~1008×1792); para horizontal 16:9 (~1792×1008). Referencias se recortan centradas si difiere el ratio.">?</button></legend>
+          <legend>1. Entradas y Modo <button type="button" class="btn-help" data-help="Wan genera a resolucion fija segun perfil: Fast 432x768 (vertical) / 768x432 (horizontal), Quality 512x896 / 896x512. La imagen se recorta centrada al ratio elegido.">?</button></legend>
           <label class="field" id="video-mode-field">
             <span>Modo</span>
             <select id="video-mode">
               <option value="i2v" selected>I2V · Imagen a Video (First Frame)</option>
               <option value="flf2v">FLF2V · Imagen inicial + final</option>
-              <option value="ref2va">Ref2VA · Referencias de personaje (R2V)</option>
-              <option value="v2v">V2V · Video de referencia (Video-to-Video)</option>
             </select>
           </label>
 
           <label class="field" id="video-image-field">
             <span id="video-image-label">Imagen inicial (first frame)</span>
             <input id="video-image" type="file" accept="image/png,image/jpeg,image/webp">
-            <p id="video-input-hint" class="field-hint">A más resolución de entrada, más detalle facial. Para vertical usa 9:16 (~1008×1792); para horizontal 16:9 (~1792×1008).</p>
+            <p id="video-input-hint" class="field-hint">Wan usa una resolucion de salida fija por perfil: Fast 432x768 / 768x432; Quality 512x896 / 896x512. La imagen se recorta centrada al ratio 9:16 o 16:9.</p>
             <p id="video-crop-notice" class="field-hint">ℹ️ La imagen de referencia se recortará centrada para adaptarse al ratio de vídeo.</p>
           </label>
 
@@ -477,6 +475,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
                 <option value="rapido" selected>Fast · 4 pasos</option>
                 <option value="calidad">Quality · 30 pasos</option>
               </select>
+              <p id="video-wan-size-info" class="field-hint">Salida Wan: 432x768 (vertical) o 768x432 (horizontal).</p>
             </label>
             <label class="field" id="video-h3-profile-field">
               <span>Perfil de Calidad</span>
@@ -492,9 +491,6 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
                 <option value="10">10 s</option>
                 <option value="12">12 s</option>
                 <option value="15">15 s</option>
-                <option value="20">20 s</option>
-                <option value="25">25 s</option>
-                <option value="30">30 s</option>
               </select>
               <p id="video-h3-seconds-info" class="field-hint"></p>
             </label>
@@ -1164,7 +1160,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </div>
           <div class="guide-step-card">
             <h3>🎞️ Paso 2: Anima en 8 Pasos</h3>
-            <p>Genera clips con H3 VideoDeltaNet en segundos usando I2V, o mantén su identidad con Ref2VA.</p>
+            <p>Genera clips con Wan 2.2 en segundos usando I2V o FLF2V.</p>
             <button type="button" class="btn small" data-goto-tab="video">Ir a Vídeo →</button>
           </div>
           <div class="guide-step-card">
@@ -1203,50 +1199,25 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           <li><strong>SDXL / Illustrious</strong>: Motor clásico para estilos artísticos densos e ilustraciones complejas. Detecta automáticamente la arquitectura de tensores al cargar LoRAs.</li>
         </ul>
         <p><strong>Zonas de Prompt</strong>: Puedes estructurar tu prompt dividiéndolo en bloques modulares (<em>Sujeto, Atuendo, Entorno/Fondo, NSFW y Acción</em>) para evitar que los tags se contaminen entre sí.</p>
-        <p><strong>OC Maker</strong>: Guarda a tu personaje con nombre, rasgos fijos e imágenes de referencia. Desde el modal de OC Maker puedes generar automáticamente una <em>Character Sheet</em> (vistas frontal, perfil y espalda) y lanzar el entrenamiento de tu propio <strong>LoRA dedicado</strong> en segundo plano.</p>
+        <p><strong>OC Maker</strong>: Guarda a tu personaje con nombre, rasgos fijos e imágenes de referencia. Desde la pestaña OC Maker puedes generar automáticamente una <em>Character Sheet</em> (vistas frontal, perfil y espalda) y lanzar el entrenamiento de tu propio <strong>LoRA dedicado</strong> en segundo plano.</p>
       </article>
 
       <!-- SECCIÓN 2: Vídeo H3 -->
       <article class="guide-section" data-category="video">
-        <h3>2. 🎞️ Vídeo H3 (I2V / FLF2V / Ref2VA / V2V)</h3>
-        <p>El motor de vídeo de WaifuStudio utiliza <strong>H3 (Wan 2.1)</strong> potenciado con <strong>VideoDeltaNet (VDN)</strong> en 8 pasos, permitiendo generar animaciones fluidas en GPU de 12 GB VRAM en tiempo récord.</p>
+        <h3>2. Video Wan 2.2 (I2V / FLF2V)</h3>
+        <p>WaifuStudio usa <strong>Wan 2.2</strong> para animar imagenes. La resolucion de salida la fija el perfil elegido; no se hereda del tamano de la imagen de entrada.</p>
         <table class="guide-table">
           <thead>
-            <tr>
-              <th>Modo</th>
-              <th>Entrada</th>
-              <th>Propósito</th>
-              <th>Consejo Pro</th>
-            </tr>
+            <tr><th>Perfil</th><th>Pasos</th><th>Vertical 9:16</th><th>Horizontal 16:9</th></tr>
           </thead>
           <tbody>
-            <tr>
-              <td><strong>I2V</strong></td>
-              <td>1 Imagen</td>
-              <td>Animar una foto fija con movimiento natural.</td>
-              <td>Describe la acción en presente (ej. <em>"waves hair, smiles softly, turns head"</em>).</td>
-            </tr>
-            <tr>
-              <td><strong>FLF2V</strong></td>
-              <td>2 Imágenes (Inicio y Fin)</td>
-              <td>Crear una transición o viaje entre dos poses/escenas.</td>
-              <td>Usa imágenes con composición y fondo similares para máxima coherencia.</td>
-            </tr>
-            <tr>
-              <td><strong>Ref2VA</strong></td>
-              <td>Hasta 4 Fotos + Sonido</td>
-              <td>Mantener la identidad exacta del OC con audio sincronizado.</td>
-              <td>Incluye fotos del personaje en distintas iluminaciones.</td>
-            </tr>
-            <tr>
-              <td><strong>V2V</strong></td>
-              <td>1 Vídeo existente</td>
-              <td>Redibujar el estilo artístico de un vídeo grabado.</td>
-              <td>Ajusta la fuerza de denoise entre 0.40 y 0.65 para no perder la silueta.</td>
-            </tr>
+            <tr><td><strong>Fast</strong></td><td>4</td><td>432x768</td><td>768x432</td></tr>
+            <tr><td><strong>Quality</strong></td><td>30</td><td>512x896</td><td>896x512</td></tr>
           </tbody>
         </table>
-        <p><strong>VideoDeltaNet (8 pasos)</strong>: Reduce el tiempo de cálculo de ~6 minutos a solo ~60 segundos manteniendo nitidez impecable. Mantén el botón VDN siempre activo en configuraciones de 12 GB.</p>
+        <p><strong>Recorte:</strong> la imagen inicial se recorta centrada para adaptarse al ratio 9:16 o 16:9. Para Fast no se usa la resolucion H3 de 1008x1792.</p>
+        <p><strong>Modos:</strong> I2V anima una imagen inicial; FLF2V interpola entre una imagen inicial y una final. Usa prompts de movimiento en presente.</p>
+        <p><strong>Duracion:</strong> Wan trabaja a 16 fps y exige un numero de frames 4n+1; la app calcula el valor valido mas cercano a la duracion elegida.</p>
       </article>
 
       <!-- SECCIÓN 3: Editor Qwen 2.1 -->
@@ -1303,7 +1274,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </div>
           <div class="guide-acc-body">
             WaifuStudio gestiona la VRAM con inferencia monohilo FIFO. Para no saturar los 12 GB:
-            1. En Vídeo H3 mantén siempre activado <strong>VDN 8 pasos</strong> y resolución 768p.
+            1. En Vídeo Wan usa el perfil <strong>Fast (4 pasos)</strong> y clips de 5 s.
             2. Evita generar vídeos de más de 10 segundos en una sola pasada; en su lugar, genera clips de 5s y únelos en la pestaña <strong>Estudio Timeline</strong> con el botón <em>"Continuar I2V"</em>.
             3. El modelo de subtitulado Qwen 2.5 opera en CPU, liberando el 100% de la GPU para renderizado.
           </div>
@@ -1318,7 +1289,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
             1. En la pestaña <strong>Imagen</strong>, abre <strong>OC Maker</strong> y crea una ficha para tu personaje con sus rasgos clave (ej. color de ojos, accesorios, peinado).
             2. Selecciona tu OC en el menú desplegable antes de generar.
             3. Genera varias poses y usa la herramienta de entrenamiento para crear su propio <strong>LoRA dedicado</strong>.
-            4. En la pestaña <strong>Vídeo</strong>, usa el modo <strong>Ref2VA</strong> adjuntando 2 a 4 fotos de tu OC como referencia.
+            4. En la pestaña <strong>Vídeo</strong>, usa I2V o FLF2V con una imagen de tu OC como referencia.
           </div>
         </div>
 

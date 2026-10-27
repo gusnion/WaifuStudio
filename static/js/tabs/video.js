@@ -810,6 +810,20 @@ async function generateVideo() {
 }
 
 
+const WAN_OUTPUT_SIZES = {
+  rapido: { vertical: [432, 768], horizontal: [768, 432] },
+  calidad: { vertical: [512, 896], horizontal: [896, 512] },
+};
+
+function updateWanSizeInfo() {
+  const el = $("video-wan-size-info");
+  if (!el) return;
+  const preset = $("video-wan-preset")?.value || "rapido";
+  const aspect = $("video-h3-aspect")?.value || "vertical";
+  const size = WAN_OUTPUT_SIZES[preset]?.[aspect] || WAN_OUTPUT_SIZES.rapido.vertical;
+  el.textContent = `Salida Wan: ${size[0]}×${size[1]} (${aspect === "vertical" ? "vertical 9:16" : "horizontal 16:9"})`;
+}
+
 function applyVideoEngine() {
   const isWan = $("video-engine") ? $("video-engine").value === "wan" : false;
   let mode = $("video-mode") ? $("video-mode").value : "i2v";
@@ -879,6 +893,7 @@ function applyVideoEngine() {
   updateH3Variants();
   updateH3SecondsAvailability();
   updateH3Notes();
+  updateWanSizeInfo();
 }
 
 
@@ -909,6 +924,8 @@ function initVideoTab() {
   });
   on("video-engine", "change", applyVideoEngine);
   on("video-mode", "change", applyVideoEngine);
+  on("video-wan-preset", "change", updateWanSizeInfo);
+  on("video-h3-aspect", "change", updateWanSizeInfo);
   on("video-v2v-input", "change", (event) => {
     const file = event.target.files && event.target.files[0];
     const wrap = $("video-v2v-preview-wrap");
