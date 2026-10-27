@@ -6633,6 +6633,62 @@ class TopbarNavigationStaticTests(ServerTestCase):
         for forbidden in ("btn-generate", "btn-audio-generate", "btn-audio-cancel", 'type="submit"'):
             self.assertNotIn(forbidden, panel_audio_html, f"panel-audio no debe incluir botón falso: {forbidden}")
 
+    def test_social_panel_blocks_links_and_no_remote_network(self):
+        html = self.make_client().get("/").text
+
+        # 1. Existencia del botón y panel social
+        self.assertIn('id="btn-social"', html)
+        self.assertIn('id="panel-social"', html)
+
+        panel_match = re.search(r'<section[^>]*id="panel-social"[^>]*>(.*?)</section>', html, re.DOTALL)
+        self.assertIsNotNone(panel_match, "No se encontró el contenedor #panel-social")
+        panel_html = panel_match.group(1)
+
+        # 2. Bloque A: Este proyecto (GitHub repo, Patreon, Redes autor)
+        self.assertIn("social-block-project", panel_html)
+        self.assertIn("https://github.com/gusnion/WaifuStudio", panel_html)
+        self.assertIn("https://www.patreon.com/", panel_html)
+        self.assertIn("https://github.com/gusnion", panel_html)
+
+        # 3. Bloque B: Créditos técnicos (Artelive, ギア @giaaibusi, POSE-DB-01, licencias)
+        self.assertIn("social-block-credits", panel_html)
+        self.assertIn("Artelive", panel_html)
+        self.assertIn("Wan 2.2", panel_html)
+        self.assertIn("ギア (@giaaibusi)", panel_html)
+        self.assertIn("POSE-DB-01", panel_html)
+        self.assertIn("LICENSE", panel_html)
+
+        # 4. Bloque C: Línea de cortesía exacta de TAREA-02
+        self.assertIn("social-block-courtesy", panel_html)
+        courtesy_line = (
+            "Si algo de esto te sirve, seguí a quienes lo hicieron posible. "
+            "La app no tiene publicidad ni telemetría; esto es lo único que pedimos."
+        )
+        self.assertIn(courtesy_line, panel_html)
+
+        # 5. Cero imágenes remotas en el panel
+        img_tags = re.findall(r'<img[^>]*src=["\']([^"\']+)["\']', panel_html, re.IGNORECASE)
+        for src in img_tags:
+            self.assertFalse(
+                src.startswith(("http://", "https://", "//")),
+                f"Prohibidas imágenes remotas en panel social: {src}",
+            )
+
+        # 6. Todos los enlaces son normales (target="_blank", rel="noopener noreferrer")
+        links = re.findall(r'<a\s+([^>]+)>', panel_html, re.IGNORECASE)
+        self.assertGreaterEqual(len(links), 4, "Debe haber al menos 4 enlaces en el panel social")
+        for link_attrs in links:
+            self.assertIn('target="_blank"', link_attrs, f"El enlace debe abrir en navegador nuevo: {link_attrs}")
+            self.assertIn("noopener", link_attrs, f"El enlace debe contener rel='noopener': {link_attrs}")
+
+        # 7. Cero fetch/XHR o telemetría para Social en JS estático
+        js_path = Path(__file__).resolve().parents[1] / "static" / "js" / "main.js"
+        js_content = js_path.read_text(encoding="utf-8")
+        # Asegurarse de que switchTab("social") o interacción social no llama a fetch/xhr
+        self.assertNotIn("fetch('/api/social", js_content)
+        self.assertNotIn('fetch("/api/social', js_content)
+        self.assertNotIn("telemetry", js_content.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,7 +53,7 @@
           <button type="button" class="lang-option" data-lang="ru" data-i18n-ignore>Русский (RU)</button>
         </div>
       </div>
-      <button id="btn-social" class="topbar-btn" data-tab="social" type="button">Social</button>
+      <button id="btn-social" class="topbar-btn" data-tab="social" type="button" aria-label="Social">Social</button>
       <button id="tab-guide" class="topbar-btn" data-tab="guide" type="button">Guía</button>
       <button id="tab-addons" class="topbar-btn" type="button">Addons</button>
       <button id="btn-oc" class="oc-button hidden" type="button">OC Maker</button>
@@ -1423,9 +1423,82 @@
     </section>
 
     <section id="panel-social" class="panel" hidden aria-label="Panel Social" role="region">
-      <div class="social-empty-panel">
-        <h2>Social</h2>
-        <p>Panel social pendiente de implementación (C-12).</p>
+      <div class="social-panel-container">
+        <header class="social-header">
+          <h2>Social & Comunidad</h2>
+          <p class="field-hint">WaifuStudio es una suite creativa local, libre, sin telemetría ni publicidad.</p>
+        </header>
+
+        <div class="social-grid">
+          <!-- Bloque A: Este proyecto -->
+          <article class="social-card" id="social-block-project">
+            <div class="social-card-header">
+              <span class="social-card-icon" aria-hidden="true">🌟</span>
+              <h3>Este proyecto</h3>
+            </div>
+            <p>Desarrollo local, código base público y vías oficiales de apoyo:</p>
+            <ul class="social-links-list">
+              <li>
+                <a href="https://github.com/gusnion/WaifuStudio" target="_blank" rel="noopener noreferrer">
+                  <strong>GitHub</strong>
+                  <span>https://github.com/gusnion/WaifuStudio</span>
+                </a>
+              </li>
+              <li>
+                <a href="https://www.patreon.com/" target="_blank" rel="noopener noreferrer">
+                  <strong>Patreon</strong>
+                  <span>https://www.patreon.com/</span>
+                </a>
+              </li>
+              <li>
+                <a href="https://github.com/gusnion" target="_blank" rel="noopener noreferrer">
+                  <strong>Redes del autor</strong>
+                  <span>@gusnion</span>
+                </a>
+              </li>
+            </ul>
+          </article>
+
+          <!-- Bloque B: Créditos técnicos -->
+          <article class="social-card" id="social-block-credits">
+            <div class="social-card-header">
+              <span class="social-card-icon" aria-hidden="true">🛠️</span>
+              <h3>Créditos técnicos</h3>
+            </div>
+            <p>Reconocimiento especial a los colaboradores técnicos y recursos clave:</p>
+            <ul class="social-credits-list">
+              <li>
+                <div class="social-credit-meta">
+                  <strong>Artelive</strong>
+                  <span>Configuración y banco de workflows Wan 2.2</span>
+                </div>
+              </li>
+              <li>
+                <div class="social-credit-meta">
+                  <strong>ギア (@giaaibusi)</strong>
+                  <span>Base de referencias de pose POSE-DB-01</span>
+                </div>
+                <a href="https://x.com/giaaibusi" class="social-sublink" target="_blank" rel="noopener noreferrer">X / Twitter (@giaaibusi)</a>
+              </li>
+            </ul>
+            <div class="social-license-box">
+              <a href="https://github.com/gusnion/WaifuStudio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+                <span>Avisos de licencia y terceros (MIT License)</span>
+              </a>
+            </div>
+          </article>
+
+          <!-- Bloque C: Cómo corresponder -->
+          <article class="social-card social-card-highlight" id="social-block-courtesy">
+            <div class="social-card-header">
+              <span class="social-card-icon" aria-hidden="true">🤝</span>
+              <h3>Cómo corresponder</h3>
+            </div>
+            <blockquote class="social-courtesy-quote">
+              “Si algo de esto te sirve, seguí a quienes lo hicieron posible. La app no tiene publicidad ni telemetría; esto es lo único que pedimos.”
+            </blockquote>
+          </article>
+        </div>
       </div>
     </section>
   </main>

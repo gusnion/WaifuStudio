@@ -1715,4 +1715,177 @@ input[type="checkbox"] {
   margin-bottom: 0.5rem;
 }
 
+/* Social Panel (C-12) */
+.social-panel-container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+.social-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.social-header h2 {
+  font-size: 1.6rem;
+  color: var(--text, #e2e4f0);
+  margin-bottom: 0.5rem;
+}
+
+.social-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .social-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .social-card-highlight {
+    grid-column: span 2;
+  }
+}
+
+.social-card {
+  background: var(--panel, #181920);
+  border: 1px solid var(--border, #2a2c38);
+  border-radius: 8px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.social-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.social-card-header h3 {
+  font-size: 1.15rem;
+  color: var(--text, #e2e4f0);
+  margin: 0;
+}
+
+.social-card-icon {
+  font-size: 1.25rem;
+}
+
+.social-card p {
+  color: var(--text-muted, #8e90a6);
+  font-size: 0.88rem;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.social-links-list,
+.social-credits-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.social-links-list li a {
+  display: flex;
+  flex-direction: column;
+  padding: 0.65rem 0.85rem;
+  background: var(--panel-2, #1f212a);
+  border: 1px solid var(--border, #2a2c38);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text, #e2e4f0);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.social-links-list li a:hover {
+  border-color: var(--accent, #6366f1);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.social-links-list li a strong {
+  font-size: 0.92rem;
+  color: var(--accent-text, #a5b4fc);
+}
+
+.social-links-list li a span {
+  font-size: 0.78rem;
+  color: var(--text-muted, #8e90a6);
+  word-break: break-all;
+}
+
+.social-credits-list li {
+  padding: 0.65rem 0.85rem;
+  background: var(--panel-2, #1f212a);
+  border: 1px solid var(--border, #2a2c38);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.social-credit-meta strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--text, #e2e4f0);
+}
+
+.social-credit-meta span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted, #8e90a6);
+}
+
+.social-sublink {
+  font-size: 0.78rem;
+  color: var(--accent, #6366f1);
+  text-decoration: none;
+  display: inline-block;
+  align-self: flex-start;
+}
+
+.social-sublink:hover {
+  text-decoration: underline;
+}
+
+.social-license-box {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border, #2a2c38);
+}
+
+.social-license-box a {
+  font-size: 0.82rem;
+  color: var(--text-muted, #8e90a6);
+  text-decoration: none;
+}
+
+.social-license-box a:hover {
+  color: var(--accent-text, #a5b4fc);
+  text-decoration: underline;
+}
+
+.social-card-highlight {
+  background: linear-gradient(180deg, var(--panel, #181920) 0%, rgba(99, 102, 241, 0.05) 100%);
+  border: 1px solid var(--border-accent, rgba(99, 102, 241, 0.3));
+}
+
+.social-courtesy-quote {
+  margin: 0;
+  padding: 0.85rem 1.1rem;
+  border-left: 3px solid var(--accent, #6366f1);
+  background: var(--panel-2, #1f212a);
+  border-radius: 0 6px 6px 0;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--text, #e2e4f0);
+  line-height: 1.5;
+}
+
+
 

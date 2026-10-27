@@ -32,7 +32,12 @@ import { initEditorMultiview } from "./components/editor_multiview.js";
 import { initGuideTab } from "./tabs/guide.js";
 import { initI18n } from "./i18n.js";
 
+let previousTabBeforeSocial = "image";
+
 function switchTab(tab) {
+  if (tab !== "social") {
+    previousTabBeforeSocial = tab;
+  }
   const image = tab === "image";
   const editor = tab === "editor";
   const video = tab === "video";
@@ -219,6 +224,13 @@ function bind() {
       const trainModal = $("oc-train-modal");
       if (trainModal && !trainModal.classList.contains("hidden")) { closeTrainModal(); return; }
       closeOcModal();
+      const panelSocial = $("panel-social");
+      if (panelSocial && !panelSocial.hidden) {
+        switchTab(previousTabBeforeSocial || "image");
+        const btnSocial = $("btn-social");
+        if (btnSocial) btnSocial.focus();
+        return;
+      }
     }
   });
   initHeader(); initI18n(); initTooltipHelp(); initFirstRun(); initTheme();
