@@ -1657,3 +1657,62 @@ input[type="checkbox"] {
   height: 100%;
 }
 
+/* Audio & Social Panels (C-11) */
+.audio-notice-card {
+  margin: 2.5rem auto;
+  max-width: 580px;
+  padding: 2.2rem;
+  background: var(--panel-2, #1c1f26);
+  border: 1px solid var(--border, #2e333d);
+  border-radius: 8px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.audio-notice-card .notice-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.8rem;
+  display: block;
+}
+
+.audio-notice-card h2 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.25rem;
+  color: var(--text, #e2e4f0);
+}
+
+.audio-notice-card p {
+  color: var(--text-muted, #8e90a6);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 1.25rem 0;
+}
+
+.audio-notice-card .audio-notice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: rgba(234, 179, 8, 0.12);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.social-empty-panel {
+  margin: 3rem auto;
+  text-align: center;
+  max-width: 500px;
+  padding: 2rem;
+  color: var(--text-muted, #8e90a6);
+}
+
+.social-empty-panel h2 {
+  font-size: 1.25rem;
+  color: var(--text, #e2e4f0);
+  margin-bottom: 0.5rem;
+}
+
+

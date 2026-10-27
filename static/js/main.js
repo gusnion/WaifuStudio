@@ -34,52 +34,69 @@ import { initI18n } from "./i18n.js";
 
 function switchTab(tab) {
   const image = tab === "image";
-  const video = tab === "video";
   const editor = tab === "editor";
-  const upscaler = tab === "upscaler";
+  const video = tab === "video";
+  const audio = tab === "audio";
   const timeline = tab === "timeline";
+  const upscaler = tab === "upscaler";
   const gallery = tab === "gallery";
+  const oc = tab === "oc";
+  const social = tab === "social";
   const guide = tab === "guide";
   const addons = tab === "addons";
-  const oc = tab === "oc";
+
   $("tab-image").classList.toggle("active", image);
-  $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
-  $("tab-upscaler").classList.toggle("active", upscaler);
+  $("tab-video").classList.toggle("active", video);
+  const tabAudioEl = $("tab-audio");
+  if (tabAudioEl) tabAudioEl.classList.toggle("active", audio);
   const tabTimelineEl = $("tab-timeline");
   if (tabTimelineEl) tabTimelineEl.classList.toggle("active", timeline);
+  $("tab-upscaler").classList.toggle("active", upscaler);
   $("tab-gallery").classList.toggle("active", gallery);
   const tabOcEl = $("tab-oc");
   if (tabOcEl) tabOcEl.classList.toggle("active", oc);
-  const tabAddonsEl = $("tab-addons");
-  if (tabAddonsEl) tabAddonsEl.classList.toggle("active", addons);
+  const btnSocialEl = $("btn-social");
+  if (btnSocialEl) btnSocialEl.classList.toggle("active", social);
   const tabGuideEl = $("tab-guide");
   if (tabGuideEl) tabGuideEl.classList.toggle("active", guide);
+  const tabAddonsEl = $("tab-addons");
+  if (tabAddonsEl) tabAddonsEl.classList.toggle("active", addons);
 
   $("panel-image").classList.toggle("active", image);
-  $("panel-video").classList.toggle("active", video);
   $("panel-editor").classList.toggle("active", editor);
-  $("panel-upscaler").classList.toggle("active", upscaler);
+  $("panel-video").classList.toggle("active", video);
+  const panelAudioEl = $("panel-audio");
+  if (panelAudioEl) {
+    panelAudioEl.classList.toggle("active", audio);
+    panelAudioEl.hidden = !audio;
+  }
   const panelTimelineEl = $("panel-timeline");
   if (panelTimelineEl) {
     panelTimelineEl.classList.toggle("active", timeline);
     panelTimelineEl.hidden = !timeline;
   }
+  $("panel-upscaler").classList.toggle("active", upscaler);
   $("panel-gallery").classList.toggle("active", gallery);
   const panelOcEl = $("panel-oc");
   if (panelOcEl) {
     panelOcEl.classList.toggle("active", oc);
     panelOcEl.hidden = !oc;
   }
-  const panelAddonsEl = $("panel-addons");
-  if (panelAddonsEl) {
-    panelAddonsEl.classList.toggle("active", addons);
-    panelAddonsEl.hidden = !addons;
+  const panelSocialEl = $("panel-social");
+  if (panelSocialEl) {
+    panelSocialEl.classList.toggle("active", social);
+    panelSocialEl.hidden = !social;
   }
   const panelGuideEl = $("panel-guide");
   if (panelGuideEl) {
     panelGuideEl.classList.toggle("active", guide);
     panelGuideEl.hidden = !guide;
+  }
+  const panelAddonsEl = $("panel-addons");
+  if (panelAddonsEl) {
+    panelAddonsEl.classList.toggle("active", addons);
+    panelAddonsEl.hidden = !addons;
   }
   if (timeline) {
     refreshTimelineMedia();
@@ -161,25 +178,33 @@ function bind() {
     console.error("bind: faltan elementos de la UI", missing);
   }
   on("tab-image", "click", () => switchTab("image"));
-  on("tab-video", "click", () => switchTab("video"));
   on("tab-editor", "click", () => { switchTab("editor"); updateEditorMode(); });
-  on("tab-upscaler", "click", () => switchTab("upscaler"));
+  on("tab-video", "click", () => switchTab("video"));
+  const tabAudio = $("tab-audio");
+  if (tabAudio) {
+    on("tab-audio", "click", () => switchTab("audio"));
+  }
   const tabTimeline = $("tab-timeline");
   if (tabTimeline) {
     on("tab-timeline", "click", () => switchTab("timeline"));
   }
+  on("tab-upscaler", "click", () => switchTab("upscaler"));
   on("tab-gallery", "click", () => switchTab("gallery"));
   const tabOc = $("tab-oc");
   if (tabOc) {
     on("tab-oc", "click", () => switchTab("oc"));
   }
-  const tabAddons = $("tab-addons");
-  if (tabAddons) {
-    on("tab-addons", "click", () => switchTab("addons"));
+  const btnSocial = $("btn-social");
+  if (btnSocial) {
+    on("btn-social", "click", () => switchTab("social"));
   }
   const tabGuide = $("tab-guide");
   if (tabGuide) {
     on("tab-guide", "click", () => switchTab("guide"));
+  }
+  const tabAddons = $("tab-addons");
+  if (tabAddons) {
+    on("tab-addons", "click", () => switchTab("addons"));
   }
   on("btn-seed-random", "click", () => toggleSeedRandom());
   on("btn-video-seed-random", "click", () => toggleSeedRandom(setVideoStatus));

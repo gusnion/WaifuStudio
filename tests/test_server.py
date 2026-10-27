@@ -6561,5 +6561,78 @@ class GalleryUiPhase3Tests(ServerTestCase):
         self.assertIn(".video-license-notice", css)
 
 
+class TopbarNavigationStaticTests(ServerTestCase):
+    def test_topbar_buttons_order_and_ids(self):
+        html = self.make_client().get("/").text
+
+        # 1. Existencia obligatoria de IDs C-11
+        self.assertIn('id="tab-audio"', html)
+        self.assertIn('id="panel-audio"', html)
+        self.assertIn('id="btn-social"', html)
+
+        # 2. Orden izquierdo exacto:
+        # IMAGEN, EDITOR, VIDEO, AUDIO, ESTUDIO, UPSCALER, GALERIA, OCMAKER
+        expected_left_tabs = [
+            "tab-image",
+            "tab-editor",
+            "tab-video",
+            "tab-audio",
+            "tab-timeline",
+            "tab-upscaler",
+            "tab-gallery",
+            "tab-oc",
+        ]
+        tabs_nav_match = re.search(r'<nav class="tabs">(.*?)</nav>', html, re.DOTALL)
+        self.assertIsNotNone(tabs_nav_match, 'No se encontró <nav class="tabs">')
+        tabs_nav_html = tabs_nav_match.group(1)
+
+        found_tabs = re.findall(r'id=["\'](tab-[a-z0-9_-]+)["\']', tabs_nav_html)
+        self.assertEqual(
+            found_tabs,
+            expected_left_tabs,
+            f"El orden de pestañas izquierdas debe ser {expected_left_tabs}, obtenido: {found_tabs}",
+        )
+
+        # 3. Orden derecho exacto:
+        # TEMA, REFRESH, IDIOMA, SOCIAL, GUIA, ADDOMS
+        expected_right_ids = [
+            "btn-theme-toggle",
+            "btn-universal-reload",
+            "btn-language-selector",
+            "btn-social",
+            "tab-guide",
+            "tab-addons",
+        ]
+        topbar_match = re.search(r'<header class="topbar">(.*?)</header>', html, re.DOTALL)
+        self.assertIsNotNone(topbar_match, 'No se encontró <header class="topbar">')
+        topbar_html = topbar_match.group(1)
+
+        positions = []
+        for rid in expected_right_ids:
+            pos = topbar_html.find(f'id="{rid}"')
+            self.assertNotEqual(pos, -1, f"No se encontró id='{rid}' en header topbar")
+            positions.append(pos)
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            f"Los controles derechos no respetan el orden esperado {expected_right_ids}",
+        )
+
+    def test_audio_tab_and_panel_specifications(self):
+        html = self.make_client().get("/").text
+
+        # Panel audio y aviso de instalación pendiente
+        panel_audio_match = re.search(r'<section[^>]*id="panel-audio"[^>]*>(.*?)</section>', html, re.DOTALL)
+        self.assertIsNotNone(panel_audio_match, "No se encontró #panel-audio")
+        panel_audio_html = panel_audio_match.group(1)
+
+        self.assertIn("pendiente de instalar", panel_audio_html.lower())
+
+        # Sin botones falsos de generación
+        for forbidden in ("btn-generate", "btn-audio-generate", "btn-audio-cancel", 'type="submit"'):
+            self.assertNotIn(forbidden, panel_audio_html, f"panel-audio no debe incluir botón falso: {forbidden}")
+
+
 if __name__ == "__main__":
     unittest.main()
