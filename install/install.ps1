@@ -32,6 +32,8 @@
     Descarga tambien entradas required=false no obsoletas (R2V, stock del Editor).
 .PARAMETER SkipVerify
     No ejecuta la suite de tests ni app.health al final.
+.PARAMETER FullTests
+    Fuerza la suite completa aunque falten datos de usuario o el entrenador.
 .PARAMETER SkipFfmpeg
     No descarga FFmpeg/FFprobe portables (Timeline, fade y concatenado no funcionaran).
 .PARAMETER NoUserEnv
@@ -49,6 +51,7 @@ param(
     [switch]$IncludeOptional,
     [switch]$IncludeTrainer,
     [switch]$SkipVerify,
+    [switch]$FullTests,
     [switch]$SkipFfmpeg,
     [switch]$NoUserEnv,
     [switch]$NoShortcut
@@ -107,7 +110,16 @@ function Assert-FileHash {
         throw ("tamano incorrecto en {0}: {1} != {2}" -f $Path, $item.Length, $Bytes)
     }
     if ($Sha256) {
-        $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hash = $null
+        for ($try = 1; $try -le 5; $try++) {
+            try {
+                $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+                break
+            } catch {
+                if ($try -eq 5) { throw }
+                Start-Sleep -Seconds 2
+            }
+        }
         if ($hash -ne $Sha256.ToLowerInvariant()) { throw ("sha256 incorrecto en {0}" -f $Path) }
     }
 }
@@ -550,9 +562,17 @@ function Invoke-FinalVerification {
     if (-not (Test-Path -LiteralPath $VenvPython)) { throw '.venv ausente: no se puede verificar.' }
     Push-Location $Root
     try {
-        & $VenvPython -m unittest discover -s tests
-        if ($LASTEXITCODE -ne 0) { throw ("suite de tests en rojo (exit {0})" -f $LASTEXITCODE) }
-        Write-Ok 'suite verde'
+        $hasUserData = Test-Path -LiteralPath (Join-Path $Root 'data\registry\loras.json')
+        $hasTrainer = Test-Path -LiteralPath (Join-Path $Root 'tools\kohya\sd-scripts\anima_train_network.py')
+        if ($FullTests -or ($hasUserData -and $hasTrainer)) {
+            & $VenvPython -m unittest discover -s tests
+            if ($LASTEXITCODE -ne 0) { throw ("suite de tests en rojo (exit {0})" -f $LASTEXITCODE) }
+            Write-Ok 'suite verde'
+        } else {
+            & $VenvPython -m unittest tests.test_first_run tests.test_catalog tests.test_agents_docs
+            if ($LASTEXITCODE -ne 0) { throw 'smoke tests en rojo' }
+            Write-Warn 'suite completa omitida: sin data de usuario ni entrenador; usa -FullTests en una instalacion completa.'
+        }
         & $VenvPython -m app.health
         if ($LASTEXITCODE -ne 0) { throw 'app.health fallo (rutas criticas)' }
         & $VenvPython -m app.health --require-engine 2>&1 | Out-Null
