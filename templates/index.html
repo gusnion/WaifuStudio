@@ -355,7 +355,8 @@
           </div>
         </div>
         <select id="video-engine" class="hidden" style="display: none;">
-          <option value="h3" selected>MiniMax H3 FL2VA · 24 fps</option>
+          <option value="wan" selected>Wan 2.2 I2V</option>
+          <option value="h3">MiniMax H3 FL2VA</option>
         </select>
 
         <!-- BLOQUE 1: Entradas y Modo de Generación -->
@@ -407,10 +408,10 @@
 
         <!-- BLOQUE 2: Prompt H3, Asistente y Guía Oficial -->
         <fieldset class="video-block control-card" id="video-block-prompt">
-          <legend>2. Prompt Cinematográfico H3 <button type="button" class="btn-help" data-help="H3 espera tres bloques en inglés técnico: multimodal, paisaje sonoro foley y música instrumental.">?</button></legend>
+          <legend>2. Prompt y Movimiento <button type="button" class="btn-help" data-help="Describe el movimiento, la cámara y la acción. En Wan el prompt de movimiento guía la animación.">?</button></legend>
           <label class="field" id="video-prompt-field">
-            <span>Prompt H3</span>
-            <textarea id="video-prompt" rows="4" placeholder="integrated_multimodal_description: ...&#10;overall_soundscape: ...&#10;non_diegetic_music: ..."></textarea>
+            <span>Prompt de movimiento</span>
+            <textarea id="video-prompt" rows="4" placeholder="Describe el movimiento: ella gira la cabeza, la cámara se acerca lentamente..."></textarea>
           </label>
 
           <div id="video-h3-prompt-actions">
@@ -469,6 +470,13 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         <fieldset class="video-block control-card" id="video-block-settings">
           <legend>3. Configuración y Rendimiento <button type="button" class="btn-help" data-help="Perfil de render, duración y resolución óptima (8 s recomendado).">?</button></legend>
           <div class="grid-2">
+            <label class="field" id="video-wan-preset-field">
+              <span>Perfil Wan</span>
+              <select id="video-wan-preset">
+                <option value="rapido" selected>Fast · 4 pasos</option>
+                <option value="calidad">Quality · 30 pasos</option>
+              </select>
+            </label>
             <label class="field" id="video-h3-profile-field">
               <span>Perfil de Calidad</span>
               <select id="video-h3-profile"></select>
@@ -662,6 +670,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
             <select id="editor-mode">
               <option value="generate">Generar</option>
               <option value="edit" selected>Editar</option>
+              <option value="multiview">Multivista</option>
             </select>
           </label>
           <p id="editor-edit-hint" class="field-hint">En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio.</p>
@@ -671,7 +680,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </label>
           <div id="editor-refs-preview" class="editor-refs"></div>
           <p id="editor-refs-hint" class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.</p>
-          <div class="field">
+          <div id="editor-multiview-field" class="field hidden">
             <span>Multivista (misma referencia y seed)</span>
             <div class="inline-row">
               <select id="editor-multiview-views">
@@ -684,8 +693,6 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </div>
           <p class="field-hint">Genera frontales, laterales y espalda con el mismo seed. Se usa la primera referencia y hay pausa entre vistas para no saturar la GPU.</p>
           <div id="editor-multiview-results" class="editor-multiview-results hidden"></div>
-          <label class="field"><span>LoRAs (opcional, múltiple)</span><select id="editor-loras" multiple size="4"></select></label>
-          <p class="field-hint">Selecciona una o más LoRAs compatibles; se aplican con peso 1.0.</p>
         </fieldset>
 
         <!-- BLOQUE 2: Instrucción de Edición -->
@@ -779,6 +786,8 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
             <input id="editor-cfg" type="number" value="1.0" min="1" max="10" step="0.1">
             <p id="editor-cfg-note" class="field-hint hidden">Aviso: cfg mayor que 1 puede degradar la edición (el par UC está certificado con cfg 1).</p>
           </label>
+          <label class="field"><span>LoRAs compatibles (opcional, múltiple)</span><select id="editor-loras" multiple size="4"></select></label>
+          <p class="field-hint">Solo se listan LoRAs de la familia del Editor; se aplican con peso 1.0.</p>
         </fieldset>
       </aside>
 
@@ -1010,6 +1019,11 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           </div>
           <div id="timeline-media-shelf" class="timeline-media-shelf"></div>
           <p class="field-hint">Usa el botón '+' en cada miniatura para añadir a la secuencia.</p>
+          <div class="control-inline">
+            <button id="btn-timeline-load-file" type="button">Cargar archivo…</button>
+            <input id="timeline-media-file" type="file" accept="image/*,video/*" hidden>
+            <button id="btn-timeline-open-gallery" type="button">Elegir de galería…</button>
+          </div>
         </fieldset>
 
         <!-- BLOQUE 3: Generar en Timeline con IA -->
@@ -1109,6 +1123,17 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         </div>
       </div>
     </section>
+
+    <div id="timeline-gallery-modal" class="modal hidden">
+      <div class="modal-box timeline-gallery-box">
+        <div class="modal-header">
+          <h2>Elegir de la galería</h2>
+          <span id="timeline-gallery-status" class="oc-status">Cargando…</span>
+          <button id="btn-timeline-gallery-close" type="button">Cerrar</button>
+        </div>
+        <div id="timeline-gallery-grid" class="timeline-gallery-grid"></div>
+      </div>
+    </div>
 
     <section id="panel-guide" class="panel" hidden>
       <!-- Hero Banner Superior -->

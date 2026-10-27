@@ -321,3 +321,47 @@ main {
 .tab .beta-badge {
   margin-left: 0.05rem;
 }
+
+.timeline-gallery-box {
+  width: min(980px, 94vw);
+  max-height: 86vh;
+}
+
+.timeline-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  padding: 0.8rem;
+  overflow-y: auto;
+}
+
+.timeline-gallery-card {
+  position: relative;
+  min-height: 120px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.timeline-gallery-card img,
+.timeline-gallery-card video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.timeline-gallery-card .timeline-gallery-plus {
+  position: absolute;
+  right: 0.3rem;
+  top: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8rem;
+}

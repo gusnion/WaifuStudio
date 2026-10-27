@@ -28,7 +28,63 @@ AUDIO_EXTENSIONS = {
     ".m4a": "audio/mp4",
 }
 
+MEDIA_EXTENSIONS = {
+    ".png": ("image", "image/png"),
+    ".jpg": ("image", "image/jpeg"),
+    ".jpeg": ("image", "image/jpeg"),
+    ".webp": ("image", "image/webp"),
+    ".mp4": ("video", "video/mp4"),
+    ".webm": ("video", "video/webm"),
+}
+
 router = APIRouter()
+
+
+@router.post("/api/timeline/upload_media")
+async def api_timeline_upload_media(request: Request) -> Any:
+    """Importa una imagen o vídeo externo a data/gallery/timeline."""
+    cfg = request.app.state.config
+    payload = await request.json()
+    filename = str(payload.get("filename") or "media")
+    raw_b64 = payload.get("media_b64") or payload.get("data")
+    if not isinstance(raw_b64, str) or not raw_b64:
+        raise EngineError("media_b64 requerido")
+    if "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+    try:
+        raw = base64.b64decode(raw_b64)
+    except Exception as exc:
+        raise EngineError(f"base64 invalido: {exc}") from exc
+    ext = Path(filename).suffix.lower()
+    entry = MEDIA_EXTENSIONS.get(ext)
+    if entry is None:
+        raise EngineError(f"extension no permitida: {ext}")
+    target_dir = (cfg.data_dir / "gallery" / "timeline").resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{uuid.uuid4().hex[:10]}_{Path(filename).name}"
+    target = (target_dir / safe_name).resolve()
+    if not target.is_relative_to(target_dir):
+        raise EngineError("nombre de archivo invalido")
+    target.write_bytes(raw)
+    return {
+        "ok": True,
+        "filename": safe_name,
+        "kind": entry[0],
+        "url": f"/media/timeline/{safe_name}",
+    }
+
+
+@router.get("/media/timeline/{name:path}")
+async def api_media_timeline(name: str, request: Request) -> Any:
+    cfg = request.app.state.config
+    root = (cfg.data_dir / "gallery" / "timeline").resolve()
+    target = (root / name).resolve()
+    if not target.is_relative_to(root):
+        return JSONResponse(status_code=403, content={"error": "ruta fuera de timeline"})
+    entry = MEDIA_EXTENSIONS.get(target.suffix.lower())
+    if entry is None or not target.is_file():
+        return JSONResponse(status_code=404, content={"error": "no encontrado"})
+    return FileResponse(target, media_type=entry[1])
 
 
 @router.get("/api/timeline/projects")

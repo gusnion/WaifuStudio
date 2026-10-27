@@ -48,6 +48,13 @@ import { t } from "../i18n.js";
 let editorResolutionKit = null;
 let pendingEditorLoras = null;
 let editorLorasLoaded = false;
+const EDITOR_LORA_FAMILIES = new Set(["qwen", "qwen-image", "qwen_image", "editor"]);
+
+function isEditorLora(item) {
+  const family = String(item?.family || "").toLowerCase();
+  if (EDITOR_LORA_FAMILIES.has(family)) return true;
+  return /qwen/i.test(`${item?.file || ""} ${item?.display_name || ""} ${item?.id || ""}`);
+}
 
 async function loadEditorLoras() {
   const select = $("editor-loras");
@@ -65,7 +72,7 @@ async function loadEditorLoras() {
     select.replaceChildren();
     const seen = new Set();
     for (const item of items) {
-      if (!item || !item.id || seen.has(item.id)) {
+      if (!item || !item.id || seen.has(item.id) || !isEditorLora(item)) {
         continue;
       }
       seen.add(item.id);
@@ -140,6 +147,7 @@ function updateEditorControls() {
     state.editorBusy ||
     !state.editorInstalled ||
     !state.editorLicenseAccepted ||
+    $("editor-mode")?.value === "multiview" ||
     (!hasPrompt && !hasPreset);
 }
 
@@ -272,14 +280,24 @@ function syncEditorEditSource() {
 }
 
 function updateEditorMode(options = {}) {
-  const edit = $("editor-mode").value === "edit";
+  const mode = $("editor-mode").value;
+  const edit = mode === "edit";
+  const multiview = mode === "multiview";
   const field = $("editor-refs-field");
   if (field) {
     field.style.display = edit ? "none" : "";
   }
+  const multiviewField = $("editor-multiview-field");
+  if (multiviewField) multiviewField.classList.toggle("hidden", !multiview);
+  const multiviewResults = $("editor-multiview-results");
+  if (multiviewResults && !multiview) multiviewResults.classList.add("hidden");
+  const generateButton = $("btn-editor-generate");
+  if (generateButton) generateButton.disabled = multiview;
   const hint = $("editor-refs-hint");
   if (hint) {
-    hint.textContent = edit
+    hint.textContent = multiview
+      ? "Referencias (hasta 10): la multivista usa la primera y el mismo seed para todas las vistas."
+      : edit
       ? "En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio."
       : "Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.";
   }
@@ -672,6 +690,10 @@ function downloadEditorResult() {
 async function generateEditor() {
   if (!state.editorLicenseAccepted) {
     setEditorStatus("Acepta la licencia de Qwen-Image 2.1 antes de generar", true);
+    return;
+  }
+  if ($("editor-mode").value === "multiview") {
+    setEditorStatus("Usa «Generar hoja de contacto» para la multivista", true);
     return;
   }
   const prompt = $("editor-prompt").value.trim();

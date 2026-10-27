@@ -3,7 +3,7 @@
 // Dependencias: static/js/api.js y static/js/dom.js.
 
 import { api, postJson, enqueueJobs, cancelJob } from "../api.js";
-import { $, on } from "../dom.js";
+import { $, on, readFileBase64 } from "../dom.js";
 
 const state = {
   projects: [],
@@ -389,6 +389,88 @@ function renderAudioTrack() {
   });
 }
 
+function addTimelineClip(item, url, isVideo, metaDuration = null) {
+  const hasParam = isVideo && (Number(item?.params?.seconds) > 0 || Number(item?.params?.duration) > 0);
+  const duration = clipDurationForItem(item, metaDuration);
+  const clip = {
+    generation_id: item.id ?? null,
+    kind: isVideo ? "video" : "image",
+    url,
+    source_path: url,
+    duration,
+    params: item.params || {},
+    mute: false,
+    effect: "none",
+    transition_in: "none",
+    transition_out: "none",
+    _hasExplicitDuration: Boolean(hasParam || metaDuration),
+  };
+  state.current.data.clips.push(clip);
+  if (state.current.data.clips.length === 1) applyFirstClipProfile(state.current.data, item);
+  const newIdx = state.current.data.clips.length - 1;
+  selectClip(newIdx);
+  calcTotalDuration();
+  renderTracks();
+  setTimelineStatus(`Clip añadido (${clip.kind}, ${duration.toFixed(1)}s)`);
+  return newIdx;
+}
+
+async function openTimelineGallery() {
+  const modal = $("timeline-gallery-modal");
+  const grid = $("timeline-gallery-grid");
+  const status = $("timeline-gallery-status");
+  if (!modal || !grid) return;
+  modal.classList.remove("hidden");
+  grid.replaceChildren();
+  if (status) status.textContent = "Cargando…";
+  try {
+    const data = await api("/api/gallery?limit=24");
+    const items = data.items || [];
+    for (const item of items) {
+      const isVideo = item.kind === "video";
+      const url = resolveMediaUrl(item);
+      if (!url) continue;
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "timeline-gallery-card";
+      card.dataset.id = String(item.id);
+      card.innerHTML = `${isVideo ? `<video src="${url}" preload="metadata"></video>` : `<img src="${url}" loading="lazy">`}<span class="timeline-gallery-plus">+</span>`;
+      card.addEventListener("click", () => {
+        addTimelineClip(item, url, isVideo);
+        closeTimelineGallery();
+      });
+      grid.appendChild(card);
+    }
+    if (status) status.textContent = `${items.length} medios`;
+  } catch (error) {
+    if (status) {
+      status.textContent = error.message;
+      status.classList.add("error");
+    }
+  }
+}
+
+function closeTimelineGallery() {
+  const modal = $("timeline-gallery-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function importTimelineFile(file) {
+  if (!file) return;
+  setTimelineStatus(`Importando ${file.name}…`);
+  try {
+    const dataUrl = await readFileBase64(file);
+    const isVideo = String(file.type).startsWith("video/") || /\.(mp4|webm)$/i.test(file.name);
+    const result = await postJson("/api/timeline/upload_media", {
+      filename: file.name,
+      media_b64: dataUrl,
+    });
+    addTimelineClip({ params: {}, id: null }, result.url || `/media/timeline/${result.filename}`, isVideo);
+  } catch (error) {
+    setTimelineStatus(error.message, true);
+  }
+}
+
 export async function refreshTimelineMedia() {
   const shelf = $("timeline-media-shelf");
   if (!shelf) return;
@@ -728,6 +810,17 @@ export function initTimelineTab() {
   on("btn-timeline-play-all", "click", togglePlayAll);
   on("btn-timeline-refresh-media", "click", refreshTimelineMedia);
   on("timeline-media-filter", "change", refreshTimelineMedia);
+  on("btn-timeline-open-gallery", "click", openTimelineGallery);
+  on("btn-timeline-gallery-close", "click", closeTimelineGallery);
+  on("timeline-gallery-modal", "click", (event) => {
+    if (event.target.id === "timeline-gallery-modal") closeTimelineGallery();
+  });
+  on("btn-timeline-load-file", "click", () => $("timeline-media-file")?.click());
+  on("timeline-media-file", "change", (event) => {
+    const file = (event.target.files || [])[0];
+    if (file) importTimelineFile(file);
+    event.target.value = "";
+  });
 
   on("timeline-project-select", "change", async (e) => {
     const id = e.target.value;

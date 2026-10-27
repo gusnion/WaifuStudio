@@ -40,9 +40,9 @@ html[data-theme="light"] #btn-video-seed-random.active,
 html[data-theme="light"] #btn-video-seed-random[aria-pressed="true"],
 html[data-theme="light"] #btn-editor-seed-random.active,
 html[data-theme="light"] #btn-editor-seed-random[aria-pressed="true"] {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: #f6dbe4;
+  color: #8c1236;
+  border-color: #b51d4a;
 }
 
 html[data-theme="light"] .gallery-badge {
@@ -136,3 +136,163 @@ html[data-theme="light"] .timeline-preview,
 html[data-theme="light"] #timeline-preview-video {
   background: #eef1f7;
 }
+
+/* Timeline: biblioteca, preview, pistas y estados */
+html[data-theme="light"] .timeline-media-shelf,
+html[data-theme="light"] .timeline-preview-wrap,
+html[data-theme="light"] .timeline-tracks-container,
+html[data-theme="light"] .timeline-track,
+html[data-theme="light"] .timeline-clip-card,
+html[data-theme="light"] .timeline-clip-thumb-wrap,
+html[data-theme="light"] .timeline-audio-card {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+html[data-theme="light"] .timeline-media-shelf {
+  background: var(--panel-2);
+}
+
+html[data-theme="light"] .timeline-media-item,
+html[data-theme="light"] .image-thumb,
+html[data-theme="light"] .video-thumb,
+html[data-theme="light"] .gallery-card-media,
+html[data-theme="light"] .gallery-modal-media,
+html[data-theme="light"] .video-preview-box {
+  background: #eef1f7;
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .timeline-media-add-btn {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+html[data-theme="light"] .timeline-preview-controls {
+  background: rgba(246, 247, 251, 0.94);
+  color: var(--text);
+  border-top-color: var(--border);
+}
+
+html[data-theme="light"] .timeline-track-header,
+html[data-theme="light"] .timeline-preview-controls span {
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .timeline-btn-mini {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .timeline-btn-mini:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+html[data-theme="light"] .timeline-clip-badge {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+
+html[data-theme="light"] .timeline-clip-placeholder {
+  background: rgba(181, 29, 74, 0.07);
+  color: var(--accent);
+}
+
+html[data-theme="light"] .gallery-pending-placeholder,
+html[data-theme="light"] .thumb-pending {
+  background: rgba(246, 247, 251, 0.96);
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .queue-spinner {
+  border-color: rgba(29, 34, 48, 0.14);
+  border-top-color: var(--text-muted);
+}
+
+html[data-theme="light"] .gallery-pending-placeholder.is-queued .queue-spinner,
+html[data-theme="light"] .thumb-pending.is-queued .queue-spinner {
+  border-color: rgba(29, 34, 48, 0.12);
+  border-top-color: var(--text-muted);
+}
+
+html[data-theme="light"] .gallery-card,
+html[data-theme="light"] .card {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .gallery-badge {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+}
+
+html[data-theme="light"] .card img,
+html[data-theme="light"] .card video,
+html[data-theme="light"] .gallery-card-media img,
+html[data-theme="light"] .gallery-card-media video {
+  background: #eef1f7;
+}
+
+/* Controles y scrollbars claros */
+html[data-theme="light"] .tab-sidebar {
+  scrollbar-color: var(--muted) transparent;
+}
+
+html[data-theme="light"] .tab-sidebar::-webkit-scrollbar-track,
+html[data-theme="light"] .image-category-body::-webkit-scrollbar-track,
+html[data-theme="light"] .timeline-track::-webkit-scrollbar-track {
+  background: rgba(29, 34, 48, 0.08) !important;
+}
+
+html[data-theme="light"] .tab-sidebar::-webkit-scrollbar-thumb,
+html[data-theme="light"] .image-category-body::-webkit-scrollbar-thumb,
+html[data-theme="light"] .timeline-track::-webkit-scrollbar-thumb {
+  background: var(--muted) !important;
+}
+
+html[data-theme="light"] .timeline-track {
+  scrollbar-color: var(--muted) rgba(29, 34, 48, 0.08);
+}
+
+/* Guía: barra de búsqueda y navegación */
+html[data-theme="light"] .guide-toolbar {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] #guide-search {
+  background: var(--panel-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+html[data-theme="light"] .guide-nav-btn {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .guide-nav-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+html[data-theme="light"] .guide-section h3 {
+  border-bottom-color: var(--border);
+}
+
+/* Botón principal universal: margen y radio del sistema */
+.tab-canonical-layout .generate-row .primary {
+  margin: 2px;
+  border-radius: 10px;
+}
+
+.tab-canonical-layout .generate-row {
+  align-items: stretch;
+}
+

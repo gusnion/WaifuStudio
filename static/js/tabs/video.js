@@ -399,7 +399,7 @@ async function reuseVideoGeneration(item) {
   const params = item.params || {};
   const reused = videoReuseParams(params);
 
-  $("video-engine").value = "h3";
+  $("video-engine").value = "wan";
   $("video-mode").value = reused.mode;
 
   setSelectValue($("video-h3-profile"), reused.profile);
@@ -468,7 +468,7 @@ async function reuseVideoGeneration(item) {
 }
 
 function startNewVideo() {
-  if ($("video-engine")) $("video-engine").value = "h3";
+  if ($("video-engine")) $("video-engine").value = "wan";
   if ($("video-mode")) $("video-mode").value = "i2v";
   $("video-seed").value = $("video-seed").defaultValue || "42";
   $("video-prompt").value = "";
@@ -629,7 +629,66 @@ function setVideoJobStatus(text, isError = false) {
   setVideoStatus(text, isError);
 }
 
+async function generateWanVideo() {
+  const mode = $("video-mode")?.value || "i2v";
+  if (mode !== "i2v" && mode !== "flf2v") {
+    setVideoStatus("Wan solo admite I2V y FLF2V", true);
+    return;
+  }
+  const first = $("video-image")?.files?.[0];
+  if (!first) {
+    setVideoStatus("Sube la imagen inicial (first frame)", true);
+    return;
+  }
+  const prompt = $("video-prompt")?.value.trim() || "";
+  if (!prompt) {
+    setVideoStatus("Wan requiere un prompt de movimiento", true);
+    return;
+  }
+  const payload = {
+    engine: "wan",
+    mode,
+    image_b64: await readFileBase64(first),
+    motion_positive: prompt,
+    motion_negative: "",
+    aspect: $("video-h3-aspect")?.value || "vertical",
+    preset: $("video-wan-preset")?.value || "rapido",
+    seconds: Number($("video-h3-seconds")?.value || 5),
+    seed: readVideoSeed(),
+  };
+  if (mode === "flf2v") {
+    const last = $("video-last-image")?.files?.[0];
+    if (!last) {
+      setVideoStatus("FLF2V requiere la imagen final", true);
+      return;
+    }
+    payload.last_image_b64 = await readFileBase64(last);
+  }
+  const btn = $("btn-video-generate");
+  if (btn) btn.disabled = true;
+  setVideoStatus("Encolando vídeo Wan…");
+  try {
+    const data = await postJson("/api/video/generate", payload);
+    reloadVideoViewerFirstPage().catch(() => {});
+    await enqueueJobs(data.job_id, {
+      statusFn: setVideoJobStatus,
+      onDone: reloadVideoViewerFirstPage,
+      progressFn: setVideoProgress,
+      manageCancel: true,
+      cancelButtonId: "btn-video-cancel",
+    });
+  } catch (error) {
+    setVideoStatus(error.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function generateVideo() {
+  if (($("video-engine")?.value || "wan") === "wan") {
+    await generateWanVideo();
+    return;
+  }
   const engine = $("video-engine") ? $("video-engine").value : "h3";
   const mode = $("video-mode") ? $("video-mode").value : "i2v";
   if (mode === "ref2va") {
@@ -753,7 +812,18 @@ async function generateVideo() {
 
 function applyVideoEngine() {
   const isWan = $("video-engine") ? $("video-engine").value === "wan" : false;
-  const mode = $("video-mode") ? $("video-mode").value : "i2v";
+  let mode = $("video-mode") ? $("video-mode").value : "i2v";
+  const modeSelect = $("video-mode");
+  if (modeSelect && isWan) {
+    for (const value of ["ref2va", "v2v"]) {
+      const opt = modeSelect.querySelector(`option[value="${value}"]`);
+      if (opt) opt.hidden = true;
+    }
+    if (mode === "ref2va" || mode === "v2v") {
+      modeSelect.value = "i2v";
+      mode = "i2v";
+    }
+  }
   const showFirst = mode === "i2v" || mode === "flf2v" || mode === "v2v";
   const showLast = mode === "flf2v";
   const showRefs = mode === "ref2va";
@@ -783,6 +853,23 @@ function applyVideoEngine() {
   }
 
   if ($("video-h3-guide")) $("video-h3-guide").style.display = isWan ? "none" : "";
+  const h3Only = [
+    "video-h3-prompt-actions",
+    "video-h3-profile-field",
+    "video-h3-size-field",
+    "video-h3-res-badge-wrap",
+    "video-h3-encoder-field",
+    "video-h3-variant-field",
+    "video-h3-encoder-warning",
+    "video-h3-sage-field",
+    "video-custom-settings-panel",
+  ];
+  for (const id of h3Only) {
+    const el = $(id);
+    if (el) el.style.display = isWan ? "none" : "";
+  }
+  const wanPreset = $("video-wan-preset-field");
+  if (wanPreset) wanPreset.style.display = isWan ? "" : "none";
 
   if (mode === "ref2va" || mode === "v2v") {
     setSelectValue($("video-h3-profile"), "ref2va");

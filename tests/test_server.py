@@ -5820,7 +5820,7 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
             'id="cfg" type="number" value="6"',
             'id="seed" type="number" value="42"',
             '<option value="nsfw" selected>nsfw</option>',
-            '<option value="h3" selected>',
+            '<option value="wan" selected>',
             STARTUP_NEGATIVE_COMPOSED,
         ):
             with self.subTest(marker=marker):
