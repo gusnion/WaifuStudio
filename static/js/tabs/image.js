@@ -246,6 +246,7 @@ async function applyModel(modelId) {
   }
   updateModelBadge(model);
   state.family = model.family || "anima";
+  state.subfamily = model.subfamily || "";
   state.prompt_profile =
     model.prompt_profile || (state.family === "anima" ? "anima" : "sdxl_tags");
 

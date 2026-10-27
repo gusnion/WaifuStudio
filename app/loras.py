@@ -71,7 +71,10 @@ def _entry_from_dict(data: object) -> dict:
     if not isinstance(notes, str):
         raise EngineError(f"notes debe ser str: {notes!r}")
     default_weight = data.get("default_weight", 1.0)
-    return {
+    subfamily = data.get("subfamily")
+    if subfamily is not None and not isinstance(subfamily, str):
+        raise EngineError(f"subfamily debe ser str: {subfamily!r}")
+    entry = {
         "id": data["id"],
         "family": data["family"],
         "file": data["file"],
@@ -84,6 +87,9 @@ def _entry_from_dict(data: object) -> dict:
         "license": data["license"],
         "notes": notes,
     }
+    if "subfamily" in data and data["subfamily"] is not None:
+        entry["subfamily"] = data["subfamily"].strip()
+    return entry
 
 
 def user_registry_path() -> Path:
@@ -246,6 +252,8 @@ def update_entry(
             key: changes[key] if key in changes else value
             for key, value in item.items()
         }
+        if "subfamily" in changes:
+            data["subfamily"] = changes["subfamily"]
         candidate = _entry_from_dict(data)
         registry["loras"][position] = candidate
         save_registry(registry, path=path)
@@ -272,13 +280,71 @@ def _entries(path: str | Path | None = None) -> list[dict]:
     return load_registry(path)["loras"]
 
 
+def _normalize_subfamily(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    val = value.strip().lower()
+    if val in ("sin_clasificar", "none", "null", "undefined"):
+        return ""
+    return val
+
+
+def check_subfamily_compatibility(
+    model_subfamily: str | None,
+    lora_subfamily: str | None,
+) -> tuple[bool, str | None]:
+    """Evalua coincidencia de subrama y aviso de compatibilidad no verificada.
+
+    Reglas:
+    - Si ambos tienen subrama: exigir coincidencia exacta. Si no coinciden -> (False, "Incompatible").
+    - Si falta en alguno: permitir -> (True, "Compatibilidad no verificada").
+    - Si ambos coinciden: permitir -> (True, None).
+    """
+    m_sub = _normalize_subfamily(model_subfamily)
+    l_sub = _normalize_subfamily(lora_subfamily)
+    if m_sub and l_sub:
+        if m_sub == l_sub:
+            return True, None
+        return False, "Incompatible"
+    return True, "Compatibilidad no verificada"
+
+
 def list_loras(
-    family: str | None = None, *, path: str | Path | None = None
+    family: str | None = None,
+    subfamily: str | None = None,
+    *,
+    all: bool = False,
+    path: str | Path | None = None,
 ) -> list[dict]:
-    """Entradas (copias) en orden del registro, filtradas por familia exacta."""
+    """Entradas (copias) en orden del registro, filtradas por familia y subrama.
+
+    Si se especifica `subfamily`:
+    - Si modelo y LoRA tienen subrama, exige coincidencia (salvo `all=True`).
+    - Si falta en alguno, permite la LoRA con aviso de compatibilidad no verificada.
+    - Con `all=True` desactiva el filtro de subrama.
+    """
     entries = _entries(path)
     if family is not None:
         entries = [entry for entry in entries if entry["family"] == family]
+    if subfamily is not None:
+        filtered: list[dict] = []
+        for entry in entries:
+            is_compat, warning = check_subfamily_compatibility(
+                subfamily, entry.get("subfamily")
+            )
+            if all or is_compat:
+                item = copy.deepcopy(entry)
+                if not is_compat:
+                    item["compatibility_warning"] = warning or "Incompatible"
+                    item["unverified_compatibility"] = True
+                elif warning:
+                    item["compatibility_warning"] = warning
+                    item["unverified_compatibility"] = True
+                else:
+                    item["compatibility_warning"] = None
+                    item["unverified_compatibility"] = False
+                filtered.append(item)
+        return filtered
     return copy.deepcopy(entries)
 
 
@@ -447,6 +513,7 @@ __all__ = [
     "DEFAULT_PATH",
     "REGISTRY_VERSION",
     "add_entry",
+    "check_subfamily_compatibility",
     "delete_entry",
     "families",
     "get",

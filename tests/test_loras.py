@@ -855,6 +855,117 @@ class DiskAutoScanTests(unittest.TestCase):
         self.assertEqual(marin["trigger"], "marinkitagawa")
 
 
+class SubfamilyFilterTests(unittest.TestCase):
+    """Filtro de LoRAs por subrama de modelo y toggle ver todas (C-08)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "loras.json"
+        entries = [
+            entry(
+                id="lora-pony",
+                family="sdxl",
+                subfamily="pony",
+                display_name="LoRA Pony",
+            ),
+            entry(
+                id="lora-illu",
+                family="sdxl",
+                subfamily="illustrious",
+                display_name="LoRA Illustrious",
+            ),
+            entry(
+                id="lora-fallback-sdxl",
+                family="sdxl",
+                display_name="LoRA SDXL sin subrama",
+            ),
+            entry(
+                id="lora-fallback-unclass",
+                family="sdxl",
+                subfamily="sin_clasificar",
+                display_name="LoRA Sin clasificar",
+            ),
+            entry(
+                id="lora-anima",
+                family="anima",
+                subfamily="anima",
+                display_name="LoRA Anima",
+            ),
+        ]
+        payload = {"version": 1, "loras": entries}
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_pony_no_aparece_sobre_illustrious_salvo_toggle(self):
+        # 1. Filtro estricto: Illustrious NO debe incluir Pony
+        results = list_loras(family="sdxl", subfamily="illustrious", all=False, path=self.path)
+        ids = [item["id"] for item in results]
+        self.assertNotIn("lora-pony", ids)
+        self.assertIn("lora-illu", ids)
+
+        # 2. Con toggle 'all=True', Pony aparece sobre Illustrious
+        results_all = list_loras(family="sdxl", subfamily="illustrious", all=True, path=self.path)
+        ids_all = [item["id"] for item in results_all]
+        self.assertIn("lora-pony", ids_all)
+        self.assertIn("lora-illu", ids_all)
+        pony_item = next(item for item in results_all if item["id"] == "lora-pony")
+        self.assertTrue(pony_item.get("unverified_compatibility"))
+        self.assertIn("Incompatible", pony_item.get("compatibility_warning", ""))
+
+    def test_fallback_sin_subrama_permite_con_aviso(self):
+        # 1. Modelo con subrama (Illustrious) y LoRAs sin subrama -> se permiten con aviso
+        results = list_loras(family="sdxl", subfamily="illustrious", all=False, path=self.path)
+        ids = [item["id"] for item in results]
+        self.assertIn("lora-fallback-sdxl", ids)
+        self.assertIn("lora-fallback-unclass", ids)
+        fb_item = next(item for item in results if item["id"] == "lora-fallback-sdxl")
+        self.assertTrue(fb_item.get("unverified_compatibility"))
+        self.assertEqual(fb_item.get("compatibility_warning"), "Compatibilidad no verificada")
+
+        fb_unclass = next(item for item in results if item["id"] == "lora-fallback-unclass")
+        self.assertTrue(fb_unclass.get("unverified_compatibility"))
+        self.assertEqual(fb_unclass.get("compatibility_warning"), "Compatibilidad no verificada")
+
+        # 2. Modelo sin subrama (ej. vacio o sin_clasificar) -> permite todas con aviso
+        results_nomodel = list_loras(family="sdxl", subfamily="", all=False, path=self.path)
+        ids_nomodel = [item["id"] for item in results_nomodel]
+        self.assertIn("lora-pony", ids_nomodel)
+        self.assertIn("lora-illu", ids_nomodel)
+        self.assertIn("lora-fallback-sdxl", ids_nomodel)
+        for item in results_nomodel:
+            self.assertTrue(item.get("unverified_compatibility"))
+            self.assertEqual(item.get("compatibility_warning"), "Compatibilidad no verificada")
+
+    def test_coincidencia_exacta_sin_aviso(self):
+        results = list_loras(family="sdxl", subfamily="illustrious", all=False, path=self.path)
+        illu_item = next(item for item in results if item["id"] == "lora-illu")
+        self.assertFalse(illu_item.get("unverified_compatibility"))
+        self.assertIsNone(illu_item.get("compatibility_warning"))
+
+    def test_api_loras_endpoint_filtra_por_subrama_y_toggle(self):
+        import asyncio
+        from unittest.mock import MagicMock
+        from app.routes.models import api_loras
+
+        req = MagicMock()
+        req.app.state.config = None
+        req.query_params = {"family": "sdxl", "subfamily": "illustrious"}
+
+        with mock.patch.object(loras_module, "DEFAULT_PATH", self.path):
+            # 1. Sin toggle: solo Illustrious y fallbacks, no Pony
+            res = asyncio.run(api_loras(req, family="sdxl", subfamily="illustrious", all=False))
+            ids = [it["id"] for it in res["items"]]
+            self.assertNotIn("lora-pony", ids)
+            self.assertIn("lora-illu", ids)
+            self.assertIn("lora-fallback-sdxl", ids)
+
+            # 2. Con toggle: aparece Pony
+            res_all = asyncio.run(api_loras(req, family="sdxl", subfamily="illustrious", all=True))
+            ids_all = [it["id"] for it in res_all["items"]]
+            self.assertIn("lora-pony", ids_all)
+            self.assertIn("lora-illu", ids_all)
+
+
 if __name__ == "__main__":
     unittest.main()
 

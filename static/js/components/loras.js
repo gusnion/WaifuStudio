@@ -7,14 +7,118 @@ import { state } from "../state.js";
 import { $, on, setStatus, readFileBase64 } from "../dom.js";
 import { api, postJson, putJson } from "../api.js";
 
+function getLoraCompatibility(lora) {
+  const modelSub = String(state.subfamily || "").trim().toLowerCase();
+  const loraSub = String(lora.subfamily || "").trim().toLowerCase();
+  const modelHasSub = Boolean(modelSub && modelSub !== "sin_clasificar");
+  const loraHasSub = Boolean(loraSub && loraSub !== "sin_clasificar");
+
+  if (modelHasSub && loraHasSub) {
+    if (modelSub === loraSub) {
+      return { isMatch: true, isMismatch: false, isUnverified: false, warning: null };
+    }
+    return {
+      isMatch: false,
+      isMismatch: true,
+      isUnverified: false,
+      warning: `Incompatible (${loraSub} vs ${modelSub})`,
+    };
+  }
+  return {
+    isMatch: true,
+    isMismatch: false,
+    isUnverified: true,
+    warning: "Compatibilidad no verificada",
+  };
+}
+
+function ensureToggleElements() {
+  // 1. En #section-loras .lora-actions (Pestaña Imagen)
+  const actions = document.querySelector("#section-loras .lora-actions");
+  if (actions && !$("lora-toggle-all-container")) {
+    const wrap = document.createElement("label");
+    wrap.id = "lora-toggle-all-container";
+    wrap.className = "lora-toggle-label";
+    wrap.style.display = "inline-flex";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "6px";
+    wrap.style.fontSize = "0.85rem";
+    wrap.style.cursor = "pointer";
+    wrap.style.marginLeft = "auto";
+    wrap.title = "Desactiva el filtro por subrama y muestra todas las LoRAs";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = "lora-toggle-all";
+    chk.checked = Boolean(state.lorasShowAll);
+    chk.addEventListener("change", (e) => onToggleAllChanged(e.target.checked));
+
+    const txt = document.createElement("span");
+    txt.textContent = "Ver todas";
+
+    wrap.append(chk, txt);
+    actions.appendChild(wrap);
+  }
+
+  // 2. En #lora-modal .lora-body (Modal Elegir LoRAs)
+  const searchInput = $("lora-search");
+  if (searchInput && !$("lora-modal-toggle-all-container")) {
+    const wrap = document.createElement("label");
+    wrap.id = "lora-modal-toggle-all-container";
+    wrap.className = "lora-toggle-label";
+    wrap.style.display = "inline-flex";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "6px";
+    wrap.style.fontSize = "0.85rem";
+    wrap.style.cursor = "pointer";
+    wrap.style.margin = "6px 0 10px 0";
+    wrap.title = "Desactiva el filtro por subrama y muestra todas las LoRAs";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = "lora-modal-toggle-all";
+    chk.checked = Boolean(state.lorasShowAll);
+    chk.addEventListener("change", (e) => onToggleAllChanged(e.target.checked));
+
+    const txt = document.createElement("span");
+    txt.textContent = "Ver todas";
+
+    wrap.append(chk, txt);
+    searchInput.parentNode.insertBefore(wrap, searchInput.nextSibling);
+  }
+
+  const c1 = $("lora-toggle-all");
+  if (c1) c1.checked = Boolean(state.lorasShowAll);
+  const c2 = $("lora-modal-toggle-all");
+  if (c2) c2.checked = Boolean(state.lorasShowAll);
+}
+
+async function onToggleAllChanged(checked) {
+  state.lorasShowAll = Boolean(checked);
+  ensureToggleElements();
+  await loadLoras({ preserveSelection: true });
+}
+
 async function loadLoras(options = {}) {
   const family = state.family || "anima";
+  const subfamily = state.subfamily || "";
+  const showAll = Boolean(state.lorasShowAll);
   const previousSelection =
     options && options.preserveSelection && state.loraSelection instanceof Map
       ? new Map(state.loraSelection)
       : null;
+  const query = new URLSearchParams({
+    family,
+    scan: "1",
+  });
+  if (subfamily) {
+    query.set("subfamily", subfamily);
+  }
+  if (showAll) {
+    query.set("all", "1");
+  }
   const data = await api(
-    `/api/loras?family=${encodeURIComponent(family)}&scan=1`
+    `/api/loras?${query.toString()}`
   );
   state.loras = data.items || [];
   if (previousSelection) {
@@ -52,6 +156,7 @@ function emptyLoraMessage(text) {
 }
 
 function renderLoraChips() {
+  ensureToggleElements();
   const container = $("loras-list");
   if (!container) {
     return;
@@ -81,17 +186,48 @@ function renderLoraChips() {
     const name = document.createElement("span");
     name.className = "lora-chip-name";
     name.textContent = lora.display_name || lora.id;
-    name.title = `${lora.id} @ ${weight.toFixed(2)}`;
+
+    const compat = getLoraCompatibility(lora);
+    let title = `${lora.id} @ ${weight.toFixed(2)}`;
+    if (compat.isMismatch) {
+      title += ` · ${compat.warning}`;
+    } else if (compat.isUnverified) {
+      title += " · Compatibilidad no verificada";
+    }
+    name.title = title;
+
     const value = document.createElement("span");
     value.className = "lora-chip-weight";
     value.textContent = `@ ${weight.toFixed(2)}`;
+
+    chip.appendChild(name);
+    if (compat.isMismatch) {
+      const warn = document.createElement("span");
+      warn.className = "lora-chip-warn";
+      warn.style.color = "var(--color-danger, #e74c3c)";
+      warn.style.marginLeft = "4px";
+      warn.title = compat.warning;
+      warn.textContent = "⚠️";
+      chip.appendChild(warn);
+    } else if (compat.isUnverified) {
+      const warn = document.createElement("span");
+      warn.className = "lora-chip-warn";
+      warn.style.color = "var(--color-warning, #e67e22)";
+      warn.style.marginLeft = "4px";
+      warn.title = "Compatibilidad no verificada";
+      warn.textContent = "⚠️";
+      chip.appendChild(warn);
+    }
+    chip.appendChild(value);
+
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "lora-chip-remove";
     remove.textContent = "×";
     remove.title = "Quitar";
     remove.addEventListener("click", () => setLoraSelected(lora.id, false));
-    chip.append(name, value, remove);
+    chip.appendChild(remove);
+
     container.appendChild(chip);
   }
 }
@@ -151,6 +287,7 @@ function selectLora(loraId, weight) {
 }
 
 function renderLoraModalList() {
+  ensureToggleElements();
   const container = $("lora-options");
   if (!container) {
     return;
@@ -164,7 +301,7 @@ function renderLoraModalList() {
     const famLabel = fam === "anima" ? "Anima" : fam.toUpperCase();
     container.appendChild(
       emptyLoraMessage(
-        `No hay LoRAs registradas compatibles con ${famLabel}. Añádelas en models/loras o desde «Gestionar biblioteca».`
+        `No hay LoRAs registradas compatibles con ${famLabel}. Activa «Ver todas» o añádelas desde «Gestionar biblioteca».`
       )
     );
     return;
@@ -173,7 +310,7 @@ function renderLoraModalList() {
     if (!query) {
       return true;
     }
-    const haystack = [lora.id, lora.display_name || "", lora.trigger || ""]
+    const haystack = [lora.id, lora.display_name || "", lora.trigger || "", lora.subfamily || ""]
       .join(" ")
       .toLowerCase();
     return haystack.includes(query);
@@ -192,7 +329,48 @@ function renderLoraModalList() {
     check.dataset.loraId = lora.id;
     const name = document.createElement("span");
     name.textContent = lora.display_name || lora.id;
-    name.title = lora.trigger ? `${lora.id} · trigger: ${lora.trigger}` : lora.id;
+
+    const compat = getLoraCompatibility(lora);
+    let title = lora.trigger ? `${lora.id} · trigger: ${lora.trigger}` : lora.id;
+    if (compat.isMismatch) {
+      title += ` · ${compat.warning}`;
+    } else if (compat.isUnverified) {
+      title += " · Compatibilidad no verificada";
+    }
+    name.title = title;
+
+    if (lora.subfamily && lora.subfamily !== "sin_clasificar") {
+      const badge = document.createElement("span");
+      badge.className = "oc-item-badge";
+      badge.style.fontSize = "0.75rem";
+      badge.style.marginLeft = "6px";
+      badge.textContent = lora.subfamily;
+      name.appendChild(document.createTextNode(" "));
+      name.appendChild(badge);
+    }
+
+    if (compat.isMismatch) {
+      const warnBadge = document.createElement("span");
+      warnBadge.className = "lora-warn-badge error";
+      warnBadge.style.fontSize = "0.75rem";
+      warnBadge.style.color = "var(--color-danger, #e74c3c)";
+      warnBadge.style.marginLeft = "6px";
+      warnBadge.textContent = "(incompatible)";
+      warnBadge.title = compat.warning;
+      name.appendChild(document.createTextNode(" "));
+      name.appendChild(warnBadge);
+    } else if (compat.isUnverified) {
+      const warnBadge = document.createElement("span");
+      warnBadge.className = "lora-warn-badge";
+      warnBadge.style.fontSize = "0.75rem";
+      warnBadge.style.color = "var(--color-warning, #e67e22)";
+      warnBadge.style.marginLeft = "6px";
+      warnBadge.textContent = "(compatibilidad no verificada)";
+      warnBadge.title = "Falta subrama en el modelo o en la LoRA: compatibilidad no verificada";
+      name.appendChild(document.createTextNode(" "));
+      name.appendChild(warnBadge);
+    }
+
     label.append(check, name);
     const weightBox = document.createElement("div");
     weightBox.className = "lora-weight";
@@ -229,6 +407,7 @@ function renderLoraModalList() {
 }
 
 function renderLoras() {
+  ensureToggleElements();
   const badge = $("lora-modal-family-badge");
   if (badge) {
     const fam = state.family || "anima";
@@ -589,6 +768,7 @@ function closeLoraLibrary() {
 
 
 function initLoras() {
+  ensureToggleElements();
   on("btn-lora-modal", "click", openLoraModal);
   on("btn-lora-close", "click", closeLoraModal);
   on("btn-lora-done", "click", closeLoraModal);

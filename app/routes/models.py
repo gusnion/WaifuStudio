@@ -478,9 +478,29 @@ def scan_disk_loras(comfy_root: Any) -> list[dict]:
             lora_id = f"{base_id}-{suffix}"
             suffix += 1
 
+        meta = {}
+        if raw_header:
+            hdr = safetensors_header(raw_header)
+            if isinstance(hdr, dict) and isinstance(hdr.get("__metadata__"), dict):
+                meta = hdr["__metadata__"]
+        lora_subfamily = infer_subfamily(meta)
+        if lora_subfamily == DEFAULT_SUBFAMILY:
+            parts_str = str(rel_path).lower()
+            if "illustrious" in parts_str:
+                lora_subfamily = "illustrious"
+            elif "pony" in parts_str:
+                lora_subfamily = "pony"
+            elif "noobai" in parts_str:
+                lora_subfamily = "noobai"
+            elif "anima" in parts_str:
+                lora_subfamily = "anima"
+            else:
+                lora_subfamily = ""
+
         entry = {
             "id": lora_id,
             "family": family,
+            "subfamily": lora_subfamily,
             "file": rel_str,
             "display_name": display_name,
             "trigger": trigger,
@@ -735,7 +755,11 @@ async def api_models(request: Request, scan: bool = False) -> list[dict]:
 
 @router.get("/api/loras")
 async def api_loras(
-    request: Request, family: str | None = None, scan: bool = False
+    request: Request,
+    family: str | None = None,
+    subfamily: str | None = None,
+    all: bool = False,
+    scan: bool = False,
 ) -> dict:
     if scan:
         cfg = getattr(request.app.state, "config", None)
@@ -743,7 +767,18 @@ async def api_loras(
         scan_disk_models(cfg, reg)
         if cfg is not None:
             scan_disk_loras(cfg.comfy_root)
-    return {"items": list_loras(family), "families": lora_families()}
+    qp = request.query_params
+    ver_todas = (
+        all
+        or qp.get("all") in ("1", "true", "True")
+        or qp.get("ver_todas") in ("1", "true", "True")
+        or qp.get("show_all") in ("1", "true", "True")
+    )
+    items = list_loras(family=family, subfamily=subfamily, all=ver_todas)
+    for item in items:
+        if "subfamily" not in item:
+            item["subfamily"] = ""
+    return {"items": items, "families": lora_families()}
 
 
 @router.post("/api/loras/scan")
@@ -810,9 +845,17 @@ async def api_loras_upload(request: Request, payload: dict = Body(...)) -> Any:
         while f"{lora_id}-{suffix}" in existing:
             suffix += 1
         lora_id = f"{lora_id}-{suffix}"
+    lora_subfamily = payload.get("subfamily")
+    if not isinstance(lora_subfamily, str) or not lora_subfamily.strip():
+        lora_subfamily = infer_subfamily(filename)
+        if lora_subfamily == DEFAULT_SUBFAMILY:
+            lora_subfamily = ""
+    else:
+        lora_subfamily = lora_subfamily.strip()
     entry = {
         "id": lora_id,
         "family": family,
+        "subfamily": lora_subfamily,
         "file": f"{family}\\{filename}",
         "display_name": display_name,
         "trigger": trigger,
