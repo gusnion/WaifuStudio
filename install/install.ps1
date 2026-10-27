@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Preflight (Windows 10/11 x64 + GPU NVIDIA + >=140 GB libres) -> uv +
-    CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.37.4 pineado +
+    CPython 3.12.12 -> .venv + requirements*.txt -> ComfyUI v0.42.5 pineado +
     dependencias del engine -> custom nodes pineados + ckpts RIFE +
     wheel SageAttention -> FFmpeg/FFprobe portables en tools\ffmpeg ->
     PREGUNTA "instalar modelos recomendados" con el

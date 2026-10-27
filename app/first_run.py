@@ -13,7 +13,7 @@ from typing import Any
 from app.config import APP_ROOT, EngineConfig
 from app.video import find_ffmpeg
 
-ENGINE_TIMEOUT = 2.0
+ENGINE_TIMEOUT = 8.0
 
 
 def _check(label: str, ok: bool, detail: str, required: bool = True) -> dict[str, Any]:
@@ -66,15 +66,25 @@ def _vram_check() -> dict[str, Any]:
         return _check("VRAM", False, "nvidia-smi no disponible", required=False)
     try:
         result = subprocess.run(
-            [exe, "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            [exe, "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=5,
             check=False,
         )
-        value = result.stdout.strip().splitlines()[0].strip()
-        mib = int(value)
-        return _check("VRAM", mib >= 8192, f"{mib} MiB detectados")
+        gpus = []
+        for line in result.stdout.splitlines():
+            parts = [part.strip() for part in line.split(",")]
+            if len(parts) < 3:
+                continue
+            try:
+                gpus.append((int(parts[-1]), parts[-2], int(parts[0])))
+            except ValueError:
+                continue
+        if not gpus:
+            raise ValueError("nvidia-smi no devolvio GPUs")
+        mib, name, _index = max(gpus)
+        return _check("VRAM", mib >= 8192, f"{name}: {mib} MiB detectados")
     except (OSError, ValueError, IndexError, subprocess.SubprocessError) as exc:
         return _check("VRAM", False, f"no se pudo leer: {exc}", required=False)
 

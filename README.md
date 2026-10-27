@@ -1,10 +1,10 @@
-# WaifuStudio v2.0 — Local Anime Production Studio
+# WaifuStudio v2.1 — Local Anime Production Studio
 
 <p align="center">
   <img src="static/waifustudio-icon.png" width="112" alt="WaifuStudio icon">
 </p>
 
-[![Version](https://img.shields.io/badge/version-2.0.0-ff4081.svg)](https://github.com/gusnion/WaifuStudio)
+[![Version](https://img.shields.io/badge/version-2.1.0-ff4081.svg)](https://github.com/gusnion/WaifuStudio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Reference GPU](https://img.shields.io/badge/Reference%20GPU-RTX%203060%2012GB-76b900.svg)](https://www.nvidia.com)
 [![Engine](https://img.shields.io/badge/Engine-ComfyUI%20Backend-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
@@ -270,7 +270,7 @@ The following items are planned or under evaluation. They are not promises, not 
 
 Version 2.0 is a stabilization and documentation pass over the original application. The remediation, test work and agent-oriented groundwork were continued with **DeepSeek V4.1 Flash 1017** using **DSH**.
 
-The offline suite currently runs 1,640 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
+The offline suite currently runs 1,641 tests. The README describes the app as it is; features that are only planned are listed under Roadmap.
 
 ## Support
 

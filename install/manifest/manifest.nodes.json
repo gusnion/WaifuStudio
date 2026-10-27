@@ -5,17 +5,18 @@
   "task": "F3b (M10-6b) installer + manifiestos",
   "notes": [
     "Pines exactos de REPO_ASSETS_Y_INSTALLER.md §9.3/§10 (estado medido 2026-09-25). El instalador clona/checkout cada revision y verifica git rev-parse HEAD.",
-    "ComfyUI se clona con --branch v0.37.4 --depth 1 y despues se fija el commit; los nodos por commit directo.",
+    "ComfyUI se clona con --branch v0.42.5 --depth 1 y despues se fija el commit; los nodos por commit directo.",
     "comfyui-controlnet-aux queda opcional/obsoleto (solo se instala con -IncludeOptional; el flujo actual no lo usa).",
+    "VHS y MMAudio son requeridos para el flujo de vídeo Wan.",
     "El wheel de SageAttention y los pines de torch/triton son los del venv auditado; el token de Civitai nunca vive en este archivo."
   ],
   "comfyui": {
     "name": "ComfyUI",
-    "version": "v0.37.4",
-    "tag": "v0.37.4",
-    "commit": "8ff6dc384ba5c410266b40e137799e049459d4f2",
+    "version": "v0.42.5",
+    "tag": "v0.42.5",
+    "commit": "483dae4326356b81de05d27aca3f433dd323cc25",
     "url": "https://github.com/Comfy-Org/ComfyUI.git",
-    "notes": "Engine del producto (nodos H3 y Qwen-Image 2.1 en core); arranque: .venv\\Scripts\\python.exe -s main.py --listen 127.0.0.1 --port 8288 --disable-api-nodes --disable-auto-launch."
+    "notes": "Engine del producto; arranque: .venv\\Scripts\\python.exe -s main.py --listen 127.0.0.1 --port 8288 --offline --disable-auto-launch."
   },
   "custom_nodes": [
     {
@@ -57,6 +58,22 @@
       "required": true,
       "obsolete": false,
       "notes": "Video Delta Net (VDN-H3) hybrid attention para MiniMax H3 en 8 pasos con soporte INT8 ConvRot."
+    },
+    {
+      "id": "ComfyUI-VideoHelperSuite",
+      "url": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git",
+      "commit": "4d907bee61e92c2e65af3bd6383a4e4d356126d1",
+      "required": true,
+      "obsolete": false,
+      "notes": "VHS: CreateVideo/VideoCombine y salida MP4 con audio."
+    },
+    {
+      "id": "ComfyUI-MMAudio",
+      "url": "https://github.com/kijai/ComfyUI-MMAudio.git",
+      "commit": "8eaeb72edc3aaf2059b57f2d96a1f6f689f19ae2",
+      "required": true,
+      "obsolete": false,
+      "notes": "MMAudio: audio para vídeo Wan; modelos en models/mmaudio."
     },
     {
       "id": "comfyui-controlnet-aux",

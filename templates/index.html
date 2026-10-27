@@ -674,14 +674,14 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
             <span>Multivista (misma referencia y seed)</span>
             <div class="inline-row">
               <select id="editor-multiview-views">
-                <option value="4">4 vistas</option>
+                <option value="4" selected>4 vistas</option>
                 <option value="6">6 vistas</option>
-                <option value="8" selected>8 vistas</option>
+                <option value="8">8 vistas</option>
               </select>
               <button id="btn-editor-multiview" type="button">Generar hoja de contacto</button>
             </div>
           </div>
-          <p class="field-hint">Genera frontales, laterales y espalda con el mismo seed. Las referencias actuales se usan en todas las vistas.</p>
+          <p class="field-hint">Genera frontales, laterales y espalda con el mismo seed. Se usa la primera referencia y hay pausa entre vistas para no saturar la GPU.</p>
           <div id="editor-multiview-results" class="editor-multiview-results hidden"></div>
           <label class="field"><span>LoRAs (opcional, múltiple)</span><select id="editor-loras" multiple size="4"></select></label>
           <p class="field-hint">Selecciona una o más LoRAs compatibles; se aplican con peso 1.0.</p>

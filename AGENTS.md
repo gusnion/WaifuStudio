@@ -1,4 +1,4 @@
-# AGENTS.md — Guía de Instalación, Diagnóstico y Desarrollo para Agentes IA (WaifuStudio v2.0.0 — remediación 2026-10-18)
+# AGENTS.md — Guía de Instalación, Diagnóstico y Desarrollo para Agentes IA (WaifuStudio v2.1.0)
 
 Este archivo es la autoridad técnica embebida del repositorio **WaifuStudio** (versión compactada del plano de control `.agents`). Tiene dos propósitos:
 1. **Asistir al usuario final** en la instalación, configuración y resolución de problemas en máquinas Windows con GPUs NVIDIA RTX 3000 / 4000 / 5000 (8 GB+ VRAM).
@@ -56,7 +56,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.640 tests offline en CPU (~91 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.641 tests offline en CPU (~65 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```

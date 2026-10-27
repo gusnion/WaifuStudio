@@ -1,4 +1,8 @@
 const DISMISS_KEY = "waifu.first_run.dismissed";
+const RETRY_MS = 5000;
+const MAX_ATTEMPTS = 12;
+let attempt = 0;
+let timer = null;
 
 function renderFirstRun(data) {
   const box = document.getElementById("first-run-banner");
@@ -31,11 +35,35 @@ function renderFirstRun(data) {
 }
 
 export async function initFirstRun() {
-  try {
-    const response = await fetch("/api/first-run", { cache: "no-store" });
-    if (!response.ok) return;
-    renderFirstRun(await response.json());
-  } catch {
-    // El chequeo es informativo; no bloquea el arranque.
-  }
+  if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
+  attempt = 0;
+  const probe = async () => {
+    try {
+      const response = await fetch("/api/first-run", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.ready) {
+        renderFirstRun(data);
+        return;
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        attempt += 1;
+        timer = setTimeout(probe, RETRY_MS);
+        return;
+      }
+      renderFirstRun(data);
+    } catch {
+      if (attempt < MAX_ATTEMPTS) {
+        attempt += 1;
+        timer = setTimeout(probe, RETRY_MS);
+      }
+      // El chequeo es informativo; no bloquea el arranque.
+    }
+  };
+  timer = setTimeout(probe, 2000);
+}
+
+export function stopFirstRunTimer() {
+  if (timer) clearTimeout(timer);
+  timer = null;
 }

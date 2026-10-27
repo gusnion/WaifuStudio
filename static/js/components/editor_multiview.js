@@ -66,11 +66,12 @@ export function initEditorMultiview() {
       setEditorStatus("Añade al menos una referencia para la multivista", true);
       return;
     }
-    const count = Number($("editor-multiview-views")?.value || 8);
+    const count = Number($("editor-multiview-views")?.value || 4);
     const prompts = multiviewPrompts($("editor-prompt")?.value || "", count);
     const seed = Number($("editor-seed")?.value || 42);
     const steps = Number($("editor-steps")?.value || 25);
     const cfg = Number($("editor-cfg")?.value || 1.0);
+    const refs = state.editorRefs.slice(0, 1).map((ref) => ref.b64);
     button.disabled = true;
     setEditorStatus(`Generando ${prompts.length} vistas con seed ${seed}…`);
     const entries = [];
@@ -85,7 +86,7 @@ export function initEditorMultiview() {
           size: { original: true },
           seed,
           preserve_structure: false,
-          ref_images_b64: state.editorRefs.map((ref) => ref.b64),
+          ref_images_b64: refs,
         };
         const job = await postJson("/api/editor/generate", payload);
         await new Promise((resolve, reject) => {
@@ -105,6 +106,9 @@ export function initEditorMultiview() {
             false
           ).catch(reject);
         });
+        if (index < prompts.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
       }
       renderSheet(entries);
       setEditorStatus(`Hoja de contacto lista (${entries.length} vistas)`);
