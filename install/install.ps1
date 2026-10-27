@@ -145,11 +145,20 @@ function Invoke-Preflight {
             $smiOut = (& nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits 2>$null)
             if ($smiOut) {
                 $gpuLines = @($smiOut)
-                $firstGpu = $gpuLines[0].Split(',')
-                if ($firstGpu.Count -ge 3) {
-                    $gpuName = $firstGpu[0].Trim()
-                    $gpuMemMb = [double]($firstGpu[1].Trim())
-                    $driverVer = $firstGpu[2].Trim()
+                $bestGpu = $gpuLines | ForEach-Object {
+                    $parts = $_ -split ','
+                    if ($parts.Count -ge 3) {
+                        [pscustomobject]@{
+                            Name   = $parts[0].Trim()
+                            Mib    = [double]$parts[1].Trim()
+                            Driver = $parts[2].Trim()
+                        }
+                    }
+                } | Sort-Object Mib -Descending | Select-Object -First 1
+                if ($bestGpu) {
+                    $gpuName = $bestGpu.Name
+                    $gpuMemMb = $bestGpu.Mib
+                    $driverVer = $bestGpu.Driver
                     Write-Ok ("NVIDIA-SMI: {0} | VRAM: {1} MB | Driver: {2}" -f $gpuName, $gpuMemMb, $driverVer)
                     if ($gpuMemMb -lt 8000) {
                         Write-Warn ("VRAM detectada ({0} MB) inferior a 8000 MB; modelos grandes o video pueden requerir perfiles ligeros." -f $gpuMemMb)
