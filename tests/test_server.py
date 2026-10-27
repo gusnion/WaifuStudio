@@ -209,10 +209,31 @@ class ReadRoutesTests(ServerTestCase):
         self.assertEqual(models[0]["id"], MODEL_ID)
         self.assertEqual(
             set(models[0]),
-            {"id", "display_name", "family", "preprompt", "unet_name", "defaults"},
+            {
+                "id",
+                "display_name",
+                "family",
+                "preprompt",
+                "unet_name",
+                "defaults",
+                "prompt_profile",
+            },
         )
         self.assertEqual(models[0]["family"], "anima")
+        self.assertEqual(models[0]["prompt_profile"], "anima")
         self.assertIsInstance(models[0]["defaults"], dict)
+
+    def test_models_payload_prompt_profile(self):
+        response = self.make_client().get("/api/models")
+        self.assertEqual(response.status_code, 200)
+        models = response.json()
+        self.assertGreaterEqual(len(models), 1)
+        for model in models:
+            self.assertIn("prompt_profile", model)
+            self.assertIn(
+                model["prompt_profile"],
+                ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit"),
+            )
 
     def test_preprompts(self):
         response = self.make_client().get("/api/preprompts", params={"family": "anima"})

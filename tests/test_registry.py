@@ -9,7 +9,13 @@ from dataclasses import FrozenInstanceError, asdict, replace
 from pathlib import Path
 
 from app.engine import EngineError
-from app.registry import ModelEntry, ModelProfile, ModelRegistry
+from app.registry import (
+    DEFAULT_PROMPT_PROFILE,
+    ModelEntry,
+    ModelProfile,
+    ModelRegistry,
+    infer_prompt_profile,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "tests" / "fixtures" / "models.json"
@@ -102,9 +108,10 @@ class RealRegistryTests(unittest.TestCase):
 
         self.assertEqual(payload["version"], 1)
         self.assertEqual(payload["models"][0]["id"], "anima-2.9b-preview")
-        self.assertEqual(
-            json.loads(REGISTRY_PATH.read_text(encoding="utf-8")), payload
-        )
+        expected = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+        for item in expected["models"]:
+            item["prompt_profile"] = "anima"
+        self.assertEqual(expected, payload)
 
 
 class AddTests(unittest.TestCase):
@@ -230,6 +237,98 @@ class RoundtripTests(unittest.TestCase):
             entry.id = "mutado"
         with self.assertRaises(FrozenInstanceError):
             entry.profile = replace(entry.profile, unet_name="otro.safetensors")
+
+
+class PromptProfileInferenceTests(unittest.TestCase):
+    def test_default_retrocompatible_para_modelo_desconocido(self):
+        entry = make_entry(
+            model_id="modelo-desconocido",
+            family="sdxl",
+            display_name="Modelo Desconocido",
+        )
+        self.assertEqual(entry.prompt_profile, "sdxl_tags")
+        self.assertEqual(infer_prompt_profile("modelo-custom", family="sdxl"), "sdxl_tags")
+        self.assertEqual(infer_prompt_profile(""), DEFAULT_PROMPT_PROFILE)
+
+    def test_perfiles_4_modelos_conocidos(self):
+        # 1. Anima -> anima
+        anima_entry = make_entry(
+            model_id="anima-2.9b-preview",
+            family="anima",
+            display_name="Anima 2.9B preview v1",
+        )
+        self.assertEqual(anima_entry.prompt_profile, "anima")
+        self.assertEqual(infer_prompt_profile("anima-model", family="anima"), "anima")
+
+        # 2. Animagine -> sdxl_tags (no confundir con anima por colision de subcadena)
+        animagine_entry = make_entry(
+            model_id="animagine-xl-4-opt",
+            family="sdxl",
+            display_name="Animagine XL 4.0 Opt",
+        )
+        self.assertEqual(animagine_entry.prompt_profile, "sdxl_tags")
+        self.assertEqual(infer_prompt_profile("animagine-xl-4-opt"), "sdxl_tags")
+
+        # 3. RealVisXL -> sdxl_natural
+        realvis_entry = make_entry(
+            model_id="realvisxl-v50",
+            family="sdxl",
+            display_name="RealVisXL V5.0 (Baked VAE)",
+        )
+        self.assertEqual(realvis_entry.prompt_profile, "sdxl_natural")
+        self.assertEqual(infer_prompt_profile("realvisxl-v50"), "sdxl_natural")
+
+        # 4. Juggernaut -> sdxl_natural
+        juggernaut_entry = make_entry(
+            model_id="juggernaut-xl-ragnarok",
+            family="sdxl",
+            display_name="Juggernaut XL Ragnarok",
+        )
+        self.assertEqual(juggernaut_entry.prompt_profile, "sdxl_natural")
+        self.assertEqual(infer_prompt_profile("juggernaut-xl-ragnarok"), "sdxl_natural")
+
+    def test_from_dict_sin_prompt_profile_infiere_retrocompatible(self):
+        raw = {
+            "id": "juggernaut-xl-ragnarok",
+            "family": "sdxl",
+            "display_name": "Juggernaut XL Ragnarok",
+            "profile": {
+                "unet_name": "juggernautXL_ragnarok.safetensors",
+                "clip_name": "__checkpoint__",
+                "clip_type": "checkpoint",
+                "vae_name": "__checkpoint__",
+            },
+            "source": "https://civitai.com",
+            "license": "OpenRAIL",
+        }
+        reg = ModelRegistry.from_dict({"version": 1, "models": [raw]})
+        self.assertEqual(reg.get("juggernaut-xl-ragnarok").prompt_profile, "sdxl_natural")
+
+    def test_prompt_profile_explicito_se_respeta(self):
+        raw = {
+            "id": "juggernaut-xl-ragnarok",
+            "family": "sdxl",
+            "display_name": "Juggernaut XL Ragnarok",
+            "profile": {
+                "unet_name": "juggernautXL_ragnarok.safetensors",
+                "clip_name": "__checkpoint__",
+                "clip_type": "checkpoint",
+                "vae_name": "__checkpoint__",
+            },
+            "source": "https://civitai.com",
+            "license": "OpenRAIL",
+            "prompt_profile": "sdxl_tags",
+        }
+        reg = ModelRegistry.from_dict({"version": 1, "models": [raw]})
+        self.assertEqual(reg.get("juggernaut-xl-ragnarok").prompt_profile, "sdxl_tags")
+
+    def test_recommended_v1_perfiles(self):
+        rec_path = ROOT / "registry" / "recommended-v1.json"
+        data = json.loads(rec_path.read_text(encoding="utf-8"))
+        profiles = {m["id"]: m.get("prompt_profile") for m in data["models"]}
+        self.assertEqual(profiles.get("animagine-xl-4-opt"), "sdxl_tags")
+        self.assertEqual(profiles.get("realvisxl-v50"), "sdxl_natural")
+        self.assertEqual(profiles.get("juggernaut-xl-ragnarok"), "sdxl_natural")
 
 
 if __name__ == "__main__":

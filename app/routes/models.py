@@ -32,7 +32,7 @@ from app.loras import (
     safetensors_header,
     update_entry as update_lora,
 )
-from app.registry import ModelEntry, ModelProfile, ModelRegistry
+from app.registry import ModelEntry, ModelProfile, ModelRegistry, infer_prompt_profile
 from app.params import SAMPLER_NAMES, SCHEDULER_NAMES
 
 
@@ -313,6 +313,12 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             preprompt="sdxl_default" if model_family == "sdxl" else "glossy",
             defaults=defaults,
             notes=notes,
+            prompt_profile=infer_prompt_profile(
+                model_id=model_id,
+                family=model_family,
+                display_name=path.stem,
+                unet_name=rel_name,
+            ),
         )
         registry.add(entry)
         known_ids.add(model_id)
@@ -333,6 +339,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
                     preprompt=existing_model.preprompt,
                     defaults=dict(existing_model.defaults),
                     notes=existing_model.notes,
+                    prompt_profile=existing_model.prompt_profile,
                 )
                 registry._replace(fixed_model)
             except Exception:
@@ -641,6 +648,7 @@ async def api_models(request: Request, scan: bool = False) -> list[dict]:
             "display_name": entry.display_name,
             "family": entry.family,
             "preprompt": entry.preprompt,
+            "prompt_profile": entry.prompt_profile,
             "unet_name": entry.profile.unet_name,
             "defaults": dict(entry.defaults),
         }

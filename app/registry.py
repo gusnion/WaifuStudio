@@ -18,6 +18,63 @@ from app.engine import EngineError
 REGISTRY_VERSION = 1
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "registry" / "models.json"
 
+PROMPT_PROFILES = ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit")
+DEFAULT_PROMPT_PROFILE = "sdxl_tags"
+
+
+def infer_prompt_profile(
+    model_id: str | dict | ModelEntry = "",
+    family: str = "",
+    display_name: str = "",
+    unet_name: str = "",
+) -> str:
+    """Infiere el prompt_profile para compatibilidad retroactiva con modelos conocidos.
+
+    Reglas:
+    - animagine -> "sdxl_tags" (evaluado antes de anima por colision de prefijo)
+    - realvis / juggernaut -> "sdxl_natural"
+    - anima (familia o en nombre/id) -> "anima"
+    - resto -> "sdxl_tags" (default retrocompatible)
+    """
+    if isinstance(model_id, dict):
+        data = model_id
+        mid = str(data.get("id") or "")
+        fam = str(data.get("family") or "")
+        disp = str(data.get("display_name") or "")
+        prof = data.get("profile") or {}
+        unet = str(prof.get("unet_name") or "") if isinstance(prof, dict) else ""
+    elif isinstance(model_id, ModelEntry):
+        mid = model_id.id
+        fam = model_id.family
+        disp = model_id.display_name
+        unet = getattr(model_id.profile, "unet_name", "")
+    else:
+        mid = str(model_id or "")
+        fam = str(family or "")
+        disp = str(display_name or "")
+        unet = str(unet_name or "")
+
+    mid_l = mid.lower()
+    fam_l = fam.lower()
+    disp_l = disp.lower()
+    unet_l = unet.lower()
+    combined = f"{mid_l} {disp_l} {unet_l}"
+
+    # 1. Animagine (SDXL anime por tags, sin scores/artistas)
+    if "animagine" in combined:
+        return "sdxl_tags"
+
+    # 2. RealVisXL / Juggernaut (modelos SDXL de lenguaje natural)
+    if "realvis" in combined or "juggernaut" in combined:
+        return "sdxl_natural"
+
+    # 3. Anima
+    if fam_l == "anima" or "anima" in combined:
+        return "anima"
+
+    # 4. Resto (default retrocompatible)
+    return DEFAULT_PROMPT_PROFILE
+
 
 def user_registry_path() -> Path:
     """Capa de usuario del registro: `data/registry/models.json`.
@@ -58,6 +115,17 @@ class ModelEntry:
     preprompt: str = "glossy"
     defaults: dict = field(default_factory=dict)
     notes: str = ""
+    prompt_profile: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.prompt_profile:
+            inferred = infer_prompt_profile(
+                model_id=self.id,
+                family=self.family,
+                display_name=self.display_name,
+                unet_name=getattr(self.profile, "unet_name", "") if hasattr(self, "profile") else "",
+            )
+            object.__setattr__(self, "prompt_profile", inferred)
 
 
 def _require_text(value: object, label: str) -> str:
@@ -94,6 +162,13 @@ def _validate_entry(entry: object) -> ModelEntry:
         raise EngineError(f"defaults debe ser dict: {entry.defaults!r}")
     if not isinstance(entry.notes, str):
         raise EngineError(f"notes debe ser str: {entry.notes!r}")
+    if (
+        not isinstance(entry.prompt_profile, str)
+        or entry.prompt_profile not in PROMPT_PROFILES
+    ):
+        raise EngineError(
+            f"prompt_profile invalido: {entry.prompt_profile!r} (esperado uno de {PROMPT_PROFILES})"
+        )
     return replace(entry, profile=_validate_profile(entry.profile))
 
 
@@ -113,6 +188,16 @@ def _entry_from_dict(data: object) -> ModelEntry:
     missing_profile = [name for name in _PROFILE_FIELDS if name not in profile_data]
     if missing_profile:
         raise EngineError(f"profile sin campos: {', '.join(missing_profile)}")
+    raw_profile = data.get("prompt_profile")
+    if raw_profile is not None and str(raw_profile).strip():
+        prompt_profile = str(raw_profile).strip()
+    else:
+        prompt_profile = infer_prompt_profile(
+            model_id=data.get("id", ""),
+            family=data.get("family", ""),
+            display_name=data.get("display_name", ""),
+            unet_name=profile_data.get("unet_name", "") if isinstance(profile_data, dict) else "",
+        )
     entry = ModelEntry(
         id=data["id"],
         family=data["family"],
@@ -125,6 +210,7 @@ def _entry_from_dict(data: object) -> ModelEntry:
         preprompt=data.get("preprompt", "glossy"),
         defaults=data.get("defaults", {}),
         notes=data.get("notes", ""),
+        prompt_profile=prompt_profile,
     )
     return _validate_entry(entry)
 
@@ -262,10 +348,13 @@ if __name__ == "__main__":
 
 __all__ = [
     "DEFAULT_PATH",
+    "DEFAULT_PROMPT_PROFILE",
+    "PROMPT_PROFILES",
     "REGISTRY_VERSION",
     "ModelEntry",
     "ModelProfile",
     "ModelRegistry",
+    "infer_prompt_profile",
     "load_or_empty",
     "main",
     "user_registry_path",

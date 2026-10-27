@@ -57,6 +57,25 @@ class DefaultsRouteTests(unittest.TestCase):
                 )
                 self.assertIn('"steps": 12', saved)
 
+    def test_api_models_preserva_prompt_profile(self):
+        from tests.test_server import REGISTRY_FIXTURE, make_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            cfg.data_dir.mkdir(parents=True)
+            registry = ModelRegistry.load(REGISTRY_FIXTURE)
+            store = Store(cfg.data_dir / "waifu.db")
+            store.init()
+            app = create_app(
+                config=cfg, store=store, registry=registry, start_worker=False
+            )
+            with TestClient(app) as client:
+                res = client.get("/api/models")
+                self.assertEqual(res.status_code, 200)
+                models = res.json()
+                self.assertGreaterEqual(len(models), 1)
+                self.assertEqual(models[0]["prompt_profile"], "anima")
+
 
 if __name__ == "__main__":
     unittest.main()

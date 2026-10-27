@@ -32,6 +32,7 @@
       "source": "https://huggingface.co/cagliostrolab/animagine-xl-4.0",
       "license": "Fair AI Public License 1.0-SD (comercial con condiciones)",
       "preprompt": "animagine",
+      "prompt_profile": "sdxl_tags",
       "defaults": {
         "steps": 28,
         "cfg": 5.0,
@@ -56,6 +57,7 @@
       "source": "https://civitai.com/models/139562?modelVersionId=789646",
       "license": "OpenRAIL++-M; atribucion requerida (allowNoCredit=false)",
       "preprompt": "ninguno",
+      "prompt_profile": "sdxl_natural",
       "defaults": {
         "steps": 30,
         "cfg": 4.5,
@@ -80,6 +82,7 @@
       "source": "https://civitai.com/models/133005?modelVersionId=1759168",
       "license": "OpenRAIL++-M; flags Image/RentCivit; el autor pide shoutout",
       "preprompt": "ninguno",
+      "prompt_profile": "sdxl_natural",
       "defaults": {
         "steps": 32,
         "cfg": 4.0,

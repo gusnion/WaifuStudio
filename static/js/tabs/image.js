@@ -57,6 +57,17 @@ let enhanceResetTimer = null;
 let refObjectUrl = null;
 let imageResolutionKit = null;
 
+const PROMPT_PROFILE_PLACEHOLDERS = {
+  anima: "Tags Danbooru, artista @ (ej.: 1girl, solo, looking at viewer, @artist)",
+  sdxl_tags: "Tags descriptivos sin score/@ (ej.: 1girl, solo, portrait, soft lighting, 8k)",
+  sdxl_natural: "Frase en lenguaje natural (ej.: A serene portrait of a young woman in a sunlit garden)",
+  qwen_edit: "Instrucción de edición o generación (ej.: Change expression to a gentle smile, sunset background)",
+};
+
+function isTagPromptProfile(profile) {
+  return profile === "anima" || profile === "sdxl_tags";
+}
+
 async function loadParams() {
   const data = await api("/api/params");
   state.params = data;
@@ -186,10 +197,39 @@ async function applyModel(modelId) {
     return;
   }
   state.family = model.family || "anima";
+  state.prompt_profile =
+    model.prompt_profile || (state.family === "anima" ? "anima" : "sdxl_tags");
+
+  // 1. Placeholder del prompt general según el perfil
+  const promptGeneral = $("prompt-general");
+  if (promptGeneral) {
+    promptGeneral.placeholder =
+      PROMPT_PROFILE_PLACEHOLDERS[state.prompt_profile] || PROMPT_PROFILE_PLACEHOLDERS.sdxl_tags;
+  }
+
+  // 2. Visibilidad de zonas de tags según el perfil
+  const showZones = isTagPromptProfile(state.prompt_profile);
+  const zonesCard = $("image-block-zones");
+  if (zonesCard) {
+    zonesCard.classList.toggle("hidden", !showZones);
+  }
+  const zonesSection = $("section-zones");
+  if (zonesSection) {
+    zonesSection.classList.toggle("hidden", !showZones);
+  }
+
+  // 3. Preprompt y opciones
   const data = await loadPrepromptOptions();
   const select = $("preprompt");
-  select.value =
-    model.preprompt && data.names.includes(model.preprompt) ? model.preprompt : data.default;
+  if (model.preprompt && data.names.includes(model.preprompt)) {
+    select.value = model.preprompt;
+  } else if (!showZones && data.names.includes("ninguno")) {
+    select.value = "ninguno";
+  } else {
+    select.value = data.default;
+  }
+
+  // 4. Defaults de generación
   const defaults = model.defaults || {};
   const hasDefaultSize = defaults.width != null && defaults.height != null;
   $("steps").value = defaults.steps != null ? defaults.steps : 30;
@@ -204,9 +244,13 @@ async function applyModel(modelId) {
     $("seed").value = defaults.seed != null ? defaults.seed : 42;
   }
   await loadLoras();
-  if (!state.negativeTouched) {
-    await refreshNegative();
-  }
+
+  // 5. Negativo actualizado al cambiar de modelo
+  state.negativeTouched = false;
+  await refreshNegative();
+
+  // 6. Estado del botón generar
+  updateGenerateButtonState();
 }
 
 async function applyStartupDefaults() {
@@ -400,11 +444,33 @@ async function startNewGeneration() {
   setStatus("Nuevo: opciones por defecto");
 }
 
+function updateGenerateButtonState() {
+  updateGenerateState();
+  const btn = $("btn-generate");
+  if (!btn) {
+    return;
+  }
+  const showZones = isTagPromptProfile(state.prompt_profile);
+  if (!showZones) {
+    const text = ($("prompt-general")?.value || "").trim();
+    if (state.activeJobsCount <= 0) {
+      btn.disabled = !text;
+    }
+  }
+}
+
 async function generate() {
   flushPendingZoneInputs();
-  const prompt = composePrompt();
+  let prompt = composePrompt();
+  const showZones = isTagPromptProfile(state.prompt_profile);
+  if (!showZones || !prompt) {
+    const generalText = $("prompt-general") ? $("prompt-general").value.trim() : "";
+    if (generalText && (!showZones || !prompt)) {
+      prompt = generalText;
+    }
+  }
   if (!prompt) {
-    updateGenerateState();
+    updateGenerateButtonState();
     setStatus("El prompt no puede estar vacío", true);
     return;
   }
@@ -448,7 +514,7 @@ async function generate() {
   } catch (error) {
     setStatus(error.message, true);
   } finally {
-    updateGenerateState();
+    updateGenerateButtonState();
   }
 }
 
