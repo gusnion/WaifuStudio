@@ -552,3 +552,24 @@
 #btn-lora-modal {
   width: 100%;
 }
+
+.field-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.model-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  background: rgba(224, 86, 122, 0.18);
+  color: var(--accent, #e0567a);
+  border: 1px solid rgba(224, 86, 122, 0.35);
+}

@@ -141,6 +141,45 @@ function setSizeFromDefaults(width, height) {
   }
 }
 
+function getModelBadgeLabel(model) {
+  if (!model) {
+    return "Sin clasificar";
+  }
+  const subfamily = String(model.subfamily || "").trim().toLowerCase();
+  const family = String(model.family || "").trim().toLowerCase();
+
+  if (subfamily === "anima" || (!subfamily && family === "anima")) {
+    return "Anima";
+  }
+  if (subfamily === "illustrious") {
+    return "SDXL Illustrious";
+  }
+  if (subfamily === "pony") {
+    return "SDXL Pony";
+  }
+  if (subfamily === "noobai") {
+    return "SDXL NoobAI";
+  }
+  if (subfamily === "sdxl_base" || subfamily === "sdxl" || (!subfamily && family === "sdxl")) {
+    return "SDXL";
+  }
+  if (subfamily === "wan" || (!subfamily && family === "wan")) {
+    return "Wan";
+  }
+  if (subfamily === "h3" || (!subfamily && family === "h3")) {
+    return "H3";
+  }
+  return "Sin clasificar";
+}
+
+function updateModelBadge(model) {
+  const badge = $("model-family-badge");
+  if (!badge) {
+    return;
+  }
+  badge.textContent = getModelBadgeLabel(model);
+}
+
 async function refreshModelsCatalog() {
   const models = await api("/api/models?scan=1");
   state.models = models || [];
@@ -151,11 +190,15 @@ async function refreshModelsCatalog() {
   const previous = select.value;
   select.replaceChildren();
   for (const model of state.models) {
-    select.appendChild(option(model.id, model.display_name || model.id));
+    const badgeLabel = getModelBadgeLabel(model);
+    const label = `[${badgeLabel}] ${model.display_name || model.id}`;
+    select.appendChild(option(model.id, label));
   }
   if (previous && state.models.some((m) => m.id === previous)) {
     select.value = previous;
   }
+  const currentModel = state.models.find((m) => m.id === select.value);
+  updateModelBadge(currentModel);
 }
 
 async function loadModels() {
@@ -163,7 +206,9 @@ async function loadModels() {
   const select = $("model");
   select.replaceChildren();
   for (const model of state.models) {
-    select.appendChild(option(model.id, model.display_name || model.id));
+    const badgeLabel = getModelBadgeLabel(model);
+    const label = `[${badgeLabel}] ${model.display_name || model.id}`;
+    select.appendChild(option(model.id, label));
   }
   if (state.models.length) {
     try {
@@ -172,6 +217,8 @@ async function loadModels() {
       setStatus(`Modelo: ${error.message}`, true);
       throw error;
     }
+  } else {
+    updateModelBadge(null);
   }
 }
 
@@ -194,8 +241,10 @@ async function loadPrepromptOptions() {
 async function applyModel(modelId) {
   const model = state.models.find((item) => item.id === modelId);
   if (!model) {
+    updateModelBadge(null);
     return;
   }
+  updateModelBadge(model);
   state.family = model.family || "anima";
   state.prompt_profile =
     model.prompt_profile || (state.family === "anima" ? "anima" : "sdxl_tags");
@@ -762,5 +811,7 @@ export {
   reuseGeneration,
   updateReferencePreview,
   clearReference,
+  getModelBadgeLabel,
+  updateModelBadge,
   initImageTab,
 };

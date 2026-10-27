@@ -179,7 +179,10 @@
             <fieldset class="control-card" id="image-block-model">
               <legend>1. Modelo y Estilo <button type="button" class="btn-help" data-help="Elige el modelo Anima base, preprompt de estilo, clasificación de contenido y LoRAs instaladas.">?</button></legend>
               <label class="field">
-                <span>Modelo</span>
+                <div class="field-header-row">
+                  <span>Modelo</span>
+                  <span id="model-family-badge" class="model-badge">Sin clasificar</span>
+                </div>
                 <select id="model"></select>
               </label>
               <div class="field">

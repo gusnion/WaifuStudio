@@ -6522,6 +6522,26 @@ class GalleryUiPhase3Tests(ServerTestCase):
         self.assertIn('<button id="btn-upscale"', html)
         self.assertEqual(html.count('class="generate-block"'), 4)
 
+    def test_model_family_badge_static_html_and_js(self):
+        html = self.make_client().get("/").text
+        self.assertIn('id="model-family-badge"', html)
+        self.assertIn('class="model-badge"', html)
+
+        css = self.get_static_css()
+        self.assertIn(".model-badge", css)
+
+        js = self.get_static_js()
+        self.assertIn("function getModelBadgeLabel", js)
+        self.assertIn("function updateModelBadge", js)
+        self.assertIn('"Sin clasificar"', js)
+        self.assertIn('"SDXL Illustrious"', js)
+        self.assertIn('"SDXL Pony"', js)
+        self.assertIn('"SDXL NoobAI"', js)
+        self.assertIn('"Anima"', js)
+        self.assertIn('"Wan"', js)
+        self.assertIn('"H3"', js)
+        self.assertIn('"SDXL"', js)
+
 
 if __name__ == "__main__":
     unittest.main()
