@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — Video Wan 2.2 sin BETA
+
+- Video queda sin badge BETA y sin controles visibles H3/VDN.
+- Prompt enhancer Wan con enfoque (movimiento/cámara/acción/expresión) y fuerza.
+- Guía Wan integrada con plantillas de retrato, caminata y acción.
+- Preview de imagen inicial/final, prompt negativo, sampling manual y seed.
+- Perfiles Fast/Quality y modo Manual con sampler, scheduler, pasos y shift.
+- Envío directo de un vídeo generado a Timeline.
+- Timeline migrado de H3 a Wan para Continuar I2V y Puente FLF2V.
+- Suite offline: 1.649 tests OK, 1 skipped.
+
 ## 2.1.0 — 2026-10-26
 
 ### Motor y modelos

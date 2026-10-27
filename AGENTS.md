@@ -19,9 +19,10 @@ Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**,
   2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos) y Quality (30 pasos), LightX2V y audio MMAudio.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
   4. **Upscaler**: **RealESRGAN x2/x4** (imagen/vídeo) + **RIFE** (interpolación FPS) con visor comparador interactivo antes/después.
-  5. **Galería**: Persistencia en SQLite (`data/waifu.db`, modo WAL) y copias seguras (`shutil.copy2`) en `data/gallery/<id>/`.
-  6. **Timeline**: secuenciador de clips e imágenes con export MP4.
-  7. **Addons**: importa ZIP validado, instala desactivado y activa por slot exclusivo.
+  5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, biblioteca de medios e IA Wan.
+  6. **Galería**: Persistencia en SQLite (`data/waifu.db`, modo WAL) y copias seguras (`shutil.copy2`) en `data/gallery/<id>/`.
+  7. **OC Maker**: ficha de personaje, referencias, hoja de vistas y entrenamiento LoRA; ahora es pestaña, no modal.
+  - **Guía** y **Addons** viven en la barra superior derecha, no en la navegación principal.
 
 ---
 
@@ -56,7 +57,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.643 tests offline en CPU (~60 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.649 tests offline en CPU (~60 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```
@@ -102,9 +103,9 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 
 ## 6. Rangos de Líneas de `templates/index.html` y Cascada CSS
 
-- **Secciones en `templates/index.html` (1.671 líneas; no leer entero)**:
-  - `L1–L60`: Header global y `<nav class="tabs">`.
-  - `L61–L335`: `#panel-image` | `L336–L625`: `#panel-video` | `L626–L807`: `#panel-editor` | `L808–L956`: `#panel-upscaler` | `L957–L1065`: `#panel-timeline` | `L1066–L1284`: `#panel-gallery` | `L1285–L1300`: `#panel-addons`.
-  - `L1301–L1671`: modales OC/LoRA y `#lightbox`.
+- **Secciones en `templates/index.html` (1.753 líneas; no leer entero)**:
+  - `L1–L63`: Header global, `nav.tabs`, acciones de Guía/Addons.
+  - `L64–L339`: `#panel-image` | `L340–L688`: `#panel-video` | `L689–L884`: `#panel-editor` | `L885–L1033`: `#panel-upscaler` | `L1034–L1035`: `#panel-oc` | `L1036–L1149`: `#panel-timeline` | `L1150–L1201`: `#panel-gallery` | `L1202–L1366`: `#panel-guide` | `L1367–L1382`: `#panel-addons`.
+  - `L1383–L1745`: modales OC/LoRA/Visión/Galería y `#lightbox` (L1746–L1753).
 - **Orden de Cascada CSS (`static/css/`)**:
-  `1. base.css` → `2. components.css` → `3. tabs/image.css` → `4. tabs/video.css` → `5. tabs/editor.css` → `6. tabs/upscaler.css` → `7. tabs/gallery.css` → `8. tabs/test_lab.css`.
+  `1. base.css` → `2. components.css` → `3. tabs/image.css` → `4. tabs/video.css` → `5. tabs/editor.css` → `6. tabs/upscaler.css` → `7. tabs/gallery.css` → `8. design-v2.css` → `9. light-theme.css`.
