@@ -93,6 +93,31 @@
         "seed": 42
       },
       "notes": "sha256=DD08FA32F98D05A2443CA1419E46DF1575A0811F6E3B246D9DD47FF20F5EB66A | bytes=7105350162 | el creador tambien acepta 1024x1024"
+    },
+    {
+      "id": "anima-official-aesthetic-v11",
+      "family": "anima",
+      "display_name": "Anima [Official] aesthetic v1.1",
+      "profile": {
+        "unet_name": "anima_aestheticV11.safetensors",
+        "clip_name": "qwen_3_06b_base.safetensors",
+        "clip_type": "stable_diffusion",
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "source": "https://civitai.com/models/2458426",
+      "license": "Anima License (CircleStone Labs LLC)",
+      "preprompt": "glossy",
+      "prompt_profile": "anima",
+      "defaults": {
+        "steps": 20,
+        "cfg": 4.0,
+        "sampler_name": "euler",
+        "scheduler": "sgm_uniform",
+        "width": 832,
+        "height": 1216,
+        "seed": 42
+      },
+      "notes": "sha256=3C1868387A3A1FF504BBB87C33678321965EAD381FCF87AFBD0264DAA600C082 | bytes=4182230656"
     }
   ],
   "manual_downloads": [],
