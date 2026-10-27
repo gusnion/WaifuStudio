@@ -129,11 +129,7 @@
         "14",
         0
       ],
-      "fps": 16.0,
-      "audio": [
-        "32",
-        0
-      ]
+      "fps": 16.0
     }
   },
   "16": {
@@ -145,57 +141,6 @@
       ],
       "filename_prefix": "waifu/video",
       "format": "auto"
-    }
-  },
-  "30": {
-    "inputs": {
-      "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
-      "base_precision": "fp16"
-    },
-    "class_type": "MMAudioModelLoader",
-    "_meta": {
-      "title": "MMAudio Model Loader"
-    }
-  },
-  "31": {
-    "inputs": {
-      "vae_model": "mmaudio_vae_44k_fp16.safetensors",
-      "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
-      "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
-      "mode": "44k",
-      "precision": "fp16"
-    },
-    "class_type": "MMAudioFeatureUtilsLoader",
-    "_meta": {
-      "title": "MMAudio Feature Utils Loader"
-    }
-  },
-  "32": {
-    "inputs": {
-      "mmaudio_model": [
-        "30",
-        0
-      ],
-      "feature_utils": [
-        "31",
-        0
-      ],
-      "duration": 5.0,
-      "steps": 25,
-      "cfg": 4.5,
-      "seed": 42,
-      "prompt": "soft breathing, quiet moans, wet sounds, fabric rustling",
-      "negative_prompt": "speech, talking, dialogue, shouting, screaming, singing, crowd",
-      "mask_away_clip": false,
-      "force_offload": true,
-      "images": [
-        "14",
-        0
-      ]
-    },
-    "class_type": "MMAudioSampler",
-    "_meta": {
-      "title": "MMAudio Sampler"
     }
   }
 }

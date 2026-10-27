@@ -665,7 +665,7 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         self.assertEqual(graph["9"]["inputs"]["height"], 1024)
         self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
 
-    def test_aio_un_solo_sampler_y_audio_tw12(self):
+    def test_aio_workflow_mudo_sin_mmaudio(self):
         graph = build_video_graph(
             self.job(
                 template=str(WAN_AIO_TEMPLATE_PATH),
@@ -678,14 +678,28 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         self.assertNotIn("13", graph)
         self.assertNotIn("20", graph)
         self.assertNotIn("21", graph)
+        self.assertNotIn("30", graph)
+        self.assertNotIn("31", graph)
+        self.assertNotIn("32", graph)
         self.assertEqual(
             graph["1"]["inputs"]["unet_name"],
             "wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf",
         )
         self.assertEqual(graph["12"]["class_type"], "KSamplerAdvanced")
         self.assertEqual(graph["12"]["inputs"]["steps"], 4)
-        self.assertEqual(graph["32"]["inputs"]["prompt"], WAN_AUDIO_POSITIVE)
-        self.assertEqual(graph["32"]["inputs"]["negative_prompt"], WAN_AUDIO_NEGATIVE)
+        mmaudio_classes = [
+            node.get("class_type")
+            for node in graph.values()
+            if isinstance(node, dict) and str(node.get("class_type", "")).startswith("MMAudio")
+        ]
+        self.assertEqual(mmaudio_classes, [])
+        create_video_nodes = [
+            node for node in graph.values()
+            if isinstance(node, dict) and node.get("class_type") == "CreateVideo"
+        ]
+        self.assertTrue(create_video_nodes)
+        for cv in create_video_nodes:
+            self.assertNotIn("audio", cv.get("inputs", {}))
 
     def test_aio_rechaza_flf2v(self):
         with self.assertRaises(EngineError):
