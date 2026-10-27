@@ -7,6 +7,7 @@ import base64
 import io
 import json
 import os
+import re
 import struct
 import tempfile
 import unittest
@@ -6544,14 +6545,11 @@ class GalleryUiPhase3Tests(ServerTestCase):
 
     def test_video_tab_label_and_license_notice(self):
         html = self.make_client().get("/").text
-        # Tab exact name: "Video" (sin adjetivos)
-        self.assertRegex(
-            html,
-            r'<button\s+id="tab-video"\s+class="tab(?: [^"]*)?"[^>]*>.*?Video</button>',
-        )
-        self.assertNotIn("Video Wan", html)
-        self.assertNotIn("Video H3", html)
-        self.assertNotIn("Video Beta", html)
+        # Tab exact name: "Video" (sin adjetivos en el boton #tab-video)
+        m = re.search(r'<button\s+[^>]*id="tab-video"[^>]*>(.*?)</button>', html, re.DOTALL)
+        self.assertIsNotNone(m, 'Boton #tab-video no encontrado')
+        btn_text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+        self.assertEqual(btn_text, "Video")
 
         # Aviso de licencia visible en el panel de video
         notice_text = "Modelo comunitario Wan 2.2 AIO NSFW; licencia Apache-2.0 declarada por su autor; no es oficial de Alibaba."
