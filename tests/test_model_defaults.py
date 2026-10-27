@@ -76,6 +76,81 @@ class DefaultsRouteTests(unittest.TestCase):
                 self.assertGreaterEqual(len(models), 1)
                 self.assertEqual(models[0]["prompt_profile"], "anima")
 
+    def test_api_models_expone_subfamily(self):
+        from tests.test_server import REGISTRY_FIXTURE, make_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            cfg.data_dir.mkdir(parents=True)
+            registry = ModelRegistry.load(REGISTRY_FIXTURE)
+            store = Store(cfg.data_dir / "waifu.db")
+            store.init()
+            app = create_app(
+                config=cfg, store=store, registry=registry, start_worker=False
+            )
+            with TestClient(app) as client:
+                res = client.get("/api/models")
+                self.assertEqual(res.status_code, 200)
+                models = res.json()
+                self.assertGreaterEqual(len(models), 1)
+                for m in models:
+                    self.assertIn("subfamily", m)
+                self.assertEqual(models[0]["subfamily"], "sin_clasificar")
+
+    def test_api_model_put_subfamily_y_persistencia(self):
+        from tests.test_server import REGISTRY_FIXTURE, make_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            cfg.data_dir.mkdir(parents=True)
+            registry = ModelRegistry.load(REGISTRY_FIXTURE)
+            store = Store(cfg.data_dir / "waifu.db")
+            store.init()
+            app = create_app(
+                config=cfg, store=store, registry=registry, start_worker=False
+            )
+            with TestClient(app) as client:
+                model_id = registry.models[0].id
+                res = client.put(
+                    f"/api/models/{model_id}",
+                    json={"subfamily": "pony"},
+                )
+                self.assertEqual(res.status_code, 200)
+                self.assertEqual(res.json()["subfamily"], "pony")
+
+                # Verificar persistencia en archivo
+                saved = (cfg.data_dir / "registry" / "models.json").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn('"subfamily": "pony"', saved)
+
+                # Verificar GET /api/models refleja el cambio
+                get_res = client.get("/api/models")
+                self.assertEqual(get_res.status_code, 200)
+                updated_models = [m for m in get_res.json() if m["id"] == model_id]
+                self.assertEqual(updated_models[0]["subfamily"], "pony")
+
+    def test_api_model_put_subfamily_invalida_400(self):
+        from tests.test_server import REGISTRY_FIXTURE, make_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_config(Path(tmp))
+            cfg.data_dir.mkdir(parents=True)
+            registry = ModelRegistry.load(REGISTRY_FIXTURE)
+            store = Store(cfg.data_dir / "waifu.db")
+            store.init()
+            app = create_app(
+                config=cfg, store=store, registry=registry, start_worker=False
+            )
+            with TestClient(app) as client:
+                model_id = registry.models[0].id
+                res = client.put(
+                    f"/api/models/{model_id}",
+                    json={"subfamily": "no_existe"},
+                )
+                self.assertEqual(res.status_code, 400)
+                self.assertIn("error", res.json())
+
 
 if __name__ == "__main__":
     unittest.main()

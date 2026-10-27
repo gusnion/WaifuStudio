@@ -213,6 +213,7 @@ class ReadRoutesTests(ServerTestCase):
                 "id",
                 "display_name",
                 "family",
+                "subfamily",
                 "preprompt",
                 "unet_name",
                 "defaults",
@@ -220,6 +221,7 @@ class ReadRoutesTests(ServerTestCase):
             },
         )
         self.assertEqual(models[0]["family"], "anima")
+        self.assertEqual(models[0]["subfamily"], "sin_clasificar")
         self.assertEqual(models[0]["prompt_profile"], "anima")
         self.assertIsInstance(models[0]["defaults"], dict)
 

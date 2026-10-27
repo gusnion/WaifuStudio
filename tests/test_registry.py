@@ -11,10 +11,13 @@ from pathlib import Path
 from app.engine import EngineError
 from app.registry import (
     DEFAULT_PROMPT_PROFILE,
+    DEFAULT_SUBFAMILY,
+    KNOWN_SUBFAMILIES,
     ModelEntry,
     ModelProfile,
     ModelRegistry,
     infer_prompt_profile,
+    infer_subfamily,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,6 +114,7 @@ class RealRegistryTests(unittest.TestCase):
         expected = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
         for item in expected["models"]:
             item["prompt_profile"] = "anima"
+            item["subfamily"] = "sin_clasificar"
         self.assertEqual(expected, payload)
 
 
@@ -329,6 +333,161 @@ class PromptProfileInferenceTests(unittest.TestCase):
         self.assertEqual(profiles.get("animagine-xl-4-opt"), "sdxl_tags")
         self.assertEqual(profiles.get("realvisxl-v50"), "sdxl_natural")
         self.assertEqual(profiles.get("juggernaut-xl-ragnarok"), "sdxl_natural")
+
+
+class SubfamilyInferenceTests(unittest.TestCase):
+    def test_infer_illustrious(self):
+        self.assertEqual(
+            infer_subfamily({"modelspec.architecture": "illustrious"}),
+            "illustrious",
+        )
+        self.assertEqual(
+            infer_subfamily({"ss_base_model_version": "illustrious-xl-v1.0"}),
+            "illustrious",
+        )
+        self.assertEqual(
+            infer_subfamily(
+                {
+                    "modelspec.architecture": "sdxl/illustrious",
+                    "ss_base_model_version": "sdxl_v1-0",
+                }
+            ),
+            "illustrious",
+        )
+        self.assertEqual(infer_subfamily(modelspec_architecture="illustrious-xl"), "illustrious")
+
+    def test_infer_pony(self):
+        self.assertEqual(
+            infer_subfamily({"modelspec.architecture": "pony"}),
+            "pony",
+        )
+        self.assertEqual(
+            infer_subfamily({"ss_base_model_version": "pony_v6"}),
+            "pony",
+        )
+        self.assertEqual(
+            infer_subfamily(
+                {
+                    "modelspec.architecture": "sdxl/pony",
+                    "ss_base_model_version": "sdxl_v1-0",
+                }
+            ),
+            "pony",
+        )
+        self.assertEqual(infer_subfamily(modelspec_architecture="pony"), "pony")
+
+    def test_infer_sdxl_generico(self):
+        self.assertEqual(
+            infer_subfamily(
+                {
+                    "ss_base_model_version": "sdxl_v1-0",
+                    "modelspec.architecture": "sdxl",
+                }
+            ),
+            "sdxl_base",
+        )
+        self.assertEqual(
+            infer_subfamily({"ss_base_model_version": "sdxl_base"}),
+            "sdxl_base",
+        )
+        self.assertEqual(
+            infer_subfamily({"ss_base_model_version": "sdxl_v1-0"}),
+            "sdxl_base",
+        )
+        self.assertEqual(infer_subfamily(modelspec_architecture="stable-diffusion-xl"), "sdxl_base")
+
+    def test_infer_sin_clasificar(self):
+        self.assertEqual(infer_subfamily({}), "sin_clasificar")
+        self.assertEqual(infer_subfamily(None), "sin_clasificar")
+        self.assertEqual(infer_subfamily({"ss_base_model_version": "v1-5"}), "sin_clasificar")
+        self.assertEqual(infer_subfamily({"modelspec.architecture": "desconocida"}), "sin_clasificar")
+
+    def test_infer_otras_familias(self):
+        self.assertEqual(infer_subfamily({"modelspec.architecture": "noobai"}), "noobai")
+        self.assertEqual(infer_subfamily({"modelspec.architecture": "anima"}), "anima")
+        self.assertEqual(infer_subfamily({"modelspec.architecture": "wan2.1"}), "wan")
+        self.assertEqual(infer_subfamily({"modelspec.architecture": "minimax_h3"}), "h3")
+
+
+class SubfamilySerializationAndEditTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+
+    def test_serializacion_subfamily(self):
+        registry = ModelRegistry()
+        entry = make_entry("modelo-pony", subfamily="pony")
+        registry.add(entry)
+        path = self.tmp / "pony_models.json"
+        registry.save(path)
+
+        loaded = ModelRegistry.load(path)
+        self.assertEqual(loaded.get("modelo-pony").subfamily, "pony")
+        self.assertEqual(loaded.to_dict()["models"][0]["subfamily"], "pony")
+
+    def test_retrocompatibilidad_sin_subfamily(self):
+        raw = {
+            "version": 1,
+            "models": [
+                {
+                    "id": "modelo-antiguo",
+                    "family": "sdxl",
+                    "display_name": "Modelo Antiguo",
+                    "profile": {
+                        "unet_name": "old.safetensors",
+                        "clip_name": "__checkpoint__",
+                        "clip_type": "checkpoint",
+                        "vae_name": "__checkpoint__",
+                    },
+                    "source": "antiguo",
+                    "license": "MIT",
+                }
+            ],
+        }
+        registry = ModelRegistry.from_dict(raw)
+        entry = registry.get("modelo-antiguo")
+        self.assertEqual(entry.subfamily, "sin_clasificar")
+
+    def test_edicion_subfamily_manual_y_persistencia(self):
+        registry = ModelRegistry()
+        registry.add(make_entry("modelo-edit", subfamily="sin_clasificar"))
+        # Edicion via update
+        updated = registry.update("modelo-edit", subfamily="illustrious")
+        self.assertEqual(updated.subfamily, "illustrious")
+        self.assertEqual(registry.get("modelo-edit").subfamily, "illustrious")
+
+        path = self.tmp / "edited_models.json"
+        registry.save(path)
+        loaded = ModelRegistry.load(path)
+        self.assertEqual(loaded.get("modelo-edit").subfamily, "illustrious")
+
+    def test_subfamily_invalida_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            make_entry("modelo-bad", subfamily="no_existe")
+
+        with self.assertRaises(EngineError):
+            ModelRegistry.from_dict(
+                {
+                    "version": 1,
+                    "models": [
+                        {
+                            "id": "modelo-bad",
+                            "family": "sdxl",
+                            "display_name": "Bad",
+                            "profile": {
+                                "unet_name": "u.safetensors",
+                                "clip_name": "c.safetensors",
+                                "clip_type": "checkpoint",
+                                "vae_name": "v.safetensors",
+                            },
+                            "source": "src",
+                            "license": "lic",
+                            "subfamily": "subfamilia_inventada",
+                        }
+                    ],
+                }
+            )
 
 
 if __name__ == "__main__":

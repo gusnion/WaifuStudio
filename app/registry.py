@@ -21,6 +21,85 @@ DEFAULT_PATH = Path(__file__).resolve().parents[1] / "registry" / "models.json"
 PROMPT_PROFILES = ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit")
 DEFAULT_PROMPT_PROFILE = "sdxl_tags"
 
+KNOWN_SUBFAMILIES = (
+    "anima",
+    "illustrious",
+    "pony",
+    "noobai",
+    "sdxl_base",
+    "wan",
+    "h3",
+    "sin_clasificar",
+)
+DEFAULT_SUBFAMILY = "sin_clasificar"
+
+
+def infer_subfamily(
+    metadata_or_base: dict | str | None = None,
+    modelspec_architecture: str = "",
+    *,
+    ss_base_model_version: str = "",
+) -> str:
+    """Infiere la subfamilia de metadatos safetensors (ss_base_model_version y modelspec.architecture).
+
+    Valores conocidos:
+    - anima, illustrious, pony, noobai, sdxl_base, wan, h3, sin_clasificar.
+    """
+    if isinstance(metadata_or_base, dict):
+        meta_ci = {str(k).lower(): v for k, v in metadata_or_base.items()}
+        base_ver = str(
+            meta_ci.get("ss_base_model_version")
+            or metadata_or_base.get("ss_base_model_version")
+            or ss_base_model_version
+            or ""
+        )
+        arch = str(
+            meta_ci.get("modelspec.architecture")
+            or metadata_or_base.get("modelspec.architecture")
+            or modelspec_architecture
+            or ""
+        )
+    elif isinstance(metadata_or_base, str):
+        base_ver = metadata_or_base
+        arch = str(modelspec_architecture or "")
+    else:
+        base_ver = str(ss_base_model_version or "")
+        arch = str(modelspec_architecture or "")
+
+    combined = f"{arch} {base_ver}".strip().lower()
+    if not combined:
+        return DEFAULT_SUBFAMILY
+
+    # 1. Illustrious
+    if "illustrious" in combined or "illu" in combined.split() or "illu_v" in combined or "illu-v" in combined:
+        return "illustrious"
+
+    # 2. Pony
+    if "pony" in combined:
+        return "pony"
+
+    # 3. NoobAI
+    if "noobai" in combined or "noob-ai" in combined or "noob" in combined.split():
+        return "noobai"
+
+    # 4. Anima
+    if "anima" in combined:
+        return "anima"
+
+    # 5. Wan
+    if "wan" in combined or "lightx2v" in combined:
+        return "wan"
+
+    # 6. H3
+    if "h3" in combined.split() or "minimax" in combined:
+        return "h3"
+
+    # 7. SDXL base
+    if "sdxl" in combined or "stable-diffusion-xl" in combined or "sd_xl" in combined:
+        return "sdxl_base"
+
+    return DEFAULT_SUBFAMILY
+
 
 def infer_prompt_profile(
     model_id: str | dict | ModelEntry = "",
@@ -116,6 +195,7 @@ class ModelEntry:
     defaults: dict = field(default_factory=dict)
     notes: str = ""
     prompt_profile: str = ""
+    subfamily: str = DEFAULT_SUBFAMILY
 
     def __post_init__(self) -> None:
         if not self.prompt_profile:
@@ -126,6 +206,12 @@ class ModelEntry:
                 unet_name=getattr(self.profile, "unet_name", "") if hasattr(self, "profile") else "",
             )
             object.__setattr__(self, "prompt_profile", inferred)
+        if not self.subfamily:
+            object.__setattr__(self, "subfamily", DEFAULT_SUBFAMILY)
+        elif not isinstance(self.subfamily, str) or self.subfamily not in KNOWN_SUBFAMILIES:
+            raise EngineError(
+                f"subfamily invalida: {self.subfamily!r} (esperada una de {KNOWN_SUBFAMILIES})"
+            )
 
 
 def _require_text(value: object, label: str) -> str:
@@ -169,6 +255,13 @@ def _validate_entry(entry: object) -> ModelEntry:
         raise EngineError(
             f"prompt_profile invalido: {entry.prompt_profile!r} (esperado uno de {PROMPT_PROFILES})"
         )
+    if (
+        not isinstance(entry.subfamily, str)
+        or entry.subfamily not in KNOWN_SUBFAMILIES
+    ):
+        raise EngineError(
+            f"subfamily invalida: {entry.subfamily!r} (esperada una de {KNOWN_SUBFAMILIES})"
+        )
     return replace(entry, profile=_validate_profile(entry.profile))
 
 
@@ -198,6 +291,11 @@ def _entry_from_dict(data: object) -> ModelEntry:
             display_name=data.get("display_name", ""),
             unet_name=profile_data.get("unet_name", "") if isinstance(profile_data, dict) else "",
         )
+    raw_subfamily = data.get("subfamily")
+    if raw_subfamily is not None and str(raw_subfamily).strip():
+        subfamily = str(raw_subfamily).strip()
+    else:
+        subfamily = DEFAULT_SUBFAMILY
     entry = ModelEntry(
         id=data["id"],
         family=data["family"],
@@ -211,6 +309,7 @@ def _entry_from_dict(data: object) -> ModelEntry:
         defaults=data.get("defaults", {}),
         notes=data.get("notes", ""),
         prompt_profile=prompt_profile,
+        subfamily=subfamily,
     )
     return _validate_entry(entry)
 
@@ -255,6 +354,13 @@ class ModelRegistry:
                 self._models[index] = validated
                 return
         self._models.append(validated)
+
+    def update(self, model_id: str, **updates) -> ModelEntry:
+        """Actualiza campos de un modelo existente y lo valida."""
+        entry = self.get(model_id)
+        updated = replace(entry, **updates)
+        self._replace(updated)
+        return updated
 
     def to_dict(self) -> dict:
         return {
@@ -349,12 +455,15 @@ if __name__ == "__main__":
 __all__ = [
     "DEFAULT_PATH",
     "DEFAULT_PROMPT_PROFILE",
+    "DEFAULT_SUBFAMILY",
+    "KNOWN_SUBFAMILIES",
     "PROMPT_PROFILES",
     "REGISTRY_VERSION",
     "ModelEntry",
     "ModelProfile",
     "ModelRegistry",
     "infer_prompt_profile",
+    "infer_subfamily",
     "load_or_empty",
     "main",
     "user_registry_path",

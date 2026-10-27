@@ -32,7 +32,16 @@ from app.loras import (
     safetensors_header,
     update_entry as update_lora,
 )
-from app.registry import ModelEntry, ModelProfile, ModelRegistry, infer_prompt_profile
+from app.registry import (
+    DEFAULT_SUBFAMILY,
+    KNOWN_SUBFAMILIES,
+    PROMPT_PROFILES,
+    ModelEntry,
+    ModelProfile,
+    ModelRegistry,
+    infer_prompt_profile,
+    infer_subfamily,
+)
 from app.params import SAMPLER_NAMES, SCHEDULER_NAMES
 
 
@@ -244,19 +253,19 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
     known_ids = {entry.id for entry in registry.models}
     added: list[ModelEntry] = []
 
-    candidates: list[tuple[Path, Path, str]] = []
+    candidates: list[tuple[Path, Path, str, bytes]] = []
     if diff_dir.is_dir():
         for p in sorted(diff_dir.rglob("*.safetensors")):
-            kind, _ = classify_safetensors_file(p)
+            kind, raw_hdr = classify_safetensors_file(p)
             if kind == "anima_unet":
-                candidates.append((p, diff_dir, "anima_unet"))
+                candidates.append((p, diff_dir, "anima_unet", raw_hdr))
     if ckpt_dir.is_dir():
         for p in sorted(ckpt_dir.rglob("*.safetensors")):
-            kind, _ = classify_safetensors_file(p)
+            kind, raw_hdr = classify_safetensors_file(p)
             if kind in ("checkpoint", "anima_unet"):
-                candidates.append((p, ckpt_dir, "checkpoint"))
+                candidates.append((p, ckpt_dir, "checkpoint", raw_hdr))
 
-    for path, base_dir, kind in candidates:
+    for path, base_dir, kind, raw_hdr in candidates:
         rel_name = str(path.relative_to(base_dir)).replace("\\", "/")
         if rel_name.replace("/", "\\").lower() in known_unets:
             continue
@@ -266,6 +275,13 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
         while model_id in known_ids:
             model_id = f"{base_id}-{suffix}"
             suffix += 1
+        meta = {}
+        if raw_hdr:
+            hdr = safetensors_header(raw_hdr)
+            if isinstance(hdr, dict) and isinstance(hdr.get("__metadata__"), dict):
+                meta = hdr["__metadata__"]
+        subfamily = infer_subfamily(meta)
+
         if kind == "checkpoint":
             model_family = "sdxl"
             profile = ModelProfile(
@@ -319,6 +335,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
                 display_name=path.stem,
                 unet_name=rel_name,
             ),
+            subfamily=subfamily,
         )
         registry.add(entry)
         known_ids.add(model_id)
@@ -340,6 +357,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
                     defaults=dict(existing_model.defaults),
                     notes=existing_model.notes,
                     prompt_profile=existing_model.prompt_profile,
+                    subfamily=getattr(existing_model, "subfamily", DEFAULT_SUBFAMILY),
                 )
                 registry._replace(fixed_model)
             except Exception:
@@ -360,6 +378,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             "id": e.id,
             "display_name": e.display_name,
             "family": e.family,
+            "subfamily": e.subfamily,
             "unet_name": e.profile.unet_name,
         }
         for e in added
@@ -636,6 +655,63 @@ async def api_model_defaults_update(
     return {"model_id": entry.id, "defaults": dict(entry.defaults)}
 
 
+@router.put("/api/models/{model_id}")
+async def api_model_update(
+    request: Request, model_id: str, payload: dict = Body(...)
+) -> Any:
+    """Edita campos de un modelo registrado (subfamily, display_name, notes, preprompt, prompt_profile)."""
+    try:
+        entry = request.app.state.registry.get(model_id)
+    except EngineError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+
+    updates: dict[str, Any] = {}
+    if "subfamily" in payload:
+        subfamily = str(payload["subfamily"]).strip()
+        if subfamily not in KNOWN_SUBFAMILIES:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": f"subfamily invalida: {subfamily!r} (esperada una de {KNOWN_SUBFAMILIES})"
+                },
+            )
+        updates["subfamily"] = subfamily
+    if "display_name" in payload and str(payload["display_name"]).strip():
+        updates["display_name"] = str(payload["display_name"]).strip()
+    if "notes" in payload and isinstance(payload["notes"], str):
+        updates["notes"] = payload["notes"]
+    if "preprompt" in payload and isinstance(payload["preprompt"], str):
+        updates["preprompt"] = payload["preprompt"]
+    if "prompt_profile" in payload:
+        prof = str(payload["prompt_profile"]).strip()
+        if prof in PROMPT_PROFILES:
+            updates["prompt_profile"] = prof
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"prompt_profile invalido: {prof!r}"},
+            )
+
+    if updates:
+        entry = replace(entry, **updates)
+        request.app.state.registry._replace(entry)
+        cfg = getattr(request.app.state, "config", None)
+        if cfg and getattr(cfg, "data_dir", None):
+            path = Path(cfg.data_dir) / "registry" / "models.json"
+            request.app.state.registry.save(path)
+
+    return {
+        "id": entry.id,
+        "display_name": entry.display_name,
+        "family": entry.family,
+        "subfamily": entry.subfamily,
+        "preprompt": entry.preprompt,
+        "prompt_profile": entry.prompt_profile,
+        "unet_name": entry.profile.unet_name,
+        "defaults": dict(entry.defaults),
+    }
+
+
 @router.get("/api/models")
 async def api_models(request: Request, scan: bool = False) -> list[dict]:
     reg = request.app.state.registry
@@ -647,6 +723,7 @@ async def api_models(request: Request, scan: bool = False) -> list[dict]:
             "id": entry.id,
             "display_name": entry.display_name,
             "family": entry.family,
+            "subfamily": getattr(entry, "subfamily", DEFAULT_SUBFAMILY),
             "preprompt": entry.preprompt,
             "prompt_profile": entry.prompt_profile,
             "unet_name": entry.profile.unet_name,
