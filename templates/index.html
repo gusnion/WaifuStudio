@@ -1134,6 +1134,18 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           <span id="timeline-gallery-status" class="oc-status">Cargando…</span>
           <button id="btn-timeline-gallery-close" type="button">Cerrar</button>
         </div>
+        <div class="timeline-gallery-controls">
+          <select id="timeline-gallery-filter" aria-label="Filtrar medios">
+            <option value="" selected>Todos</option>
+            <option value="image">Imágenes</option>
+            <option value="video">Vídeos</option>
+          </select>
+          <div class="viewer-pager">
+            <button id="timeline-gallery-prev" type="button" aria-label="Página anterior">‹</button>
+            <span id="timeline-gallery-page-info">página 1 de 1</span>
+            <button id="timeline-gallery-next" type="button" aria-label="Página siguiente">›</button>
+          </div>
+        </div>
         <div id="timeline-gallery-grid" class="timeline-gallery-grid"></div>
       </div>
     </div>

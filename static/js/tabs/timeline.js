@@ -415,17 +415,34 @@ function addTimelineClip(item, url, isVideo, metaDuration = null) {
   return newIdx;
 }
 
-async function openTimelineGallery() {
-  const modal = $("timeline-gallery-modal");
+const TIMELINE_GALLERY_LIMIT = 24;
+let timelineGalleryPage = 1;
+let timelineGalleryCount = 0;
+
+async function loadTimelineGallery(page = 1) {
   const grid = $("timeline-gallery-grid");
   const status = $("timeline-gallery-status");
-  if (!modal || !grid) return;
-  modal.classList.remove("hidden");
+  const prev = $("timeline-gallery-prev");
+  const next = $("timeline-gallery-next");
+  const pageInfo = $("timeline-gallery-page-info");
+  const filter = $("timeline-gallery-filter")?.value || "";
+  if (!grid) return;
+  page = Math.max(1, Number(page) || 1);
+  if (status) {
+    status.textContent = "Cargando…";
+    status.classList.remove("error");
+  }
   grid.replaceChildren();
-  if (status) status.textContent = "Cargando…";
   try {
-    const data = await api("/api/gallery?limit=24");
+    const offset = (page - 1) * TIMELINE_GALLERY_LIMIT;
+    const query = [`limit=${TIMELINE_GALLERY_LIMIT}`, `offset=${offset}`];
+    if (filter) query.push(`kind=${encodeURIComponent(filter)}`);
+    const data = await api(`/api/gallery?${query.join("&")}`);
     const items = data.items || [];
+    timelineGalleryCount = Number(data.count || items.length);
+    const totalPages = Math.max(1, Math.ceil(timelineGalleryCount / TIMELINE_GALLERY_LIMIT));
+    if (page > totalPages) return loadTimelineGallery(totalPages);
+    timelineGalleryPage = page;
     for (const item of items) {
       const isVideo = item.kind === "video";
       const url = resolveMediaUrl(item);
@@ -441,13 +458,24 @@ async function openTimelineGallery() {
       });
       grid.appendChild(card);
     }
-    if (status) status.textContent = `${items.length} medios`;
+    if (status) status.textContent = `${timelineGalleryCount} medios · ${items.length} en esta página`;
+    if (pageInfo) pageInfo.textContent = `página ${page} de ${totalPages}`;
+    if (prev) prev.disabled = page <= 1;
+    if (next) next.disabled = page >= totalPages;
   } catch (error) {
     if (status) {
       status.textContent = error.message;
       status.classList.add("error");
     }
   }
+}
+
+async function openTimelineGallery() {
+  const modal = $("timeline-gallery-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  timelineGalleryPage = 1;
+  await loadTimelineGallery(1);
 }
 
 function closeTimelineGallery() {
@@ -812,6 +840,9 @@ export function initTimelineTab() {
   on("timeline-media-filter", "change", refreshTimelineMedia);
   on("btn-timeline-open-gallery", "click", openTimelineGallery);
   on("btn-timeline-gallery-close", "click", closeTimelineGallery);
+  on("timeline-gallery-filter", "change", () => loadTimelineGallery(1));
+  on("timeline-gallery-prev", "click", () => loadTimelineGallery(timelineGalleryPage - 1));
+  on("timeline-gallery-next", "click", () => loadTimelineGallery(timelineGalleryPage + 1));
   on("timeline-gallery-modal", "click", (event) => {
     if (event.target.id === "timeline-gallery-modal") closeTimelineGallery();
   });
