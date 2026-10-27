@@ -291,6 +291,27 @@ html[data-theme="light"] .guide-section h3 {
   border-bottom-color: var(--border);
 }
 
+/* Ayuda contextual (?) y nubes de tooltip */
+html[data-theme="light"] .btn-help {
+  background: var(--panel-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .btn-help:hover,
+html[data-theme="light"] .btn-help:focus {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(181, 29, 74, 0.08);
+}
+
+html[data-theme="light"] .tooltip-popover {
+  background: #f7f8fb;
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(30, 35, 50, 0.14);
+}
+
 /* Botón principal universal: margen y radio del sistema */
 .tab-canonical-layout .generate-row .primary {
   margin: 3px;

@@ -17,6 +17,20 @@
   border-radius: 8px;
 }
 
+/* Wan 2.2 es el motor por defecto: no mostrar controles H3/VDN legacy. */
+#video-h3-profile-field,
+#video-h3-size-field,
+#video-h3-res-badge-wrap,
+#video-h3-encoder-field,
+#video-h3-variant-field,
+#video-h3-encoder-warning,
+#video-h3-sage-field,
+#video-h3-guide,
+#video-h3-prompt-actions,
+#video-custom-settings-panel {
+  display: none !important;
+}
+
 .video-preview-box video {
   max-width: 100%;
   max-height: 100%;

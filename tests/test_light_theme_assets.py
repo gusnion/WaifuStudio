@@ -22,6 +22,8 @@ class LightThemeAssetsTests(unittest.TestCase):
             ".guide-step-card",
             ".guide-section",
             "#panel-upscaler #upscale-preview",
+            ".tooltip-popover",
+            ".btn-help",
         ):
             self.assertIn(selector, css)
 
