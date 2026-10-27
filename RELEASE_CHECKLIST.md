@@ -1,13 +1,13 @@
 # Release checklist — WAIFU STUDIO 2.x
 
-Estado: 2026-10-26. Esta lista separa lo verificado en la sesión de lo que
-requiere una máquina limpia o publicación externa.
+Estado: 2026-10-27. Esta lista separa lo verificado en la sesión de lo que
+requiere publicación externa.
 
 ## Criterios de terminada
 
 | # | Criterio | Estado | Evidencia / pendiente |
 |---|---|---|---|
-| 1 | Instalación limpia + primera imagen sin leer nada | **Pendiente** | Requiere una máquina Windows limpia; el `/api/first-run` y el instalador ya existen. |
+| 1 | Instalación limpia + primera imagen sin leer nada | **Hecho (G:)** | `G:\IA\WAIFU-clean`, instalador 0.42.5, `/api/first-run ready=true`, imagen 512×768 generada |
 | 2 | Defaults por modelo con set oficial | **Hecho** | Animagine, RealVisXL y Juggernaut; API `PUT /api/models/{id}/defaults`. |
 | 3 | Pestañas funcionan o llevan beta visible | **Hecho** | Imagen, Vídeo, Editor, Upscaler, Timeline, Galería y Addons; badges beta existentes. |
 | 4 | Licencia 2.1 aceptada antes del Editor | **Hecho** | `app/editor_license.py`; 403 sin aceptación. |
@@ -27,19 +27,12 @@ Get-ChildItem tests\*.mjs | ForEach-Object { node $_.FullName }
 
 Resultado esperado actual: **1.641 tests OK, 1 skipped**; tests JS OK.
 
-## Instalación limpia (pendiente)
+## Instalación limpia (verificada en G:)
 
-En una máquina Windows sin Python/ComfyUI:
-
-```powershell
-git clone https://github.com/gusnion/WaifuStudio.git
-cd WaifuStudio
-.\install.bat -SkipModels -SkipLlm
-.\start.bat
-```
-
-Después: `GET /api/first-run` debe pasar a `ready=true`; generar una imagen
-pequeña, el editor, un upscale y un vídeo Wan de 1 s.
+Se instaló con `install.bat -SkipModels -SkipLlm -NoUserEnv -NoShortcut` en
+`G:\IA\WAIFU-clean`, se copiaron los tres checkpoints oficiales y se generó
+la imagen `G:\IA\WAIFU-clean\data\gallery\2\imagen_00002_.png` (512×768 RGB).
+El motor respondió con RTX 3060 y `/api/first-run` quedó `ready=true`.
 
 ## Publicación (pendiente)
 

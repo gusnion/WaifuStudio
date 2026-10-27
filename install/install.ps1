@@ -630,6 +630,7 @@ function Register-RecommendedModels {
         if (@($entries | Where-Object { $_.id -eq $model.id }).Count -gt 0) { continue }
         $unet = $model.profile.unet_name
         $candidates = @(
+            (Join-Path $ComfyModelsRoot ("checkpoints\{0}" -f $unet)),
             (Join-Path $ComfyModelsRoot ("diffusion_models\{0}" -f $unet)),
             (Join-Path $ComfyModelsRoot ("unet\{0}" -f $unet))
         )
@@ -752,6 +753,7 @@ Install-Python
 Install-Venv
 Install-Ffmpeg
 Install-Engine
+New-Item -ItemType Directory -Force -Path (Join-Path $Root 'data'), (Join-Path $ComfyRoot 'user\default\workflows') | Out-Null
 if ($IncludeTrainer -or ($IncludeOptional -and -not $SkipEngine)) {
     Install-Trainer
 }
