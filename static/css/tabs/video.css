@@ -230,3 +230,19 @@
   line-height: 1.35;
   display: block;
 }
+
+/* Aviso de licencia comunitaria Wan 2.2 (C-10) */
+.video-license-notice {
+  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.5rem 0;
+  padding: 0.45rem 0.75rem;
+  background: var(--panel, #16181d);
+  border: 1px solid var(--border, #2a2e38);
+  border-left: 3px solid var(--accent, #6366f1);
+  border-radius: 6px;
+  color: var(--text-dim, #9ca3af);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

@@ -6542,6 +6542,26 @@ class GalleryUiPhase3Tests(ServerTestCase):
         self.assertIn('"H3"', js)
         self.assertIn('"SDXL"', js)
 
+    def test_video_tab_label_and_license_notice(self):
+        html = self.make_client().get("/").text
+        # Tab exact name: "Video" (sin adjetivos)
+        self.assertRegex(
+            html,
+            r'<button\s+id="tab-video"\s+class="tab(?: [^"]*)?"[^>]*>.*?Video</button>',
+        )
+        self.assertNotIn("Video Wan", html)
+        self.assertNotIn("Video H3", html)
+        self.assertNotIn("Video Beta", html)
+
+        # Aviso de licencia visible en el panel de video
+        notice_text = "Modelo comunitario Wan 2.2 AIO NSFW; licencia Apache-2.0 declarada por su autor; no es oficial de Alibaba."
+        self.assertIn('id="video-license-notice"', html)
+        self.assertIn(notice_text, html)
+
+        # Estilo del aviso en el CSS de video
+        css = self.get_static_css()
+        self.assertIn(".video-license-notice", css)
+
 
 if __name__ == "__main__":
     unittest.main()
