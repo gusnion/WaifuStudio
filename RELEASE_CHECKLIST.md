@@ -9,10 +9,10 @@ requiere publicación externa.
 |---|---|---|---|
 | 1 | Instalación limpia + primera imagen sin leer nada | **Hecho (G:)** | `G:\IA\WAIFU-clean`, instalador 0.42.5, `/api/first-run ready=true`, imagen 512×768 generada |
 | 2 | Defaults por modelo con set oficial | **Hecho** | Animagine, RealVisXL y Juggernaut; API `PUT /api/models/{id}/defaults`. |
-| 3 | Pestañas funcionan o llevan beta visible | **Hecho** | Imagen, Vídeo, Editor, Upscaler, Timeline, Galería y Addons; badges beta existentes. |
+| 3 | Pestañas funcionan o llevan beta visible | **Hecho** | Imagen, Vídeo (sin BETA), Editor, Upscaler, Timeline (BETA), Galería, OC Maker; Guía/Addons en barra superior. |
 | 4 | Licencia 2.1 aceptada antes del Editor | **Hecho** | `app/editor_license.py`; 403 sin aceptación. |
 | 5 | Addon ZIP importado, validado, desactivado y activado | **Hecho** | `/api/addons/import`, slots exclusivos y estado persistido. |
-| 6 | Tema claro/oscuro AA | **Hecho** | `tokens.css` + toggle persistido; contraste 14.82/7.80/6.48. |
+| 6 | Tema claro/oscuro AA | **Hecho** | `tokens.css` + toggle persistido; contraste 14.82/7.80/6.48; scrollbars, previews, tooltips y estados claros corregidos. |
 | 7 | Documentación = código | **Parcial** | README/AGENTS/SKILL/8 guías actualizados; falta auditoría final de cifras. |
 | 8 | Avisos completos + hashes fijados | **Parcial** | Manifiestos Wan/modelos y FFmpeg verificado; faltan textos de algunas familias. |
 
