@@ -41,6 +41,7 @@ function switchTab(tab) {
   const gallery = tab === "gallery";
   const guide = tab === "guide";
   const addons = tab === "addons";
+  const oc = tab === "oc";
   $("tab-image").classList.toggle("active", image);
   $("tab-video").classList.toggle("active", video);
   $("tab-editor").classList.toggle("active", editor);
@@ -48,6 +49,8 @@ function switchTab(tab) {
   const tabTimelineEl = $("tab-timeline");
   if (tabTimelineEl) tabTimelineEl.classList.toggle("active", timeline);
   $("tab-gallery").classList.toggle("active", gallery);
+  const tabOcEl = $("tab-oc");
+  if (tabOcEl) tabOcEl.classList.toggle("active", oc);
   const tabAddonsEl = $("tab-addons");
   if (tabAddonsEl) tabAddonsEl.classList.toggle("active", addons);
   const tabGuideEl = $("tab-guide");
@@ -63,6 +66,11 @@ function switchTab(tab) {
     panelTimelineEl.hidden = !timeline;
   }
   $("panel-gallery").classList.toggle("active", gallery);
+  const panelOcEl = $("panel-oc");
+  if (panelOcEl) {
+    panelOcEl.classList.toggle("active", oc);
+    panelOcEl.hidden = !oc;
+  }
   const panelAddonsEl = $("panel-addons");
   if (panelAddonsEl) {
     panelAddonsEl.classList.toggle("active", addons);
@@ -161,6 +169,10 @@ function bind() {
     on("tab-timeline", "click", () => switchTab("timeline"));
   }
   on("tab-gallery", "click", () => switchTab("gallery"));
+  const tabOc = $("tab-oc");
+  if (tabOc) {
+    on("tab-oc", "click", () => switchTab("oc"));
+  }
   const tabAddons = $("tab-addons");
   if (tabAddons) {
     on("tab-addons", "click", () => switchTab("addons"));
@@ -187,6 +199,8 @@ function bind() {
   initHeader(); initI18n(); initTooltipHelp(); initFirstRun(); initTheme();
   initCompare(); initLightbox(); initPromptZones(); initPromptPopover();
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
+  window.addEventListener("waifu:oc-open", () => switchTab("oc"));
+  window.addEventListener("waifu:oc-close", () => switchTab("image"));
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();
   initModelDefaults();
   initEditorTab(); initUpscalerTab(); initTimelineTab(); initGalleryTab(); initGuideTab();

@@ -652,7 +652,7 @@ function openOcModal() {
   try {
     resetOcForm();
     setOcStatus("Modo crear: formulario limpio");
-    $("oc-modal").classList.remove("hidden");
+    window.dispatchEvent(new CustomEvent("waifu:oc-open"));
   } catch (error) {
     console.error("openOcModal: no se pudo abrir el OC Maker", error);
     setOcStatus(`No se pudo abrir el OC Maker: ${error.message}`, true);
@@ -665,11 +665,18 @@ function openOcModal() {
 }
 
 function closeOcModal() {
-  $("oc-modal").classList.add("hidden");
+  window.dispatchEvent(new CustomEvent("waifu:oc-close"));
 }
 
 
 function initOcPicker() {
+  const modal = $("oc-modal");
+  const panel = $("panel-oc");
+  if (modal && panel) {
+    modal.classList.remove("modal", "hidden");
+    modal.classList.add("oc-inline");
+    panel.appendChild(modal);
+  }
   on("btn-oc", "click", openOcModal);
   on("btn-oc-close", "click", closeOcModal);
   on("btn-oc-add", "click", addOcTagsToPrompt);

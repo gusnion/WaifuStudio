@@ -30,8 +30,7 @@
       <button id="tab-upscaler" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/><path d="m9 15 6-6M15 9h-4M15 9v4"/></svg>Upscaler</button>
       <button id="tab-timeline" class="tab" data-tab="timeline" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5"/></svg>Estudio <span class="beta-badge">BETA</span></button>
       <button id="tab-gallery" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Galería</button>
-      <button id="tab-addons" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v7M14 17.5h7"/></svg>Addons</button>
-      <button id="tab-guide" class="tab" data-tab="guide" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>Guía</button>
+      <button id="tab-oc" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>OC Maker</button>
     </nav>
     <div class="topbar-actions">
       <button id="btn-theme-toggle" class="topbar-btn" type="button" title="Cambiar tema" aria-label="Cambiar tema">
@@ -53,7 +52,9 @@
           <button type="button" class="lang-option" data-lang="ru" data-i18n-ignore>Русский (RU)</button>
         </div>
       </div>
-      <button id="btn-oc" class="oc-button" type="button">OC Maker</button>
+      <button id="tab-guide" class="topbar-btn" data-tab="guide" type="button">Guía</button>
+      <button id="tab-addons" class="topbar-btn" type="button">Addons</button>
+      <button id="btn-oc" class="oc-button hidden" type="button">OC Maker</button>
     </div>
   </header>
 
@@ -980,6 +981,8 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         </section>
       </section>
     </section>
+
+    <section id="panel-oc" class="panel" hidden></section>
 
     <section id="panel-timeline" class="panel tab-canonical-layout" hidden>
       <aside class="controls tab-sidebar timeline-sidebar">
