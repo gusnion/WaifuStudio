@@ -1413,20 +1413,146 @@
     <section id="panel-audio" class="panel tab-canonical-layout" hidden>
       <div class="controls tab-sidebar">
         <div class="control-card">
-          <h2>Módulo de Audio</h2>
-          <p class="field-hint">Generación y procesamiento de audio para bandas sonoras, efectos y síntesis de voz (TTS/MMAudio).</p>
+          <h2>Audio & Sonido</h2>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button id="btn-audio-mode-b" class="tab active" type="button" style="flex:1; font-size:0.8rem; padding:4px 8px;">Modo B (Vídeo)</button>
+            <button id="btn-audio-mode-a" class="tab" type="button" style="flex:1; font-size:0.8rem; padding:4px 8px;">Modo A (Libre)</button>
+          </div>
+          <p id="audio-mode-hint" class="field-hint" style="margin-top:0.4rem;">Modo B: hereda duración y sincroniza audio condicionado a los fotogramas del clip sin regenerar vídeo.</p>
+          <div id="audio-mode-a-notice" class="audio-notice-badge" style="display:none; margin-top:0.4rem; font-size:0.75rem; color:#f0ad4e;">
+            ⚠️ Modo A: MMAudio sin vídeo es experimental. Síntesis de voz (Irodori) no disponible en este hito.
+          </div>
+        </div>
+
+        <div class="control-card" id="audio-clip-selector-card">
+          <h3>Clip de Vídeo (Modo B)</h3>
+          <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.4rem;">
+            <button id="btn-audio-pick-gallery" class="secondary" type="button" style="font-size:0.78rem; padding:3px 8px;">De Galería</button>
+            <button id="btn-audio-latest-video" class="secondary" type="button" style="font-size:0.78rem; padding:3px 8px;">Último Vídeo</button>
+          </div>
+
+          <div id="audio-selected-clip-card" style="margin-top:0.6rem; padding:0.5rem; background:rgba(255,255,255,0.03); border:1px solid var(--border-color,#333); border-radius:4px; font-size:0.8rem;">
+            <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="audio-clip-name">Ningún clip seleccionado</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem; margin-top:0.4rem; font-size:0.75rem; color:var(--text-muted,#aaa);">
+              <div>Duración: <strong id="audio-clip-duration" style="color:var(--text-main,#fff);">--</strong> <span class="badge" style="font-size:0.65rem; background:#2d4059; padding:1px 4px; border-radius:3px;">Heredada</span></div>
+              <div>FPS: <span id="audio-clip-fps">--</span></div>
+              <div>Pista origen: <span id="audio-clip-audio-status">--</span></div>
+              <div>Muestreo: <strong>48 kHz</strong></div>
+            </div>
+            <input type="hidden" id="audio-selected-path">
+            <input type="hidden" id="audio-selected-gen-id">
+          </div>
+        </div>
+
+        <div class="control-card">
+          <h3>Motores de Audio</h3>
+          <label class="field field-inline" style="display:flex; align-items:center; justify-content:space-between; margin-top:0.3rem;">
+            <span><strong>Ambiente (MMAudio)</strong></span>
+            <input type="checkbox" id="audio-engine-mmaudio" checked disabled>
+          </label>
+          <p class="field-hint">Generación ambiental condicionada a frames. Resampleo automático a 48 kHz.</p>
+
+          <label class="field field-inline" style="display:flex; align-items:center; justify-content:space-between; margin-top:0.6rem; opacity:0.6; cursor:not-allowed;" title="Irodori no está disponible todavía en esta instancia. Requiere microservicio en localhost:8291.">
+            <span><strong>Voz (Irodori TTS)</strong> <span class="badge" style="font-size:0.65rem; background:#444; color:#bbb; padding:1px 4px; border-radius:3px;">No disponible</span></span>
+            <input type="checkbox" id="audio-engine-irodori" disabled>
+          </label>
+          <p class="field-hint" style="font-size:0.72rem; color:var(--text-muted,#888);">Irodori (TTS / gemidos) no disponible todavía en este hito (previsto C-17 en :8291).</p>
+        </div>
+
+        <div class="control-card">
+          <h3>Pista & Parámetros</h3>
+          <label class="field-label" style="font-size:0.78rem;">Tratamiento de pista existente:</label>
+          <div style="display:flex; gap:0.8rem; margin:0.3rem 0 0.5rem 0; font-size:0.8rem;">
+            <label class="field-inline"><input type="radio" name="audio-track-action" value="replace" checked> Reemplazar</label>
+            <label class="field-inline" id="audio-track-mix-label"><input type="radio" name="audio-track-action" value="mix"> Mezclar</label>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Prompt Ambiente:</span>
+            <textarea id="audio-prompt" rows="2" class="textarea">soft breathing, quiet moans, wet sounds, fabric rustling</textarea>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Prompt Negativo:</span>
+            <textarea id="audio-negative" rows="2" class="textarea">speech, talking, dialogue, shouting, screaming, singing, crowd</textarea>
+          </label>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem;">
+            <label class="field">
+              <span class="field-label">Pasos (Steps):</span>
+              <input type="number" id="audio-steps" value="25" min="10" max="50" step="1">
+            </label>
+            <label class="field">
+              <span class="field-label">CFG:</span>
+              <input type="number" id="audio-cfg" value="4.5" min="1.0" max="15.0" step="0.5">
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Seed:</span>
+            <div style="display:flex; gap:0.3rem;">
+              <input type="number" id="audio-seed" value="-1" style="flex:1;">
+              <button id="btn-audio-random-seed" class="secondary" type="button" style="font-size:0.75rem;">🎲</button>
+            </div>
+          </label>
+
+          <button id="btn-audio-generate" class="primary btn-primary" type="button" style="width:100%; margin-top:0.75rem; padding:8px;" disabled>🎵 Generar Audio Modo B</button>
+          <button id="btn-audio-cancel" class="secondary" type="button" style="width:100%; margin-top:0.35rem; display:none;">Cancelar</button>
+
+          <div id="audio-status" class="field-hint" style="margin-top:0.5rem; min-height:1.2rem;"></div>
+          <div id="audio-progress" class="progress" style="display:none; margin-top:0.3rem;">
+            <div id="audio-progress-fill" class="progress-fill" style="width:0%;"></div>
+          </div>
+          <div id="audio-progress-text" class="field-hint" style="text-align:right; font-size:0.72rem;"></div>
         </div>
       </div>
+
       <div class="tab-viewport">
-        <div class="audio-notice-card">
-          <span class="notice-icon" aria-hidden="true">🎵</span>
-          <h2>Módulo de audio pendiente de instalar</h2>
+        <div id="audio-result-card" class="control-card" style="display:none; margin-bottom:1.5rem;">
+          <div class="gallery-header" style="margin-bottom:0.6rem;">
+            <h3>Resultado Modo B (MP4 Nuevo + WAV Aislado)</h3>
+            <span id="audio-result-badge" class="badge" style="background:#28a745; color:#fff; font-size:0.75rem; padding:2px 6px; border-radius:3px;">Completado</span>
+          </div>
+
+          <div style="text-align:center; background:#000; border-radius:6px; padding:0.5rem;">
+            <video id="audio-preview-video" controls playsinline style="max-width:100%; max-height:480px; border-radius:4px; display:inline-block;"></video>
+          </div>
+
+          <div style="margin-top:0.8rem; padding:0.8rem; background:rgba(255,255,255,0.03); border:1px solid var(--border-color,#333); border-radius:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+              <strong>Pista de Audio Aislada (48 kHz PCM Master)</strong>
+              <span class="badge" style="font-size:0.7rem; background:#333; color:#ccc; padding:1px 5px; border-radius:3px;">48.000 Hz</span>
+            </div>
+            <audio id="audio-preview-wav" controls style="width:100%;"></audio>
+          </div>
+
+          <div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
+            <a id="btn-audio-download-mp4" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar MP4 con audio</a>
+            <a id="btn-audio-download-wav" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar WAV 48 kHz</a>
+            <button id="btn-audio-send-timeline" class="secondary btn" type="button" style="padding:6px 12px; font-size:0.82rem;">🎬 Enviar a Timeline</button>
+          </div>
+          <p class="field-hint" style="margin-top:0.5rem; font-size:0.75rem;">Nota: el clip original de vídeo no se ha modificado. Se han generado un archivo MP4 nuevo y un WAV de 48 kHz independiente.</p>
+        </div>
+
+        <div id="audio-empty-card" class="audio-notice-card">
+          <span class="notice-icon" aria-hidden="true">🎧</span>
+          <h2>Audio Modo B (MMAudio condicionado a frames)</h2>
           <p>
-            El backend de audio no está instalado en esta instancia local.
-            Esta pestaña estará disponible para producción una vez integrado el pipeline de audio correspondiente.
+            Elige un clip de vídeo de la galería. El motor MMAudio analizará los fotogramas para componer el sonido ambiente sincronizado a la duración exacta del clip y estandarizará la pista a 48 kHz.
           </p>
           <div class="audio-notice-badge">
-            <span>⚠️</span> Pendiente de instalación • Sin backend activo
+            <span>✅</span> Modo B activo • Cola FIFO 1-GPU • MMAudio 44.1k → 48 kHz
+          </div>
+        </div>
+
+        <div class="control-card" style="margin-top:1.5rem;">
+          <div class="gallery-header">
+            <h3>Vídeos de la Galería</h3>
+            <button id="btn-audio-refresh-gallery" class="secondary" type="button" style="font-size:0.75rem; padding:2px 8px;">↻ Actualizar</button>
+          </div>
+          <p class="field-hint">Haz clic en cualquier clip para seleccionarlo y cargar su duración en Modo B:</p>
+          <div id="audio-gallery-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:0.6rem; margin-top:0.6rem; max-height:400px; overflow-y:auto;">
+            <p class="field-hint">Cargando clips...</p>
           </div>
         </div>
       </div>

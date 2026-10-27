@@ -56,6 +56,7 @@ from app.routes.video import router as video_router
 from app.routes.timeline import router as timeline_router
 from app.routes.addons import router as addons_router
 from app.routes.prompt import _ensure_vision_server, _get_manager, _manager, _manager_llm, router as prompt_router
+from app.audio import router as audio_router, run_audio_generation
 
 APP_HOST = "127.0.0.1"
 APP_PORT = 8765
@@ -100,6 +101,9 @@ def create_app(
         elif kind == "video":
             rec = _JOBS.setdefault(job["gen_id"], {"prompt_id": None, "tracker": None, "status": "queued", "engine": None, "kind": "video"})
             run_video_generation(job, config=cfg, store=st, engine_factory=video_factory, record=rec)
+        elif kind == "audio":
+            rec = _JOBS.setdefault(job["gen_id"], {"prompt_id": None, "tracker": None, "status": "queued", "engine": None, "kind": "audio"})
+            run_audio_generation(job, config=cfg, store=st, engine_factory=video_factory, record=rec)
         elif kind == "editor":
             rec = _JOBS.setdefault(job["gen_id"], {"prompt_id": None, "tracker": None, "status": "queued", "engine": None, "kind": "editor"})
             run_editor_generation(job, config=cfg, store=st, engine_factory=factory, record=rec)
@@ -188,6 +192,7 @@ def create_app(
     app.include_router(image_router)
     app.include_router(video_router)
     app.include_router(editor_router)
+    app.include_router(audio_router)
 
     @app.exception_handler(EngineError)
     async def _engine_error(_request: Request, exc: EngineError) -> JSONResponse:

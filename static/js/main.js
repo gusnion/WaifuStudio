@@ -26,6 +26,7 @@ import { initFirstRun } from "./components/first_run.js";
 import { initTheme } from "./components/theme.js";
 import { initTooltipHelp } from "./components/tooltip_help.js";
 import { initTimelineTab, refreshTimelineMedia } from "./tabs/timeline.js";
+import { initAudioTab, loadAudioClips } from "./tabs/audio.js";
 import { initAddons, loadAddons } from "./tabs/addons.js";
 import { initModelDefaults } from "./components/model_defaults.js";
 import { initEditorMultiview } from "./components/editor_multiview.js";
@@ -105,6 +106,9 @@ function switchTab(tab) {
   }
   if (timeline) {
     refreshTimelineMedia();
+  }
+  if (audio) {
+    loadAudioClips().catch(() => {});
   }
   if (image) {
     loadImageViewer().catch((error) => setStatus(error.message, true));
@@ -270,6 +274,7 @@ async function init() {
     await settle("seed aleatoria", initSeedRandom);
     await settle("perfiles H3", loadH3Profiles);
     await settle("video", applyVideoEngine);
+    await settle("audio", initAudioTab);
     await settle("editor", () => {
       updateEditorControls();
       updateEditorMode();
