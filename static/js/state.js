@@ -100,7 +100,7 @@ const H3_GUIDE_TEXT = [
   "1. Una sola toma continua sin cortes ni transiciones bruscas.",
   "2. Parámetros de cámara: close-up shot, medium shot, full body shot, low angle, slow pan, slow dolly in.",
   "3. Iluminación cinematográfica: volumetric lighting, golden hour sunlight, rim lighting, neon reflection.",
-  "4. Sonido Foley & Ambiente: rustling leaves, subtle footsteps, distant ocean waves, soft rain.",
+  "4. Audio Foley & Ambiente: rustling leaves, subtle footsteps, distant ocean waves, soft rain.",
   "5. Diálogo: Declarar speaker y sintaxis <d>[Idioma] texto</d> (máx 2/3 de duración).",
   "6. Música no diegética: None o descripción instrumental (piano, acoustic guitar, anime synthwave).",
   "7. Referencias (Ref2VA): Identificar con <Picture 1>, <Picture 2>, etc.",
