@@ -339,7 +339,7 @@ function videoReuseParams(params = {}) {
   const preset = ["rapido", "estandar", "calidad", "manual"].includes(p.preset)
     ? p.preset
     : "rapido";
-  const wan_model = p.wan_model === "nsfw_aio" ? "nsfw_aio" : "dual";
+  const wan_model = p.wan_model === "dual" ? "dual" : "nsfw_aio";
   const isWan = p.engine === "wan" || Boolean(p.preset);
   const wanSampler = p.sampler_name != null
     ? String(p.sampler_name)
@@ -557,7 +557,7 @@ async function reuseVideoGeneration(item) {
 function startNewVideo() {
   if ($("video-engine")) $("video-engine").value = "wan";
   if ($("video-mode")) $("video-mode").value = "i2v";
-  if ($("video-wan-model")) setSelectValue($("video-wan-model"), "dual");
+  if ($("video-wan-model")) setSelectValue($("video-wan-model"), "nsfw_aio");
   if ($("video-wan-preset")) setSelectValue($("video-wan-preset"), "rapido");
   if ($("video-negative")) $("video-negative").value = "";
   if ($("video-wan-sampler")) setSelectValue($("video-wan-sampler"), "euler");
@@ -743,7 +743,7 @@ async function generateWanVideo() {
   }
   applyRandomSeed("video-seed");
   const preset = $("video-wan-preset")?.value || "rapido";
-  const wanModel = $("video-wan-model")?.value || "dual";
+  const wanModel = $("video-wan-model")?.value || "nsfw_aio";
   const payload = {
     engine: "wan",
     wan_model: wanModel,
@@ -970,7 +970,7 @@ function updateWanResolutionOptions() {
 }
 
 function updateWanModelState() {
-  const model = $("video-wan-model")?.value || "dual";
+  const model = $("video-wan-model")?.value || "nsfw_aio";
   const aio = model === "nsfw_aio";
   const mode = $("video-mode");
   if (mode) {

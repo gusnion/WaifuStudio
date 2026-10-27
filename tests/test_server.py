@@ -5753,6 +5753,8 @@ class WanPromptUiStaticTests(ServerTestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
+        self.assertNotIn('value="dual"', html)
+        self.assertNotIn('Wan 2.2 dual', html)
         self.assertNotIn('Video <span class="beta-badge">', html)
 
     def test_app_js_incluye_handoff_a_timeline(self):

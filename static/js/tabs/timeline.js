@@ -630,7 +630,7 @@ function inheritedVideoConfig(clip) {
   return {
     aspect,
     preset,
-    wan_model: p.wan_model === "nsfw_aio" ? "nsfw_aio" : "dual",
+    wan_model: p.wan_model === "dual" ? "dual" : "nsfw_aio",
     sampler_name: typeof p.sampler_name === "string" ? p.sampler_name : "",
     scheduler: typeof p.scheduler === "string" ? p.scheduler : "",
     steps: Number.isFinite(Number(p.steps)) ? Number(p.steps) : null,
