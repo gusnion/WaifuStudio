@@ -27,17 +27,27 @@ GOLDEN_MOTION_NEGATIVE = (
 
 GOLDEN_SYS_PROMPT_MOTION = (
     "Eres el escritor de motion prompts de un generador de video anime local "
-    "(Wan 2.2 I2V).\n"
-    "Recibes en lenguaje natural (espanol) lo que debe pasar en el video y el rating activo.\n"
-    "Escribe UN motion prompt en INGLES con 1-3 frases naturales (NO tags danbooru, "
-    "NO listas, NO comillas, NO preambulo):\n"
-    "- describe el movimiento de los cuerpos y de la camara (handheld, estatica, leve "
-    "paneo...) manteniendo la coherencia con el frame de entrada (I2V);\n"
+    "(Wan 2.2 I2V/FLF2V).\n"
+    "Recibes en lenguaje natural (espanol) lo que debe pasar en el video, el rating activo, "
+    "un enfoque y una fuerza opcionales.\n"
+    "Escribe UN motion prompt en INGLES, en presente, con 1-3 frases naturales y maximo 70 palabras. "
+    "NO uses tags danbooru, listas, JSON, comillas, markdown ni preambulo.\n"
+    "Reglas obligatorias:\n"
+    "- Empieza por el sujeto y la accion solicitada; conserva identidad, ropa, cara y composicion "
+    "del frame de entrada (I2V);\n"
+    "- describe UN movimiento corporal principal y, solo si aporta, un movimiento secundario "
+    "(pelo, tela, respiracion);\n"
+    "- indica explicitamente UN movimiento de camara: static camera, slow push-in, slow pull-out, "
+    "slow pan left/right, slow orbit o subtle handheld movement;\n"
+    "- menciona entorno o iluminacion solo si ayuda; no inventes personajes, objetos, ropa, "
+    "acciones ni dialogos nuevos;\n"
+    "- una sola toma continua: prohibido cuts, scene changes, transitions o multiple shots;\n"
+    "- no anadas romance, invitaciones, personalidad ni adjetivos no pedidos;\n"
     "- si rating=nsfw se explicito con el acto y el movimiento, sin eufemismos; NUNCA "
     "describas ni pidas censura (nada de mosaic/bar censor);\n"
     "- HARD RULE: todos los personajes son adultos (21+); nunca menores ni los terminos "
     "child, teen, loli o young-looking;\n"
-    "- las lineas internas de contexto (movimiento/rating/duracion) son referencia: "
+    "- las lineas internas de contexto (movimiento/rating/focus/strength/duracion) son referencia: "
     "nunca las copies literalmente;\n"
     "- responde SOLO con el motion prompt."
 )
@@ -54,7 +64,7 @@ class FakeLLM:
 
 
 class GoldenTests(unittest.TestCase):
-    def test_sys_prompt_es_la_copia_certificada_del_legacy(self):
+    def test_sys_prompt_es_el_contrato_wan(self):
         self.assertEqual(SYS_PROMPT_MOTION, GOLDEN_SYS_PROMPT_MOTION)
 
     def test_motion_negative_es_la_copia_certificada_del_legacy(self):
@@ -64,6 +74,8 @@ class GoldenTests(unittest.TestCase):
         self.assertTrue(SYS_PROMPT_MOTION.startswith("Eres el escritor de motion prompts"))
         self.assertTrue(SYS_PROMPT_MOTION.endswith("responde SOLO con el motion prompt."))
         self.assertIn("HARD RULE", SYS_PROMPT_MOTION)
+        self.assertIn("slow push-in", SYS_PROMPT_MOTION)
+        self.assertIn("una sola toma continua", SYS_PROMPT_MOTION)
         self.assertNotIn("\r", SYS_PROMPT_MOTION)
 
     def test_loader_se_reutiliza_de_enhancer(self):
@@ -119,9 +131,11 @@ class WriteMotionTests(unittest.TestCase):
             focus="camara",
             strength="creativo",
         )
-        _system, user = llm.calls[0]
+        system, user = llm.calls[0]
         self.assertIn("focus: camara", user)
         self.assertIn("strength: creativo", user)
+        self.assertIn("Enfoque camara", system)
+        self.assertIn("Fuerza creativa", system)
 
     def test_focus_invalido_lanza_engine_error(self):
         with self.assertRaises(EngineError):

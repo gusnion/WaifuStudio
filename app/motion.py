@@ -25,23 +25,48 @@ MOTION_NEGATIVE = (
     "bar censor, child, teen, loli, young-looking, deformed hands, extra limbs"
 )
 
-# Copia EXACTA (texto, sin reformatear) del SYS_PROMPT legacy.
+# Prompt de sistema para Wan 2.2 I2V/FLF2V. Las reglas de formato son
+# deliberadamente estrictas: el modelo pequeno tiende a escribir parrafos,
+# tags o acciones nuevas si no se le acota.
 SYS_PROMPT_MOTION = (
     "Eres el escritor de motion prompts de un generador de video anime local "
-    "(Wan 2.2 I2V).\n"
-    "Recibes en lenguaje natural (espanol) lo que debe pasar en el video y el rating activo.\n"
-    "Escribe UN motion prompt en INGLES con 1-3 frases naturales (NO tags danbooru, "
-    "NO listas, NO comillas, NO preambulo):\n"
-    "- describe el movimiento de los cuerpos y de la camara (handheld, estatica, leve "
-    "paneo...) manteniendo la coherencia con el frame de entrada (I2V);\n"
+    "(Wan 2.2 I2V/FLF2V).\n"
+    "Recibes en lenguaje natural (espanol) lo que debe pasar en el video, el rating activo, "
+    "un enfoque y una fuerza opcionales.\n"
+    "Escribe UN motion prompt en INGLES, en presente, con 1-3 frases naturales y maximo 70 palabras. "
+    "NO uses tags danbooru, listas, JSON, comillas, markdown ni preambulo.\n"
+    "Reglas obligatorias:\n"
+    "- Empieza por el sujeto y la accion solicitada; conserva identidad, ropa, cara y composicion "
+    "del frame de entrada (I2V);\n"
+    "- describe UN movimiento corporal principal y, solo si aporta, un movimiento secundario "
+    "(pelo, tela, respiracion);\n"
+    "- indica explicitamente UN movimiento de camara: static camera, slow push-in, slow pull-out, "
+    "slow pan left/right, slow orbit o subtle handheld movement;\n"
+    "- menciona entorno o iluminacion solo si ayuda; no inventes personajes, objetos, ropa, "
+    "acciones ni dialogos nuevos;\n"
+    "- una sola toma continua: prohibido cuts, scene changes, transitions o multiple shots;\n"
+    "- no anadas romance, invitaciones, personalidad ni adjetivos no pedidos;\n"
     "- si rating=nsfw se explicito con el acto y el movimiento, sin eufemismos; NUNCA "
     "describas ni pidas censura (nada de mosaic/bar censor);\n"
     "- HARD RULE: todos los personajes son adultos (21+); nunca menores ni los terminos "
     "child, teen, loli o young-looking;\n"
-    "- las lineas internas de contexto (movimiento/rating/duracion) son referencia: "
+    "- las lineas internas de contexto (movimiento/rating/focus/strength/duracion) son referencia: "
     "nunca las copies literalmente;\n"
     "- responde SOLO con el motion prompt."
 )
+
+FOCUS_INSTRUCTIONS = {
+    "movimiento": "Enfoque movimiento: prioriza la accion corporal y su progresion; la camara queda secundaria.",
+    "camara": "Enfoque camara: el movimiento de camara debe ser el protagonista; el cuerpo solo reacciona.",
+    "accion": "Enfoque accion: describe una accion fisica concreta y visible, sin coreografia extra.",
+    "expresion": "Enfoque expresion: prioriza cara, mirada y microgestos; evita movimiento corporal grande.",
+}
+
+STRENGTH_INSTRUCTIONS = {
+    "fiel": "Fuerza fiel: no anadas acciones, objetos ni adjetivos que no esten en el texto; reformula lo minimo.",
+    "balanceado": "Fuerza balanceada: puedes precisar camara y movimiento secundario sin cambiar la accion pedida.",
+    "creativo": "Fuerza creativa: puedes enriquecer camara, luz y movimiento secundario, pero no cambiar el sujeto ni la accion.",
+}
 
 
 def clean_motion(text) -> str:
@@ -99,7 +124,12 @@ def write_motion(
     if strength_value:
         user += "\nstrength: " + strength_value
     user += "\nEscribe solo el motion prompt en ingles."
-    raw = llm(SYS_PROMPT_MOTION, user)
+    system = SYS_PROMPT_MOTION
+    if focus_value:
+        system += "\n" + FOCUS_INSTRUCTIONS[focus_value]
+    if strength_value:
+        system += "\n" + STRENGTH_INSTRUCTIONS[strength_value]
+    raw = llm(system, user)
     if not isinstance(raw, str):
         raise EngineError("motion: el LLM no devolvio texto")
     return {"motion_positive": clean_motion(raw), "motion_negative": MOTION_NEGATIVE}
