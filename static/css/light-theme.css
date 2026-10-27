@@ -293,11 +293,49 @@ html[data-theme="light"] .guide-section h3 {
 
 /* Botón principal universal: margen y radio del sistema */
 .tab-canonical-layout .generate-row .primary {
-  margin: 2px;
-  border-radius: 10px;
+  margin: 3px;
+  border-radius: 13px;
+  min-height: 2.3rem;
 }
 
 .tab-canonical-layout .generate-row {
   align-items: stretch;
+  gap: 0.6rem;
+}
+
+html[data-theme="light"] .generate-block {
+  background: var(--panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px;
+  padding: 0.4rem 0.45rem 0.55rem !important;
+  box-shadow: 0 4px 14px rgba(30, 35, 50, 0.08) !important;
+}
+
+/* Scrollbars claros con selectores explícitos para las barras de Imagen. */
+html[data-theme="light"] .controls.image-controls,
+html[data-theme="light"] .tab-sidebar {
+  scrollbar-color: #8a93a8 #e3e7f0 !important;
+}
+
+html[data-theme="light"] .controls.image-controls::-webkit-scrollbar-track,
+html[data-theme="light"] .tab-sidebar::-webkit-scrollbar-track,
+html[data-theme="light"] .image-category-body::-webkit-scrollbar-track,
+html[data-theme="light"] .timeline-track::-webkit-scrollbar-track {
+  background: #e3e7f0 !important;
+}
+
+html[data-theme="light"] .controls.image-controls::-webkit-scrollbar-thumb,
+html[data-theme="light"] .tab-sidebar::-webkit-scrollbar-thumb,
+html[data-theme="light"] .image-category-body::-webkit-scrollbar-thumb,
+html[data-theme="light"] .timeline-track::-webkit-scrollbar-thumb {
+  background: #8a93a8 !important;
+  border-radius: 4px !important;
+}
+
+html[data-theme="light"] .controls.image-controls::-webkit-scrollbar-thumb:hover,
+html[data-theme="light"] .tab-sidebar::-webkit-scrollbar-thumb:hover,
+html[data-theme="light"] .image-category-body::-webkit-scrollbar-thumb:hover,
+html[data-theme="light"] .timeline-track::-webkit-scrollbar-thumb:hover {
+  background: var(--accent) !important;
 }
 
