@@ -104,9 +104,9 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 
 ## 6. Rangos de Líneas de `templates/index.html` y Cascada CSS
 
-- **Secciones en `templates/index.html` (1.753 líneas; no leer entero)**:
+- **Secciones en `templates/index.html` (1.758 líneas; no leer entero)**:
   - `L1–L63`: Header global, `nav.tabs`, acciones de Guía/Addons.
-  - `L64–L339`: `#panel-image` | `L340–L688`: `#panel-video` | `L689–L884`: `#panel-editor` | `L885–L1033`: `#panel-upscaler` | `L1034–L1035`: `#panel-oc` | `L1036–L1149`: `#panel-timeline` | `L1150–L1201`: `#panel-gallery` | `L1202–L1366`: `#panel-guide` | `L1367–L1382`: `#panel-addons`.
-  - `L1383–L1745`: modales OC/LoRA/Visión/Galería y `#lightbox` (L1746–L1753).
+  - `L64–L339`: `#panel-image` | `L340–L695`: `#panel-video` | `L696–L889`: `#panel-editor` | `L890–L1038`: `#panel-upscaler` | `L1039–L1040`: `#panel-oc` | `L1041–L1154`: `#panel-timeline` | `L1155–L1206`: `#panel-gallery` | `L1207–L1371`: `#panel-guide` | `L1372–L1387`: `#panel-addons`.
+  - `L1388–L1750`: modales OC/LoRA/Visión/Galería y `#lightbox` (L1751–L1758).
 - **Orden de Cascada CSS (`static/css/`)**:
   `1. base.css` → `2. components.css` → `3. tabs/image.css` → `4. tabs/video.css` → `5. tabs/editor.css` → `6. tabs/upscaler.css` → `7. tabs/gallery.css` → `8. design-v2.css` → `9. light-theme.css`.
