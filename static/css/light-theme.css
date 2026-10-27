@@ -317,6 +317,10 @@ html[data-theme="light"] .tab-sidebar {
   scrollbar-color: #8a93a8 #e3e7f0 !important;
 }
 
+html[data-theme="light"] .image-category-body {
+  scrollbar-color: #8a93a8 #e3e7f0 !important;
+}
+
 html[data-theme="light"] .controls.image-controls::-webkit-scrollbar-track,
 html[data-theme="light"] .tab-sidebar::-webkit-scrollbar-track,
 html[data-theme="light"] .image-category-body::-webkit-scrollbar-track,
