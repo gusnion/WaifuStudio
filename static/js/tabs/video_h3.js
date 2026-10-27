@@ -197,7 +197,7 @@ function updateH3Notes() {
   const seconds = Number($("video-h3-seconds") ? $("video-h3-seconds").value : 8);
   const secondsInfo = $("video-h3-seconds-info");
   if (secondsInfo) {
-    const isWan = $("video-engine")?.value === "wan";
+    const isWan = true;
     const frames = isWan ? wanFramesForSeconds(seconds) : h3FramesForSeconds(seconds);
     secondsInfo.textContent = Number.isFinite(seconds)
       ? `≈ ${seconds} s → ${frames} frames (${isWan ? 16 : H3_FPS} fps)`
@@ -306,10 +306,8 @@ function fillH3Seconds() {
   }
   const current = secondsSelect.value;
   secondsSelect.replaceChildren();
-  const allSeconds = Array.isArray(state.videoH3Seconds) && state.videoH3Seconds.length
-    ? state.videoH3Seconds
-    : [5, 8, 10, 12, 15, 20, 25, 30];
-  for (const seconds of allSeconds.filter(wanSecondsAllowed)) {
+  // Wan es el único motor visible y admite como máximo 15 s.
+  for (const seconds of [5, 8, 10, 12, 15]) {
     secondsSelect.appendChild(option(String(seconds), `${seconds} s`));
   }
   if (current && [...secondsSelect.options].some((opt) => opt.value === current)) {
@@ -326,24 +324,16 @@ function updateH3SecondsAvailability() {
   }
   const mode = $("video-mode") ? $("video-mode").value : "i2v";
   const isRestricted = mode === "ref2va" || mode === "v2v";
-  const allSeconds = Array.isArray(state.videoH3Seconds) && state.videoH3Seconds.length
-    ? state.videoH3Seconds
-    : [5, 8, 10, 12, 15, 20, 25, 30];
+  const allSeconds = [5, 8, 10, 12, 15];
   const currentVal = Number(secondsSelect.value);
-  const engineAllows = allSeconds.filter(wanSecondsAllowed);
-
-  const targetSeconds = isRestricted
-    ? engineAllows.filter((s) => Number(s) <= 15)
-    : engineAllows;
+  const targetSeconds = allSeconds;
 
   secondsSelect.replaceChildren();
   for (const seconds of targetSeconds) {
     secondsSelect.appendChild(option(String(seconds), `${seconds} s`));
   }
 
-  if (isRestricted && currentVal > 15) {
-    setSelectValue(secondsSelect, String(defaultH3Seconds()));
-  } else if ([...secondsSelect.options].some((opt) => opt.value === String(currentVal))) {
+  if ([...secondsSelect.options].some((opt) => opt.value === String(currentVal))) {
     secondsSelect.value = String(currentVal);
   } else {
     setSelectValue(secondsSelect, String(defaultH3Seconds()));
