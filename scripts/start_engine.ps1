@@ -18,6 +18,10 @@ if ($listener) {
 Set-Location (Join-Path $StackRoot 'ComfyUI')
 # El equipo puede exponer una iGPU/2060 como GPU 0. ComfyUI solo debe ver la
 # GPU de mayor VRAM para no partir el modelo ni bloquear la maquina.
+# CUDA enumera por "fastest first" por defecto: con una 2060 y una 3060 el
+# ordinal CUDA puede invertirse respecto a nvidia-smi. PCI_BUS_ID alinea
+# ambos ordenes para que el indice elegido aqui sea el mismo que ve torch.
+$env:CUDA_DEVICE_ORDER = 'PCI_BUS_ID'
 $gpuLines = & nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader,nounits 2>$null
 $bestGpu = $gpuLines | ForEach-Object {
     $parts = $_ -split ','

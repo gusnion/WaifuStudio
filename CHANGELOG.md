@@ -9,7 +9,7 @@
 - Perfiles Fast/Standard/Quality y modo Manual con sampler, scheduler, pasos, shift y resolución propia.
 - Envío directo de un vídeo generado a Timeline.
 - Timeline migrado de H3 a Wan para Continuar I2V y Puente FLF2V.
-- Suite offline: 1.653 tests OK, 1 skipped.
+- Suite offline: 1.654 tests OK, 1 skipped.
 
 ## 2.1.0 — 2026-10-26
 

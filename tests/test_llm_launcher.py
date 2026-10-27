@@ -28,6 +28,12 @@ class LauncherFilesTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue((ROOT / name).is_file(), f"falta {name}")
 
+    def test_start_engine_alinea_ordinal_cuda_con_nvidia_smi(self):
+        text = (ROOT / "scripts" / "start_engine.ps1").read_text(encoding="utf-8")
+        self.assertIn("CUDA_DEVICE_ORDER = 'PCI_BUS_ID'", text)
+        self.assertIn("CUDA_VISIBLE_DEVICES", text)
+        self.assertIn("Sort-Object Mib -Descending", text)
+
     def test_no_quedan_launchers_legacy(self):
         for name in (
             "INSTALAR.bat",

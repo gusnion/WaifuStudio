@@ -25,7 +25,7 @@ Get-ChildItem tests\*.mjs | ForEach-Object { node $_.FullName }
 & .\.venv\Scripts\python.exe -m app.health
 ```
 
-Resultado esperado actual: **1.653 tests OK, 1 skipped**; tests JS OK.
+Resultado esperado actual: **1.654 tests OK, 1 skipped**; tests JS OK.
 
 ## Instalación limpia (verificada en G:)
 
