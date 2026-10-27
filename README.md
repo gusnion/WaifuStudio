@@ -31,7 +31,7 @@ The application is designed around a single NVIDIA GPU and a Windows desktop. It
 | **Windows installer** | Available | Sets up a portable Python environment, ComfyUI, custom nodes, models, FFmpeg/FFprobe and the app shortcut. |
 | **Image and OC Maker** | Available | Animagine XL 4.0 Opt, RealVisXL V5 and Juggernaut XL Ragnarok (SDXL), prompt zones, LoRA selection, character profiles, reference images and optional LoRA training. |
 | **Prompt assistant** | Available | Local Danbooru tag index plus an optional CPU LLM for prompt expansion and image captioning. |
-| **Wan 2.2 video** | Available | I2V and FLF2V with Wan 2.2 A14B Q4_K_S, LightX2V, Fast/Standard/Quality/Manual profiles, prompt assistant and MMAudio audio. |
+| **Wan 2.2 video** | Available | I2V and FLF2V with Wan 2.2 A14B Q4_K_S, LightX2V, Fast/Standard/Quality/Manual profiles, prompt assistant and MMAudio audio. Optional experimental **Wan 2.2 NSFW AIO v10** (single 14B GGUF, I2V only, not part of the official set). |
 | **Editor** | Available | Instruction-based editing with Qwen-Image 2.1, up to ten reference images and L0–L3 pose presets. Mask-based inpainting is not part of this version. |
 | **Timeline** | Available | Arrange clips and still images, set duration, apply fade/zoom, mute clips, add external audio, continue a clip with I2V/FLF2V and export MP4. It is a focused sequencer, not a full NLE. |
 | **Upscaler** | Available | Image upscaling with GAN, Hires Fix and Qwen Remaster modes, plus RCAS/Adaptive USM sharpening and RIFE interpolation. Video upscaling is limited to 300 frames per job. |
@@ -166,6 +166,7 @@ The repository does not include third-party checkpoints or LoRAs. The installer 
 |---|---|---|---|
 | SDXL checkpoint | `ComfyUI/models/checkpoints/` | `.safetensors` | Official set: `animagine-xl-4.0-opt`, `realvisxlV50_v50Bakedvae_full_fp16`, `juggernautXL_ragnarok`. |
 | Wan 2.2 DiT | `ComfyUI/models/diffusion_models/` | `.gguf` | High/Low `Q4_K_S`; workflow uses GGUF. |
+| Wan 2.2 NSFW AIO (optional) | `ComfyUI/models/diffusion_models/` | `.gguf` | `wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf` (10.85 GB); manifest `install/manifest/manifest.wan-nsfw.json`; I2V only. |
 | Wan text encoder | `ComfyUI/models/text_encoders/` | `.gguf` | `umt5-xxl-encoder-Q5_K_M.gguf`. |
 | Wan VAE | `ComfyUI/models/vae/` | `.safetensors` | `wan_2.1_vae.safetensors`. |
 | Wan LightX2V LoRA | `ComfyUI/models/loras/` | `.safetensors` | `wan22_lightx2v_high/low.safetensors`. |
