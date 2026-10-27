@@ -619,34 +619,35 @@ function inheritedVideoConfig(clip) {
   const width = Number(p.width);
   const height = Number(p.height);
   const hasSize = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
-  const profileOk = typeof p.profile === "string" && !["ref2va", "v2v"].includes(p.profile);
   const aspect = p.aspect === "vertical" || p.aspect === "horizontal"
     ? p.aspect
     : hasSize
     ? (height > width ? "vertical" : "horizontal")
-    : "";
+    : "vertical";
+  const preset = ["rapido", "calidad", "manual"].includes(p.preset)
+    ? p.preset
+    : "rapido";
   return {
-    profile: profileOk ? p.profile : "",
-    variant: profileOk && typeof p.variant === "string" ? p.variant : "",
-    width: hasSize ? Math.round(width) : null,
-    height: hasSize ? Math.round(height) : null,
     aspect,
-    sage: typeof p.sage === "boolean" ? p.sage : null,
-    include_audio: typeof p.include_audio === "boolean" ? p.include_audio : null,
+    preset,
+    sampler_name: typeof p.sampler_name === "string" ? p.sampler_name : "",
+    scheduler: typeof p.scheduler === "string" ? p.scheduler : "",
+    steps: Number.isFinite(Number(p.steps)) ? Number(p.steps) : null,
+    shift: Number.isFinite(Number(p.shift)) ? Number(p.shift) : null,
+    motion_negative: typeof p.motion_negative === "string" ? p.motion_negative : "",
   };
 }
 
 function applyInheritedVideoConfig(payload, inherited) {
-  if (inherited.profile) payload.profile = inherited.profile;
-  if (inherited.variant) payload.variant = inherited.variant;
-  if (inherited.width && inherited.height) {
-    payload.width = inherited.width;
-    payload.height = inherited.height;
-  } else if (inherited.aspect) {
-    payload.aspect = inherited.aspect;
+  if (inherited.aspect) payload.aspect = inherited.aspect;
+  if (inherited.preset) payload.preset = inherited.preset;
+  if (inherited.motion_negative) payload.motion_negative = inherited.motion_negative;
+  if (inherited.preset === "manual") {
+    if (inherited.sampler_name) payload.sampler_name = inherited.sampler_name;
+    if (inherited.scheduler) payload.scheduler = inherited.scheduler;
+    if (inherited.steps != null) payload.steps = inherited.steps;
+    if (inherited.shift != null) payload.shift = inherited.shift;
   }
-  if (inherited.sage !== null) payload.sage = inherited.sage;
-  if (inherited.include_audio !== null) payload.include_audio = inherited.include_audio;
 }
 
 async function hydrateClipParams(clips) {
@@ -732,7 +733,7 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
       if (!refClip) throw new Error("No hay clip de referencia para continuar");
       await hydrateClipParams([refClip]);
       const inherited = inheritedVideoConfig(refClip);
-      if (!inherited.aspect && !inherited.width) {
+      if (!inherited.aspect) {
         throw new Error("El clip de referencia no tiene configuración guardada; vuelve a añadirlo desde la Biblioteca.");
       }
       state.aiGenerating = true;
@@ -742,15 +743,15 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
         source_path: refClip.source_path,
         position: "last",
       });
-      setAiStatus("Encolando animación I2V...");
+      setAiStatus("Encolando animación I2V Wan...");
       const payload = {
-        engine: "h3",
+        engine: "wan",
         mode: "i2v",
         image_b64: frameRes.image_b64,
         prompt,
         motion_positive: prompt,
         seconds,
-        aspect: inherited.aspect || "horizontal",
+        aspect: inherited.aspect,
       };
       applyInheritedVideoConfig(payload, inherited);
       if (!payload.image_b64 && frameRes.image_name) {
@@ -764,23 +765,23 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
       const idxB = idxA + 1;
       await hydrateClipParams([clips[idxA], clips[idxB]]);
       const inherited = inheritedVideoConfig(clips[idxA]);
-      if (!inherited.aspect && !inherited.width) {
+      if (!inherited.aspect) {
         throw new Error("El clip de referencia no tiene configuración guardada; vuelve a añadirlo desde la Biblioteca.");
       }
       state.aiGenerating = true;
       renderTracks();
-      setAiStatus("Extrayendo extremos para puente FLF2V...");
+      setAiStatus("Extrayendo extremos para puente FLF2V Wan...");
       const fA = await postJson("/api/timeline/extract_frame", { generation_id: clips[idxA].generation_id, source_path: clips[idxA].source_path, position: "last" });
       const fB = await postJson("/api/timeline/extract_frame", { generation_id: clips[idxB].generation_id, source_path: clips[idxB].source_path, position: "first" });
       const payload = {
-        engine: "h3",
+        engine: "wan",
         mode: "flf2v",
         image_b64: fA.image_b64,
         last_image_b64: fB.image_b64,
         prompt,
         motion_positive: prompt,
         seconds,
-        aspect: inherited.aspect || "horizontal",
+        aspect: inherited.aspect,
       };
       applyInheritedVideoConfig(payload, inherited);
       if (!payload.image_b64 && fA.image_name) payload.image_name = fA.image_name;
@@ -804,6 +805,16 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
 }
 
 export function initTimelineTab() {
+  window.addEventListener("waifu:timeline-add", (event) => {
+    const item = event.detail && event.detail.item;
+    if (!item) return;
+    const url = resolveMediaUrl(item);
+    if (!url) {
+      setTimelineStatus("El medio no tiene una URL válida para Timeline", true);
+      return;
+    }
+    addTimelineClip(item, url, item.kind === "video");
+  });
   const trackVideo = $("timeline-track-video");
   if (trackVideo) { trackVideo.addEventListener("click", handleTrackClick); trackVideo.addEventListener("change", handleTrackChange); }
   const trackAudio = $("timeline-track-audio");

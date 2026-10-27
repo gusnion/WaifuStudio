@@ -30,6 +30,18 @@ import { applyVideoEngine } from "./video.js";
 let h3PromptResetTimer = null;
 let h3PromptStatusTimer = null;
 
+const WAN_PROMPT_TEMPLATE = "medium shot, the character turns their head slowly toward the camera, hair sways gently, soft window light, static camera";
+const WAN_TEMPLATE_PORTRAIT = "close-up shot, a girl slowly turns her head toward the camera, hair sways in a gentle breeze, soft window light, subtle smile, slow push-in";
+const WAN_TEMPLATE_WALK = "full body shot, she walks slowly toward the camera, fabric and hair move naturally, gentle afternoon light, slight handheld camera movement";
+const WAN_TEMPLATE_ACTION = "medium shot, the character turns and reaches forward, dynamic hair movement, cinematic rim lighting, slow orbit camera";
+const WAN_GUIDE_TEXT = `Wan 2.2 prompt guide
+Formula: subject + action + camera + environment + secondary motion.
+Use 1-3 natural English sentences, not Danbooru tags.
+Camera: static camera, slow push-in, slow pull-out, slow pan left/right, subtle handheld movement, slow orbit.
+Action: turns head, smiles softly, walks toward camera, hair moves in the wind, blinks.
+Keep one continuous shot; do not describe cuts.
+Durations: 5, 8, 10, 12, 15 s. Output: Fast 432x768/768x432, Quality 512x896/896x512.`;
+
 async function improveH3Prompt() {
   if (state.pendingH3Prompt) {
     return;
@@ -37,7 +49,7 @@ async function improveH3Prompt() {
   const area = $("video-prompt");
   const text = area.value.trim();
   if (!text) {
-    setH3PromptStatus("Escribe el prompt H3 para mejorarlo", true);
+    setH3PromptStatus("Escribe el prompt Wan para mejorarlo", true);
     area.focus();
     return;
   }
@@ -51,39 +63,16 @@ async function improveH3Prompt() {
     h3PromptStatusTimer = null;
   }
   try {
-    const ratingEl = $("video-rating");
-    const mode = $("video-mode") ? $("video-mode").value : "i2v";
+    const ratingEl = $("rating");
+    const focusEl = $("video-prompt-focus");
     const strengthEl = $("video-h3-prompt-strength");
-    const strength = (strengthEl && strengthEl.value) || "balanceado";
-    let image_b64 = null;
-    let images_b64 = null;
-    if (mode === "ref2va" && state.videoRefs && state.videoRefs.length > 0) {
-      images_b64 = state.videoRefs.map((ref) => {
-        const raw = ref.b64 || "";
-        return raw.includes(",") ? raw.split(",", 2)[1] : raw;
-      });
-    } else {
-      const videoImageInput = $("video-image");
-      const file = videoImageInput && videoImageInput.files && videoImageInput.files[0];
-      if (file) {
-        const rawB64 = await readFileBase64(file);
-        image_b64 = (typeof rawB64 === "string" && rawB64.includes(","))
-          ? rawB64.split(",", 2)[1]
-          : rawB64;
-      }
-    }
-    const reqBody = {
+    const data = await postJson("/api/motion", {
       text,
       rating: (ratingEl && ratingEl.value) || "nsfw",
-      strength,
-    };
-    if (images_b64) {
-      reqBody.images_b64 = images_b64;
-    } else if (image_b64) {
-      reqBody.image_b64 = image_b64;
-    }
-    const data = await postJson("/api/video/h3_prompt", reqBody);
-    area.value = data.h3_prompt || "";
+      focus: (focusEl && focusEl.value) || "movimiento",
+      strength: (strengthEl && strengthEl.value) || "balanceado",
+    });
+    area.value = data.motion_positive || "";
     button.textContent = "Listo ✓";
     setH3PromptStatus("Generado ✓");
     if (h3PromptStatusTimer) {
@@ -105,7 +94,7 @@ async function improveH3Prompt() {
     }
     h3PromptResetTimer = setTimeout(() => {
       if (!state.pendingH3Prompt) {
-        button.textContent = "Mejorar prompt (H3)";
+        button.textContent = "Mejorar prompt con IA";
       }
     }, 1600);
   }
@@ -398,18 +387,18 @@ function insertH3Template() {
     return;
   }
   const current = area.value.replace(/\s+$/, "");
-  area.value = current ? `${current}\n\n${H3_PROMPT_TEMPLATE}` : H3_PROMPT_TEMPLATE;
+  area.value = current ? `${current}\n\n${WAN_PROMPT_TEMPLATE}` : WAN_PROMPT_TEMPLATE;
   area.focus();
-  setH3GuideStatus("Plantilla insertada");
+  setH3GuideStatus("Plantilla Wan insertada");
 }
 
 async function copyH3Guide() {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(H3_GUIDE_TEXT);
+      await navigator.clipboard.writeText(WAN_GUIDE_TEXT);
     } else {
       const area = document.createElement("textarea");
-      area.value = H3_GUIDE_TEXT;
+      area.value = WAN_GUIDE_TEXT;
       area.setAttribute("readonly", "");
       area.style.position = "fixed";
       area.style.opacity = "0";
@@ -452,25 +441,25 @@ function initVideoH3() {
   on("btn-h3-template-portrait", "click", () => {
     const area = $("video-prompt");
     if (area) {
-      area.value = H3_TEMPLATE_PORTRAIT;
+      area.value = WAN_TEMPLATE_PORTRAIT;
       area.focus();
-      setH3GuideStatus("Plantilla 'Retrato Anime' insertada");
+      setH3GuideStatus("Plantilla 'Retrato' insertada");
     }
   });
   on("btn-h3-template-walk", "click", () => {
     const area = $("video-prompt");
     if (area) {
-      area.value = H3_TEMPLATE_WALK;
+      area.value = WAN_TEMPLATE_WALK;
       area.focus();
-      setH3GuideStatus("Plantilla 'Caminata Costa' insertada");
+      setH3GuideStatus("Plantilla 'Caminata' insertada");
     }
   });
   on("btn-h3-template-action", "click", () => {
     const area = $("video-prompt");
     if (area) {
-      area.value = H3_TEMPLATE_ACTION;
+      area.value = WAN_TEMPLATE_ACTION;
       area.focus();
-      setH3GuideStatus("Plantilla 'Escena Dinámica' insertada");
+      setH3GuideStatus("Plantilla 'Acción' insertada");
     }
   });
   on("btn-h3-copy-guide", "click", copyH3Guide);

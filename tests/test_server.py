@@ -5579,25 +5579,21 @@ class UpscaleRouteTests(ServerTestCase):
         self.assertEqual(row["outputs"], ["upscaled_00001_.png"])
 
 
-class H3GuideUiStaticTests(ServerTestCase):
-    def test_index_incluye_guia_de_prompt_h3(self):
+class WanPromptUiStaticTests(ServerTestCase):
+    def test_index_incluye_guia_de_prompt_wan(self):
         text = self.make_client().get("/").text
         for marker in (
             'id="video-h3-guide"',
-            "Guía de prompt H3",
+            "Guía de prompt Wan 2.2",
             'id="btn-h3-insert-template"',
-            "Insertar plantilla",
+            "Plantilla base",
             'id="btn-h3-copy-guide"',
             "Copiar guía",
             'id="h3-guide-status"',
-            "integrated_multimodal_description",
-            "overall_soundscape",
-            "non_diegetic_music",
-            "[Español]",
-            "speaker id estable",
-            "~2/3",
-            "sin cortes",
-            "FL2VA",
+            "Fórmula recomendada",
+            "slow push-in",
+            "close-up shot",
+            "Una sola toma",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
@@ -5606,19 +5602,17 @@ class H3GuideUiStaticTests(ServerTestCase):
             text.index('id="video-h3-guide"'),
         )
 
-    def test_app_js_incluye_guia_y_plantilla_h3(self):
+    def test_app_js_incluye_guia_y_plantilla_wan(self):
         text = self.get_static_js()
         for marker in (
-            "H3_PROMPT_TEMPLATE",
-            "H3_GUIDE_TEXT",
+            "WAN_PROMPT_TEMPLATE",
+            "WAN_GUIDE_TEXT",
             "insertH3Template",
             "copyH3Guide",
             "setH3GuideStatus",
-            "${current}\\n\\n${H3_PROMPT_TEMPLATE}",
+            "${current}\\n\\n${WAN_PROMPT_TEMPLATE}",
             'on("btn-h3-insert-template", "click", insertH3Template);',
             'on("btn-h3-copy-guide", "click", copyH3Guide);',
-            '$("video-h3-guide").style.display = isWan ? "none" : "";',
-            '"video-h3-guide",',
             '"btn-h3-insert-template",',
             '"btn-h3-copy-guide",',
             '"h3-guide-status",',
@@ -5626,11 +5620,49 @@ class H3GuideUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
 
-    def test_app_js_improve_h3_prompt_envia_image_b64(self):
+    def test_app_js_improve_wan_prompt_envia_contexto(self):
         text = self.get_static_js()
-        self.assertIn('$("video-image")', text)
-        self.assertIn("image_b64", text)
-        self.assertIn('postJson("/api/video/h3_prompt"', text)
+        self.assertIn('$("video-prompt-focus")', text)
+        self.assertIn('postJson("/api/motion"', text)
+        self.assertIn("focus:", text)
+        self.assertIn("strength:", text)
+
+    def test_index_incluye_controles_wan_avanzados(self):
+        html = self.make_client().get("/").text
+        for marker in (
+            'id="video-image-preview"',
+            'id="video-last-image-preview"',
+            'id="video-negative"',
+            'id="video-wan-advanced"',
+            'id="video-wan-sampler"',
+            'id="video-wan-scheduler"',
+            'id="video-wan-steps"',
+            'id="video-wan-shift"',
+            'id="btn-video-to-timeline"',
+            '<option value="manual">Manual</option>',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+        self.assertNotIn('Video <span class="beta-badge">', html)
+
+    def test_app_js_incluye_handoff_a_timeline(self):
+        text = self.get_static_js()
+        for marker in (
+            "btn-video-to-timeline",
+            "waifu:timeline-add",
+            "waifu:switch-tab",
+            "motion_negative",
+            "video-wan-preset",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_timeline_js_genera_video_con_wan(self):
+        text = self.get_static_js()
+        self.assertIn('engine: "wan"', text)
+        self.assertNotIn('engine: "h3"', text)
+        self.assertIn('postJson("/api/video/generate"', text)
+        self.assertIn("payload.preset = inherited.preset", text)
 
     def test_m16_video_redesign_controls_and_templates_present(self):
         html = self.make_client().get("/").text
@@ -5841,7 +5873,7 @@ class StartupDefaultsUiStaticTests(ServerTestCase):
             "seed: 42",
             'preprompt: "anima_default"',
             'rating: "nsfw"',
-            'video_engine: "h3"',
+            'video_engine: "wan"',
             "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, ",
             "blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name",
             STARTUP_NEGATIVE_ANTI_MINORS,

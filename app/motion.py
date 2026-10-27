@@ -61,25 +61,44 @@ def clean_motion(text) -> str:
 
 
 def write_motion(
-    text, rating: str = "nsfw", llm: LlmFn | None = None
+    text,
+    rating: str = "nsfw",
+    llm: LlmFn | None = None,
+    focus: str | None = None,
+    strength: str | None = None,
 ) -> dict[str, str]:
     """Escribe el motion positivo con el LLM y devuelve positivo + negativo fijo.
 
     `llm(system, user) -> str` es obligatorio (EngineError si falta); el rating
-    debe ser `sfw` o `nsfw`; el texto debe ser no vacío. El resultado es
-    determinista salvo por el LLM: negativo = `MOTION_NEGATIVE`.
+    debe ser `sfw` o `nsfw`; el texto debe ser no vacío. `focus` y `strength`
+    son opcionales y se añaden como contexto; el resultado es determinista
+    salvo por el LLM: negativo = `MOTION_NEGATIVE`.
     """
     if not isinstance(text, str) or not text.strip():
         raise EngineError("motion: movimiento vacio")
     if rating not in ("nsfw", "sfw"):
         raise EngineError(f"motion: rating invalido {rating!r}; usar nsfw|sfw")
+    focus_value = None
+    if focus is not None:
+        if focus not in ("movimiento", "camara", "accion", "expresion"):
+            raise EngineError(f"motion: focus invalido {focus!r}")
+        focus_value = focus
+    strength_value = None
+    if strength is not None:
+        if strength not in ("fiel", "balanceado", "creativo"):
+            raise EngineError(f"motion: strength invalido {strength!r}")
+        strength_value = strength
     if llm is None:
         raise EngineError("LLM no inyectado")
     user = (
         "movimiento: " + text.strip()
         + "\nrating: " + rating
-        + "\nEscribe solo el motion prompt en ingles."
     )
+    if focus_value:
+        user += "\nfocus: " + focus_value
+    if strength_value:
+        user += "\nstrength: " + strength_value
+    user += "\nEscribe solo el motion prompt en ingles."
     raw = llm(SYS_PROMPT_MOTION, user)
     if not isinstance(raw, str):
         raise EngineError("motion: el LLM no devolvio texto")

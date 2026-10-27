@@ -110,6 +110,27 @@ class WriteMotionTests(unittest.TestCase):
         self.assertIn("rating: sfw", user)
         self.assertIn("Escribe solo el motion prompt en ingles.", user)
 
+    def test_focus_y_strength_se_envian_al_llm(self):
+        llm = FakeLLM()
+        write_motion(
+            self.MOTION,
+            rating="sfw",
+            llm=llm,
+            focus="camara",
+            strength="creativo",
+        )
+        _system, user = llm.calls[0]
+        self.assertIn("focus: camara", user)
+        self.assertIn("strength: creativo", user)
+
+    def test_focus_invalido_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            write_motion(self.MOTION, llm=FakeLLM(), focus="otro")
+
+    def test_strength_invalido_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            write_motion(self.MOTION, llm=FakeLLM(), strength="extremo")
+
     def test_rating_por_defecto_nsfw(self):
         llm = FakeLLM()
         write_motion(self.MOTION, llm=llm)

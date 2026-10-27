@@ -25,10 +25,42 @@
 #video-h3-variant-field,
 #video-h3-encoder-warning,
 #video-h3-sage-field,
-#video-h3-guide,
-#video-h3-prompt-actions,
 #video-custom-settings-panel {
   display: none !important;
+}
+
+.video-input-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.45rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.video-input-preview img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #0e0f13;
+}
+
+.video-input-preview .field-hint {
+  margin: 0;
+}
+
+#video-wan-advanced .section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+#video-wan-advanced textarea {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .video-preview-box video {

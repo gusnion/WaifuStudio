@@ -25,7 +25,7 @@
     <h1>WAIFU</h1>
     <nav class="tabs">
       <button id="tab-image" class="tab active" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Imagen</button>
-      <button id="tab-video" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="m10 9 5 3-5 3V9Z"/></svg>Video <span class="beta-badge">BETA</span></button>
+      <button id="tab-video" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="m10 9 5 3-5 3V9Z"/></svg>Video</button>
       <button id="tab-editor" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editor</button>
       <button id="tab-upscaler" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/><path d="m9 15 6-6M15 9h-4M15 9v4"/></svg>Upscaler</button>
       <button id="tab-timeline" class="tab" data-tab="timeline" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5"/></svg>Estudio <span class="beta-badge">BETA</span></button>
@@ -262,8 +262,6 @@
                           <option value="vertical">Vertical (9:16)</option>
                           <option value="horizontal">Horizontal (16:9)</option>
                           <option value="square" selected>Cuadrado (1:1)</option>
-                          <option value="h3_vertical">H3 Vertical</option>
-                          <option value="h3_horizontal">H3 Horizontal</option>
                         </select>
                       </label>
                       <label class="field">
@@ -373,6 +371,10 @@
           <label class="field" id="video-image-field">
             <span id="video-image-label">Imagen inicial (first frame)</span>
             <input id="video-image" type="file" accept="image/png,image/jpeg,image/webp">
+            <div id="video-image-preview" class="video-input-preview hidden">
+              <img id="video-image-preview-img" alt="Primer frame seleccionado">
+              <span id="video-image-preview-name" class="field-hint"></span>
+            </div>
             <p id="video-input-hint" class="field-hint">Wan usa una resolucion de salida fija por perfil: Fast 432x768 / 768x432; Quality 512x896 / 896x512. La imagen se recorta centrada al ratio 9:16 o 16:9.</p>
             <p id="video-crop-notice" class="field-hint">ℹ️ La imagen de referencia se recortará centrada para adaptarse al ratio de vídeo.</p>
           </label>
@@ -380,6 +382,10 @@
           <label class="field" id="video-last-image-field" style="display: none">
             <span>Imagen final (last frame)</span>
             <input id="video-last-image" type="file" accept="image/png,image/jpeg,image/webp">
+            <div id="video-last-image-preview" class="video-input-preview hidden">
+              <img id="video-last-image-preview-img" alt="Último frame seleccionado">
+              <span id="video-last-image-preview-name" class="field-hint"></span>
+            </div>
             <p class="field-hint">Acondiciona el último fotograma para transición fluida.</p>
           </label>
 
@@ -404,17 +410,26 @@
           </div>
         </fieldset>
 
-        <!-- BLOQUE 2: Prompt H3, Asistente y Guía Oficial -->
+        <!-- BLOQUE 2: Prompt, Asistente y Guía Wan -->
         <fieldset class="video-block control-card" id="video-block-prompt">
-          <legend>2. Prompt y Movimiento <button type="button" class="btn-help" data-help="Describe el movimiento, la cámara y la acción. En Wan el prompt de movimiento guía la animación.">?</button></legend>
+          <legend>2. Prompt, Asistente y Guía Wan <button type="button" class="btn-help" data-help="Describe movimiento, cámara, acción y entorno. El asistente reescribe el prompt en inglés para Wan 2.2.">?</button></legend>
           <label class="field" id="video-prompt-field">
             <span>Prompt de movimiento</span>
-            <textarea id="video-prompt" rows="4" placeholder="Describe el movimiento: ella gira la cabeza, la cámara se acerca lentamente..."></textarea>
+            <textarea id="video-prompt" rows="5" placeholder="Ej.: ella gira la cabeza, el cabello se mueve, la cámara se acerca lentamente..."></textarea>
           </label>
 
           <div id="video-h3-prompt-actions">
-            <div class="enhance-row control-inline" style="display: flex; gap: 0.5rem; align-items: center;">
+            <div class="enhance-row control-inline" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
               <button id="btn-h3-prompt" type="button">Mejorar prompt con IA</button>
+              <label class="inline-field control-inline" style="display: flex; align-items: center; gap: 0.3rem;">
+                <span style="font-size: 0.78rem;">Enfoque</span>
+                <select id="video-prompt-focus">
+                  <option value="movimiento" selected>Movimiento</option>
+                  <option value="camara">Cámara</option>
+                  <option value="accion">Acción</option>
+                  <option value="expresion">Expresión</option>
+                </select>
+              </label>
               <label class="inline-field control-inline" style="display: flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 0.78rem;">Fuerza</span>
                 <select id="video-h3-prompt-strength">
@@ -428,32 +443,29 @@
           </div>
 
           <details id="video-h3-guide" class="advanced panel-section">
-            <summary>Guía de prompt H3 (MiniMax Anime Standard)</summary>
+            <summary>Guía de prompt Wan 2.2</summary>
             <div class="section-body">
-              <p class="field-hint">H3 espera tres bloques en inglés técnico, en una sola toma continua por generación (sin cortes, también aplica a FL2VA):</p>
-              <pre class="h3-guide-code">integrated_multimodal_description: &lt;sujeto, vestuario, entorno, iluminación, cámara y movimiento continuo&gt;
-overall_soundscape: &lt;diseño sonoro foley, ambiente y diálogo si aplica&gt;
-non_diegetic_music: &lt;música instrumental o None&gt;</pre>
-              
+              <p class="field-hint">Fórmula recomendada: <strong>sujeto + acción + cámara + entorno + movimiento secundario</strong>. Wan funciona mejor con 1-3 frases naturales en inglés, sin tags Danbooru.</p>
+              <pre class="h3-guide-code">close-up shot, a girl slowly turns her head toward the camera, hair sways gently, soft window light, slow push-in</pre>
+
               <div class="h3-guide-accordion-sub" style="font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem;">
-                <strong style="color: var(--text);">Parámetros Cinematográficos Oficiales:</strong>
+                <strong style="color: var(--text);">Vocabulario útil:</strong>
                 <ul class="h3-guide-tips" style="margin-top: 0.25rem;">
-                  <li><strong>Cámara y Tomas:</strong> <code>close-up shot</code> (primer plano), <code>medium shot</code> (plano medio), <code>full body shot</code> (entero), <code>low angle shot</code> (contrapicado), <code>slow pan right/left</code> (paneo), <code>slow dolly in</code> (acercamiento suave), <code>subtle handheld camera movement</code>. Mantener una sola toma continua: sin cortes.</li>
-                  <li><strong>Iluminación:</strong> <code>volumetric lighting / god rays</code> (rayos solares), <code>golden hour warm sunlight</code> (atardecer dorado), <code>cinematic rim lighting</code> (luz de contorno), <code>neon reflections on wet asphalt</code>, <code>soft diffused indoor lighting</code>.</li>
-                  <li><strong>Foley & Sonido:</strong> <code>gentle breeze rustling leaves</code>, <code>subtle footsteps on wooden floor</code>, <code>distant ocean waves crashing</code>, <code>soft rain tapping on window glass</code>.</li>
-                  <li><strong>Diálogo:</strong> Con idioma explícito <code>&lt;d&gt;[Español] texto&lt;/d&gt;</code> y un speaker id estable antes de las voces (ej. <code>speaker_1</code>); no llenar más de ~2/3 de su plano.</li>
-                  <li><strong>Música:</strong> <code>None</code> o estilo instrumental (ej. <code>gentle acoustic guitar and piano theme</code>, <code>melancholic anime violin melody</code>).</li>
-                  <li><strong>Referencias (Ref2VA):</strong> Citar elementos con <code>&lt;Picture 1&gt;</code>, <code>&lt;Picture 2&gt;</code> para anclar identidad.</li>
+                  <li><strong>Plano:</strong> <code>close-up shot</code>, <code>medium shot</code>, <code>full body shot</code>.</li>
+                  <li><strong>Cámara:</strong> <code>static camera</code>, <code>slow push-in</code>, <code>slow pull-out</code>, <code>slow pan left/right</code>, <code>subtle handheld movement</code>, <code>slow orbit</code>.</li>
+                  <li><strong>Acción:</strong> <code>turns head</code>, <code>smiles softly</code>, <code>walks toward camera</code>, <code>hair moves in the wind</code>, <code>blinks</code>.</li>
+                  <li><strong>Entorno:</strong> <code>soft window light</code>, <code>golden hour sunlight</code>, <code>neon reflections</code>, <code>rainy street</code>.</li>
+                  <li><strong>Una sola toma:</strong> evita describir cortes o cambios de escena; Wan anima un clip continuo.</li>
                 </ul>
               </div>
 
               <div class="h3-guide-templates-section" style="margin-top: 0.5rem;">
-                <span style="font-size: 0.78rem; font-weight: bold; color: var(--text);">Plantillas Rápidas a 1 Clic:</span>
+                <span style="font-size: 0.78rem; font-weight: bold; color: var(--text);">Plantillas rápidas:</span>
                 <div class="h3-guide-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin-top: 0.3rem;">
-                  <button id="btn-h3-template-portrait" type="button" title="Retrato con luz dorada y brisa suave">Retrato Anime</button>
-                  <button id="btn-h3-template-walk" type="button" title="Toma continua caminando junto al mar">Caminata Costa</button>
-                  <button id="btn-h3-template-action" type="button" title="Toma dinámica con movimiento de cámara">Escena Dinámica</button>
-                  <button id="btn-h3-insert-template" type="button" title="Plantilla base en blanco">Insertar plantilla</button>
+                  <button id="btn-h3-template-portrait" type="button" title="Retrato con giro de cabeza y brisa">Retrato</button>
+                  <button id="btn-h3-template-walk" type="button" title="Caminata suave hacia cámara">Caminata</button>
+                  <button id="btn-h3-template-action" type="button" title="Acción dinámica con cámara en órbita">Acción</button>
+                  <button id="btn-h3-insert-template" type="button" title="Plantilla base editable">Plantilla base</button>
                 </div>
               </div>
               <div class="h3-guide-actions" style="margin-top: 0.4rem;">
@@ -473,6 +485,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
               <select id="video-wan-preset">
                 <option value="rapido" selected>Fast · 4 pasos</option>
                 <option value="calidad">Quality · 30 pasos</option>
+                <option value="manual">Manual</option>
               </select>
               <p id="video-wan-size-info" class="field-hint">Salida Wan: 432x768 (vertical) o 768x432 (horizontal).</p>
             </label>
@@ -594,6 +607,46 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
             </div>
           </div>
 
+          <details id="video-wan-advanced" class="advanced panel-section">
+            <summary>Ajustes avanzados Wan</summary>
+            <div class="section-body">
+              <label class="field">
+                <span>Prompt negativo</span>
+                <textarea id="video-negative" rows="2" placeholder="Vacío = negativo recomendado de Wan (calidad, sin movimiento, anatomía, anti-censura)"></textarea>
+              </label>
+              <p class="field-hint">El negativo solo se aplica cuando escribes uno; si queda vacío se usa el negativo certificado.</p>
+              <div class="grid-2">
+                <label class="field">
+                  <span>Sampler</span>
+                  <select id="video-wan-sampler">
+                    <option value="euler" selected>euler</option>
+                    <option value="res_multistep">res_multistep</option>
+                    <option value="dpmpp_2m">dpmpp_2m</option>
+                    <option value="uni_pc">uni_pc</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Scheduler</span>
+                  <select id="video-wan-scheduler">
+                    <option value="simple" selected>simple</option>
+                    <option value="karras">karras</option>
+                    <option value="sgm_uniform">sgm_uniform</option>
+                    <option value="normal">normal</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Pasos manuales</span>
+                  <input id="video-wan-steps" type="number" min="1" max="200" value="20">
+                </label>
+                <label class="field">
+                  <span>Shift</span>
+                  <input id="video-wan-shift" type="number" min="0.1" max="30" step="0.1" value="8.0">
+                </label>
+              </div>
+              <p class="field-hint">Sampler, scheduler, pasos y shift solo se envían con perfil <strong>Manual</strong>; con Fast/Quality mandan los valores del preset.</p>
+            </div>
+          </details>
+
           <div class="grid-2" style="margin-top: 0.5rem;">
             <label class="field">
               <span>Seed</span>
@@ -616,6 +669,7 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
         <div class="viewer-toolbar">
           <button id="btn-new-video" type="button">Generar nuevo</button>
           <button id="btn-toggle-video-thumbs" type="button" title="Ocultar/mostrar miniaturas" aria-pressed="true">Miniaturas</button>
+          <button id="btn-video-to-timeline" type="button">Enviar a Timeline</button>
           <span id="video-preview-info" class="viewer-info">Sin videos</span>
           <div class="viewer-pager">
             <button id="video-prev-page" type="button" aria-label="Página anterior">‹</button>
@@ -1030,8 +1084,8 @@ non_diegetic_music: &lt;música instrumental o None&gt;</pre>
           <label class="field">
             <span>Acción IA</span>
             <select id="timeline-ai-action">
-              <option value="continue_i2v">Continuar último clip (I2V desde último frame)</option>
-              <option value="bridge_flf2v">Puente entre 2 clips (FLF2V inicio-&gt;fin)</option>
+              <option value="continue_i2v">Continuar último clip (I2V Wan desde último frame)</option>
+              <option value="bridge_flf2v">Puente entre 2 clips (FLF2V Wan inicio-&gt;fin)</option>
               <option value="insert_image">Generar e insertar Imagen (Anima/SDXL)</option>
             </select>
           </label>

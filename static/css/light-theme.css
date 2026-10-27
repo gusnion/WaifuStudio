@@ -305,6 +305,15 @@ html[data-theme="light"] .btn-help:focus {
   background: rgba(181, 29, 74, 0.08);
 }
 
+html[data-theme="light"] .video-input-preview {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .video-input-preview img {
+  background: #eef1f7;
+}
+
 html[data-theme="light"] .tooltip-popover {
   background: #f7f8fb;
   border-color: var(--border);

@@ -130,7 +130,7 @@ const STARTUP_DEFAULTS = {
   negative:
     "worst quality, low quality, jpeg artifacts, child, teen, loli, young-looking, " +
     "blurry, mosaic censoring, bar censor, score_1, score_2, score_3, artist name",
-  video_engine: "h3",
+  video_engine: "wan",
 };
 
 const SEED_RANDOM_KEY = "waifu.seed.random";

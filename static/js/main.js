@@ -201,6 +201,10 @@ function bind() {
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
   window.addEventListener("waifu:oc-open", () => switchTab("oc"));
   window.addEventListener("waifu:oc-close", () => switchTab("image"));
+  window.addEventListener("waifu:switch-tab", (event) => {
+    const target = event.detail && event.detail.tab;
+    if (target) switchTab(target);
+  });
   initImageViewer(); initImageTab(); initVideoTab(); initVideoH3();
   initModelDefaults();
   initEditorTab(); initUpscalerTab(); initTimelineTab(); initGalleryTab(); initGuideTab();

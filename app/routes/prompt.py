@@ -282,6 +282,8 @@ async def api_motion(request: Request, payload: dict = Body(...)) -> Any:
         payload.get("text"),
         rating=str(payload.get("rating") or "nsfw"),
         llm=llm,
+        focus=payload.get("focus"),
+        strength=payload.get("strength"),
     )
 
 

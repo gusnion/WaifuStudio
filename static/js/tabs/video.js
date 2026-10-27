@@ -1,5 +1,5 @@
 // WaifuStudio — Pestaña de Generación de Vídeo
-// Qué hace: modos I2V, FLF2V, Ref2VA y V2V con VideoDeltaNet, perfiles y ejecución.
+// Qué hace: I2V/FLF2V con Wan 2.2, prompts, perfiles, ajustes avanzados y visor.
 // Qué no hace: no realiza inpainting estático ni entrena checkpoints de vídeo.
 // Dependencias: static/js/state.js, static/js/dom.js, static/js/api.js y tabs/video_h3.js.
 
@@ -38,6 +38,41 @@ import {
 } from "./video_h3.js";
 
 let v2vPreviewObjectUrl = null;
+const videoPreviewObjectUrls = new Map();
+
+function clearVideoInputPreview(wrapId) {
+  const wrap = $(wrapId);
+  if (!wrap) return;
+  wrap.classList.add("hidden");
+  const img = wrap.querySelector("img");
+  if (img) img.removeAttribute("src");
+  const name = wrap.querySelector("span");
+  if (name) name.textContent = "";
+  const previous = videoPreviewObjectUrls.get(wrapId);
+  if (previous) {
+    URL.revokeObjectURL(previous);
+    videoPreviewObjectUrls.delete(wrapId);
+  }
+}
+
+function updateVideoInputPreview(inputId, wrapId, imgId, nameId) {
+  const input = $(inputId);
+  const wrap = $(wrapId);
+  const file = input && input.files && input.files[0];
+  if (!file || !wrap) {
+    clearVideoInputPreview(wrapId);
+    return;
+  }
+  const previous = videoPreviewObjectUrls.get(wrapId);
+  if (previous) URL.revokeObjectURL(previous);
+  const url = URL.createObjectURL(file);
+  videoPreviewObjectUrls.set(wrapId, url);
+  const img = $(imgId);
+  if (img) img.src = url;
+  const name = $(nameId);
+  if (name) name.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+  wrap.classList.remove("hidden");
+}
 
 function selectedVideoView() {
   return (
@@ -87,6 +122,8 @@ function updateVideoPreview() {
   info.textContent = item
     ? `#${item.id} · ${videoEngineLabel(item)} · ${formatGalleryDate(item.created_at)}`
     : "Sin videos";
+  const toTimeline = $("btn-video-to-timeline");
+  if (toTimeline) toTimeline.disabled = !url;
 }
 
 function renderVideoThumbs() {
@@ -224,6 +261,8 @@ async function attachVideoFrameFromUrl(inputId, name) {
   const input = $(inputId);
   if (!clean) {
     input.value = "";
+    if (inputId === "video-image") clearVideoInputPreview("video-image-preview");
+    if (inputId === "video-last-image") clearVideoInputPreview("video-last-image-preview");
     return;
   }
   try {
@@ -232,6 +271,11 @@ async function attachVideoFrameFromUrl(inputId, name) {
       `/api/refs/${encodeURIComponent(clean)}`,
       clean
     );
+    if (inputId === "video-image") {
+      updateVideoInputPreview("video-image", "video-image-preview", "video-image-preview-img", "video-image-preview-name");
+    } else if (inputId === "video-last-image") {
+      updateVideoInputPreview("video-last-image", "video-last-image-preview", "video-last-image-preview-img", "video-last-image-preview-name");
+    }
   } catch (error) {
     input.value = "";
     throw new Error(`frame guardado no disponible (${error.message})`);
@@ -240,10 +284,8 @@ async function attachVideoFrameFromUrl(inputId, name) {
 
 function videoReuseParams(params = {}) {
   const p = params || {};
-  let mode = "i2v";
-  if (p.mode === "ref2va") mode = "ref2va";
-  else if (p.mode === "v2v") mode = "v2v";
-  else if (p.mode === "flf2v") mode = "flf2v";
+  // Wan solo expone I2V y FLF2V; las generaciones H3 antiguas se recuperan como I2V.
+  const mode = p.mode === "flf2v" ? "flf2v" : "i2v";
 
   const profile =
     mode === "ref2va" || mode === "v2v"
@@ -294,9 +336,30 @@ function videoReuseParams(params = {}) {
     ? [p.ref_images]
     : [];
   const ref_video = typeof p.ref_video === "string" ? p.ref_video.trim() : "";
+  const preset = ["rapido", "calidad", "manual"].includes(p.preset)
+    ? p.preset
+    : "rapido";
+  const isWan = p.engine === "wan" || Boolean(p.preset);
+  const wanSampler = p.sampler_name != null
+    ? String(p.sampler_name)
+    : isWan
+    ? "euler"
+    : "res_multistep";
+  const wanSteps = Number.isFinite(Number(p.steps)) ? Number(p.steps) : 20;
+  const wanShift = Number.isFinite(Number(p.shift)) ? Number(p.shift) : 8.0;
+  const motionNegative = typeof p.motion_negative === "string" ? p.motion_negative : "";
+  const inheritedAspect =
+    p.aspect === "vertical" || p.aspect === "horizontal"
+      ? p.aspect
+      : width && height
+      ? height > width
+        ? "vertical"
+        : "horizontal"
+      : "vertical";
 
   return {
     mode,
+    aspect: inheritedAspect,
     profile,
     variant,
     sage,
@@ -308,12 +371,16 @@ function videoReuseParams(params = {}) {
     encoder,
     lora_strength,
     denoise,
-    sampler_name,
+    sampler_name: wanSampler,
     scheduler,
     tile_size,
     include_audio,
     ref_images,
     ref_video,
+    preset,
+    steps: wanSteps,
+    shift: wanShift,
+    motion_negative: motionNegative,
   };
 }
 
@@ -401,6 +468,18 @@ async function reuseVideoGeneration(item) {
 
   $("video-engine").value = "wan";
   $("video-mode").value = reused.mode;
+  if ($("video-wan-preset")) setSelectValue($("video-wan-preset"), reused.preset);
+  if ($("video-h3-aspect")) {
+    setSelectValue(
+      $("video-h3-aspect"),
+      reused.aspect || (reused.height > reused.width ? "vertical" : "horizontal")
+    );
+  }
+  if ($("video-negative")) $("video-negative").value = reused.motion_negative || "";
+  if ($("video-wan-sampler")) setSelectValue($("video-wan-sampler"), reused.sampler_name);
+  if ($("video-wan-scheduler")) setSelectValue($("video-wan-scheduler"), reused.scheduler);
+  if ($("video-wan-steps")) $("video-wan-steps").value = String(reused.steps);
+  if ($("video-wan-shift")) $("video-wan-shift").value = String(reused.shift);
 
   setSelectValue($("video-h3-profile"), reused.profile);
   updateH3Variants();
@@ -470,6 +549,14 @@ async function reuseVideoGeneration(item) {
 function startNewVideo() {
   if ($("video-engine")) $("video-engine").value = "wan";
   if ($("video-mode")) $("video-mode").value = "i2v";
+  if ($("video-wan-preset")) setSelectValue($("video-wan-preset"), "rapido");
+  if ($("video-negative")) $("video-negative").value = "";
+  if ($("video-wan-sampler")) setSelectValue($("video-wan-sampler"), "euler");
+  if ($("video-wan-scheduler")) setSelectValue($("video-wan-scheduler"), "simple");
+  if ($("video-wan-steps")) $("video-wan-steps").value = "20";
+  if ($("video-wan-shift")) $("video-wan-shift").value = "8.0";
+  clearVideoInputPreview("video-image-preview");
+  clearVideoInputPreview("video-last-image-preview");
   $("video-seed").value = $("video-seed").defaultValue || "42";
   $("video-prompt").value = "";
   $("video-image").value = "";
@@ -645,17 +732,34 @@ async function generateWanVideo() {
     setVideoStatus("Wan requiere un prompt de movimiento", true);
     return;
   }
+  applyRandomSeed("video-seed");
+  const preset = $("video-wan-preset")?.value || "rapido";
   const payload = {
     engine: "wan",
     mode,
     image_b64: await readFileBase64(first),
     motion_positive: prompt,
-    motion_negative: "",
     aspect: $("video-h3-aspect")?.value || "vertical",
-    preset: $("video-wan-preset")?.value || "rapido",
+    preset,
     seconds: Number($("video-h3-seconds")?.value || 5),
     seed: readVideoSeed(),
   };
+  const negative = $("video-negative")?.value.trim() || "";
+  if (negative) payload.motion_negative = negative;
+  if (preset === "manual") {
+    payload.sampler_name = $("video-wan-sampler")?.value || "euler";
+    payload.scheduler = $("video-wan-scheduler")?.value || "simple";
+    payload.steps = Number($("video-wan-steps")?.value || 20);
+    payload.shift = Number($("video-wan-shift")?.value || 8.0);
+    if (!Number.isFinite(payload.steps) || payload.steps < 1 || payload.steps > 200) {
+      setVideoStatus("Pasos manuales fuera de rango (1-200)", true);
+      return;
+    }
+    if (!Number.isFinite(payload.shift) || payload.shift <= 0) {
+      setVideoStatus("Shift manual inválido", true);
+      return;
+    }
+  }
   if (mode === "flf2v") {
     const last = $("video-last-image")?.files?.[0];
     if (!last) {
@@ -813,7 +917,18 @@ async function generateVideo() {
 const WAN_OUTPUT_SIZES = {
   rapido: { vertical: [432, 768], horizontal: [768, 432] },
   calidad: { vertical: [512, 896], horizontal: [896, 512] },
+  manual: { vertical: [432, 768], horizontal: [768, 432] },
 };
+
+function updateWanAdvancedState() {
+  const manual = ($("video-wan-preset")?.value || "rapido") === "manual";
+  for (const id of ["video-wan-sampler", "video-wan-scheduler", "video-wan-steps", "video-wan-shift"]) {
+    const el = $(id);
+    if (el) el.disabled = !manual;
+  }
+  const details = $("video-wan-advanced");
+  if (details && manual) details.open = true;
+}
 
 function updateWanSizeInfo() {
   const el = $("video-wan-size-info");
@@ -822,6 +937,7 @@ function updateWanSizeInfo() {
   const aspect = $("video-h3-aspect")?.value || "vertical";
   const size = WAN_OUTPUT_SIZES[preset]?.[aspect] || WAN_OUTPUT_SIZES.rapido.vertical;
   el.textContent = `Salida Wan: ${size[0]}×${size[1]} (${aspect === "vertical" ? "vertical 9:16" : "horizontal 16:9"})`;
+  updateWanAdvancedState();
 }
 
 function applyVideoEngine() {
@@ -866,9 +982,8 @@ function applyVideoEngine() {
     v2vBox.style.display = showV2V ? "" : "none";
   }
 
-  if ($("video-h3-guide")) $("video-h3-guide").style.display = isWan ? "none" : "";
   const h3Only = [
-    "video-h3-prompt-actions",
+    "video-h3-profile-field",
     "video-h3-profile-field",
     "video-h3-size-field",
     "video-h3-res-badge-wrap",
@@ -897,6 +1012,17 @@ function applyVideoEngine() {
 }
 
 
+function sendSelectedVideoToTimeline() {
+  const item = selectedVideoView();
+  if (!item || !videoViewUrl(item)) {
+    setVideoStatus("Selecciona un vídeo generado para enviarlo a Timeline", true);
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("waifu:timeline-add", { detail: { item } }));
+  window.dispatchEvent(new CustomEvent("waifu:switch-tab", { detail: { tab: "timeline" } }));
+  setVideoStatus(`Vídeo #${item.id} enviado a Timeline`);
+}
+
 function initVideoTab() {
   on("video-prev-page", "click", () => {
     state.videoViewer.page -= 1;
@@ -916,6 +1042,7 @@ function initVideoTab() {
   });
   on("btn-video-generate", "click", generateVideo);
   on("btn-video-cancel", "click", cancelJob);
+  on("btn-video-to-timeline", "click", sendSelectedVideoToTimeline);
   window.addEventListener("waifu:queue-updated", () => {
     const btn = $("btn-video-generate");
     if (btn) {
@@ -958,6 +1085,12 @@ function initVideoTab() {
       const originalPath = file.path || file.webkitRelativePath || file.name;
       state.localFilesOriginalPaths.set(file.name, originalPath);
     }
+    updateVideoInputPreview(
+      "video-image",
+      "video-image-preview",
+      "video-image-preview-img",
+      "video-image-preview-name"
+    );
   });
   on("video-last-image", "change", (event) => {
     const file = event.target.files && event.target.files[0];
@@ -965,6 +1098,12 @@ function initVideoTab() {
       const originalPath = file.path || file.webkitRelativePath || file.name;
       state.localFilesOriginalPaths.set(file.name, originalPath);
     }
+    updateVideoInputPreview(
+      "video-last-image",
+      "video-last-image-preview",
+      "video-last-image-preview-img",
+      "video-last-image-preview-name"
+    );
   });
   on("btn-video-clear-refs", "click", clearVideoRefs);
 }
