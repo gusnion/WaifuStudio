@@ -68,8 +68,13 @@
   flex: 1 1 130px;
   flex-direction: column !important;
   align-items: flex-start !important;
+  justify-content: flex-start;
   gap: 0.2rem;
   min-width: 120px;
+}
+
+#video-h3-prompt-actions .enhance-row {
+  align-items: stretch !important;
 }
 
 .video-enhance-field > span {
@@ -79,10 +84,15 @@
 
 .video-enhance-field select {
   width: 100%;
+  min-height: 2.2rem;
 }
 
 .video-prompt-ai {
   min-width: 76px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   white-space: normal;
   line-height: 1.05;
   text-align: center;
