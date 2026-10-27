@@ -300,3 +300,24 @@ main {
 *::-webkit-scrollbar {
   display: none;
 }
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tab-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tab .beta-badge {
+  margin-left: 0.05rem;
+}

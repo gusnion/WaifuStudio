@@ -30,5 +30,5 @@
 
 ### Verificación
 
-- Suite offline: 1.641 tests OK, 1 skipped.
+- Suite offline: 1.643 tests OK, 1 skipped.
 - Tests JS de Timeline, cola, audio, upscaler, reúso de vídeo y multivista.

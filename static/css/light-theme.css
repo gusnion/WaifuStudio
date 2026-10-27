@@ -1,0 +1,138 @@
+/* Correcciones del tema claro para componentes con color oscuro historico. */
+
+html[data-theme="light"] .image-category-card {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .image-category-header {
+  background: var(--panel-2) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .image-category-card[open] > .image-category-header,
+html[data-theme="light"] .image-category-header:hover {
+  background: #e8ebf3 !important;
+  color: var(--accent) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+html[data-theme="light"] .image-preview {
+  background: #eef1f7;
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .image-preview .empty {
+  color: var(--muted);
+}
+
+html[data-theme="light"] #btn-seed-random,
+html[data-theme="light"] #btn-video-seed-random,
+html[data-theme="light"] #btn-editor-seed-random {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] #btn-seed-random.active,
+html[data-theme="light"] #btn-seed-random[aria-pressed="true"],
+html[data-theme="light"] #btn-video-seed-random.active,
+html[data-theme="light"] #btn-video-seed-random[aria-pressed="true"],
+html[data-theme="light"] #btn-editor-seed-random.active,
+html[data-theme="light"] #btn-editor-seed-random[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+html[data-theme="light"] .gallery-badge {
+  background: rgba(255, 255, 255, 0.92);
+  color: #1d2230;
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .guide-hero {
+  background: linear-gradient(135deg, rgba(181, 29, 74, 0.12) 0%, #ffffff 100%);
+  border-color: rgba(181, 29, 74, 0.28);
+  box-shadow: 0 8px 24px rgba(30, 35, 50, 0.08);
+}
+
+html[data-theme="light"] .guide-hero h2,
+html[data-theme="light"] .guide-hero strong,
+html[data-theme="light"] .guide-section h3,
+html[data-theme="light"] .guide-section strong {
+  color: var(--text);
+}
+
+html[data-theme="light"] .guide-hero p,
+html[data-theme="light"] .guide-section p,
+html[data-theme="light"] .guide-section li,
+html[data-theme="light"] .guide-acc-body {
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .guide-step-card,
+html[data-theme="light"] .guide-section,
+html[data-theme="light"] .guide-accordion,
+html[data-theme="light"] .guide-acc-header {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+html[data-theme="light"] .guide-step-card:hover,
+html[data-theme="light"] .guide-acc-header:hover {
+  background: var(--panel-2);
+}
+
+html[data-theme="light"] .guide-step-card h3 {
+  color: var(--accent);
+}
+
+html[data-theme="light"] .guide-step-card p {
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .guide-step-card button,
+html[data-theme="light"] .guide-nav-btn {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .guide-nav-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+html[data-theme="light"] .guide-table th,
+html[data-theme="light"] .guide-table td {
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .guide-table th {
+  background: var(--panel-2);
+  color: var(--accent);
+}
+
+html[data-theme="light"] .guide-acc-header {
+  background: var(--panel-2);
+}
+
+html[data-theme="light"] .guide-acc-body {
+  background: var(--paper, #f6f7fb);
+}
+
+html[data-theme="light"] .gallery-card,
+html[data-theme="light"] .timeline-clip-card,
+html[data-theme="light"] .timeline-audio-card {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .timeline-track,
+html[data-theme="light"] .timeline-preview,
+html[data-theme="light"] #timeline-preview-video {
+  background: #eef1f7;
+}
