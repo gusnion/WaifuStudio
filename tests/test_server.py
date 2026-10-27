@@ -6689,6 +6689,67 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertNotIn('fetch("/api/social', js_content)
         self.assertNotIn("telemetry", js_content.lower())
 
+    def test_c13_theme_toggle_and_8_tabs_responsive_overflow(self):
+        """C-13: Tema claro/oscuro (icono/aria/persistencia) y overflow de 8 tabs a 1100px."""
+        html = self.make_client().get("/").text
+
+        # 1. Botón #btn-theme-toggle en index.html con icono, aria y persistencia
+        btn_match = re.search(r'<button\s+id="btn-theme-toggle"\s*([^>]*)>(.*?)</button>', html, re.DOTALL)
+        self.assertIsNotNone(btn_match, "No se encontró el botón #btn-theme-toggle")
+        btn_attrs, btn_content = btn_match.group(1), btn_match.group(2)
+
+        self.assertIn('aria-label=', btn_attrs, "#btn-theme-toggle debe tener atributo aria-label")
+        self.assertIn('aria-pressed=', btn_attrs, "#btn-theme-toggle debe tener atributo aria-pressed")
+        self.assertIn('title=', btn_attrs, "#btn-theme-toggle debe tener atributo title")
+        self.assertIn('id="theme-toggle-icon"', btn_content, "Debe contener el elemento #theme-toggle-icon")
+
+        # Persistencia en <head> para evitar FOUC
+        self.assertIn("waifu.theme", html, "index.html debe contener script para restaurar waifu.theme en head")
+
+        # 2. Las 8 tabs exactas en <nav class="tabs">
+        expected_8_tabs = [
+            "tab-image",
+            "tab-editor",
+            "tab-video",
+            "tab-audio",
+            "tab-timeline",
+            "tab-upscaler",
+            "tab-gallery",
+            "tab-oc",
+        ]
+        tabs_nav_match = re.search(r'<nav class="tabs">(.*?)</nav>', html, re.DOTALL)
+        self.assertIsNotNone(tabs_nav_match, "No se encontró <nav class='tabs'>")
+        found_tabs = re.findall(r'id=["\'](tab-[a-z0-9_-]+)["\']', tabs_nav_match.group(1))
+        self.assertEqual(len(found_tabs), 8, f"Deben ser exactamente 8 tabs, obtenido: {len(found_tabs)}")
+        self.assertEqual(found_tabs, expected_8_tabs)
+
+        # 3. Lógica de header.js (icono/aria/persistencia)
+        header_js_path = Path(__file__).resolve().parents[1] / "static" / "js" / "components" / "header.js"
+        header_js = header_js_path.read_text(encoding="utf-8")
+        self.assertIn("THEME_KEY", header_js, "header.js debe gestionar THEME_KEY")
+        self.assertIn("waifu.theme", header_js, "header.js debe persistir waifu.theme")
+        self.assertIn("initThemeToggle", header_js, "header.js debe incluir initThemeToggle")
+        self.assertIn("syncThemeUI", header_js, "header.js debe sincronizar UI/aria del tema")
+        self.assertIn("aria-pressed", header_js, "header.js debe actualizar aria-pressed")
+        self.assertIn("theme-toggle-icon", header_js, "header.js debe actualizar icono de tema")
+
+        # 4. Reglas CSS responsive a 1100px en components.css
+        css_path = Path(__file__).resolve().parents[1] / "static" / "css" / "components.css"
+        css_content = css_path.read_text(encoding="utf-8")
+        self.assertIn("@media (max-width: 1100px)", css_content, "Debe existir media query a 1100px")
+        self.assertIn("overflow-x: auto", css_content, "Debe incluir scroll horizontal en responsive")
+        self.assertIn("scrollbar-width: none", css_content, "Scrollbar debe estar oculto en Firefox")
+        self.assertIn("-ms-overflow-style: none", css_content, "Scrollbar debe estar oculto en IE/Edge")
+        self.assertIn("::-webkit-scrollbar", css_content, "Scrollbar debe estar oculto en WebKit")
+        self.assertIn("display: none", css_content)
+        self.assertIn("flex-shrink: 0", css_content, "Las pestañas deben tener flex-shrink: 0 para no encogerse")
+
+        # 5. Sin reducción de tipografía dentro de las reglas de 1100px para tabs
+        media_1100_block = re.search(r'@media\s*\(max-width:\s*1100px\)\s*\{(.*?)\n\}', css_content, re.DOTALL)
+        self.assertIsNotNone(media_1100_block, "No se encontró el bloque @media (max-width: 1100px)")
+        media_css = media_1100_block.group(1)
+        self.assertNotIn("font-size:", media_css, "No se debe reducir tipografía (font-size) en el bloque responsive de tabs")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,16 @@
   <link rel="stylesheet" href="/static/css/tabs/gallery.css">
   <link rel="stylesheet" href="/static/css/design-v2.css">
   <link rel="stylesheet" href="/static/css/light-theme.css">
+  <script>
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('waifu.theme') || localStorage.getItem('waifu_theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -34,8 +44,8 @@
       <button id="tab-oc" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>OC Maker</button>
     </nav>
     <div class="topbar-actions">
-      <button id="btn-theme-toggle" class="topbar-btn" type="button" title="Cambiar tema" aria-label="Cambiar tema">
-        <span id="theme-toggle-icon" aria-hidden="true">◐</span>
+      <button id="btn-theme-toggle" class="topbar-btn" type="button" title="Cambiar tema" aria-label="Cambiar a tema claro" aria-pressed="false">
+        <span id="theme-toggle-icon" class="theme-toggle-icon" aria-hidden="true">◐</span>
       </button>
       <button id="btn-universal-reload" class="topbar-btn" type="button" title="Recargar pestaña actual" aria-label="Recargar pestaña actual">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
