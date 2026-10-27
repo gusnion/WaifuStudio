@@ -22,6 +22,11 @@ html[data-theme="light"] .image-preview {
   border-color: var(--border);
 }
 
+html[data-theme="light"] #panel-upscaler #upscale-preview {
+  background: #eef1f7 !important;
+  border-color: var(--border) !important;
+}
+
 html[data-theme="light"] .image-preview .empty {
   color: var(--muted);
 }

@@ -21,6 +21,7 @@ class LightThemeAssetsTests(unittest.TestCase):
             ".guide-hero",
             ".guide-step-card",
             ".guide-section",
+            "#panel-upscaler #upscale-preview",
         ):
             self.assertIn(selector, css)
 
