@@ -339,6 +339,7 @@ function videoReuseParams(params = {}) {
   const preset = ["rapido", "estandar", "calidad", "manual"].includes(p.preset)
     ? p.preset
     : "rapido";
+  const wan_model = p.wan_model === "nsfw_aio" ? "nsfw_aio" : "dual";
   const isWan = p.engine === "wan" || Boolean(p.preset);
   const wanSampler = p.sampler_name != null
     ? String(p.sampler_name)
@@ -378,6 +379,7 @@ function videoReuseParams(params = {}) {
     ref_images,
     ref_video,
     preset,
+    wan_model,
     steps: wanSteps,
     shift: wanShift,
     motion_negative: motionNegative,
@@ -469,6 +471,7 @@ async function reuseVideoGeneration(item) {
   $("video-engine").value = "wan";
   $("video-mode").value = reused.mode;
   if ($("video-wan-preset")) setSelectValue($("video-wan-preset"), reused.preset);
+  if ($("video-wan-model")) setSelectValue($("video-wan-model"), reused.wan_model);
   if ($("video-h3-aspect")) {
     setSelectValue(
       $("video-h3-aspect"),
@@ -554,6 +557,7 @@ async function reuseVideoGeneration(item) {
 function startNewVideo() {
   if ($("video-engine")) $("video-engine").value = "wan";
   if ($("video-mode")) $("video-mode").value = "i2v";
+  if ($("video-wan-model")) setSelectValue($("video-wan-model"), "dual");
   if ($("video-wan-preset")) setSelectValue($("video-wan-preset"), "rapido");
   if ($("video-negative")) $("video-negative").value = "";
   if ($("video-wan-sampler")) setSelectValue($("video-wan-sampler"), "euler");
@@ -739,8 +743,10 @@ async function generateWanVideo() {
   }
   applyRandomSeed("video-seed");
   const preset = $("video-wan-preset")?.value || "rapido";
+  const wanModel = $("video-wan-model")?.value || "dual";
   const payload = {
     engine: "wan",
+    wan_model: wanModel,
     mode,
     image_b64: await readFileBase64(first),
     motion_positive: prompt,
@@ -963,6 +969,23 @@ function updateWanResolutionOptions() {
     : WAN_MANUAL_RESOLUTIONS[aspect][0].join("x");
 }
 
+function updateWanModelState() {
+  const model = $("video-wan-model")?.value || "dual";
+  const aio = model === "nsfw_aio";
+  const mode = $("video-mode");
+  if (mode) {
+    const flf = mode.querySelector('option[value="flf2v"]');
+    if (flf) flf.disabled = aio;
+    if (aio && mode.value === "flf2v") mode.value = "i2v";
+  }
+  const hint = $("video-wan-model-hint");
+  if (hint) {
+    hint.textContent = aio
+      ? "AIO v10 usa un solo UNet NSFW; en esta integración solo I2V. Requiere el GGUF descargado."
+      : "El modelo dual usa high/low + LightX2V. AIO usa un solo UNet NSFW y solo I2V.";
+  }
+}
+
 function updateWanAdvancedState() {
   const preset = $("video-wan-preset")?.value || "rapido";
   const manual = preset === "manual";
@@ -1072,6 +1095,7 @@ function applyVideoEngine() {
   updateH3SecondsAvailability();
   updateH3Notes();
   updateWanSizeInfo();
+  updateWanModelState();
 }
 
 
@@ -1114,6 +1138,10 @@ function initVideoTab() {
   });
   on("video-engine", "change", applyVideoEngine);
   on("video-mode", "change", applyVideoEngine);
+  on("video-wan-model", "change", () => {
+    updateWanModelState();
+    updateWanSizeInfo();
+  });
   on("video-wan-preset", "change", updateWanSizeInfo);
   on("video-h3-aspect", "change", updateWanSizeInfo);
   on("video-v2v-input", "change", (event) => {

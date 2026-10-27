@@ -25,6 +25,9 @@ from app.video import (
     WAN_DEFAULT_SHIFT,
     WAN_DEFAULT_STEPS,
     WAN_FLF_TEMPLATE_PATH,
+    WAN_AIO_TEMPLATE_PATH,
+    WAN_AUDIO_NEGATIVE,
+    WAN_AUDIO_POSITIVE,
     WAN_TEMPLATE_PATH,
     build_video_graph,
     frames_for_seconds,
@@ -661,6 +664,39 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         self.assertEqual(graph["9"]["inputs"]["width"], 576)
         self.assertEqual(graph["9"]["inputs"]["height"], 1024)
         self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
+
+    def test_aio_un_solo_sampler_y_audio_tw12(self):
+        graph = build_video_graph(
+            self.job(
+                template=str(WAN_AIO_TEMPLATE_PATH),
+                wan_model="nsfw_aio",
+                preset="rapido",
+                frames=81,
+            )
+        )
+        self.assertNotIn("2", graph)
+        self.assertNotIn("13", graph)
+        self.assertNotIn("20", graph)
+        self.assertNotIn("21", graph)
+        self.assertEqual(
+            graph["1"]["inputs"]["unet_name"],
+            "wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf",
+        )
+        self.assertEqual(graph["12"]["class_type"], "KSamplerAdvanced")
+        self.assertEqual(graph["12"]["inputs"]["steps"], 4)
+        self.assertEqual(graph["32"]["inputs"]["prompt"], WAN_AUDIO_POSITIVE)
+        self.assertEqual(graph["32"]["inputs"]["negative_prompt"], WAN_AUDIO_NEGATIVE)
+
+    def test_aio_rechaza_flf2v(self):
+        with self.assertRaises(EngineError):
+            build_video_graph(
+                self.job(
+                    template=str(WAN_AIO_TEMPLATE_PATH),
+                    wan_model="nsfw_aio",
+                    mode="flf2v",
+                    last_image_name="b.png",
+                )
+            )
 
     def test_h3_ignora_preset(self):
         graph = build_video_graph(

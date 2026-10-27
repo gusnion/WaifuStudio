@@ -16,7 +16,7 @@ Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**,
 - **LLM / Visión en CPU (`:8290`)**: `Qwen3.5-9B NSFW Captioning v5` (`Q4_K_M` + `mmproj-Q8_0`) servido por `tools/llama.cpp/llama-server.exe` con `-ngl 0` (100% CPU, 0 VRAM). La app lo arranca y detiene automáticamente mediante `app/llm_server.py`.
 - **7 Pestañas**:
   1. **Imagen**: checkpoints **Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok** (SDXL) con `LoraLoader` dual, auto-detección de arquitectura de LoRAs por tensores (`infer_lora_family`) e inyección automática de *triggers*.
-  2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos), Standard (12), Quality (30) y Manual, prompt assistant, guía integrada y audio MMAudio.
+  2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos), Standard (12), Quality (30) y Manual, prompt assistant, guía integrada y audio MMAudio. Incluye **Wan 2.2 NSFW AIO v10** opcional (GGUF externo, un solo UNet, solo I2V, experimental) seleccionable junto al modelo dual.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
   4. **Upscaler**: **RealESRGAN x2/x4** (imagen/vídeo) + **RIFE** (interpolación FPS) con visor comparador interactivo antes/después.
   5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, biblioteca de medios e IA Wan.
@@ -57,7 +57,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.654 tests offline en CPU (~60 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.658 tests offline en CPU (~60 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```
@@ -104,9 +104,9 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 
 ## 6. Rangos de Líneas de `templates/index.html` y Cascada CSS
 
-- **Secciones en `templates/index.html` (1.758 líneas; no leer entero)**:
+- **Secciones en `templates/index.html` (1.767 líneas; no leer entero)**:
   - `L1–L63`: Header global, `nav.tabs`, acciones de Guía/Addons.
-  - `L64–L339`: `#panel-image` | `L340–L695`: `#panel-video` | `L696–L889`: `#panel-editor` | `L890–L1038`: `#panel-upscaler` | `L1039–L1040`: `#panel-oc` | `L1041–L1154`: `#panel-timeline` | `L1155–L1206`: `#panel-gallery` | `L1207–L1371`: `#panel-guide` | `L1372–L1387`: `#panel-addons`.
-  - `L1388–L1750`: modales OC/LoRA/Visión/Galería y `#lightbox` (L1751–L1758).
+  - `L64–L339`: `#panel-image` | `L340–L704`: `#panel-video` | `L705–L898`: `#panel-editor` | `L899–L1047`: `#panel-upscaler` | `L1048–L1049`: `#panel-oc` | `L1050–L1163`: `#panel-timeline` | `L1164–L1215`: `#panel-gallery` | `L1216–L1380`: `#panel-guide` | `L1381–L1396`: `#panel-addons`.
+  - `L1397–L1759`: modales OC/LoRA/Visión/Galería y `#lightbox` (L1760–L1767).
 - **Orden de Cascada CSS (`static/css/`)**:
   `1. base.css` → `2. components.css` → `3. tabs/image.css` → `4. tabs/video.css` → `5. tabs/editor.css` → `6. tabs/upscaler.css` → `7. tabs/gallery.css` → `8. design-v2.css` → `9. light-theme.css`.

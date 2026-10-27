@@ -630,6 +630,7 @@ function inheritedVideoConfig(clip) {
   return {
     aspect,
     preset,
+    wan_model: p.wan_model === "nsfw_aio" ? "nsfw_aio" : "dual",
     sampler_name: typeof p.sampler_name === "string" ? p.sampler_name : "",
     scheduler: typeof p.scheduler === "string" ? p.scheduler : "",
     steps: Number.isFinite(Number(p.steps)) ? Number(p.steps) : null,
@@ -641,6 +642,7 @@ function inheritedVideoConfig(clip) {
 function applyInheritedVideoConfig(payload, inherited) {
   if (inherited.aspect) payload.aspect = inherited.aspect;
   if (inherited.preset) payload.preset = inherited.preset;
+  if (inherited.wan_model) payload.wan_model = inherited.wan_model;
   if (inherited.motion_negative) payload.motion_negative = inherited.motion_negative;
   if (inherited.preset === "manual") {
     if (inherited.sampler_name) payload.sampler_name = inherited.sampler_name;
@@ -767,6 +769,9 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
       const inherited = inheritedVideoConfig(clips[idxA]);
       if (!inherited.aspect) {
         throw new Error("El clip de referencia no tiene configuración guardada; vuelve a añadirlo desde la Biblioteca.");
+      }
+      if (inherited.wan_model === "nsfw_aio") {
+        throw new Error("El modelo AIO v10 solo admite Continuar I2V; no se puede usar en puente FLF2V");
       }
       state.aiGenerating = true;
       renderTracks();

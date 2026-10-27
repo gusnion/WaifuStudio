@@ -258,8 +258,8 @@
       "steps": 25,
       "cfg": 4.5,
       "seed": 42,
-      "prompt": "ambient",
-      "negative_prompt": "",
+      "prompt": "soft breathing, quiet moans, wet sounds, fabric rustling",
+      "negative_prompt": "speech, talking, dialogue, shouting, screaming, singing, crowd",
       "mask_away_clip": false,
       "force_offload": true,
       "images": [

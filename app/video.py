@@ -43,7 +43,16 @@ from app.video_presets import PRESET_MANUAL, resolve_video_preset
 
 WAN_TEMPLATE_PATH = APP_ROOT / "workflows" / "wan22_i2v_432x768.api.json"
 WAN_FLF_TEMPLATE_PATH = APP_ROOT / "workflows" / "wan22_flf2v_432x768.api.json"
+WAN_AIO_TEMPLATE_PATH = APP_ROOT / "workflows" / "wan22_aio_i2v_nsfw_432x768.api.json"
 H3_TEMPLATE_PATH = APP_ROOT / "workflows" / "h3_fl2va_vertical.api.json"
+
+WAN_MODEL_DUAL = "dual"
+WAN_MODEL_NSFW_AIO = "nsfw_aio"
+WAN_MODELS = (WAN_MODEL_DUAL, WAN_MODEL_NSFW_AIO)
+
+# TW-12: bajar el sesgo de habla de MMAudio sin cambiar de motor de audio.
+WAN_AUDIO_POSITIVE = "soft breathing, quiet moans, wet sounds, fabric rustling"
+WAN_AUDIO_NEGATIVE = "speech, talking, dialogue, shouting, screaming, singing, crowd"
 
 # H3 variante Sage (M10-2c-3): patch de KJNodes "Patch Sage Attention KJ".
 H3_SAGE_NODE_CLASS = "PathchSageAttentionKJ"
@@ -239,8 +248,21 @@ def _patch_wan_split(graph: dict, steps: int) -> None:
     """Reparte high/low para `steps`: 12 end_at_step=steps//2, 13 start_at_step=steps//2.
 
     El sampler alto conserva ``end_at_step=10000``/``add_noise`` del certificado;
-    con N=20 el reparto es 10/10, identico a la plantilla.
+    con N=20 el reparto es 10/10, identico a la plantilla. Si el grafo AIO tiene
+    un solo sampler, no hay reparto que aplicar.
     """
+    if WAN_HIGH_SAMPLER_ID not in graph and WAN_LOW_SAMPLER_ID not in graph:
+        return
+    if WAN_HIGH_SAMPLER_ID not in graph or WAN_LOW_SAMPLER_ID not in graph:
+        high = graph.get(WAN_HIGH_SAMPLER_ID)
+        if (
+            isinstance(high, dict)
+            and high.get("class_type") == "KSamplerAdvanced"
+            and isinstance(high.get("inputs"), dict)
+            and high["inputs"].get("end_at_step") == 10000
+        ):
+            return
+        raise EngineError("grafo Wan incompleto: falta una rama high/low")
     mid = steps // 2
     high = _node_inputs(graph, WAN_HIGH_SAMPLER_ID, "KSamplerAdvanced")
     _require_field(high, "end_at_step", WAN_HIGH_SAMPLER_ID)
@@ -296,6 +318,21 @@ def _patch_wan_lora_strength(graph: dict, strength: float) -> None:
         applied += 1
     if not applied:
         raise EngineError("grafo Wan sin LoraLoaderModelOnly")
+
+
+def _patch_wan_audio(graph: dict) -> None:
+    """Aplica el positivo/negativo de audio de TW-12 al MMAudioSampler."""
+    for node_id, node in graph.items():
+        if not isinstance(node, dict) or node.get("class_type") != "MMAudioSampler":
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            raise EngineError(f"nodo {node_id!r} sin inputs dict")
+        _require_field(inputs, "prompt", node_id)
+        _require_field(inputs, "negative_prompt", node_id)
+        inputs["prompt"] = WAN_AUDIO_POSITIVE
+        inputs["negative_prompt"] = WAN_AUDIO_NEGATIVE
+    # FLF2V no incluye MMAudio; no es un error para ese grafo.
 
 
 
@@ -513,6 +550,7 @@ def prepare_wan_graph(
         _patch_cfg(prepared, cfg)
     if lora_strength is not None:
         _patch_wan_lora_strength(prepared, lora_strength)
+    _patch_wan_audio(prepared)
     return prepared
 
 
@@ -611,6 +649,7 @@ def prepare_wan_flf_graph(
         _patch_cfg(prepared, cfg)
     if lora_strength is not None:
         _patch_wan_lora_strength(prepared, lora_strength)
+    _patch_wan_audio(prepared)
     return prepared
 
 
@@ -1067,6 +1106,7 @@ def build_video_graph(job: dict) -> dict:
             height=job.get("height"),
         )
         mode = job.get("mode")
+        is_aio = Path(template).name == WAN_AIO_TEMPLATE_PATH.name
         if mode is None:
             mode = (
                 WAN_FLF_MODE
@@ -1075,6 +1115,8 @@ def build_video_graph(job: dict) -> dict:
             )
         if mode not in ("i2v", WAN_FLF_MODE):
             raise EngineError(f"video: mode invalido {mode!r}; usar i2v|flf2v")
+        if is_aio and mode != "i2v":
+            raise EngineError("wan AIO v10 solo admite i2v en esta integracion")
         common = {
             "width": profile["width"],
             "height": profile["height"],
@@ -1085,7 +1127,7 @@ def build_video_graph(job: dict) -> dict:
             "steps": profile["steps"],
             "shift": profile["shift"],
             "cfg": profile.get("cfg"),
-            "lora_strength": profile.get("lora_strength"),
+            "lora_strength": None if is_aio else profile.get("lora_strength"),
         }
         if mode == WAN_FLF_MODE:
             return prepare_wan_flf_graph(
@@ -1403,6 +1445,12 @@ __all__ = [
     "WAN_DEFAULT_SHIFT",
     "WAN_DEFAULT_STEPS",
     "WAN_FLF_TEMPLATE_PATH",
+    "WAN_AIO_TEMPLATE_PATH",
+    "WAN_MODEL_DUAL",
+    "WAN_MODEL_NSFW_AIO",
+    "WAN_MODELS",
+    "WAN_AUDIO_POSITIVE",
+    "WAN_AUDIO_NEGATIVE",
     "WAN_HIGH_SAMPLER_ID",
     "WAN_LOW_SAMPLER_ID",
     "WAN_TEMPLATE_PATH",

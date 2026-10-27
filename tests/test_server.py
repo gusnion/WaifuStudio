@@ -5633,6 +5633,8 @@ class WanPromptUiStaticTests(ServerTestCase):
             'id="video-image-preview"',
             'id="video-last-image-preview"',
             'id="video-negative"',
+            'id="video-wan-model"',
+            'value="nsfw_aio"',
             'id="video-wan-advanced"',
             'id="video-wan-resolution-field"',
             'id="video-wan-resolution"',

@@ -33,7 +33,11 @@ from app.routes.image import _decode_image_b64, _write_input_png
 from app.routes.jobs import _JOBS
 from app.video import (
     ASPECTS,
+    WAN_AIO_TEMPLATE_PATH,
     WAN_FLF_TEMPLATE_PATH,
+    WAN_MODEL_DUAL,
+    WAN_MODEL_NSFW_AIO,
+    WAN_MODELS,
     WAN_TEMPLATE_PATH,
     frames_for_seconds,
     resolve_wan_profile,
@@ -93,11 +97,18 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         )
     if engine_kind not in ("wan", "h3"):
         raise EngineError("engine invalido; usar wan|h3")
+    wan_model = payload.get("wan_model") or WAN_MODEL_DUAL
+    if not isinstance(wan_model, str) or wan_model not in WAN_MODELS:
+        raise EngineError("wan_model invalido; usar dual|nsfw_aio")
+    if engine_kind == "h3" and wan_model != WAN_MODEL_DUAL:
+        raise EngineError("wan_model solo aplica a engine wan")
     mode = payload.get("mode") or ("ref2va" if payload.get("profile") == "ref2va" else "i2v")
     if mode not in ("i2v", "flf2v", "ref2va", "v2v"):
         raise EngineError("mode invalido; usar i2v|flf2v|ref2va|v2v")
     if mode in ("ref2va", "v2v") and engine_kind != "h3":
         raise EngineError(f"{mode} solo es compatible con motor h3")
+    if wan_model == WAN_MODEL_NSFW_AIO and mode != "i2v":
+        raise EngineError("wan AIO v10 solo admite i2v en esta integracion")
     aspect = payload.get("aspect") or "vertical"
     if aspect not in ASPECTS:
         raise EngineError("aspect invalido; usar vertical|horizontal")
@@ -265,6 +276,8 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
             template = h3_template_path(h3_profile)
     elif mode == "flf2v":
         template = WAN_FLF_TEMPLATE_PATH
+    elif wan_model == WAN_MODEL_NSFW_AIO:
+        template = WAN_AIO_TEMPLATE_PATH
     else:
         template = WAN_TEMPLATE_PATH
     profile_fields = (
@@ -292,6 +305,7 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
     if engine_kind == "wan":
         stored_params["width"] = width
         stored_params["height"] = height
+        stored_params["wan_model"] = wan_model
     if h3_profile is not None:
         stored_params["profile"] = h3_profile["id"]
         stored_params["variant"] = h3_variant["id"]
@@ -339,6 +353,7 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
     if engine_kind == "wan":
         job["width"] = width
         job["height"] = height
+        job["wan_model"] = wan_model
     if h3_profile is not None:
         job["profile"] = h3_profile["id"]
         job["variant"] = h3_variant["id"]

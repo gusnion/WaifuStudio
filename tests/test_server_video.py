@@ -931,6 +931,50 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(queue.jobs[0]["preset"], "manual")
         self.assertEqual(queue.jobs[0]["steps"], 20)
 
+    def test_wan_aio_selecciona_plantilla_y_modelo(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "wan_model": "nsfw_aio",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "preset": "rapido",
+                "aspect": "vertical",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        job = queue.jobs[0]
+        self.assertEqual(job["wan_model"], "nsfw_aio")
+        self.assertIn("wan22_aio_i2v_nsfw_432x768.api.json", job["template"])
+        params = self.store.list()[0]["params"]
+        self.assertEqual(params["wan_model"], "nsfw_aio")
+
+    def test_wan_aio_rechaza_flf2v_e_invalido(self):
+        flf = self.make_client().post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "wan_model": "nsfw_aio",
+                "mode": "flf2v",
+                "image_b64": PNG_B64,
+                "last_image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+            },
+        )
+        self.assertEqual(flf.status_code, 400)
+        invalid = self.make_client().post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "wan_model": "nope",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+            },
+        )
+        self.assertEqual(invalid.status_code, 400)
+
     def test_manual_acepta_resolucion_explicita(self):
         queue = RecordingQueue()
         response = self.make_client(queue=queue).post(

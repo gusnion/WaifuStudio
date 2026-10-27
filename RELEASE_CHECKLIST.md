@@ -25,7 +25,11 @@ Get-ChildItem tests\*.mjs | ForEach-Object { node $_.FullName }
 & .\.venv\Scripts\python.exe -m app.health
 ```
 
-Resultado esperado actual: **1.654 tests OK, 1 skipped**; tests JS OK.
+Resultado esperado actual: **1.658 tests OK, 1 skipped**; tests JS OK.
+
+## Modelo AIO NSFW opcional
+
+El GGUF `wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf` (10,85 GB) se verificó con SHA256 `126a9f67cf41247981c8d2f1c39cde73f010b0670ce032854bd8c8d6ed746b67` en RTX 3060. No lo descarga el instalador por defecto; el manifiesto separado es `install/manifest/manifest.wan-nsfw.json`. La UI lo expone como modelo experimental, solo I2V. El audio sigue usando MMAudio, sin pestaña ni modelos de sonido nuevos.
 
 ## Instalación limpia (verificada en G:)
 

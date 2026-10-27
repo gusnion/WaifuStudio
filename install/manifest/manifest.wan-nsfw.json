@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "generated": "2026-10-27",
+  "app": "WAIFU",
+  "task": "Wan 2.2 NSFW AIO v10 opcional (puente de modelo)",
+  "destination_root": "ComfyUI/models",
+  "sha256_convention": "64 hex = sha256 completo verificado en origen/descarga.",
+  "notes": [
+    "No lo descarga el instalador por defecto.",
+    "No forma parte del set oficial verificado.",
+    "Licencia Apache-2.0 declarada por el uploader; el peso es de terceros.",
+    "Solo I2V en esta integracion."
+  ],
+  "models": [
+    {
+      "id": "wan2.2-14b-rapid-aio-nsfw-v10-q4-k-m",
+      "filename": "wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf",
+      "subdir": "diffusion_models",
+      "bytes": 10849052416,
+      "sha256": "126a9f67cf41247981c8d2f1c39cde73f010b0670ce032854bd8c8d6ed746b67",
+      "url": "https://huggingface.co/desirel/WAN2.2-14B-Rapid-AllInOne-GGUF-NSFW-v10/resolve/4502c7f3de51fd728d851b37eda262f2be2a5628/wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf",
+      "revision": "4502c7f3de51fd728d851b37eda262f2be2a5628",
+      "license": "Apache-2.0 (declarada por el uploader; peso de terceros)",
+      "required": false
+    }
+  ]
+}
