@@ -20,12 +20,18 @@ from app.enhancer import (
     DEFAULT_STRENGTH_PRESET,
     LLM_TIMEOUT_ENV,
     LLM_URL_ENV,
+    PROMPT_PROFILE_SYS_PROMPTS,
     RAG_ENTRIES,
     STRENGTH_PRESETS,
     SYS_PROMPT,
+    SYS_PROMPT_ANIMA,
+    SYS_PROMPT_QWEN_EDIT,
+    SYS_PROMPT_SDXL_NATURAL,
+    SYS_PROMPT_SDXL_TAGS,
     _http_transport,
     apply_preprompt,
     enhance,
+    get_sys_prompt,
     load_local_llm,
     load_server_llm,
     retrieve,
@@ -33,6 +39,7 @@ from app.enhancer import (
     server_llm_status,
 )
 from app.prompt_zones import canonical_order
+from app.registry import infer_prompt_profile
 
 GOLDEN_SYS_PROMPT = (
     "You are the local prompt planner for an anime image generator trained on danbooru tags.\n"
@@ -1043,6 +1050,97 @@ class ServerLlmStateTests(unittest.TestCase):
             server_llm_status("http://x", transport=transport),
             (False, "HTTP 503: loading"),
         )
+
+
+class PromptProfileSysPromptTests(unittest.TestCase):
+    """C-03: System prompts del mejorador diferenciados por prompt_profile."""
+
+    def test_sys_prompts_por_perfil_existen_y_no_vacios(self):
+        for profile in ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit"):
+            prompt = get_sys_prompt(profile)
+            self.assertIsInstance(prompt, str)
+            self.assertTrue(len(prompt.strip()) > 50)
+
+    def test_sin_perfil_o_vacio_devuelve_sys_prompt_legacy(self):
+        self.assertEqual(get_sys_prompt(None), SYS_PROMPT)
+        self.assertEqual(get_sys_prompt(""), SYS_PROMPT)
+
+    def test_perfil_anima_es_sys_prompt_y_pide_tags_danbooru(self):
+        prompt = get_sys_prompt("anima")
+        self.assertEqual(prompt, SYS_PROMPT)
+        self.assertEqual(prompt, SYS_PROMPT_ANIMA)
+        self.assertIn("danbooru-style tags", prompt)
+        self.assertIn("no prose", prompt)
+
+    def test_perfil_sdxl_tags_pide_tags_sin_scores_ni_aroba(self):
+        prompt = get_sys_prompt("sdxl_tags")
+        self.assertEqual(prompt, SYS_PROMPT_SDXL_TAGS)
+        self.assertIn("EXACTLY ONE line of descriptive tags", prompt)
+        self.assertIn("NEVER use score tags", prompt)
+        self.assertIn("NEVER use \"@\" artist prefixes", prompt)
+
+    def test_perfil_sdxl_natural_pide_prosa_descriptiva_sin_tags(self):
+        prompt = get_sys_prompt("sdxl_natural")
+        self.assertEqual(prompt, SYS_PROMPT_SDXL_NATURAL)
+        self.assertIn("natural English prose", prompt)
+        self.assertIn("DO NOT output tags", prompt)
+
+    def test_perfil_qwen_edit_pide_instruccion_natural(self):
+        prompt = get_sys_prompt("qwen_edit")
+        self.assertEqual(prompt, SYS_PROMPT_QWEN_EDIT)
+        self.assertIn("editing instruction in natural English", prompt)
+        self.assertIn("DO NOT output comma-separated tags", prompt)
+
+    def test_perfil_desconocido_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            get_sys_prompt("perfil_inexistente")
+
+
+class EnhancePromptProfileTests(unittest.TestCase):
+    """C-03: Demostración con FakeLLM de que Anima pide tags y RealVisXL pide prosa."""
+
+    def test_enhance_anima_pide_tags(self):
+        llm = CapturingLLM("1girl, solo, smile")
+        result = enhance("1girl", prompt_profile="anima", llm=llm)
+        system = llm.calls[0]["system"]
+        self.assertEqual(system, SYS_PROMPT)
+        self.assertIn("danbooru-style tags", system)
+        self.assertIn("1girl", result["positive"])
+
+    def test_enhance_realvisxl_pide_prosa_y_preserva_texto(self):
+        profile = infer_prompt_profile("realvis")
+        self.assertEqual(profile, "sdxl_natural")
+        prose_output = "A serene woman sitting on a wooden bench in a sunlit garden, golden morning light."
+        llm = CapturingLLM(prose_output)
+        result = enhance(
+            "woman in a garden",
+            prompt_profile=profile,
+            preprompt="ninguno",
+            llm=llm,
+        )
+        system = llm.calls[0]["system"]
+        self.assertIn("natural English prose", system)
+        self.assertIn("DO NOT output tags", system)
+        self.assertEqual(result["positive"], prose_output)
+        self.assertEqual(result["raw"], prose_output)
+        self.assertEqual(result["dropped"], [])
+
+    def test_enhance_sdxl_tags_pide_tags_sin_scores_ni_aroba(self):
+        llm = CapturingLLM("1girl, solo, smile")
+        enhance("1girl", prompt_profile="sdxl_tags", llm=llm)
+        system = llm.calls[0]["system"]
+        self.assertEqual(system, SYS_PROMPT_SDXL_TAGS)
+        self.assertIn("NEVER use score tags", system)
+        self.assertIn("NEVER use \"@\" artist prefixes", system)
+
+    def test_enhance_retrocompatible_sin_perfil_usa_legacy(self):
+        llm = CapturingLLM("1girl, smile")
+        enhance("1girl", llm=llm)
+        self.assertEqual(llm.calls[0]["system"], SYS_PROMPT)
+
+    def test_enhance_perfil_desconocido_lanza_engine_error(self):
+        with self.assertRaises(EngineError):
+            enhance("1girl", prompt_profile="desconocido", llm=FakeLLM())
 
 
 if __name__ == "__main__":

@@ -397,20 +397,37 @@ async function enhancePrompt() {
   setStatus("Generando prompt...");
   const startedAt = performance.now();
   try {
-    const data = await postJson("/api/prompt/enhance_zones", {
-      text,
-      strength: $("enhance-strength").value,
-      rating: $("rating").value,
-      tags: collectPromptZoneTags(),
-    });
+    const isTagProfile = isTagPromptProfile(state.prompt_profile);
+    let data;
+    if (isTagProfile) {
+      data = await postJson("/api/prompt/enhance_zones", {
+        text,
+        strength: $("enhance-strength").value,
+        rating: $("rating").value,
+        tags: collectPromptZoneTags(),
+        prompt_profile: state.prompt_profile,
+      });
+      applyZonesPayload(data.zones || []);
+      renderZoneEditor();
+    } else {
+      data = await postJson("/api/enhance", {
+        text,
+        family: state.family,
+        preprompt: $("preprompt") ? $("preprompt").value : "ninguno",
+        strength: $("enhance-strength").value,
+        rating: $("rating").value,
+        prompt_profile: state.prompt_profile,
+      });
+      if (data && data.positive) {
+        generalField.value = data.positive;
+      }
+    }
     const elapsedMs = performance.now() - startedAt;
-    applyZonesPayload(data.zones || []);
     const negative = String(data.negative || "").trim();
     if (negative) {
       $("negative").value = negative;
       state.negativeTouched = false;
     }
-    renderZoneEditor();
     button.textContent = "Generado ✓";
     setStatus(`Prompt generado ✓ · ${(elapsedMs / 1000).toFixed(1)} s`);
   } catch (error) {

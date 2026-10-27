@@ -20,7 +20,14 @@ from app import loras as loras_module
 from app import server as server_module
 from app.config import EngineConfig
 from app.engine import ComfyEngine, EngineError
-from app.enhancer import BASE_NEGATIVE, apply_preprompt
+from app.enhancer import (
+    BASE_NEGATIVE,
+    SYS_PROMPT,
+    SYS_PROMPT_ANIMA,
+    SYS_PROMPT_SDXL_NATURAL,
+    SYS_PROMPT_SDXL_TAGS,
+    apply_preprompt,
+)
 from app.formats import DEFAULT_FORMAT, list_image_formats
 from app.jobs import JobQueue
 from app.params import (
@@ -30,7 +37,7 @@ from app.params import (
     SCHEDULER_NAMES,
 )
 from app.prompt_zones import CAMERA_TAGS, canonical_order
-from app.registry import ModelRegistry
+from app.registry import ModelRegistry, infer_prompt_profile
 from app.server import create_app, run_generation
 from app.store import Store
 from app.tags import list_groups
@@ -1406,6 +1413,80 @@ class EnhanceStrengthRouteTests(ServerTestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("error", response.json())
                 self.assertEqual(llm.calls, [])
+
+
+class EnhancePromptProfileRouteTests(ServerTestCase):
+    """C-03: System prompts del mejorador por prompt_profile vía /api/enhance."""
+
+    def test_sin_perfil_usa_sys_prompt_legacy(self):
+        llm = CapturingLLM("1girl, smile")
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(llm.calls[0]["system"], SYS_PROMPT)
+
+    def test_anima_pide_tags(self):
+        llm = CapturingLLM("1girl, smile")
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl", "prompt_profile": "anima"}
+        )
+        self.assertEqual(response.status_code, 200)
+        system = llm.calls[0]["system"]
+        self.assertEqual(system, SYS_PROMPT_ANIMA)
+        self.assertIn("danbooru-style tags", system)
+        self.assertIn("no prose", system)
+
+    def test_realvisxl_pide_prosa(self):
+        profile = infer_prompt_profile("RealVisXL_V5.0_Lightning.safetensors")
+        self.assertEqual(profile, "sdxl_natural")
+        prose = "A cinematic shot of a young woman in an urban street at dusk."
+        llm = CapturingLLM(prose)
+        response = self.make_client(llm=llm).post(
+            "/api/enhance",
+            json={
+                "text": "woman in urban street",
+                "prompt_profile": profile,
+                "preprompt": "ninguno",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system = llm.calls[0]["system"]
+        self.assertEqual(system, SYS_PROMPT_SDXL_NATURAL)
+        self.assertIn("natural English prose", system)
+        self.assertIn("DO NOT output tags", system)
+        self.assertEqual(response.json()["positive"], prose)
+        self.assertEqual(response.json()["dropped"], [])
+
+    def test_sdxl_tags_pide_tags_sin_scores_ni_aroba(self):
+        llm = CapturingLLM("1girl, smile")
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl", "prompt_profile": "sdxl_tags"}
+        )
+        self.assertEqual(response.status_code, 200)
+        system = llm.calls[0]["system"]
+        self.assertEqual(system, SYS_PROMPT_SDXL_TAGS)
+        self.assertIn("EXACTLY ONE line of descriptive tags", system)
+        self.assertIn("NEVER use score tags", system)
+        self.assertIn("NEVER use \"@\" artist prefixes", system)
+
+    def test_perfil_invalido_400(self):
+        llm = CapturingLLM()
+        response = self.make_client(llm=llm).post(
+            "/api/enhance", json={"text": "1girl", "prompt_profile": "perfil_falso"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+        self.assertEqual(llm.calls, [])
+
+    def test_enhance_zones_propaga_prompt_profile(self):
+        llm = CapturingLLM("1girl, smile")
+        response = self.make_client(llm=llm).post(
+            "/api/prompt/enhance_zones",
+            json={"text": "1girl", "prompt_profile": "sdxl_tags"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("NEVER use score tags", llm.calls[0]["system"])
 
 
 class EnhanceZonesRouteTests(ServerTestCase):

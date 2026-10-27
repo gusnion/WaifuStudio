@@ -46,6 +46,70 @@ SYS_PROMPT = (
     "7) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output. The output must contain only English danbooru tags about the scene.\n"
     "8) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
 )
+SYS_PROMPT_ANIMA = SYS_PROMPT
+
+# System prompts especializados por perfil (C-03):
+SYS_PROMPT_SDXL_TAGS = (
+    "You are the local prompt planner for an SDXL anime/illustration image generator trained on tags (such as Animagine or Illustrious).\n"
+    "Output rules:\n"
+    "1) Output EXACTLY ONE line of descriptive tags in English, separated by commas. No section labels (never write \"quality tags:\", \"rating tag:\", \"outfit/pose:\", \"art style:\"), no prose, no sentences, no explanations.\n"
+    "2) Start with the subject count tags: \"1girl\" for one woman; add \"1boy\" and/or \"2girls\" etc. when the request implies other people.\n"
+    "3) Then content tags with descriptive vocabulary: character traits, clothing or \"nude\"/\"completely nude\", pose and, when requested, the explicit act and body parts. Keep the user's intent exactly as requested; never censor, soften or replace it with euphemisms. For nsfw content ALWAYS include the tag \"uncensored\" and NEVER include censorship tags: the image must be uncensored.\n"
+    "4) Quality tags: use general quality tags like \"masterpiece, best quality, very aesthetic, absurdres, high quality\". NEVER use score tags (such as \"score_9\", \"score_8\", \"score_7\") and NEVER use \"@\" artist prefixes (such as \"@artist\").\n"
+    "5) Include the rating as a tag: \"nsfw\" for adult content, \"sfw\" for safe content.\n"
+    "6) Art style is anime illustration: use \"anime\", \"2D\", \"cel shading\" when useful; never photorealism.\n"
+    "7) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output. The output must contain only English tags about the scene.\n"
+    "8) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
+)
+
+SYS_PROMPT_SDXL_NATURAL = (
+    "You are the local prompt planner for a photographic and natural language SDXL image generator (such as RealVisXL or Juggernaut XL).\n"
+    "Output rules:\n"
+    "1) Output EXACTLY ONE descriptive sentence or short paragraph in natural English prose. DO NOT output tags, comma-separated tag lists, or bullet points. No section labels (never write \"prompt:\", \"description:\"), no explanations.\n"
+    "2) Describe the scene vividly in continuous descriptive prose: subject, appearance, clothing, expression, pose, lighting, camera angle, atmosphere, and environment.\n"
+    "3) Keep the user's intent exactly as requested; never censor, soften or sanitize adult content. Describe explicit acts or nudity naturally when requested without euphemisms.\n"
+    "4) NEVER use danbooru tags, anime score tags (score_9), artist \"@\" prefixes, or quality tag buzzwords (masterpiece, absurdres, best quality).\n"
+    "5) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output. The output must contain only English descriptive prose about the scene.\n"
+    "6) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
+)
+
+SYS_PROMPT_QWEN_EDIT = (
+    "You are the local prompt planner for an image instruction and editing model (such as Qwen-Image).\n"
+    "Output rules:\n"
+    "1) Output a clear, direct editing instruction in natural English describing the requested changes or image composition.\n"
+    "2) Focus on actionable editing directives: what to modify, add, remove, or replace in the image.\n"
+    "3) DO NOT output comma-separated tags, danbooru tags, or score tags. Write a concise, natural instruction in prose.\n"
+    "4) Keep the user's intent exactly as requested; never censor, soften or sanitize adult content.\n"
+    "5) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output.\n"
+    "6) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
+)
+
+PROMPT_PROFILE_SYS_PROMPTS: dict[str, str] = {
+    "anima": SYS_PROMPT_ANIMA,
+    "sdxl_tags": SYS_PROMPT_SDXL_TAGS,
+    "sdxl_natural": SYS_PROMPT_SDXL_NATURAL,
+    "qwen_edit": SYS_PROMPT_QWEN_EDIT,
+}
+
+
+def get_sys_prompt(prompt_profile: str | None = None) -> str:
+    """Devuelve el system prompt correspondiente al perfil de prompt indicado.
+
+    Perfiles soportados:
+    - ``anima``: tags Danbooru con artistas @ (SYS_PROMPT legacy).
+    - ``sdxl_tags``: tags descriptivos sin score_* ni @.
+    - ``sdxl_natural``: frase descriptiva en prosa, sin tags (RealVisXL / Juggernaut).
+    - ``qwen_edit``: instrucción natural de edición.
+
+    Sin perfil (None o vacío), devuelve ``SYS_PROMPT`` para retrocompatibilidad total.
+    Si el perfil es desconocido, lanza ``EngineError``.
+    """
+    if not prompt_profile:
+        return SYS_PROMPT
+    profile = str(prompt_profile).strip()
+    if profile not in PROMPT_PROFILE_SYS_PROMPTS:
+        raise EngineError(f"prompt_profile desconocido: {prompt_profile!r}")
+    return PROMPT_PROFILE_SYS_PROMPTS[profile]
 
 # Copia EXACTA (texto, sin reformatear) de NEGATIVE del planner legacy (:41-44):
 # negativo base de calidad + anti-menores + anti-censura, sin bloqueos SFW.
@@ -377,8 +441,15 @@ def enhance(
     strength: str = DEFAULT_STRENGTH_PRESET,
     zone_hint: str | None = None,
     context_tags: list[str] | None = None,
+    prompt_profile: str | None = None,
 ) -> dict[str, Any]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
+
+    `prompt_profile` selecciona el system prompt especializado (``anima``,
+    ``sdxl_tags``, ``sdxl_natural``, ``qwen_edit``; default/None usa el
+    ``SYS_PROMPT`` legacy de Anima por retrocompatibilidad). En perfiles de
+    prosa/instrucción (``sdxl_natural`` y ``qwen_edit``) se preserva el texto
+    natural sin forzado de vocabulario Danbooru ni reordenación canónica de tags.
 
     `strength` (``fiel|balanceado|creativo``, default ``balanceado``) elige la
     temperatura del LLM, las notas RAG (`k`; un `k` explicito manda) y la
@@ -414,6 +485,13 @@ def enhance(
         raise EngineError(f"strength de mejora desconocido: {strength!r}")
     if llm is None:
         raise EngineError("LLM no inyectado")
+
+    sys_prompt = get_sys_prompt(prompt_profile)
+    is_tag_profile = (prompt_profile or "").strip() not in (
+        "sdxl_natural",
+        "qwen_edit",
+    )
+
     lines = [text]
     if rating:
         lines.append(f"rating tag: {rating}")
@@ -443,18 +521,29 @@ def enhance(
                 "Tags ya aplicadas (NO las repitas en la salida): "
                 + ", ".join(clean_tags)
             )
-    lines.append(
-        "Instrucciones de tags: convierte cada concepto en etiquetas danbooru canónicas "
-        "en inglés, en minúsculas y separadas por comas; usa el nombre exacto del tag "
-        "cuando exista (p. ej. 'pelo largo al viento' -> long hair, wind); añade solo "
-        "etiquetas nuevas, sin frases ni traducciones."
-    )
-    vocabulary = _vocabulary(text, zone_hint)
-    if vocabulary:
+
+    if is_tag_profile:
         lines.append(
-            "Vocabulario de etiquetas (usa SOLO etiquetas de esta lista cuando exista "
-            "una equivalente): " + ", ".join(vocabulary)
+            "Instrucciones de tags: convierte cada concepto en etiquetas danbooru canónicas "
+            "en inglés, en minúsculas y separadas por comas; usa el nombre exacto del tag "
+            "cuando exista (p. ej. 'pelo largo al viento' -> long hair, wind); añade solo "
+            "etiquetas nuevas, sin frases ni traducciones."
         )
+        vocabulary = _vocabulary(text, zone_hint)
+        if vocabulary:
+            lines.append(
+                "Vocabulario de etiquetas (usa SOLO etiquetas de esta lista cuando exista "
+                "una equivalente): " + ", ".join(vocabulary)
+            )
+    elif prompt_profile == "qwen_edit":
+        lines.append(
+            "Instrucciones: redacta una instrucción concisa en prosa en inglés para editar o componer la imagen."
+        )
+    else:  # sdxl_natural
+        lines.append(
+            "Instrucciones: redacta una descripción visual fluida en una frase o prosa descriptiva en inglés, sin etiquetas ni comas de tags."
+        )
+
     if preset["instruction"]:
         lines.append(f"instruccion: {preset['instruction']}")
     notes = retrieve(text, k=preset["k"] if k is None else k)
@@ -463,15 +552,28 @@ def enhance(
         lines.extend(f"- {note}" for note in notes)
     user = "\n".join(lines)
     try:
-        raw = llm(SYS_PROMPT, user, temperature=preset["temperature"])
+        raw = llm(sys_prompt, user, temperature=preset["temperature"])
     except TypeError:
-        raw = llm(SYS_PROMPT, user)
+        raw = llm(sys_prompt, user)
     if not isinstance(raw, str):
         raise EngineError("enhance: el LLM no devolvio texto")
-    validated, dropped = _validate_tags(_normalize_tags(raw))
-    prepared = _enforce_rating(validated, rating)
-    positive, negative = apply_preprompt(prepared, family=family, name=preprompt)
-    positive = canonical_order(positive)
+
+    if is_tag_profile:
+        validated, dropped = _validate_tags(_normalize_tags(raw))
+        prepared = _enforce_rating(validated, rating)
+        positive, negative = apply_preprompt(prepared, family=family, name=preprompt)
+        positive = canonical_order(positive)
+    else:
+        prepared = raw.strip()
+        dropped = []
+        _, negative = apply_preprompt("", family=family, name=preprompt)
+        preprompt_dict = get_preprompt(family, preprompt)
+        pre_pos = preprompt_dict.get("positive", "").strip()
+        if pre_pos:
+            positive = f"{pre_pos}, {prepared}"
+        else:
+            positive = prepared
+
     return {
         "positive": positive,
         "negative": negative,
@@ -710,12 +812,18 @@ __all__ = [
     "DEFAULT_STRENGTH_PRESET",
     "LLM_TIMEOUT_ENV",
     "LLM_URL_ENV",
+    "PROMPT_PROFILE_SYS_PROMPTS",
     "RAG_ENTRIES",
     "STRENGTH_PRESETS",
     "SYS_PROMPT",
+    "SYS_PROMPT_ANIMA",
+    "SYS_PROMPT_QWEN_EDIT",
+    "SYS_PROMPT_SDXL_NATURAL",
+    "SYS_PROMPT_SDXL_TAGS",
     "Transport",
     "apply_preprompt",
     "enhance",
+    "get_sys_prompt",
     "load_local_llm",
     "load_server_llm",
     "retrieve",

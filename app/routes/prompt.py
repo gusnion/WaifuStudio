@@ -28,6 +28,7 @@ from app.llm_server import LlamaServerManager
 from app.motion import write_motion
 from app.oc_traits import build_prompt
 from app.preprompts import DEFAULT_FAMILY, DEFAULT_PREPROMPT
+from app.registry import PROMPT_PROFILES
 from app.prompt_zones import (
     ZONE_ORDER,
     compose_zones,
@@ -184,6 +185,15 @@ async def api_enhance(request: Request, payload: dict = Body(...)) -> Any:
             status_code=400,
             content={"error": "strength invalido; usar fiel|balanceado|creativo"},
         )
+    prompt_profile = payload.get("prompt_profile")
+    if prompt_profile is not None and prompt_profile != "":
+        if not isinstance(prompt_profile, str) or prompt_profile not in PROMPT_PROFILES:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"prompt_profile invalido: {prompt_profile!r}"},
+            )
+    else:
+        prompt_profile = None
     if llm is None:
         return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
     result = enhance_prompt(
@@ -193,6 +203,7 @@ async def api_enhance(request: Request, payload: dict = Body(...)) -> Any:
         rating=rating,
         strength=strength,
         llm=llm,
+        prompt_profile=prompt_profile,
     )
     return {
         "positive": result["positive"],
@@ -242,6 +253,15 @@ async def api_prompt_enhance_zones(request: Request, payload: dict = Body(...)) 
         return JSONResponse(
             status_code=400, content={"error": "rating invalido; usar sfw|nsfw"}
         )
+    prompt_profile = payload.get("prompt_profile")
+    if prompt_profile is not None and prompt_profile != "":
+        if not isinstance(prompt_profile, str) or prompt_profile not in PROMPT_PROFILES:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"prompt_profile invalido: {prompt_profile!r}"},
+            )
+    else:
+        prompt_profile = None
     tags = payload.get("tags")
     if tags is None:
         tags = []
@@ -261,6 +281,7 @@ async def api_prompt_enhance_zones(request: Request, payload: dict = Body(...)) 
         llm=llm,
         zone_hint=zone,
         context_tags=tags,
+        prompt_profile=prompt_profile,
     )
     zones = split_zones(result["positive"])
     return {
