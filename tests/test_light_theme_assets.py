@@ -29,7 +29,7 @@ class LightThemeAssetsTests(unittest.TestCase):
 
     def test_pestanas_llevan_icono_svg(self):
         html = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertEqual(html.count('class="tab-icon"'), 7)
+        self.assertEqual(html.count('class="tab-icon"'), 8)
         nav = html.split('<nav class="tabs">', 1)[1].split("</nav>", 1)[0]
         self.assertNotIn("🎬 Estudio", nav)
         self.assertNotIn("📖 Guía", nav)
