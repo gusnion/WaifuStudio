@@ -372,14 +372,17 @@ def resolve_wan_profile(
     scheduler: object = None,
     steps: object = None,
     shift: object = None,
+    width: object = None,
+    height: object = None,
 ) -> dict[str, Any]:
     """Perfil efectivo de Wan: overrides explicitos > preset > certificado.
 
     Devuelve ``{"preset", "sampler_name", "scheduler", "steps", "shift",
     "width", "height"}``. ``preset`` ausente/``""``/``"manual"`` = sin preset
     (tamano de ``ASPECTS`` y perfil certificado euler/simple/20/8.0); con preset
-    el tamano sale de su par vertical/horizontal segun ``aspect``. EngineError
-    si el preset, el aspecto o un override no validan.
+    el tamano sale de su par vertical/horizontal segun ``aspect``. ``width`` y
+    ``height`` solo se aceptan juntos, múltiplos de 16 y >=16. EngineError si el
+    preset, el aspecto o un override no validan.
     """
     if aspect not in ASPECTS:
         raise EngineError(f"video: aspect invalido {aspect!r}; usar vertical|horizontal")
@@ -416,6 +419,15 @@ def resolve_wan_profile(
         profile["steps"] = _require_steps(steps, "video")
     if shift is not None:
         profile["shift"] = _require_shift(shift, "video")
+    if width is not None or height is not None:
+        if width is None or height is None:
+            raise EngineError("wan: width y height deben enviarse juntos")
+        for name, value in (("width", width), ("height", height)):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise EngineError(f"wan: {name} invalido: {value!r}")
+            if value < 16 or value % 16 != 0:
+                raise EngineError(f"wan: {name} fuera de rango (min 16, paso 16): {value}")
+            profile[name] = value
     return profile
 
 
@@ -1051,6 +1063,8 @@ def build_video_graph(job: dict) -> dict:
             scheduler=job.get("scheduler"),
             steps=job.get("steps"),
             shift=job.get("shift"),
+            width=job.get("width"),
+            height=job.get("height"),
         )
         mode = job.get("mode")
         if mode is None:

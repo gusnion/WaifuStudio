@@ -530,14 +530,35 @@ class ResolveWanProfileTests(unittest.TestCase):
         self.assertEqual(profile["shift"], 5.0)
         self.assertEqual(profile["preset"], "rapido")
 
+    def test_preset_estandar(self):
+        profile = resolve_wan_profile(preset="estandar", aspect="vertical")
+        self.assertEqual((profile["width"], profile["height"]), (512, 896))
+        self.assertEqual(profile["sampler_name"], "euler")
+        self.assertEqual(profile["steps"], 12)
+        self.assertEqual(profile["shift"], 5.0)
+        self.assertEqual(profile["preset"], "estandar")
+
     def test_preset_calidad_y_horizontal(self):
         profile = resolve_wan_profile(preset="calidad", aspect="vertical")
-        self.assertEqual((profile["width"], profile["height"]), (512, 896))
+        self.assertEqual((profile["width"], profile["height"]), (576, 1024))
         self.assertEqual(profile["sampler_name"], "er_sde")
         self.assertEqual(profile["steps"], 30)
         self.assertEqual(profile["shift"], 5.0)
         horizontal = resolve_wan_profile(preset="calidad", aspect="horizontal")
-        self.assertEqual((horizontal["width"], horizontal["height"]), (896, 512))
+        self.assertEqual((horizontal["width"], horizontal["height"]), (1024, 576))
+
+    def test_manual_acepta_width_height(self):
+        profile = resolve_wan_profile(
+            preset="manual",
+            aspect="vertical",
+            width=640,
+            height=1152,
+        )
+        self.assertEqual((profile["width"], profile["height"]), (640, 1152))
+        with self.assertRaises(EngineError):
+            resolve_wan_profile(preset="manual", aspect="vertical", width=640)
+        with self.assertRaises(EngineError):
+            resolve_wan_profile(preset="manual", aspect="vertical", width=641, height=1152)
 
     def test_overrides_ganan_al_preset(self):
         profile = resolve_wan_profile(
@@ -552,7 +573,7 @@ class ResolveWanProfileTests(unittest.TestCase):
         self.assertEqual(profile["scheduler"], "karras")
         self.assertEqual(profile["steps"], 4)
         self.assertEqual(profile["shift"], 5.0)
-        self.assertEqual((profile["width"], profile["height"]), (512, 896))
+        self.assertEqual((profile["width"], profile["height"]), (576, 1024))
 
     def test_preset_desconocido_o_aspect_invalido(self):
         with self.assertRaises(EngineError):
@@ -600,8 +621,8 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
 
     def test_preset_calidad_cambia_tamano_y_perfil(self):
         graph = build_video_graph(self.job(preset="calidad"))
-        self.assertEqual(graph["9"]["inputs"]["width"], 512)
-        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        self.assertEqual(graph["9"]["inputs"]["width"], 576)
+        self.assertEqual(graph["9"]["inputs"]["height"], 1024)
         for node_id in ("12", "13"):
             self.assertEqual(graph[node_id]["inputs"]["sampler_name"], "er_sde")
             self.assertEqual(graph[node_id]["inputs"]["steps"], 30)
@@ -610,8 +631,8 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
 
     def test_preset_calidad_horizontal(self):
         graph = build_video_graph(self.job(preset="calidad", aspect="horizontal"))
-        self.assertEqual(graph["9"]["inputs"]["width"], 896)
-        self.assertEqual(graph["9"]["inputs"]["height"], 512)
+        self.assertEqual(graph["9"]["inputs"]["width"], 1024)
+        self.assertEqual(graph["9"]["inputs"]["height"], 576)
 
     def test_overrides_ganan_sobre_preset(self):
         graph = build_video_graph(self.job(preset="calidad", steps=4, shift=5.0))
@@ -620,7 +641,7 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         self.assertEqual(graph["13"]["inputs"]["start_at_step"], 2)
         self.assertEqual(graph["10"]["inputs"]["shift"], 5.0)
         self.assertEqual(graph["12"]["inputs"]["sampler_name"], "er_sde")
-        self.assertEqual(graph["9"]["inputs"]["width"], 512)
+        self.assertEqual(graph["9"]["inputs"]["width"], 576)
 
     def test_preset_desconocido_o_manual(self):
         with self.assertRaises(EngineError):
@@ -637,8 +658,8 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
                 preset="calidad",
             )
         )
-        self.assertEqual(graph["9"]["inputs"]["width"], 512)
-        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        self.assertEqual(graph["9"]["inputs"]["width"], 576)
+        self.assertEqual(graph["9"]["inputs"]["height"], 1024)
         self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
 
     def test_h3_ignora_preset(self):
@@ -1442,8 +1463,8 @@ class RunVideoTests(VideoTestCase):
             job, config=self.config, store=self.store, engine_factory=self.factory(transport)
         )
         graph = transport.submits[0]["prompt"]
-        self.assertEqual(graph["9"]["inputs"]["width"], 512)
-        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        self.assertEqual(graph["9"]["inputs"]["width"], 576)
+        self.assertEqual(graph["9"]["inputs"]["height"], 1024)
         self.assertEqual(graph["12"]["inputs"]["sampler_name"], "er_sde")
         self.assertEqual(graph["12"]["inputs"]["steps"], 30)
         self.assertEqual(graph["12"]["inputs"]["end_at_step"], 15)

@@ -27,7 +27,7 @@ from app.video_presets import (
     video_presets,
 )
 
-EXPECTED_IDS = ("rapido", "calidad")
+EXPECTED_IDS = ("rapido", "estandar", "calidad")
 
 EXPECTED = {
     "rapido": {
@@ -39,10 +39,19 @@ EXPECTED = {
         "steps": 4,
         "shift": 5.0,
     },
-    "calidad": {
-        "label": "Calidad",
+    "estandar": {
+        "label": "Estándar",
         "vertical": {"width": 512, "height": 896},
         "horizontal": {"width": 896, "height": 512},
+        "sampler": "euler",
+        "scheduler": "simple",
+        "steps": 12,
+        "shift": 5.0,
+    },
+    "calidad": {
+        "label": "Calidad",
+        "vertical": {"width": 576, "height": 1024},
+        "horizontal": {"width": 1024, "height": 576},
         "sampler": "er_sde",
         "scheduler": "simple",
         "steps": 30,
@@ -81,7 +90,7 @@ class RegistryFileTests(unittest.TestCase):
             with self.subTest(preset_id=preset_id):
                 preset = catalog[preset_id]
                 self.assertEqual(preset["label"], expected["label"])
-                self.assertIn("provisional hasta el A/B de M10-2a", preset["note"])
+                self.assertIn("pasos", preset["note"])
                 self.assertEqual(preset["vertical"], expected["vertical"])
                 self.assertEqual(preset["horizontal"], expected["horizontal"])
                 self.assertEqual(preset["sampler"], expected["sampler"])

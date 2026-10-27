@@ -607,7 +607,7 @@ class VideoPresetsApiTests(ServerVideoTestCase):
         data = response.json()
         items = data["items"]
         self.assertEqual(data["presets"], items)
-        self.assertEqual([item["id"] for item in items], ["rapido", "calidad"])
+        self.assertEqual([item["id"] for item in items], ["rapido", "estandar", "calidad"])
         for item in items:
             with self.subTest(preset=item["id"]):
                 for field in (
@@ -623,7 +623,7 @@ class VideoPresetsApiTests(ServerVideoTestCase):
                     "horizontal",
                 ):
                     self.assertIn(field, item)
-                self.assertIn("provisional hasta el A/B de M10-2a", item["note"])
+                self.assertIn("pasos", item["note"])
                 self.assertEqual(
                     item["profile"],
                     {
@@ -635,8 +635,11 @@ class VideoPresetsApiTests(ServerVideoTestCase):
                 )
         self.assertEqual(items[0]["label"], "Rápido")
         self.assertEqual(items[0]["profile"]["steps"], 4)
-        self.assertEqual(items[1]["label"], "Calidad")
-        self.assertEqual(items[1]["profile"]["sampler"], "er_sde")
+        self.assertEqual(items[1]["label"], "Estándar")
+        self.assertEqual(items[1]["profile"]["steps"], 12)
+        self.assertEqual(items[2]["label"], "Calidad")
+        self.assertEqual(items[2]["profile"]["sampler"], "er_sde")
+        self.assertEqual(items[2]["profile"]["steps"], 30)
 
 
 class H3ProfilesApiTests(ServerVideoTestCase):
@@ -855,7 +858,7 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("81 frames a 896x512", response.json()["vram_hint"])
+        self.assertIn("81 frames a 1024x576", response.json()["vram_hint"])
         job = queue.jobs[0]
         self.assertEqual(job["template"], str(WAN_TEMPLATE_PATH))
         self.assertEqual(job["preset"], "calidad")
@@ -905,7 +908,7 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("81 frames a 512x896", response.json()["vram_hint"])
+        self.assertIn("81 frames a 576x1024", response.json()["vram_hint"])
         job = queue.jobs[0]
         self.assertEqual(job["preset"], "calidad")
         self.assertEqual(job["sampler_name"], "euler")
@@ -927,6 +930,43 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(queue.jobs[0]["preset"], "manual")
         self.assertEqual(queue.jobs[0]["steps"], 20)
+
+    def test_manual_acepta_resolucion_explicita(self):
+        queue = RecordingQueue()
+        response = self.make_client(queue=queue).post(
+            "/api/video/generate",
+            json={
+                "engine": "wan",
+                "image_b64": PNG_B64,
+                "motion_positive": "She walks slowly.",
+                "preset": "manual",
+                "aspect": "vertical",
+                "width": 640,
+                "height": 1152,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("81 frames a 640x1152", response.json()["vram_hint"])
+        job = queue.jobs[0]
+        self.assertEqual((job["width"], job["height"]), (640, 1152))
+        params = self.store.list()[0]["params"]
+        self.assertEqual((params["width"], params["height"]), (640, 1152))
+
+    def test_manual_rechaza_resolucion_invalida(self):
+        for width, height in ((640, None), (641, 1152), (640, 1151)):
+            with self.subTest(width=width, height=height):
+                response = self.make_client().post(
+                    "/api/video/generate",
+                    json={
+                        "engine": "wan",
+                        "image_b64": PNG_B64,
+                        "motion_positive": "She walks slowly.",
+                        "preset": "manual",
+                        "width": width,
+                        "height": height,
+                    },
+                )
+                self.assertEqual(response.status_code, 400)
 
     def test_h3_acepta_preset_manual_y_no_guarda_perfil(self):
         queue = RecordingQueue()
@@ -1409,14 +1449,14 @@ class VideoQueueIntegrationTests(ServerVideoTestCase):
                 },
             )
             self.assertEqual(response.status_code, 200)
-            self.assertIn("81 frames a 512x896", response.json()["vram_hint"])
+            self.assertIn("81 frames a 576x1024", response.json()["vram_hint"])
             job_id = response.json()["job_id"]
             app.state.queue.wait(job_id, 5)
             self.assertEqual(client.get(f"/api/jobs/{job_id}").json()["status"], "done")
         self.assertEqual(len(transport.submits), 1)
         graph = transport.submits[0]["prompt"]
-        self.assertEqual(graph["9"]["inputs"]["width"], 512)
-        self.assertEqual(graph["9"]["inputs"]["height"], 896)
+        self.assertEqual(graph["9"]["inputs"]["width"], 576)
+        self.assertEqual(graph["9"]["inputs"]["height"], 1024)
         for node_id in ("12", "13"):
             with self.subTest(node_id=node_id):
                 self.assertEqual(graph[node_id]["inputs"]["sampler_name"], "er_sde")

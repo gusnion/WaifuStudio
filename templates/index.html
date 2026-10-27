@@ -419,10 +419,10 @@
           </label>
 
           <div id="video-h3-prompt-actions">
-            <div class="enhance-row control-inline" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <button id="btn-h3-prompt" type="button">Mejorar prompt con IA</button>
-              <label class="inline-field control-inline" style="display: flex; align-items: center; gap: 0.3rem;">
-                <span style="font-size: 0.78rem;">Enfoque</span>
+            <div class="enhance-row control-inline" style="display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap;">
+              <button id="btn-h3-prompt" class="video-prompt-ai" type="button" data-i18n-ignore><span>IA<br>PROMPT</span></button>
+              <label class="inline-field control-inline video-enhance-field">
+                <span>Enfoque</span>
                 <select id="video-prompt-focus">
                   <option value="movimiento" selected>Movimiento</option>
                   <option value="camara">Cámara</option>
@@ -430,8 +430,8 @@
                   <option value="expresion">Expresión</option>
                 </select>
               </label>
-              <label class="inline-field control-inline" style="display: flex; align-items: center; gap: 0.3rem;">
-                <span style="font-size: 0.78rem;">Fuerza</span>
+              <label class="inline-field control-inline video-enhance-field">
+                <span>Fuerza</span>
                 <select id="video-h3-prompt-strength">
                   <option value="fiel">Fiel</option>
                   <option value="balanceado" selected>Balanceado</option>
@@ -484,7 +484,8 @@
               <span>Perfil Wan</span>
               <select id="video-wan-preset">
                 <option value="rapido" selected>Fast · 4 pasos</option>
-                <option value="calidad">Quality · 30 pasos</option>
+                <option value="estandar">Estándar · 12 pasos</option>
+                <option value="calidad">Calidad · 30 pasos</option>
                 <option value="manual">Manual</option>
               </select>
               <p id="video-wan-size-info" class="field-hint">Salida Wan: 432x768 (vertical) o 768x432 (horizontal).</p>
@@ -615,11 +616,17 @@
                 <textarea id="video-negative" rows="2" placeholder="Vacío = negativo recomendado de Wan (calidad, sin movimiento, anatomía, anti-censura)"></textarea>
               </label>
               <p class="field-hint">El negativo solo se aplica cuando escribes uno; si queda vacío se usa el negativo certificado.</p>
+              <label class="field hidden" id="video-wan-resolution-field">
+                <span>Resolución manual</span>
+                <select id="video-wan-resolution"></select>
+                <p class="field-hint">Solo se usa con perfil Manual; se ajusta a la orientación elegida.</p>
+              </label>
               <div class="grid-2">
                 <label class="field">
                   <span>Sampler</span>
                   <select id="video-wan-sampler">
                     <option value="euler" selected>euler</option>
+                    <option value="er_sde">er_sde</option>
                     <option value="res_multistep">res_multistep</option>
                     <option value="dpmpp_2m">dpmpp_2m</option>
                     <option value="uni_pc">uni_pc</option>

@@ -63,6 +63,46 @@
   box-sizing: border-box;
 }
 
+.video-enhance-field {
+  display: flex !important;
+  flex: 1 1 130px;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0.2rem;
+  min-width: 120px;
+}
+
+.video-enhance-field > span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.video-enhance-field select {
+  width: 100%;
+}
+
+.video-prompt-ai {
+  min-width: 76px;
+  white-space: normal;
+  line-height: 1.05;
+  text-align: center;
+  padding: 0.45rem 0.6rem;
+}
+
+.video-prompt-ai span {
+  display: inline-block;
+}
+
+#video-wan-advanced select:disabled,
+#video-wan-advanced input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#video-wan-resolution-field.hidden {
+  display: none !important;
+}
+
 .video-preview-box video {
   max-width: 100%;
   max-height: 100%;

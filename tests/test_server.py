@@ -5634,12 +5634,16 @@ class WanPromptUiStaticTests(ServerTestCase):
             'id="video-last-image-preview"',
             'id="video-negative"',
             'id="video-wan-advanced"',
+            'id="video-wan-resolution-field"',
+            'id="video-wan-resolution"',
+            'IA<br>PROMPT',
             'id="video-wan-sampler"',
             'id="video-wan-scheduler"',
             'id="video-wan-steps"',
             'id="video-wan-shift"',
             'id="btn-video-to-timeline"',
             '<option value="manual">Manual</option>',
+            '<option value="estandar">',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)

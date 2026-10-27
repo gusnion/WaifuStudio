@@ -336,7 +336,7 @@ function videoReuseParams(params = {}) {
     ? [p.ref_images]
     : [];
   const ref_video = typeof p.ref_video === "string" ? p.ref_video.trim() : "";
-  const preset = ["rapido", "calidad", "manual"].includes(p.preset)
+  const preset = ["rapido", "estandar", "calidad", "manual"].includes(p.preset)
     ? p.preset
     : "rapido";
   const isWan = p.engine === "wan" || Boolean(p.preset);
@@ -480,6 +480,11 @@ async function reuseVideoGeneration(item) {
   if ($("video-wan-scheduler")) setSelectValue($("video-wan-scheduler"), reused.scheduler);
   if ($("video-wan-steps")) $("video-wan-steps").value = String(reused.steps);
   if ($("video-wan-shift")) $("video-wan-shift").value = String(reused.shift);
+  if (reused.preset === "manual" && reused.width && reused.height) {
+    updateWanResolutionOptions();
+    const resolution = $("video-wan-resolution");
+    if (resolution) resolution.value = `${reused.width}x${reused.height}`;
+  }
 
   setSelectValue($("video-h3-profile"), reused.profile);
   updateH3Variants();
@@ -747,6 +752,14 @@ async function generateWanVideo() {
   const negative = $("video-negative")?.value.trim() || "";
   if (negative) payload.motion_negative = negative;
   if (preset === "manual") {
+    const resolution = $("video-wan-resolution")?.value || "432x768";
+    const [width, height] = resolution.split("x").map(Number);
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      setVideoStatus("Resolución manual inválida", true);
+      return;
+    }
+    payload.width = width;
+    payload.height = height;
     payload.sampler_name = $("video-wan-sampler")?.value || "euler";
     payload.scheduler = $("video-wan-scheduler")?.value || "simple";
     payload.steps = Number($("video-wan-steps")?.value || 20);
@@ -916,15 +929,60 @@ async function generateVideo() {
 
 const WAN_OUTPUT_SIZES = {
   rapido: { vertical: [432, 768], horizontal: [768, 432] },
-  calidad: { vertical: [512, 896], horizontal: [896, 512] },
+  estandar: { vertical: [512, 896], horizontal: [896, 512] },
+  calidad: { vertical: [576, 1024], horizontal: [1024, 576] },
   manual: { vertical: [432, 768], horizontal: [768, 432] },
 };
 
+const WAN_MANUAL_RESOLUTIONS = {
+  vertical: [[432, 768], [512, 896], [576, 1024]],
+  horizontal: [[768, 432], [896, 512], [1024, 576]],
+};
+
+const WAN_PRESET_DEFAULTS = {
+  rapido: { sampler: "euler", scheduler: "simple", steps: 4, shift: 5.0 },
+  estandar: { sampler: "euler", scheduler: "simple", steps: 12, shift: 5.0 },
+  calidad: { sampler: "er_sde", scheduler: "simple", steps: 30, shift: 5.0 },
+};
+
+function updateWanResolutionOptions() {
+  const select = $("video-wan-resolution");
+  if (!select) return;
+  const aspect = $("video-h3-aspect")?.value || "vertical";
+  const previous = select.value;
+  select.replaceChildren();
+  for (const [width, height] of WAN_MANUAL_RESOLUTIONS[aspect] || WAN_MANUAL_RESOLUTIONS.vertical) {
+    const option = document.createElement("option");
+    option.value = `${width}x${height}`;
+    option.textContent = `${width}×${height}`;
+    select.appendChild(option);
+  }
+  const values = [...select.options].map((opt) => opt.value);
+  select.value = values.includes(previous)
+    ? previous
+    : WAN_MANUAL_RESOLUTIONS[aspect][0].join("x");
+}
+
 function updateWanAdvancedState() {
-  const manual = ($("video-wan-preset")?.value || "rapido") === "manual";
+  const preset = $("video-wan-preset")?.value || "rapido";
+  const manual = preset === "manual";
+  if (!manual && WAN_PRESET_DEFAULTS[preset]) {
+    const defaults = WAN_PRESET_DEFAULTS[preset];
+    if ($("video-wan-sampler")) setSelectValue($("video-wan-sampler"), defaults.sampler);
+    if ($("video-wan-scheduler")) setSelectValue($("video-wan-scheduler"), defaults.scheduler);
+    if ($("video-wan-steps")) $("video-wan-steps").value = String(defaults.steps);
+    if ($("video-wan-shift")) $("video-wan-shift").value = String(defaults.shift);
+  }
   for (const id of ["video-wan-sampler", "video-wan-scheduler", "video-wan-steps", "video-wan-shift"]) {
     const el = $(id);
     if (el) el.disabled = !manual;
+  }
+  const resolutionField = $("video-wan-resolution-field");
+  if (resolutionField) resolutionField.classList.toggle("hidden", !manual);
+  const resolutionSelect = $("video-wan-resolution");
+  if (resolutionSelect) {
+    resolutionSelect.disabled = !manual;
+    if (manual) updateWanResolutionOptions();
   }
   const details = $("video-wan-advanced");
   if (details && manual) details.open = true;
@@ -935,7 +993,12 @@ function updateWanSizeInfo() {
   if (!el) return;
   const preset = $("video-wan-preset")?.value || "rapido";
   const aspect = $("video-h3-aspect")?.value || "vertical";
-  const size = WAN_OUTPUT_SIZES[preset]?.[aspect] || WAN_OUTPUT_SIZES.rapido.vertical;
+  let size = WAN_OUTPUT_SIZES[preset]?.[aspect] || WAN_OUTPUT_SIZES.rapido.vertical;
+  if (preset === "manual") {
+    const resolution = $("video-wan-resolution")?.value || "";
+    const parts = resolution.split("x").map(Number);
+    if (parts.length === 2 && parts.every(Number.isFinite)) size = parts;
+  }
   el.textContent = `Salida Wan: ${size[0]}×${size[1]} (${aspect === "vertical" ? "vertical 9:16" : "horizontal 16:9"})`;
   updateWanAdvancedState();
 }

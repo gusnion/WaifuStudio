@@ -94,7 +94,7 @@ async function improveH3Prompt() {
     }
     h3PromptResetTimer = setTimeout(() => {
       if (!state.pendingH3Prompt) {
-        button.textContent = "Mejorar prompt con IA";
+        button.innerHTML = "<span>IA<br>PROMPT</span>";
       }
     }, 1600);
   }

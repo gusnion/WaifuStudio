@@ -113,6 +113,8 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
             scheduler=payload.get("scheduler"),
             steps=payload.get("steps"),
             shift=payload.get("shift"),
+            width=payload.get("width"),
+            height=payload.get("height"),
         )
         seconds = payload.get("seconds")
         if seconds is None:
@@ -287,6 +289,9 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         "preset": PRESET_MANUAL if profile is None else profile["preset"],
         **profile_fields,
     }
+    if engine_kind == "wan":
+        stored_params["width"] = width
+        stored_params["height"] = height
     if h3_profile is not None:
         stored_params["profile"] = h3_profile["id"]
         stored_params["variant"] = h3_variant["id"]
@@ -331,6 +336,9 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         "preset": stored_params["preset"],
         **profile_fields,
     }
+    if engine_kind == "wan":
+        job["width"] = width
+        job["height"] = height
     if h3_profile is not None:
         job["profile"] = h3_profile["id"]
         job["variant"] = h3_variant["id"]

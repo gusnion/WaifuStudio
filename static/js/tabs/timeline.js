@@ -624,7 +624,7 @@ function inheritedVideoConfig(clip) {
     : hasSize
     ? (height > width ? "vertical" : "horizontal")
     : "vertical";
-  const preset = ["rapido", "calidad", "manual"].includes(p.preset)
+  const preset = ["rapido", "estandar", "calidad", "manual"].includes(p.preset)
     ? p.preset
     : "rapido";
   return {

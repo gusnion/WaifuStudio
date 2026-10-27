@@ -16,7 +16,7 @@ Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**,
 - **LLM / Visión en CPU (`:8290`)**: `Qwen3.5-9B NSFW Captioning v5` (`Q4_K_M` + `mmproj-Q8_0`) servido por `tools/llama.cpp/llama-server.exe` con `-ngl 0` (100% CPU, 0 VRAM). La app lo arranca y detiene automáticamente mediante `app/llm_server.py`.
 - **7 Pestañas**:
   1. **Imagen**: checkpoints **Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok** (SDXL) con `LoraLoader` dual, auto-detección de arquitectura de LoRAs por tensores (`infer_lora_family`) e inyección automática de *triggers*.
-  2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos) y Quality (30 pasos), LightX2V y audio MMAudio.
+  2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos), Standard (12), Quality (30) y Manual, prompt assistant, guía integrada y audio MMAudio.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
   4. **Upscaler**: **RealESRGAN x2/x4** (imagen/vídeo) + **RIFE** (interpolación FPS) con visor comparador interactivo antes/después.
   5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, biblioteca de medios e IA Wan.
@@ -57,7 +57,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.649 tests offline en CPU (~60 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.653 tests offline en CPU (~60 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```
