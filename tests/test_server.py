@@ -4077,12 +4077,19 @@ class IndexTests(ServerTestCase):
             "reuseGeneration",
             "applySavedReference",
             "isSheetRef",
-            "Usar como referencia",
             "IPAdapter (M10)",
             "no se adjunta como referencia I2I",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
+
+    def test_ocmaker_sin_boton_ni_funcion_usar_como_referencia(self):
+        index_html = self.make_client().get("/").text
+        oc_picker_path = Path(__file__).resolve().parents[1] / "static" / "js" / "components" / "oc_picker.js"
+        oc_picker_js = oc_picker_path.read_text(encoding="utf-8")
+        self.assertNotIn("Usar como referencia", index_html)
+        self.assertNotIn("Usar como referencia", oc_picker_js)
+        self.assertNotIn("useRefAsReference", oc_picker_js)
 
 
 class CacheHeaderTests(ServerTestCase):

@@ -1,4 +1,4 @@
-// WaifuStudio — Selector y Modal de OCs (Original Characters)
+// WaifuStudio  ESelector y Modal de OCs (Original Characters)
 // Qué hace: creación, edición, catálogo de rasgos y persistencia de personajes.
 // Qué no hace: no ejecuta entrenamientos ni renderiza hojas de contacto (sheets).
 // Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
@@ -46,23 +46,6 @@ function isSheetRef(ref) {
     return true;
   }
   return refFilename(ref).startsWith("sheet_");
-}
-
-async function useRefAsReference(ref) {
-  if (isSheetRef(ref)) {
-    const proceed = window.confirm(
-      "Esta ref es una hoja (catálogo para IPAdapter M10): como referencia I2I puede copiar el mosaico. ¿Adjuntarla igualmente?"
-    );
-    if (!proceed) {
-      return false;
-    }
-  }
-  await attachReferenceFromUrl(ref.url, refFilename(ref));
-  closeOcModal();
-  setStatus(
-    `Referencia adjuntada (fuerza ${Number($("strength").value).toFixed(2)})`
-  );
-  return true;
 }
 
 function isOcTagSelected(tag) {
@@ -528,12 +511,6 @@ async function loadCharacterRefs() {
     link.target = "_blank";
     link.rel = "noopener";
     link.textContent = "Ver/Descargar";
-    const use = document.createElement("button");
-    use.type = "button";
-    use.textContent = "Usar como referencia";
-    use.addEventListener("click", () => {
-      useRefAsReference(ref).catch((error) => setOcStatus(error.message, true));
-    });
     const remove = document.createElement("button");
     remove.type = "button";
     remove.textContent = "Quitar";
@@ -542,7 +519,7 @@ async function loadCharacterRefs() {
         setOcStatus(error.message, true)
       );
     });
-    figure.append(link, use, remove);
+    figure.append(link, remove);
     container.appendChild(figure);
   }
 }
@@ -595,7 +572,7 @@ async function openOcSaveModal(item) {
   await loadCharacters();
   const select = $("oc-save-select");
   select.replaceChildren();
-  select.appendChild(option("", "— elegir OC —"));
+  select.appendChild(option("", " Eelegir OC  E));
   for (const character of state.characters) {
     select.appendChild(option(String(character.id), character.name));
   }
@@ -725,7 +702,6 @@ export {
   setOcSaveStatus,
   refFilename,
   isSheetRef,
-  useRefAsReference,
   isOcTagSelected,
   renderOcCatalogResults,
   renderOcSelected,
