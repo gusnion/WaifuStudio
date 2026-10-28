@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.0 — 2026-10-28 (cierre manual autorizado)
+
+- Cierre manual de 2.5: 42 ítems `[x]` + C-42 `[!]` autorizado por el usuario.
+- Sin tag `v2.5.0` ni release remoto: el remoto rechazó la clave pública y `gh release view v2.5.0` dio `release not found`.
+- Instalación limpia verificada en `G:\IA\WAIFU-25-clean`: app, ComfyUI 0.42.5, `app.health` OK y primera imagen gen 1.
+- Suite final: 1.785 tests OK, 1 skipped.
+- Evidencia y auditoría: `docs/2.5/CIERRE_2.5.md`.
+
 ## Unreleased — Video Wan 2.2 sin BETA
 
 - Video queda sin badge BETA y sin controles visibles H3/VDN.
