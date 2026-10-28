@@ -1466,7 +1466,28 @@
             </label>
             <p class="field-hint">Usa una sola referencia: archivo de audio o ref_embed. Sin referencia se usa solo el caption. Esta pestaña no calcula Speaker Inversion.</p>
 
+            <div class="field" style="margin-top:0.6rem; border-top:1px solid var(--border-color, #333); padding-top:0.6rem;">
+              <label class="field-inline" style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                <input type="checkbox" id="audio-voice-long">
+                <span><strong>Modo texto largo (tramos con crossfade)</strong></span>
+              </label>
+              <div id="audio-voice-long-controls" style="display:none; margin-top:0.4rem;">
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                  <label class="field" style="flex:1; margin-bottom:0;">
+                    <span class="field-label" style="font-size:0.75rem;">Tramos (auto / manual):</span>
+                    <input type="number" id="audio-voice-tramos" min="1" max="10" placeholder="Auto" style="font-size:0.8rem; padding:4px 6px;">
+                  </label>
+                  <div id="audio-voice-chunks-info" class="field-hint" style="flex:2; font-size:0.74rem;">Auto: tramos de ~20 s (0,3 s crossfade)</div>
+                </div>
+              </div>
+              <p class="field-hint">Divide en tramos coherentes, sintetiza con Irodori y concatena con crossfade de 0,3 s a 48 kHz (ej.: 60 s = 3 tramos continuos).</p>
+            </div>
+
             <button id="btn-audio-voice-generate" class="primary btn-primary" type="button" style="width:100%; margin-top:0.75rem; padding:8px;">🎙️ Generar Voz</button>
+            <div id="audio-voice-progress" class="progress" style="display:none; margin-top:0.5rem;">
+              <div id="audio-voice-progress-fill" class="progress-fill" style="width:0%;"></div>
+            </div>
+            <div id="audio-voice-progress-text" class="field-hint" style="text-align:right; font-size:0.72rem; display:none;"></div>
             <div id="audio-voice-status" class="field-hint" style="margin-top:0.5rem; min-height:1.2rem;"></div>
           </div>
         </div>

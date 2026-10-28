@@ -352,6 +352,131 @@ function fileToBase64(file) {
   });
 }
 
+export function setVoiceProgress(percent = 0, text = "") {
+  const wrap = $("audio-voice-progress");
+  const fill = $("audio-voice-progress-fill");
+  const txt = $("audio-voice-progress-text");
+  if (!wrap || !fill) return;
+
+  const valid = typeof percent === "number" && percent >= 0;
+  wrap.style.display = valid ? "block" : "none";
+  fill.style.width = valid ? `${Math.min(100, Math.max(0, percent))}%` : "0%";
+  if (txt) {
+    txt.style.display = valid ? "block" : "none";
+    txt.textContent = text || (valid ? `${Math.round(percent)}%` : "");
+  }
+}
+
+export function splitVoiceTextJS(text, maxChars = 220, targetChunks = null, targetDuration = null) {
+  const clean = (text || "").trim();
+  if (!clean) return [];
+  if (!targetChunks && targetDuration && targetDuration > 0) {
+    targetChunks = Math.max(1, Math.round(targetDuration / 20));
+  }
+  if (targetChunks === 1) return [clean];
+
+  const sentences = clean.split(/(?<=[.!?。！？\n])\s+/).map((s) => s.trim()).filter(Boolean);
+  const baseList = sentences.length ? sentences : [clean];
+
+  if (targetChunks && targetChunks > 1) {
+    if (baseList.length === targetChunks) return baseList;
+    if (baseList.length > targetChunks) {
+      const chunks = [];
+      for (let i = 0; i < targetChunks; i++) {
+        const start = Math.floor((i * baseList.length) / targetChunks);
+        const end = Math.floor(((i + 1) * baseList.length) / targetChunks);
+        const block = baseList.slice(start, end).join(" ").trim();
+        if (block) chunks.push(block);
+      }
+      return chunks;
+    }
+    const words = clean.split(/\s+/).filter(Boolean);
+    if (words.length >= targetChunks) {
+      const chunks = [];
+      for (let i = 0; i < targetChunks; i++) {
+        const start = Math.floor((i * words.length) / targetChunks);
+        const end = Math.floor(((i + 1) * words.length) / targetChunks);
+        const block = words.slice(start, end).join(" ").trim();
+        if (block) chunks.push(block);
+      }
+      return chunks;
+    }
+    const totalChars = clean.length;
+    if (totalChars >= targetChunks) {
+      const chunks = [];
+      for (let i = 0; i < targetChunks; i++) {
+        const start = Math.floor((i * totalChars) / targetChunks);
+        const end = Math.floor(((i + 1) * totalChars) / targetChunks);
+        const block = clean.slice(start, end).trim();
+        if (block) chunks.push(block);
+      }
+      if (chunks.length === targetChunks) return chunks;
+    }
+    return baseList;
+  }
+
+  const chunks = [];
+  let current = [];
+  let currentLen = 0;
+  for (const s of baseList) {
+    if (s.length > maxChars) {
+      if (current.length) {
+        chunks.push(current.join(" "));
+        current = [];
+        currentLen = 0;
+      }
+      const words = s.split(/\s+/).filter(Boolean);
+      let wAcc = [];
+      let wLen = 0;
+      for (const w of words) {
+        if (wAcc.length && (wLen + w.length + 1 > maxChars)) {
+          chunks.push(wAcc.join(" "));
+          wAcc = [w];
+          wLen = w.length;
+        } else {
+          wAcc.push(w);
+          wLen += w.length + 1;
+        }
+      }
+      if (wAcc.length) chunks.push(wAcc.join(" "));
+      continue;
+    }
+    const added = s.length + (current.length ? 1 : 0);
+    if (current.length && currentLen + added > maxChars) {
+      chunks.push(current.join(" "));
+      current = [s];
+      currentLen = s.length;
+    } else {
+      current.push(s);
+      currentLen += added;
+    }
+  }
+  if (current.length) chunks.push(current.join(" "));
+  return chunks;
+}
+
+export function updateVoiceLongPreview() {
+  const longCheck = $("audio-voice-long");
+  const controls = $("audio-voice-long-controls");
+  const info = $("audio-voice-chunks-info");
+  if (!longCheck) return;
+  const isLong = Boolean(longCheck.checked);
+  if (controls) controls.style.display = isLong ? "block" : "none";
+  if (!isLong || !info) return;
+
+  const text = $("audio-voice-text")?.value?.trim() || "";
+  const tramosInput = parseInt($("audio-voice-tramos")?.value, 10);
+  const manualTramos = !isNaN(tramosInput) && tramosInput > 0 ? tramosInput : null;
+  const chunks = splitVoiceTextJS(text, 220, manualTramos);
+  const count = chunks.length || 1;
+  const estSeconds = Math.round(count * 20);
+  if (manualTramos) {
+    info.textContent = `${count} tramos manuales (~${estSeconds} s, crossfade 0,3 s)`;
+  } else {
+    info.textContent = `Previsto: ${count} tramo${count > 1 ? "s" : ""} (~${estSeconds} s, crossfade 0,3 s)`;
+  }
+}
+
 function renderVoiceResult(res) {
   const card = $("audio-voice-result-card");
   const empty = $("audio-voice-empty-card");
@@ -370,7 +495,8 @@ function renderVoiceResult(res) {
   }
   if (meta) {
     const secs = typeof res.duration === "number" ? `${res.duration.toFixed(1)} s · ` : "";
-    meta.textContent = `${secs}seed ${res.seed}${res.has_ref ? " · con referencia" : ""}`;
+    const tramosStr = res.chunks && res.chunks > 1 ? ` · ${res.chunks} tramos (crossfade 0,3 s)` : "";
+    meta.textContent = `${secs}seed ${res.seed}${res.has_ref ? " · con referencia" : ""}${tramosStr}`;
   }
   card.style.display = "block";
   if (empty) empty.style.display = "none";
@@ -388,6 +514,16 @@ async function handleGenerateVoice() {
   const seedInput = parseInt($("audio-voice-seed")?.value, 10);
   const payload = { text, caption, seed: isNaN(seedInput) || seedInput < 0 ? -1 : seedInput };
 
+  const isLong = Boolean($("audio-voice-long")?.checked);
+  const tramosInput = parseInt($("audio-voice-tramos")?.value, 10);
+  if (isLong) {
+    payload.long = true;
+    payload.crossfade = 0.3;
+    if (!isNaN(tramosInput) && tramosInput > 0) {
+      payload.tramos = tramosInput;
+    }
+  }
+
   const file = $("audio-voice-ref-file")?.files?.[0] || null;
   const refEmbed = $("audio-voice-ref-embed")?.value?.trim() || "";
   if (file && refEmbed) {
@@ -395,10 +531,29 @@ async function handleGenerateVoice() {
     return;
   }
 
+  const manualTramos = !isNaN(tramosInput) && tramosInput > 0 ? tramosInput : null;
+  const expectedChunks = isLong ? (splitVoiceTextJS(text, 220, manualTramos).length || 1) : 1;
+
   const btn = $("btn-audio-voice-generate");
   voiceBusy = true;
   if (btn) btn.disabled = true;
-  setVoiceStatus("Sintetizando voz con Irodori...");
+
+  let progressInterval = null;
+  if (isLong) {
+    setVoiceProgress(10, `Iniciando síntesis (tramo 1/${expectedChunks})...`);
+    setVoiceStatus(`Sintetizando voz en ${expectedChunks} tramos con crossfade de 0,3 s...`);
+    let simulated = 10;
+    progressInterval = setInterval(() => {
+      if (simulated < 85) {
+        simulated += 6;
+        const curTramo = Math.min(expectedChunks, Math.max(1, Math.ceil((simulated / 85) * expectedChunks)));
+        setVoiceProgress(simulated, `Sintetizando tramo ${curTramo}/${expectedChunks}...`);
+      }
+    }, 2000);
+  } else {
+    setVoiceProgress(15, "Sintetizando voz con Irodori...");
+    setVoiceStatus("Sintetizando voz con Irodori...");
+  }
 
   try {
     if (file) {
@@ -415,14 +570,36 @@ async function handleGenerateVoice() {
       body: JSON.stringify(payload),
       timeoutMs: VOICE_REQUEST_TIMEOUT_MS,
     });
+
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+
+    if (isLong) {
+      setVoiceProgress(100, `Completado: ${res.chunks || expectedChunks} tramos concatenados`);
+      setVoiceStatus(`Voz continua generada (${res.chunks || expectedChunks} tramos con crossfade de 0,3 s, Gen #${res.gen_id}).`, false);
+    } else {
+      setVoiceProgress(100, "Voz completada");
+      setVoiceStatus(`Voz generada y guardada en la galería (Gen #${res.gen_id}).`, false);
+    }
+
     renderVoiceResult(res);
-    setVoiceStatus(`Voz generada y guardada en la galería (Gen #${res.gen_id}).`, false);
   } catch (err) {
     console.error("[audio] Error al sintetizar voz:", err);
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+    setVoiceProgress(-1);
     setVoiceStatus(`Error: ${err.message}`, true);
   } finally {
+    if (progressInterval) clearInterval(progressInterval);
     voiceBusy = false;
     if (btn) btn.disabled = false;
+    setTimeout(() => {
+      if (!voiceBusy) setVoiceProgress(-1);
+    }, 3500);
   }
 }
 
@@ -464,6 +641,11 @@ export function initAudioTab() {
     const seedEl = $("audio-voice-seed");
     if (seedEl) seedEl.value = Math.floor(Math.random() * 2147483647);
   });
+
+  on("audio-voice-long", "change", updateVoiceLongPreview);
+  on("audio-voice-text", "input", updateVoiceLongPreview);
+  on("audio-voice-tramos", "input", updateVoiceLongPreview);
+  updateVoiceLongPreview();
 
   on("btn-audio-cancel", "click", async () => {
     if (activeAudioJobId) {

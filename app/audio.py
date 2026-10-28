@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import random
+import re
 import shutil
 import subprocess
 import threading
@@ -178,6 +179,216 @@ def wav_duration_seconds(data: bytes) -> float | None:
             return round(wf.getnframes() / float(rate), 3) if rate > 0 else None
     except (wave.Error, EOFError):
         return None
+
+
+VOICE_LONG_CROSSFADE_S = 0.3
+VOICE_CHUNK_TARGET_DURATION_S = 20.0
+VOICE_CHUNK_CHARS_PER_SEC = 10.0
+VOICE_CHUNK_MAX_CHARS = 220
+
+
+def split_voice_text(
+    text: str,
+    max_chars: int = VOICE_CHUNK_MAX_CHARS,
+    target_chunks: int | None = None,
+    target_duration: float | None = None,
+) -> list[str]:
+    """Divide el texto para síntesis de voz en tramos coherentes (por frases o longitud).
+
+    Para una duración objetivo de 60 s (o texto equivalente de ~60 s / 3 frases),
+    produce exactamente 3 tramos de ~20 s. Mantiene intactos emojis y signos de puntuación.
+    """
+    clean = text.strip()
+    if not clean:
+        return []
+
+    if target_chunks is None and target_duration is not None and target_duration > 0:
+        target_chunks = max(1, round(float(target_duration) / VOICE_CHUNK_TARGET_DURATION_S))
+
+    if target_chunks == 1:
+        return [clean]
+
+    pattern = r"(?<=[.!?\n])\s+|(?<=[。！？…])"
+    raw_sentences = [s.strip() for s in re.split(pattern, clean) if s.strip()]
+    if not raw_sentences:
+        raw_sentences = [clean]
+
+    if target_chunks is not None and target_chunks > 1:
+        if len(raw_sentences) == target_chunks:
+            return raw_sentences
+        if len(raw_sentences) > target_chunks:
+            chunks: list[str] = []
+            total = len(raw_sentences)
+            for i in range(target_chunks):
+                start = (i * total) // target_chunks
+                end = ((i + 1) * total) // target_chunks
+                block = " ".join(raw_sentences[start:end]).strip()
+                if block:
+                    chunks.append(block)
+            return chunks
+        else:
+            clause_pat = r"(?<=[,;—–])\s+|(?<=[，、；])"
+            clauses: list[str] = []
+            for sent in raw_sentences:
+                sub = [c.strip() for c in re.split(clause_pat, sent) if c.strip()]
+                clauses.extend(sub or [sent])
+            if len(clauses) >= target_chunks:
+                chunks = []
+                total = len(clauses)
+                for i in range(target_chunks):
+                    start = (i * total) // target_chunks
+                    end = ((i + 1) * total) // target_chunks
+                    block = " ".join(clauses[start:end]).strip()
+                    if block:
+                        chunks.append(block)
+                return chunks
+
+            words = clean.split()
+            if len(words) >= target_chunks:
+                chunks = []
+                total = len(words)
+                for i in range(target_chunks):
+                    start = (i * total) // target_chunks
+                    end = ((i + 1) * total) // target_chunks
+                    block = " ".join(words[start:end]).strip()
+                    if block:
+                        chunks.append(block)
+                return chunks
+
+            # Si el texto no tiene suficientes palabras o delimitadores (ej. japonés sin espacios ni puntuación),
+            # divide por caracteres equitativamente para garantizar los tramos solicitados.
+            total_chars = len(clean)
+            if total_chars >= target_chunks:
+                chunks = []
+                for i in range(target_chunks):
+                    start = (i * total_chars) // target_chunks
+                    end = ((i + 1) * total_chars) // target_chunks
+                    block = clean[start:end].strip()
+                    if block:
+                        chunks.append(block)
+                if len(chunks) == target_chunks:
+                    return chunks
+
+            return raw_sentences
+
+    chunks: list[str] = []
+    current_parts: list[str] = []
+    current_len = 0
+
+    for sent in raw_sentences:
+        if len(sent) > max_chars:
+            if current_parts:
+                chunks.append(" ".join(current_parts))
+                current_parts = []
+                current_len = 0
+            clause_pat = r"(?<=[,;—–])\s+|(?<=[，、；])"
+            subclauses = [c.strip() for c in re.split(clause_pat, sent) if c.strip()]
+            if not subclauses or len(subclauses) == 1:
+                words = sent.split()
+                w_acc: list[str] = []
+                w_len = 0
+                for w in words:
+                    if w_acc and (w_len + len(w) + 1 > max_chars):
+                        chunks.append(" ".join(w_acc))
+                        w_acc = [w]
+                        w_len = len(w)
+                    else:
+                        w_acc.append(w)
+                        w_len += len(w) + 1
+                if w_acc:
+                    chunks.append(" ".join(w_acc))
+            else:
+                c_acc: list[str] = []
+                c_len = 0
+                for c in subclauses:
+                    if c_acc and (c_len + len(c) + 1 > max_chars):
+                        chunks.append(" ".join(c_acc))
+                        c_acc = [c]
+                        c_len = len(c)
+                    else:
+                        c_acc.append(c)
+                        c_len += len(c) + 1
+                if c_acc:
+                    chunks.append(" ".join(c_acc))
+            continue
+
+        added_len = len(sent) + (1 if current_parts else 0)
+        if current_parts and (current_len + added_len > max_chars):
+            chunks.append(" ".join(current_parts))
+            current_parts = [sent]
+            current_len = len(sent)
+        else:
+            current_parts.append(sent)
+            current_len += added_len
+
+    if current_parts:
+        chunks.append(" ".join(current_parts))
+
+    return chunks
+
+
+def build_crossfade_filter(
+    num_inputs: int,
+    crossfade_s: float = VOICE_LONG_CROSSFADE_S,
+    sample_rate: int = AUDIO_TARGET_SAMPLE_RATE,
+) -> str:
+    """Construye la cadena de filtros FFmpeg para concatenar N audios con crossfade y salida a sample_rate."""
+    if num_inputs <= 0:
+        return ""
+    if num_inputs == 1:
+        return f"[0:a]aresample={sample_rate}[aout]"
+
+    steps: list[str] = []
+    for i in range(1, num_inputs):
+        in_left = "[0:a]" if i == 1 else f"[a{i-1}]"
+        in_right = f"[{i}:a]"
+        if i == num_inputs - 1:
+            steps.append(f"{in_left}{in_right}acrossfade=d={crossfade_s}:c1=tri:c2=tri,aresample={sample_rate}[aout]")
+        else:
+            steps.append(f"{in_left}{in_right}acrossfade=d={crossfade_s}:c1=tri:c2=tri[a{i}]")
+    return ";".join(steps)
+
+
+def concat_wavs_crossfade(
+    wav_paths: list[Path],
+    output_wav: Path,
+    crossfade_s: float = VOICE_LONG_CROSSFADE_S,
+    sample_rate: int = AUDIO_TARGET_SAMPLE_RATE,
+    ffmpeg_bin: str | Path | None = None,
+) -> None:
+    """Concatena una lista de archivos WAV con crossfade usando FFmpeg y salida PCM a sample_rate."""
+    if not wav_paths:
+        raise ValueError("Lista de WAVs vacía")
+    exe = str(ffmpeg_bin) if ffmpeg_bin else find_ffmpeg()
+    if not exe:
+        raise EngineError("ffmpeg no encontrado para concatenación de audio")
+
+    output_wav.parent.mkdir(parents=True, exist_ok=True)
+    if len(wav_paths) == 1:
+        cmd = [
+            str(exe), "-y",
+            "-i", str(wav_paths[0]),
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", str(sample_rate),
+            str(output_wav),
+        ]
+    else:
+        filter_expr = build_crossfade_filter(len(wav_paths), crossfade_s=crossfade_s, sample_rate=sample_rate)
+        cmd = [str(exe), "-y"]
+        for p in wav_paths:
+            cmd.extend(["-i", str(p)])
+        cmd.extend([
+            "-filter_complex", filter_expr,
+            "-map", "[aout]",
+            "-acodec", "pcm_s16le",
+            "-ar", str(sample_rate),
+            str(output_wav),
+        ])
+
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise EngineError(f"Error de FFmpeg al concatenar audio con crossfade: {proc.stderr.strip()}")
 
 
 def build_mmaudio_mode_b_graph(job: dict[str, Any]) -> dict[str, Any]:
@@ -758,6 +969,38 @@ async def api_audio_voice(payload: dict[str, Any], request: Request) -> dict[str
     cfg = request.app.state.config
     st = request.app.state.store
 
+    is_long = bool(payload.get("long") or payload.get("long_mode") or payload.get("mode") == "long")
+    raw_crossfade = payload.get("crossfade")
+    try:
+        crossfade_s = float(raw_crossfade) if raw_crossfade is not None and str(raw_crossfade).strip() != "" else VOICE_LONG_CROSSFADE_S
+    except (TypeError, ValueError):
+        crossfade_s = VOICE_LONG_CROSSFADE_S
+    if crossfade_s < 0.05 or crossfade_s > 2.0:
+        crossfade_s = VOICE_LONG_CROSSFADE_S
+
+    raw_tramos = payload.get("tramos") or payload.get("chunks")
+    try:
+        target_chunks = int(raw_tramos) if raw_tramos is not None and str(raw_tramos).strip() != "" else None
+    except (TypeError, ValueError):
+        target_chunks = None
+
+    raw_duration = payload.get("target_duration") or payload.get("duration")
+    try:
+        target_duration = float(raw_duration) if raw_duration is not None and str(raw_duration).strip() != "" else None
+    except (TypeError, ValueError):
+        target_duration = None
+
+    if is_long:
+        chunks = split_voice_text(
+            text,
+            target_chunks=target_chunks,
+            target_duration=target_duration,
+        )
+        if not chunks:
+            chunks = [text]
+    else:
+        chunks = [text]
+
     ref_kind = "wav" if (upload_b64 or ref_wav_path) else ("embed" if ref_embed_path else "none")
     stored_params = {
         "engine": "irodori",
@@ -767,6 +1010,9 @@ async def api_audio_voice(payload: dict[str, Any], request: Request) -> dict[str
         "ref": ref_kind,
         "ref_name": upload_name if upload_b64 else (ref_wav_path or ref_embed_path or Path("")).name,
         "response_format": "wav",
+        "long": is_long,
+        "chunks": len(chunks),
+        "crossfade_s": crossfade_s if is_long else 0.0,
     }
     gen_id = st.add(IRODORI_MODEL_NAME, text, "", stored_params, status="running", kind="audio")
 
@@ -777,20 +1023,45 @@ async def api_audio_voice(payload: dict[str, Any], request: Request) -> dict[str
             ref_wav_path = gallery_dir / f"ref_{gen_id}{Path(upload_name).suffix.lower()}"
             ref_wav_path.write_bytes(upload_bytes)
 
-        body = build_irodori_speech_body(
-            text, caption=caption or None, seed=seed, ref_wav=ref_wav_path, ref_embed=ref_embed_path
-        )
-
-        def _synthesize() -> tuple[bytes, int | None]:
-            with _VOICE_LOCK:
-                return request_irodori_speech(body)
-
-        wav_bytes, seed_used = await asyncio.to_thread(_synthesize)
-        if not wav_bytes.startswith(b"RIFF"):
-            raise IrodoriSpeechError(502, "Irodori no devolvió un WAV válido.")
-
+        chunk_wav_paths: list[Path] = []
+        seed_used: int | None = None
         wav_name = f"voice_{gen_id}.wav"
-        (gallery_dir / wav_name).write_bytes(wav_bytes)
+        final_path = gallery_dir / wav_name
+
+        for idx, chunk_text in enumerate(chunks):
+            body = build_irodori_speech_body(
+                chunk_text, caption=caption or None, seed=seed, ref_wav=ref_wav_path, ref_embed=ref_embed_path
+            )
+
+            def _synthesize(b=body) -> tuple[bytes, int | None]:
+                with _VOICE_LOCK:
+                    return request_irodori_speech(b)
+
+            chunk_bytes, chunk_seed = await asyncio.to_thread(_synthesize)
+            if not chunk_bytes.startswith(b"RIFF"):
+                suffix = f" (tramo {idx + 1}/{len(chunks)})" if len(chunks) > 1 else ""
+                raise IrodoriSpeechError(502, f"Irodori no devolvió un WAV válido{suffix}.")
+
+            if seed_used is None and chunk_seed is not None:
+                seed_used = chunk_seed
+
+            if len(chunks) == 1:
+                final_path.write_bytes(chunk_bytes)
+                final_wav_bytes = chunk_bytes
+            else:
+                chunk_path = gallery_dir / f"chunk_{gen_id}_{idx}.wav"
+                chunk_path.write_bytes(chunk_bytes)
+                chunk_wav_paths.append(chunk_path)
+
+        if len(chunks) > 1:
+            await asyncio.to_thread(
+                concat_wavs_crossfade,
+                chunk_wav_paths,
+                final_path,
+                crossfade_s=crossfade_s,
+                sample_rate=AUDIO_TARGET_SAMPLE_RATE,
+            )
+            final_wav_bytes = final_path.read_bytes()
     except IrodoriSpeechError as exc:
         st.update(gen_id, status="error", error=exc.detail)
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
@@ -806,11 +1077,14 @@ async def api_audio_voice(payload: dict[str, Any], request: Request) -> dict[str
         "outputs": outputs,
         "url": f"/api/audio/media/{gen_id}/{wav_name}",
         "seed": seed_used if seed_used is not None else seed,
-        "duration": wav_duration_seconds(wav_bytes),
-        "bytes": len(wav_bytes),
+        "duration": wav_duration_seconds(final_wav_bytes),
+        "bytes": len(final_wav_bytes),
         "caption": caption,
         "ref": ref_kind,
         "has_ref": ref_kind != "none",
+        "long": is_long,
+        "chunks": len(chunks),
+        "chunk_texts": chunks,
     }
 
 

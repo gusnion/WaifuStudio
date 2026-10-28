@@ -32,14 +32,18 @@ from app.audio import (
     AUDIO_TARGET_SAMPLE_RATE,
     IRODORI_DISABLED_REASON,
     VOICE_EMOJI_PALETTE,
+    VOICE_LONG_CROSSFADE_S,
     IrodoriSpeechError,
+    build_crossfade_filter,
     build_irodori_speech_body,
     build_mmaudio_mode_b_graph,
+    concat_wavs_crossfade,
     extract_48k_wav,
     mux_video_audio,
     probe_clip_audio,
     request_irodori_speech,
     run_audio_generation,
+    split_voice_text,
     wav_duration_seconds,
 )
 
@@ -223,6 +227,133 @@ class TestAudioFFmpegCommands(unittest.TestCase):
             self.assertIn("amix=inputs=2", filter_expr)
             self.assertIn("aresample=48000", filter_expr)
             self.assertIn("-shortest", args)
+
+
+class TestVoiceChunkingAndSplitting(unittest.TestCase):
+    """Verifica el troceado de texto para Modo A largo (por frases, longitud y duración objetivo)."""
+
+    def test_split_by_sentences_and_punctuation(self) -> None:
+        text = "Frase uno. Frase dos! Frase tres? Última frase."
+        chunks = split_voice_text(text, target_chunks=4)
+        self.assertEqual(len(chunks), 4)
+        self.assertEqual(chunks[0], "Frase uno.")
+        self.assertEqual(chunks[1], "Frase dos!")
+        self.assertEqual(chunks[2], "Frase tres?")
+        self.assertEqual(chunks[3], "Última frase.")
+
+    def test_split_japanese_punctuation(self) -> None:
+        text = "落ち着いた声です。次のフレーズです！最後に囁きます？"
+        chunks = split_voice_text(text, target_chunks=3)
+        self.assertEqual(len(chunks), 3)
+        self.assertIn("落ち着いた声です。", chunks[0])
+        self.assertIn("次のフレーズです！", chunks[1])
+        self.assertIn("最後に囁きます？", chunks[2])
+
+    def test_split_60s_target_duration_produces_3_chunks(self) -> None:
+        # Para 60 s debe producir 3 tramos de ~20 s (C-19 / T3-17)
+        text = "Primera parte del audio largo. Segunda parte que fluye continuamente. Tercera parte que concluye suavemente."
+        chunks = split_voice_text(text, target_duration=60.0)
+        self.assertEqual(len(chunks), 3)
+
+    def test_split_60s_explicit_tramos_produces_3_chunks(self) -> None:
+        text = "Tramo 1 continuo. Tramo 2 continuo. Tramo 3 continuo."
+        chunks = split_voice_text(text, target_chunks=3)
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual(chunks[0], "Tramo 1 continuo.")
+        self.assertEqual(chunks[1], "Tramo 2 continuo.")
+        self.assertEqual(chunks[2], "Tramo 3 continuo.")
+
+    def test_split_60s_by_length_produces_3_chunks(self) -> None:
+        # Texto largo de ~600 caracteres (aprox 60 s a 10 chars/segundo)
+        sentence = "palabra " * 75
+        chunks = split_voice_text(sentence.strip(), max_chars=220)
+        self.assertEqual(len(chunks), 3)
+        for c in chunks:
+            self.assertLessEqual(len(c), 220)
+
+    def test_split_preserves_emojis(self) -> None:
+        text = "Sensación intensa 🥵 en la piel. Respiración entrecortada 😮‍💨 sin pausa. Un beso final 💋 suave."
+        chunks = split_voice_text(text, target_chunks=3)
+        self.assertEqual(len(chunks), 3)
+        self.assertIn("🥵", chunks[0])
+        self.assertIn("😮‍💨", chunks[1])
+        self.assertIn("💋", chunks[2])
+
+    def test_split_empty_and_single_clause(self) -> None:
+        self.assertEqual(split_voice_text(""), [])
+        self.assertEqual(split_voice_text("   "), [])
+        self.assertEqual(split_voice_text("Una sola frase corta."), ["Una sola frase corta."])
+
+
+class TestVoiceCrossfadeFFmpeg(unittest.TestCase):
+    """Verifica la construcción del filtro FFmpeg y la concatenación con crossfade de 0,3 s a 48 kHz."""
+
+    def test_crossfade_default_is_0_3s(self) -> None:
+        self.assertEqual(VOICE_LONG_CROSSFADE_S, 0.3)
+
+    def test_build_crossfade_filter_2_inputs(self) -> None:
+        filt = build_crossfade_filter(2, crossfade_s=0.3, sample_rate=48000)
+        self.assertEqual(filt, "[0:a][1:a]acrossfade=d=0.3:c1=tri:c2=tri,aresample=48000[aout]")
+
+    def test_build_crossfade_filter_3_inputs_60s(self) -> None:
+        # Para 3 tramos (60 s), encadena 2 filtros acrossfade secuenciales terminando en aresample=48000
+        filt = build_crossfade_filter(3, crossfade_s=0.3, sample_rate=48000)
+        expected = "[0:a][1:a]acrossfade=d=0.3:c1=tri:c2=tri[a1];[a1][2:a]acrossfade=d=0.3:c1=tri:c2=tri,aresample=48000[aout]"
+        self.assertEqual(filt, expected)
+
+    def test_build_crossfade_filter_edge_cases(self) -> None:
+        self.assertEqual(build_crossfade_filter(0), "")
+        self.assertEqual(build_crossfade_filter(1, sample_rate=48000), "[0:a]aresample=48000[aout]")
+
+    @patch("subprocess.run")
+    def test_concat_wavs_crossfade_invokes_correct_args_3_chunks(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as td:
+            p1 = Path(td) / "chunk1.wav"
+            p2 = Path(td) / "chunk2.wav"
+            p3 = Path(td) / "chunk3.wav"
+            out = Path(td) / "merged.wav"
+            for p in (p1, p2, p3):
+                p.write_bytes(b"RIFFdummy")
+
+            concat_wavs_crossfade([p1, p2, p3], out, crossfade_s=0.3, sample_rate=48000, ffmpeg_bin="ffmpeg")
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+
+            self.assertEqual(args[0], "ffmpeg")
+            self.assertIn("-i", args)
+            self.assertEqual(args.count("-i"), 3)
+            self.assertIn(str(p1), args)
+            self.assertIn(str(p2), args)
+            self.assertIn(str(p3), args)
+            self.assertIn("-filter_complex", args)
+            filter_idx = args.index("-filter_complex")
+            filter_str = args[filter_idx + 1]
+            self.assertIn("acrossfade=d=0.3", filter_str)
+            self.assertIn("aresample=48000", filter_str)
+            self.assertIn("-map", args)
+            self.assertIn("[aout]", args)
+            self.assertIn("-acodec", args)
+            self.assertIn("pcm_s16le", args)
+            self.assertIn("-ar", args)
+            self.assertIn("48000", args)
+            self.assertEqual(args[-1], str(out))
+
+    @patch("subprocess.run")
+    def test_concat_wavs_crossfade_single_input(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as td:
+            p1 = Path(td) / "chunk1.wav"
+            p1.write_bytes(b"RIFFdummy")
+            out = Path(td) / "resampled.wav"
+
+            concat_wavs_crossfade([p1], out, sample_rate=48000, ffmpeg_bin="ffmpeg")
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertEqual(args[0], "ffmpeg")
+            self.assertIn("-ar", args)
+            self.assertIn("48000", args)
+            self.assertNotIn("-filter_complex", args)
 
 
 class TestAudioRouter(unittest.TestCase):
@@ -710,6 +841,79 @@ class TestAudioVoiceRoute(unittest.TestCase):
             res = self.client.post("/api/audio/voice", json={"text": "hola"})
         self.assertEqual(res.status_code, 502)
 
+    @patch("app.audio.concat_wavs_crossfade")
+    def test_voice_long_mode_synthesizes_3_chunks_with_crossfade(
+        self, mock_concat: MagicMock
+    ) -> None:
+        def _fake_concat(wav_paths, out_path, **kwargs):
+            out_path.write_bytes(self.wav)
+
+        mock_concat.side_effect = _fake_concat
+
+        text = "Frase uno apasionada 🥵. Frase dos con calma 😮‍💨. Frase tres de despedida 💋."
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(self.wav, "77")
+        ) as mock_open:
+            res = self.client.post(
+                "/api/audio/voice",
+                json={
+                    "text": text,
+                    "long": True,
+                    "caption": "voz femenina suave",
+                    "seed": 42,
+                    "tramos": 3,
+                },
+            )
+
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertTrue(data["long"])
+        self.assertEqual(data["chunks"], 3)
+        self.assertEqual(len(data["chunk_texts"]), 3)
+        self.assertEqual(data["seed"], 77)
+
+        # Se llamó a Irodori exactamente 3 veces (una por tramo)
+        self.assertEqual(mock_open.call_count, 3)
+
+        # En todas las llamadas se mantuvo caption y seed idénticos
+        for call in mock_open.call_args_list:
+            req_body = json.loads(call[0][0].data.decode("utf-8"))
+            self.assertEqual(req_body["irodori"]["caption"], "voz femenina suave")
+            self.assertEqual(req_body["irodori"]["seed"], 42)
+
+        # Se llamó a la concatenación con crossfade de 0,3 s y salida 48 kHz
+        mock_concat.assert_called_once()
+        _, kwargs = mock_concat.call_args
+        self.assertEqual(kwargs.get("crossfade_s"), 0.3)
+        self.assertEqual(kwargs.get("sample_rate"), 48000)
+
+    @patch("app.audio.concat_wavs_crossfade")
+    def test_voice_long_mode_target_duration_60s_produces_3_chunks(
+        self, mock_concat: MagicMock
+    ) -> None:
+        def _fake_concat(wav_paths, out_path, **kwargs):
+            out_path.write_bytes(self.wav)
+
+        mock_concat.side_effect = _fake_concat
+
+        text = "Texto fluido para sesenta segundos. Continuando con ritmo suave. Finalizando la locución continua."
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(self.wav)
+        ) as mock_open:
+            res = self.client.post(
+                "/api/audio/voice",
+                json={
+                    "text": text,
+                    "long": True,
+                    "target_duration": 60,
+                },
+            )
+
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertEqual(data["chunks"], 3)
+        self.assertEqual(mock_open.call_count, 3)
+
 
 class TestAudioVoiceStaticUI(unittest.TestCase):
     """Test estático: Modo A en index.html / audio.js / audio.css (sin servidor)."""
@@ -762,6 +966,27 @@ class TestAudioVoiceStaticUI(unittest.TestCase):
         self.assertIn("ref_wav_data", js)
         self.assertIn("ref_embed", js)
         self.assertIn("insertEmojiAtCursor", js)
+
+    def test_panel_has_long_mode_and_progress_controls(self) -> None:
+        panel = self._panel_audio()
+        for element_id in (
+            "audio-voice-long",
+            "audio-voice-tramos",
+            "audio-voice-chunks-info",
+            "audio-voice-progress",
+            "audio-voice-progress-fill",
+            "audio-voice-progress-text",
+        ):
+            self.assertIn(f'id="{element_id}"', panel, element_id)
+
+    def test_js_wires_long_mode_and_progress(self) -> None:
+        js = self._read("static/js/tabs/audio.js")
+        self.assertIn("audio-voice-long", js)
+        self.assertIn("audio-voice-tramos", js)
+        self.assertIn("splitVoiceTextJS", js)
+        self.assertIn("setVoiceProgress", js)
+        self.assertIn("updateVoiceLongPreview", js)
+        self.assertIn("crossfade", js)
 
     def test_audio_css_exists_and_is_linked(self) -> None:
         self.assertIn('href="/static/css/tabs/audio.css"', self._read("templates/index.html"))
