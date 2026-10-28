@@ -611,6 +611,61 @@ def mux_video_audio(
         raise EngineError(f"Error de FFmpeg al ensamblar MP4 con audio: {proc.stderr.strip()}")
 
 
+def mix_audio_stems(
+    voice_wav: Path,
+    ambient_wav: Path,
+    output_wav: Path,
+    sample_rate: int = AUDIO_TARGET_SAMPLE_RATE,
+    ffmpeg_bin: str | Path | None = None,
+) -> None:
+    """Mezcla dos stems de audio (voz y ambiente) a sample_rate (48 kHz PCM s16le)."""
+    exe = str(ffmpeg_bin) if ffmpeg_bin else find_ffmpeg()
+    if not exe:
+        raise EngineError("ffmpeg no encontrado para mezclar stems de audio")
+    output_wav.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        str(exe), "-y",
+        "-i", str(voice_wav),
+        "-i", str(ambient_wav),
+        "-filter_complex", f"[0:a][1:a]amix=inputs=2:duration=longest:dropout_transition=2,aresample={sample_rate}[aout]",
+        "-map", "[aout]",
+        "-acodec", "pcm_s16le",
+        "-ar", str(sample_rate),
+        str(output_wav),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise EngineError(f"Error de FFmpeg al mezclar audio: {proc.stderr.strip()}")
+
+
+def mux_video_mixed_audio(
+    original_video: Path,
+    mixed_wav: Path,
+    output_mp4: Path,
+    ffmpeg_bin: str | Path | None = None,
+) -> None:
+    """Muxea el vídeo original con el audio mezclado sin reencodear el flujo de vídeo (-c:v copy)."""
+    exe = str(ffmpeg_bin) if ffmpeg_bin else find_ffmpeg()
+    if not exe:
+        raise EngineError("ffmpeg no encontrado para muxing de vídeo y audio mezclado")
+    output_mp4.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        str(exe), "-y",
+        "-i", str(original_video),
+        "-i", str(mixed_wav),
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-shortest",
+        str(output_mp4),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise EngineError(f"Error de FFmpeg al muxear vídeo con audio mezclado: {proc.stderr.strip()}")
+
+
 def run_audio_generation(
     job: dict[str, Any],
     *,
@@ -1106,3 +1161,214 @@ async def api_audio_media(gen_id: int, name: str, request: Request) -> Any:
     suf = target.suffix.lower()
     media_type = "audio/wav" if suf == ".wav" else ("video/mp4" if suf == ".mp4" else "application/octet-stream")
     return FileResponse(target, media_type=media_type)
+
+
+def _find_stem_file(gallery_dir: Path, prefixes: tuple[str, ...], extensions: tuple[str, ...]) -> Path | None:
+    """Busca un archivo en el directorio de galería que coincida con prefijos o extensiones."""
+    if not gallery_dir.is_dir():
+        return None
+    try:
+        entries = sorted(gallery_dir.iterdir(), key=lambda p: p.name)
+    except OSError:
+        return None
+
+    # Primero buscar coincidencia con los prefijos preferidos
+    for p in entries:
+        if p.is_file() and p.suffix.lower() in extensions:
+            name_lower = p.name.lower()
+            if any(name_lower.startswith(pref.lower()) for pref in prefixes):
+                return p
+
+    # Fallback: cualquier archivo con la extensión requerida
+    for p in entries:
+        if p.is_file() and p.suffix.lower() in extensions:
+            return p
+
+    return None
+
+
+def find_latest_audio_gen_id(cfg: Any, st: Any, kind_type: str = "voice") -> int | None:
+    """Encuentra el gen_id de la última voz ('voice') o ambiente ('ambient') disponible."""
+    # 1. Inspeccionar generaciones recientes en store
+    try:
+        rows = st.list(limit=60, kind="audio")
+        for row in rows:
+            gid = row.get("id")
+            if not gid:
+                continue
+            params = row.get("params") or {}
+            engine = str(params.get("engine") or "").lower()
+            outputs = [str(o).lower() for o in (row.get("outputs") or [])]
+            gdir = cfg.data_dir / "gallery" / str(gid)
+            if kind_type == "voice":
+                if engine in ("irodori", "voice") or any("voice" in o for o in outputs):
+                    if _find_stem_file(gdir, ("voice",), (".wav",)):
+                        return int(gid)
+            elif kind_type == "ambient":
+                if engine in ("mmaudio", "ambient") or any("audio" in o for o in outputs):
+                    if _find_stem_file(gdir, ("audio", "ambient"), (".wav",)):
+                        return int(gid)
+    except Exception:
+        pass
+
+    # 2. Fallback escaneando data/gallery en orden descendente
+    gallery_root = cfg.data_dir / "gallery"
+    if gallery_root.is_dir():
+        try:
+            subdirs = [d for d in gallery_root.iterdir() if d.is_dir() and d.name.isdigit()]
+            subdirs.sort(key=lambda d: int(d.name), reverse=True)
+            for sub in subdirs:
+                gid = int(sub.name)
+                if kind_type == "voice" and _find_stem_file(sub, ("voice",), (".wav",)):
+                    return gid
+                if kind_type == "ambient" and _find_stem_file(sub, ("audio", "ambient"), (".wav",)):
+                    return gid
+        except OSError:
+            pass
+
+    return None
+
+
+@router.get("/mix/latest")
+async def api_audio_mix_latest(request: Request) -> dict[str, Any]:
+    """Devuelve los IDs de la última voz y ambiente detectados en la galería."""
+    cfg = request.app.state.config
+    st = request.app.state.store
+    v_id = find_latest_audio_gen_id(cfg, st, "voice")
+    a_id = find_latest_audio_gen_id(cfg, st, "ambient")
+    return {
+        "latest_voice_gen_id": v_id,
+        "latest_ambient_gen_id": a_id,
+    }
+
+
+@router.post("/mix")
+async def api_audio_mix(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Mezcla stems de voz y ambiente a 48 kHz y opcionalmente añade pista de vídeo original sin reencodear.
+
+    Recibe voice_gen_id, ambient_gen_id y opcionalmente video_gen_id.
+    Crea una generación nueva con:
+    - mixed.wav (voz + ambiente a 48 kHz)
+    - voice.wav (stem de voz)
+    - ambient.wav (stem de ambiente)
+    - mixed.mp4 (vídeo original con audio mezclado, sin reencodear vídeo) si hay vídeo
+    """
+    cfg = request.app.state.config
+    st = request.app.state.store
+
+    def _parse_id(val: Any) -> int | None:
+        if val is None:
+            return None
+        val_str = str(val).strip()
+        if not val_str or val_str.lower() in ("null", "none", "auto", "0", "-1"):
+            return None
+        try:
+            return int(val_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"ID inválido: {val}")
+
+    voice_gen_id = _parse_id(payload.get("voice_gen_id"))
+    ambient_gen_id = _parse_id(payload.get("ambient_gen_id"))
+    video_gen_id = _parse_id(payload.get("video_gen_id"))
+
+    if voice_gen_id is None:
+        voice_gen_id = find_latest_audio_gen_id(cfg, st, "voice")
+    if voice_gen_id is None:
+        raise HTTPException(status_code=400, detail="voice_gen_id es requerido o no hay ninguna pista de voz disponible.")
+
+    if ambient_gen_id is None:
+        ambient_gen_id = find_latest_audio_gen_id(cfg, st, "ambient")
+    if ambient_gen_id is None:
+        raise HTTPException(status_code=400, detail="ambient_gen_id es requerido o no hay ninguna pista de ambiente disponible.")
+
+    voice_dir = cfg.data_dir / "gallery" / str(voice_gen_id)
+    voice_path = _find_stem_file(voice_dir, ("voice",), (".wav",))
+    if not voice_path:
+        raise HTTPException(status_code=404, detail=f"Pista de voz no encontrada para gen_id {voice_gen_id}")
+
+    ambient_dir = cfg.data_dir / "gallery" / str(ambient_gen_id)
+    ambient_path = _find_stem_file(ambient_dir, ("audio", "ambient"), (".wav",))
+    if not ambient_path:
+        raise HTTPException(status_code=404, detail=f"Pista de ambiente no encontrada para gen_id {ambient_gen_id}")
+
+    video_path: Path | None = None
+    if video_gen_id is not None:
+        video_dir = cfg.data_dir / "gallery" / str(video_gen_id)
+        video_path = _find_stem_file(video_dir, ("video", "clip"), (".mp4", ".webm"))
+        if not video_path:
+            raise HTTPException(status_code=404, detail=f"Vídeo no encontrado para gen_id {video_gen_id}")
+
+    stored_params = {
+        "engine": "mix",
+        "voice_gen_id": voice_gen_id,
+        "ambient_gen_id": ambient_gen_id,
+        "video_gen_id": video_gen_id,
+        "sample_rate": AUDIO_TARGET_SAMPLE_RATE,
+        "stems": ["voice.wav", "ambient.wav"],
+        "has_video": video_path is not None,
+    }
+
+    gen_id = st.add(
+        "mix",
+        f"Mezcla capas: voz #{voice_gen_id} + ambiente #{ambient_gen_id}",
+        "",
+        stored_params,
+        status="running",
+        kind="audio",
+    )
+
+    try:
+        mix_dir = cfg.data_dir / "gallery" / str(gen_id)
+        mix_dir.mkdir(parents=True, exist_ok=True)
+
+        voice_stem_path = mix_dir / "voice.wav"
+        ambient_stem_path = mix_dir / "ambient.wav"
+        mixed_wav_path = mix_dir / "mixed.wav"
+
+        shutil.copyfile(voice_path, voice_stem_path)
+        shutil.copyfile(ambient_path, ambient_stem_path)
+
+        await asyncio.to_thread(
+            mix_audio_stems,
+            voice_stem_path,
+            ambient_stem_path,
+            mixed_wav_path,
+            sample_rate=AUDIO_TARGET_SAMPLE_RATE,
+        )
+
+        mixed_mp4_path: Path | None = None
+        if video_path is not None:
+            mixed_mp4_path = mix_dir / "mixed.mp4"
+            await asyncio.to_thread(
+                mux_video_mixed_audio,
+                video_path,
+                mixed_wav_path,
+                mixed_mp4_path,
+            )
+
+        outputs = (
+            ["mixed.mp4", "mixed.wav", "voice.wav", "ambient.wav"]
+            if mixed_mp4_path is not None
+            else ["mixed.wav", "voice.wav", "ambient.wav"]
+        )
+        st.update(gen_id, status="done", outputs=outputs, kind="audio")
+
+        return {
+            "gen_id": gen_id,
+            "outputs": outputs,
+            "mixed_wav": f"/api/audio/media/{gen_id}/mixed.wav",
+            "voice_stem": f"/api/audio/media/{gen_id}/voice.wav",
+            "ambient_stem": f"/api/audio/media/{gen_id}/ambient.wav",
+            "mixed_mp4": f"/api/audio/media/{gen_id}/mixed.mp4" if mixed_mp4_path is not None else None,
+            "has_video": mixed_mp4_path is not None,
+            "voice_gen_id": voice_gen_id,
+            "ambient_gen_id": ambient_gen_id,
+            "video_gen_id": video_gen_id if mixed_mp4_path is not None else None,
+            "sample_rate": AUDIO_TARGET_SAMPLE_RATE,
+        }
+    except HTTPException:
+        st.update(gen_id, status="error", error="HTTP exception")
+        raise
+    except Exception as exc:
+        st.update(gen_id, status="error", error=str(exc))
+        raise HTTPException(status_code=500, detail=f"Fallo en mezcla de capas de audio: {exc}")

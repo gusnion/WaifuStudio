@@ -1575,9 +1575,86 @@
           <div id="audio-progress-text" class="field-hint" style="text-align:right; font-size:0.72rem;"></div>
         </div>
         </div>
+
+        <div class="control-card" id="audio-mix-card" style="margin-top:1rem;">
+          <h3>Mezclar Capas (Stems)</h3>
+          <p class="field-hint" style="margin-bottom:0.6rem;">Combina la última voz y el último ambiente a 48 kHz PCM sin reencodear vídeo.</p>
+
+          <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+            <div style="flex:1;">
+              <label for="audio-mix-voice-id" class="field-label" style="font-size:0.75rem;">Gen Voz:</label>
+              <input type="number" id="audio-mix-voice-id" placeholder="Última voz" style="width:100%; font-size:0.8rem; padding:4px;">
+            </div>
+            <div style="flex:1;">
+              <label for="audio-mix-ambient-id" class="field-label" style="font-size:0.75rem;">Gen Ambiente:</label>
+              <input type="number" id="audio-mix-ambient-id" placeholder="Último amb." style="width:100%; font-size:0.8rem; padding:4px;">
+            </div>
+          </div>
+          <div style="margin-bottom:0.6rem;">
+            <label for="audio-mix-video-id" class="field-label" style="font-size:0.75rem;">Gen Vídeo (Opcional):</label>
+            <input type="number" id="audio-mix-video-id" placeholder="ID clip opcional" style="width:100%; font-size:0.8rem; padding:4px;">
+          </div>
+
+          <button id="btn-audio-mix-layers" class="primary btn-primary" type="button" style="width:100%; padding:8px;">Mezclar capas</button>
+
+          <!-- Avisos requeridos por C-20: japonés y SilentCipher -->
+          <div id="audio-mix-notices" style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.4rem;">
+            <div class="audio-notice-badge" id="audio-notice-japanese" style="font-size:0.73rem; background:rgba(255,193,7,0.1); border:1px solid rgba(255,193,7,0.25); color:#e0a800; padding:4px 6px; border-radius:4px; line-height:1.3;">
+              <span>🇯🇵</span> <strong>Aviso de japonés:</strong> El modelo de voz está optimizado para idioma japonés (kanji, hiragana, katakana) y emojis expresivos.
+            </div>
+            <div class="audio-notice-badge" id="audio-notice-silentcipher" style="font-size:0.73rem; background:rgba(23,162,184,0.1); border:1px solid rgba(23,162,184,0.25); color:#17a2b8; padding:4px 6px; border-radius:4px; line-height:1.3;">
+              <span>🔒</span> <strong>Aviso SilentCipher:</strong> Pistas de audio protegidas con marca de agua inaudible SilentCipher para verificación y trazabilidad de IA.
+            </div>
+          </div>
+
+          <div id="audio-mix-status" class="field-hint" style="margin-top:0.5rem; min-height:1.2rem;"></div>
+        </div>
       </div>
 
       <div class="tab-viewport">
+        <div id="audio-mix-result-card" class="control-card" style="display:none; margin-bottom:1.5rem;">
+          <div class="gallery-header" style="margin-bottom:0.6rem;">
+            <h3>Resultado de Mezcla (Stems y Master 48 kHz)</h3>
+            <span id="audio-mix-result-badge" class="badge" style="background:#28a745; color:#fff; font-size:0.75rem; padding:2px 6px; border-radius:3px;">Mezcla OK</span>
+          </div>
+
+          <div id="audio-mix-video-container" style="text-align:center; background:#000; border-radius:6px; padding:0.5rem; display:none; margin-bottom:0.8rem;">
+            <video id="audio-mix-preview-video" controls playsinline style="max-width:100%; max-height:420px; border-radius:4px; display:inline-block;"></video>
+          </div>
+
+          <div style="margin-top:0.5rem; padding:0.6rem; background:rgba(255,255,255,0.03); border:1px solid var(--border-color,#333); border-radius:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+              <strong>Mezcla Master (mixed.wav)</strong>
+              <span class="badge" style="font-size:0.7rem; background:#333; color:#ccc; padding:1px 5px; border-radius:3px;">48.000 Hz</span>
+            </div>
+            <audio id="audio-mix-preview-mixed" controls style="width:100%;"></audio>
+          </div>
+
+          <div style="margin-top:0.5rem; padding:0.6rem; background:rgba(255,255,255,0.03); border:1px solid var(--border-color,#333); border-radius:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+              <strong>Stem Voz (voice.wav)</strong>
+              <span class="badge" style="font-size:0.7rem; background:#333; color:#ccc; padding:1px 5px; border-radius:3px;">Stem</span>
+            </div>
+            <audio id="audio-mix-preview-voice" controls style="width:100%;"></audio>
+          </div>
+
+          <div style="margin-top:0.5rem; padding:0.6rem; background:rgba(255,255,255,0.03); border:1px solid var(--border-color,#333); border-radius:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+              <strong>Stem Ambiente (ambient.wav)</strong>
+              <span class="badge" style="font-size:0.7rem; background:#333; color:#ccc; padding:1px 5px; border-radius:3px;">Stem</span>
+            </div>
+            <audio id="audio-mix-preview-ambient" controls style="width:100%;"></audio>
+          </div>
+
+          <!-- Enlaces de descarga de cada stem -->
+          <div id="audio-mix-download-links" style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
+            <a id="btn-audio-download-mixed" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar mixed.wav</a>
+            <a id="btn-audio-download-voice-stem" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar voice.wav</a>
+            <a id="btn-audio-download-ambient-stem" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar ambient.wav</a>
+            <a id="btn-audio-download-mixed-mp4" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem; display:none;" download>⬇️ Descargar mixed.mp4</a>
+          </div>
+          <p class="field-hint" style="margin-top:0.5rem; font-size:0.75rem;">Stems y master generados. Flujo de vídeo conservado sin reencodear (-c:v copy).</p>
+        </div>
         <div id="audio-mode-a-viewport" class="audio-mode-group" hidden>
           <div id="audio-voice-result-card" class="control-card" style="display:none; margin-bottom:1.5rem;">
             <div class="gallery-header" style="margin-bottom:0.6rem;">

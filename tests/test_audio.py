@@ -39,7 +39,9 @@ from app.audio import (
     build_mmaudio_mode_b_graph,
     concat_wavs_crossfade,
     extract_48k_wav,
+    mix_audio_stems,
     mux_video_audio,
+    mux_video_mixed_audio,
     probe_clip_audio,
     request_irodori_speech,
     run_audio_generation,
@@ -227,6 +229,62 @@ class TestAudioFFmpegCommands(unittest.TestCase):
             self.assertIn("amix=inputs=2", filter_expr)
             self.assertIn("aresample=48000", filter_expr)
             self.assertIn("-shortest", args)
+
+    @patch("subprocess.run")
+    def test_mix_audio_stems_invokes_correct_args(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as td:
+            v_wav = Path(td) / "voice.wav"
+            v_wav.write_bytes(b"voice-pcm")
+            a_wav = Path(td) / "ambient.wav"
+            a_wav.write_bytes(b"ambient-pcm")
+            out_wav = Path(td) / "mixed.wav"
+
+            mix_audio_stems(v_wav, a_wav, out_wav, sample_rate=48000, ffmpeg_bin="ffmpeg")
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+
+            self.assertEqual(args[0], "ffmpeg")
+            self.assertIn("-i", args)
+            self.assertIn(str(v_wav), args)
+            self.assertIn(str(a_wav), args)
+            self.assertIn("-filter_complex", args)
+            fc = args[args.index("-filter_complex") + 1]
+            self.assertIn("amix=inputs=2", fc)
+            self.assertIn("duration=longest", fc)
+            self.assertIn("aresample=48000", fc)
+            self.assertIn("-acodec", args)
+            self.assertIn("pcm_s16le", args)
+            self.assertIn("-ar", args)
+            self.assertIn("48000", args)
+            self.assertEqual(args[-1], str(out_wav))
+
+    @patch("subprocess.run")
+    def test_mux_video_mixed_audio_invokes_copy_no_reencode(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as td:
+            orig_vid = Path(td) / "orig.mp4"
+            orig_vid.write_bytes(b"video-bytes")
+            mixed_wav = Path(td) / "mixed.wav"
+            mixed_wav.write_bytes(b"mixed-pcm")
+            out_mp4 = Path(td) / "mixed.mp4"
+
+            mux_video_mixed_audio(orig_vid, mixed_wav, out_mp4, ffmpeg_bin="ffmpeg")
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+
+            self.assertEqual(args[0], "ffmpeg")
+            self.assertIn("-map", args)
+            self.assertIn("0:v:0", args)
+            self.assertIn("1:a:0", args)
+            self.assertIn("-c:v", args)
+            self.assertIn("copy", args)
+            self.assertIn("-c:a", args)
+            self.assertIn("aac", args)
+            self.assertIn("-b:a", args)
+            self.assertIn("192k", args)
+            self.assertIn("-shortest", args)
+            self.assertEqual(args[-1], str(out_mp4))
 
 
 class TestVoiceChunkingAndSplitting(unittest.TestCase):
@@ -993,6 +1051,190 @@ class TestAudioVoiceStaticUI(unittest.TestCase):
         css = self._read("static/css/tabs/audio.css")
         self.assertIn(".audio-emoji-palette", css)
         self.assertIn(".audio-mode-group", css)
+
+
+class TestAudioMixRouter(unittest.TestCase):
+    """Comprueba el endpoint POST /api/audio/mix (C-20: capas, stems y avisos)."""
+
+    def setUp(self) -> None:
+        self.td = tempfile.TemporaryDirectory()
+        self.root = Path(self.td.name)
+        self.cfg = EngineConfig(
+            comfy_root=self.root / "comfy",
+            comfy_url="http://127.0.0.1:8288",
+            data_dir=self.root / "data",
+        )
+        self.cfg.comfy_output_dir.mkdir(parents=True, exist_ok=True)
+        self.cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        db_path = self.cfg.data_dir / "waifu.db"
+        with closing(sqlite3.connect(str(db_path))) as conn:
+            conn.executescript(_OLD_SCHEMA)
+        self.store = Store(db_path)
+        self.store.init()
+        self.client = TestClient(create_app(config=self.cfg, store=self.store))
+        self.wav = _make_wav_bytes()
+
+    def tearDown(self) -> None:
+        self.client.close()
+        self.td.cleanup()
+
+    @patch("app.audio.mux_video_mixed_audio")
+    @patch("app.audio.mix_audio_stems")
+    def test_api_audio_mix_creates_stems_and_mixed_wav(
+        self, mock_mix: MagicMock, mock_mux: MagicMock
+    ) -> None:
+        def _fake_mix(v, a, out, **kwargs):
+            out.write_bytes(b"RIFFmixed48k")
+        mock_mix.side_effect = _fake_mix
+
+        def _fake_mux(v, a, out, **kwargs):
+            out.write_bytes(b"mp4muxed")
+        mock_mux.side_effect = _fake_mux
+
+        gallery_dir = self.cfg.data_dir / "gallery"
+        v_dir = gallery_dir / "1258"
+        v_dir.mkdir(parents=True, exist_ok=True)
+        (v_dir / "voice_1258.wav").write_bytes(self.wav)
+
+        a_dir = gallery_dir / "1243"
+        a_dir.mkdir(parents=True, exist_ok=True)
+        (a_dir / "audio_1243.wav").write_bytes(self.wav)
+        (a_dir / "video_audio_1243.mp4").write_bytes(b"vid")
+
+        # 1. Mezcla solo audio (sin video_gen_id)
+        res = self.client.post("/api/audio/mix", json={
+            "voice_gen_id": 1258,
+            "ambient_gen_id": 1243,
+        })
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        gid = data["gen_id"]
+        self.assertFalse(data["has_video"])
+        self.assertIsNone(data["mixed_mp4"])
+        self.assertEqual(data["outputs"], ["mixed.wav", "voice.wav", "ambient.wav"])
+        self.assertEqual(data["sample_rate"], 48000)
+
+        mix_dir = gallery_dir / str(gid)
+        self.assertTrue((mix_dir / "voice.wav").is_file())
+        self.assertTrue((mix_dir / "ambient.wav").is_file())
+        self.assertTrue((mix_dir / "mixed.wav").is_file())
+        self.assertFalse((mix_dir / "mixed.mp4").exists())
+        mock_mix.assert_called_once()
+
+        # 2. Mezcla con vídeo (video_gen_id)
+        mock_mix.reset_mock()
+        res_vid = self.client.post("/api/audio/mix", json={
+            "voice_gen_id": 1258,
+            "ambient_gen_id": 1243,
+            "video_gen_id": 1243,
+        })
+        self.assertEqual(res_vid.status_code, 200, res_vid.text)
+        data_vid = res_vid.json()
+        gid_vid = data_vid["gen_id"]
+        self.assertTrue(data_vid["has_video"])
+        self.assertIsNotNone(data_vid["mixed_mp4"])
+        self.assertEqual(data_vid["outputs"], ["mixed.mp4", "mixed.wav", "voice.wav", "ambient.wav"])
+
+        mix_vid_dir = gallery_dir / str(gid_vid)
+        self.assertTrue((mix_vid_dir / "mixed.mp4").is_file())
+        self.assertTrue((mix_vid_dir / "voice.wav").is_file())
+        self.assertTrue((mix_vid_dir / "ambient.wav").is_file())
+        self.assertTrue((mix_vid_dir / "mixed.wav").is_file())
+        mock_mux.assert_called_once()
+
+    @patch("app.audio.mix_audio_stems")
+    def test_api_audio_mix_auto_resolves_latest_from_gallery(
+        self, mock_mix: MagicMock
+    ) -> None:
+        def _fake_mix(v, a, out, **kwargs):
+            out.write_bytes(b"RIFFmixed48k")
+        mock_mix.side_effect = _fake_mix
+
+        gallery_dir = self.cfg.data_dir / "gallery"
+        v_dir = gallery_dir / "1258"
+        v_dir.mkdir(parents=True, exist_ok=True)
+        (v_dir / "voice_1258.wav").write_bytes(self.wav)
+
+        a_dir = gallery_dir / "1243"
+        a_dir.mkdir(parents=True, exist_ok=True)
+        (a_dir / "audio_1243.wav").write_bytes(self.wav)
+
+        res = self.client.post("/api/audio/mix", json={})
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertEqual(data["voice_gen_id"], 1258)
+        self.assertEqual(data["ambient_gen_id"], 1243)
+
+    def test_api_audio_mix_missing_stems_raises_404(self) -> None:
+        res = self.client.post("/api/audio/mix", json={
+            "voice_gen_id": 99999,
+            "ambient_gen_id": 88888,
+        })
+        self.assertEqual(res.status_code, 404)
+
+    def test_api_audio_mix_latest_endpoint(self) -> None:
+        gallery_dir = self.cfg.data_dir / "gallery"
+        v_dir = gallery_dir / "1258"
+        v_dir.mkdir(parents=True, exist_ok=True)
+        (v_dir / "voice_1258.wav").write_bytes(self.wav)
+
+        a_dir = gallery_dir / "1243"
+        a_dir.mkdir(parents=True, exist_ok=True)
+        (a_dir / "audio_1243.wav").write_bytes(self.wav)
+
+        res = self.client.get("/api/audio/mix/latest")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["latest_voice_gen_id"], 1258)
+        self.assertEqual(data["latest_ambient_gen_id"], 1243)
+
+
+class TestAudioMixStaticUI(unittest.TestCase):
+    """Test estático: controles de mezcla de capas, stems y avisos C-20."""
+
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def _read(self, rel: str) -> str:
+        return (self.ROOT / rel).read_text(encoding="utf-8")
+
+    def _panel_audio(self) -> str:
+        html = self._read("templates/index.html")
+        start = html.index('id="panel-audio"')
+        return html[start : html.index('id="panel-social"', start)]
+
+    def test_panel_has_mix_layers_controls_and_stems_downloads(self) -> None:
+        panel = self._panel_audio()
+        for element_id in (
+            "audio-mix-card",
+            "btn-audio-mix-layers",
+            "audio-mix-voice-id",
+            "audio-mix-ambient-id",
+            "audio-mix-video-id",
+            "audio-notice-japanese",
+            "audio-notice-silentcipher",
+            "audio-mix-result-card",
+            "btn-audio-download-mixed",
+            "btn-audio-download-voice-stem",
+            "btn-audio-download-ambient-stem",
+            "btn-audio-download-mixed-mp4",
+        ):
+            self.assertIn(f'id="{element_id}"', panel, element_id)
+
+    def test_panel_has_japanese_and_silentcipher_notices(self) -> None:
+        panel = self._panel_audio()
+        self.assertIn("japonés", panel.lower())
+        self.assertIn("SilentCipher", panel)
+
+    def test_js_wires_mix_endpoint_and_stems(self) -> None:
+        js = self._read("static/js/tabs/audio.js")
+        self.assertIn("/api/audio/mix", js)
+        self.assertIn("btn-audio-mix-layers", js)
+        self.assertIn("handleMixLayers", js)
+        self.assertIn("renderMixResult", js)
+        self.assertIn("voice.wav", js)
+        self.assertIn("ambient.wav", js)
+        self.assertIn("mixed.wav", js)
+        self.assertIn("mixed.mp4", js)
 
 
 if __name__ == "__main__":

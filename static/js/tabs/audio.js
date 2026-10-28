@@ -13,6 +13,10 @@ import { state } from "../state.js";
 let selectedClip = null;
 let activeAudioJobId = null;
 let irodoriStatusCache = null;
+let lastVoiceGenId = null;
+let lastAmbientGenId = null;
+let lastVideoGenId = null;
+let mixBusy = false;
 
 export function updateIrodoriUI(statusData) {
   irodoriStatusCache = statusData;
@@ -175,6 +179,12 @@ export async function selectClip(clipSource) {
     $("audio-selected-path").value = selectedClip.path || "";
     $("audio-selected-gen-id").value = selectedClip.gen_id || "";
 
+    if (selectedClip.gen_id) {
+      lastVideoGenId = selectedClip.gen_id;
+      const vidInput = $("audio-mix-video-id");
+      if (vidInput && !vidInput.value) vidInput.placeholder = `Vídeo (#${lastVideoGenId})`;
+    }
+
     const btnGen = $("btn-audio-generate");
     if (btnGen) {
       btnGen.disabled = false;
@@ -280,6 +290,11 @@ function renderAudioResult(jobData) {
   if (!resultCard) return;
 
   const gid = jobData.gen_id;
+  if (gid) {
+    lastAmbientGenId = gid;
+    const ambInput = $("audio-mix-ambient-id");
+    if (ambInput && !ambInput.value) ambInput.placeholder = `Último amb. (#${lastAmbientGenId})`;
+  }
   const outputs = jobData.outputs || [];
 
   let mp4Url = "";
@@ -485,6 +500,13 @@ function renderVoiceResult(res) {
   const meta = $("audio-voice-result-meta");
   if (!card || !res?.url) return;
 
+  const gid = res?.gen_id;
+  if (gid) {
+    lastVoiceGenId = gid;
+    const voiceInput = $("audio-mix-voice-id");
+    if (voiceInput && !voiceInput.value) voiceInput.placeholder = `Última voz (#${lastVoiceGenId})`;
+  }
+
   if (player) {
     player.src = res.url;
     player.load();
@@ -625,9 +647,127 @@ function setAudioMode(mode) {
   if (notice) notice.style.display = isA ? "inline-flex" : "none";
 }
 
+function setMixStatus(text, isError = false) {
+  const el = $("audio-mix-status");
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = isError ? "var(--error-color, #e74c3c)" : "var(--accent-color, #27ae60)";
+}
+
+export async function updateLatestMixDefaults() {
+  try {
+    const data = await api("/api/audio/mix/latest");
+    if (data?.latest_voice_gen_id && !lastVoiceGenId) {
+      lastVoiceGenId = data.latest_voice_gen_id;
+      const vi = $("audio-mix-voice-id");
+      if (vi && !vi.value) vi.placeholder = `Última voz (#${lastVoiceGenId})`;
+    }
+    if (data?.latest_ambient_gen_id && !lastAmbientGenId) {
+      lastAmbientGenId = data.latest_ambient_gen_id;
+      const ai = $("audio-mix-ambient-id");
+      if (ai && !ai.value) ai.placeholder = `Último amb. (#${lastAmbientGenId})`;
+    }
+  } catch (_) {}
+}
+
+export function renderMixResult(res) {
+  const card = $("audio-mix-result-card");
+  if (!card) return;
+
+  const mixedAudio = $("audio-mix-preview-mixed");
+  const voiceAudio = $("audio-mix-preview-voice");
+  const ambientAudio = $("audio-mix-preview-ambient");
+  const videoEl = $("audio-mix-preview-video");
+  const videoWrap = $("audio-mix-video-container");
+
+  const btnMixed = $("btn-audio-download-mixed");
+  const btnVoice = $("btn-audio-download-voice-stem");
+  const btnAmbient = $("btn-audio-download-ambient-stem");
+  const btnMp4 = $("btn-audio-download-mixed-mp4");
+
+  if (mixedAudio && res.mixed_wav) {
+    mixedAudio.src = res.mixed_wav;
+    mixedAudio.load();
+  }
+  if (voiceAudio && res.voice_stem) {
+    voiceAudio.src = res.voice_stem;
+    voiceAudio.load();
+  }
+  if (ambientAudio && res.ambient_stem) {
+    ambientAudio.src = res.ambient_stem;
+    ambientAudio.load();
+  }
+
+  if (btnMixed && res.mixed_wav) {
+    btnMixed.href = res.mixed_wav;
+    btnMixed.setAttribute("download", `mixed_${res.gen_id}.wav`);
+  }
+  if (btnVoice && res.voice_stem) {
+    btnVoice.href = res.voice_stem;
+    btnVoice.setAttribute("download", `voice_${res.gen_id}.wav`);
+  }
+  if (btnAmbient && res.ambient_stem) {
+    btnAmbient.href = res.ambient_stem;
+    btnAmbient.setAttribute("download", `ambient_${res.gen_id}.wav`);
+  }
+
+  if (res.has_video && res.mixed_mp4) {
+    if (videoWrap) videoWrap.style.display = "block";
+    if (videoEl) {
+      videoEl.src = res.mixed_mp4;
+      videoEl.load();
+    }
+    if (btnMp4) {
+      btnMp4.style.display = "inline-flex";
+      btnMp4.href = res.mixed_mp4;
+      btnMp4.setAttribute("download", `mixed_${res.gen_id}.mp4`);
+    }
+  } else {
+    if (videoWrap) videoWrap.style.display = "none";
+    if (btnMp4) btnMp4.style.display = "none";
+  }
+
+  card.style.display = "block";
+  card.scrollIntoView({ behavior: "smooth" });
+}
+
+export async function handleMixLayers() {
+  if (mixBusy) return;
+  const btn = $("btn-audio-mix-layers");
+  const voiceInput = $("audio-mix-voice-id")?.value?.trim();
+  const ambientInput = $("audio-mix-ambient-id")?.value?.trim();
+  const videoInput = $("audio-mix-video-id")?.value?.trim();
+
+  const voiceId = voiceInput ? parseInt(voiceInput, 10) : lastVoiceGenId;
+  const ambientId = ambientInput ? parseInt(ambientInput, 10) : lastAmbientGenId;
+  const videoId = videoInput ? parseInt(videoInput, 10) : (lastVideoGenId || selectedClip?.gen_id || null);
+
+  mixBusy = true;
+  if (btn) btn.disabled = true;
+  setMixStatus("Mezclando capas a 48 kHz (voz + ambiente)...");
+
+  try {
+    const payload = {
+      voice_gen_id: voiceId,
+      ambient_gen_id: ambientId,
+      video_gen_id: videoId,
+    };
+    const res = await postJson("/api/audio/mix", payload);
+    setMixStatus(`Mezcla completada (Gen #${res.gen_id}). Stems y master listos.`, false);
+    renderMixResult(res);
+  } catch (err) {
+    console.error("[audio] Error al mezclar capas:", err);
+    setMixStatus(`Error: ${err.message}`, true);
+  } finally {
+    mixBusy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
 export function initAudioTab() {
   on("btn-audio-generate", "click", handleGenerateAudio);
   on("btn-audio-voice-generate", "click", handleGenerateVoice);
+  on("btn-audio-mix-layers", "click", handleMixLayers);
 
   const palette = $("audio-voice-palette");
   if (palette) {
@@ -692,4 +832,5 @@ export function initAudioTab() {
 
   loadAudioClips();
   refreshAudioStatus();
+  updateLatestMixDefaults();
 }
