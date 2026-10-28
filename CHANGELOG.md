@@ -12,7 +12,7 @@
 - **Wan 2.2 NSFW AIO v10 Q4_K_M** opcional: grafo de un solo UNet y un `KSampler`; selector “Wan 2.2 NSFW AIO v10 · experimental”; solo I2V. Verificado con clip de 5 s a 432×768 en RTX 3060.
 - MMAudio conserva su motor actual; se aplican los prompts de TW-12: positivo `soft breathing, quiet moans, wet sounds, fabric rustling` y negativo `speech, talking, dialogue, shouting, screaming, singing, crowd`.
 - No se añadió pestaña de Audio ni modelos de sonido nuevos.
-- Suite offline: 1.658 tests OK, 1 skipped.
+- Suite offline: 1.730 tests OK, 1 skipped.
 
 ## 2.1.0 — 2026-10-26
 

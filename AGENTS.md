@@ -14,15 +14,16 @@ Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**,
 - **App Web**: `http://127.0.0.1:8765` (`WAIFU_APP_PORT`). Lanzador ligero en ventana dedicada (~100 MB RAM): `start.bat` (`scripts/open_window.ps1`).
 - **Engine ComfyUI**: `http://127.0.0.1:8288` (`WAIFU_COMFY_URL`), cola estrictamente monohilo FIFO (`app/jobs.py`) dimensionada para **1 GPU desde 8–12 GB VRAM (RTX 3060+)**.
 - **LLM / Visión en CPU (`:8290`)**: `Qwen3.5-9B NSFW Captioning v5` (`Q4_K_M` + `mmproj-Q8_0`) servido por `tools/llama.cpp/llama-server.exe` con `-ngl 0` (100% CPU, 0 VRAM). La app lo arranca y detiene automáticamente mediante `app/llm_server.py`.
-- **7 Pestañas**:
-  1. **Imagen**: checkpoints **Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok** (SDXL) con `LoraLoader` dual, auto-detección de arquitectura de LoRAs por tensores (`infer_lora_family`) e inyección automática de *triggers*.
-  2. **Vídeo**: **Wan 2.2 I2V/FLF2V** con perfiles Fast (4 pasos), Standard (12), Quality (30) y Manual, prompt assistant, guía integrada y audio MMAudio. Incluye **Wan 2.2 NSFW AIO v10** opcional (GGUF externo, un solo UNet, solo I2V, experimental) seleccionable junto al modelo dual.
+- **8 Pestañas**:
+  1. **Imagen**: Anima Aesthetic v1.1, Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok, con `prompt_profile`, badge de subrama y LoRAs filtradas.
+  2. **Vídeo**: **Wan 2.2 NSFW AIO v10** como único motor, I2V, un `KSampler`, mudo; aviso de licencia comunitaria.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
-  4. **Upscaler**: **RealESRGAN x2/x4** (imagen/vídeo) + **RIFE** (interpolación FPS) con visor comparador interactivo antes/después.
-  5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, biblioteca de medios e IA Wan.
-  6. **Galería**: Persistencia en SQLite (`data/waifu.db`, modo WAL) y copias seguras (`shutil.copy2`) en `data/gallery/<id>/`.
-  7. **OC Maker**: ficha de personaje, referencias, hoja de vistas y entrenamiento LoRA; ahora es pestaña, no modal.
-  - **Guía** y **Addons** viven en la barra superior derecha, no en la navegación principal.
+  4. **Audio**: MMAudio ambiente en modo B; Irodori deshabilitado con motivo hasta instalar `tools/irodori` y el servicio `:8291`.
+  5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, audio y proyectos; sin BETA.
+  6. **Upscaler**: **RealESRGAN x2/x4** + **RIFE** con comparador.
+  7. **Galería**: SQLite (`data/waifu.db`, WAL) y copias seguras en `data/gallery/<id>/`.
+  8. **OC Maker**: ficha, referencias, personajes guardados y entrenamiento LoRA; pestaña, no modal.
+  - **Guía** y **Addons** viven en la barra superior derecha; **Social** entre idioma y Guía.
 
 ---
 
@@ -57,7 +58,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.658 tests offline en CPU (~60 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.730 tests offline en CPU (~60 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```
@@ -104,9 +105,9 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 
 ## 6. Rangos de Líneas de `templates/index.html` y Cascada CSS
 
-- **Secciones en `templates/index.html` (1.767 líneas; no leer entero)**:
+- **Secciones en `templates/index.html` (2.036 líneas; no leer entero)**:
   - `L1–L63`: Header global, `nav.tabs`, acciones de Guía/Addons.
-  - `L64–L339`: `#panel-image` | `L340–L704`: `#panel-video` | `L705–L898`: `#panel-editor` | `L899–L1047`: `#panel-upscaler` | `L1048–L1049`: `#panel-oc` | `L1050–L1163`: `#panel-timeline` | `L1164–L1215`: `#panel-gallery` | `L1216–L1380`: `#panel-guide` | `L1381–L1396`: `#panel-addons`.
-  - `L1397–L1759`: modales OC/LoRA/Visión/Galería y `#lightbox` (L1760–L1767).
+  - `L76–L354`: `#panel-image` | `L355–L721`: `#panel-video` | `L722–L915`: `#panel-editor` | `L916–L1064`: `#panel-upscaler` | `L1065–L1066`: `#panel-oc` | `L1067–L1180`: `#panel-timeline` | `L1181–L1232`: `#panel-gallery` | `L1233–L1397`: `#panel-guide` | `L1398–L1412`: `#panel-addons`.
+  - `L1413–L2029`: modales OC/LoRA/Visión/Galería y `#lightbox` (L2030–L2036).
 - **Orden de Cascada CSS (`static/css/`)**:
   `1. base.css` → `2. components.css` → `3. tabs/image.css` → `4. tabs/video.css` → `5. tabs/editor.css` → `6. tabs/upscaler.css` → `7. tabs/gallery.css` → `8. design-v2.css` → `9. light-theme.css`.
