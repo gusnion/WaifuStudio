@@ -6914,6 +6914,43 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertEqual(persisted["name"], "TestRenamed")
         self.assertEqual(persisted["tags"], ["black hair"])
 
+    def test_c28_oc_multiview_control_and_call(self):
+        """Item C-28: multivista con Qwen desde la referencia del personaje en OCMaker."""
+        base_dir = Path(__file__).resolve().parents[1]
+
+        # 1. oc_picker.js contiene el control '8 vistas' en la tarjeta y el handler
+        picker_path = base_dir / "static" / "js" / "components" / "oc_picker.js"
+        picker_code = picker_path.read_text(encoding="utf-8")
+        self.assertIn("8 vistas", picker_code, "oc_picker.js debe incluir el control '8 vistas' en la tarjeta")
+        self.assertIn("generateCharacterMultiview", picker_code, "oc_picker.js debe definir generateCharacterMultiview")
+        self.assertIn("runMultiviewGeneration", picker_code, "oc_picker.js debe reutilizar runMultiviewGeneration")
+        self.assertIn("/api/characters/", picker_code, "oc_picker.js debe llamar al endpoint de refs del personaje")
+        self.assertIn("loadCharacterRefs", picker_code, "oc_picker.js debe recargar referencias en OCMaker")
+        self.assertIn("data-action", picker_code, "oc_picker.js debe asignar data-action al control")
+
+        # 2. editor_multiview.js exporta la lógica de generación reutilizable y llama al endpoint existente
+        mv_path = base_dir / "static" / "js" / "components" / "editor_multiview.js"
+        mv_code = mv_path.read_text(encoding="utf-8")
+        self.assertIn("export async function runMultiviewGeneration", mv_code)
+        self.assertIn("/api/editor/generate", mv_code, "editor_multiview.js debe invocar /api/editor/generate")
+        self.assertIn("pollJob", mv_code, "editor_multiview.js debe usar pollJob para esperar cada vista")
+
+        # 3. templates/index.html declara contenedor para resultados multivista en OCMaker
+        index_path = base_dir / "templates" / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+        self.assertIn('id="oc-multiview-results"', html)
+
+        # 4. Verificación de existencia de endpoints existentes sin inventar nuevos
+        client = self.make_client()
+        # /api/editor/generate existe y valida entrada (400 con payload vacío)
+        resp_gen = client.post("/api/editor/generate", json={})
+        self.assertEqual(resp_gen.status_code, 400)
+        self.assertIn("prompt vacio", resp_gen.json().get("error", ""))
+
+        # /api/characters/{id}/refs existe y devuelve 404 para ID inexistente
+        resp_ref = client.post("/api/characters/999999/refs", json={"gen_id": 1})
+        self.assertEqual(resp_ref.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

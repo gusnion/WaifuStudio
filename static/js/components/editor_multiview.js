@@ -29,8 +29,8 @@ function resultUrl(job) {
   return out.name && job.gen_id ? `/media/${job.gen_id}/${out.name}` : "";
 }
 
-function renderSheet(entries) {
-  const box = $("editor-multiview-results");
+export function renderSheet(entries, containerOrId = "editor-multiview-results") {
+  const box = typeof containerOrId === "string" ? $(containerOrId) : containerOrId;
   if (!box) return;
   box.replaceChildren();
   for (const entry of entries) {
@@ -54,6 +54,71 @@ function renderSheet(entries) {
   box.classList.remove("hidden");
 }
 
+export async function runMultiviewGeneration({
+  refs = [],
+  prompt = "",
+  negative = "",
+  count = 8,
+  seed = 42,
+  steps = 25,
+  cfg = 1.0,
+  onProgress = () => {},
+  onViewGenerated = null,
+} = {}) {
+  const prompts = multiviewPrompts(prompt, count);
+  const views = VIEWS[count] || VIEWS[8];
+  const entries = [];
+  for (const [index, p] of prompts.entries()) {
+    const payload = {
+      prompt: p,
+      mode: "generate",
+      negative: negative || "",
+      steps,
+      cfg,
+      size: { original: true },
+      seed,
+      preserve_structure: false,
+      ref_images_b64: refs,
+    };
+    const job = await postJson("/api/editor/generate", payload);
+    await new Promise((resolve, reject) => {
+      pollJob(
+        job.job_id,
+        (message) => onProgress(`Vista ${index + 1}/${prompts.length}: ${message}`),
+        async (done) => {
+          const url = resultUrl(done);
+          if (!url) {
+            reject(new Error(done.error || "La vista no devolvió imagen"));
+            return;
+          }
+          const entry = {
+            view: views[index],
+            seed,
+            job_id: job.job_id,
+            gen_id: done.gen_id,
+            url,
+          };
+          entries.push(entry);
+          if (typeof onViewGenerated === "function") {
+            try {
+              await onViewGenerated(entry, index, prompts.length);
+            } catch (err) {
+              console.error("[multiview] onViewGenerated callback error:", err);
+            }
+          }
+          resolve();
+        },
+        () => {},
+        false
+      ).catch(reject);
+    });
+    if (index < prompts.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  return entries;
+}
+
 export function initEditorMultiview() {
   const button = $("btn-editor-multiview");
   if (!button) return;
@@ -67,49 +132,23 @@ export function initEditorMultiview() {
       return;
     }
     const count = Number($("editor-multiview-views")?.value || 4);
-    const prompts = multiviewPrompts($("editor-prompt")?.value || "", count);
     const seed = Number($("editor-seed")?.value || 42);
     const steps = Number($("editor-steps")?.value || 25);
     const cfg = Number($("editor-cfg")?.value || 1.0);
     const refs = state.editorRefs.slice(0, 1).map((ref) => ref.b64);
     button.disabled = true;
-    setEditorStatus(`Generando ${prompts.length} vistas con seed ${seed}…`);
-    const entries = [];
+    setEditorStatus(`Generando ${count} vistas con seed ${seed}…`);
     try {
-      for (const [index, prompt] of prompts.entries()) {
-        const payload = {
-          prompt,
-          mode: "generate",
-          negative: $("editor-negative")?.value || "",
-          steps,
-          cfg,
-          size: { original: true },
-          seed,
-          preserve_structure: false,
-          ref_images_b64: refs,
-        };
-        const job = await postJson("/api/editor/generate", payload);
-        await new Promise((resolve, reject) => {
-          pollJob(
-            job.job_id,
-            (message) => setEditorStatus(`Vista ${index + 1}/${prompts.length}: ${message}`),
-            (done) => {
-              const url = resultUrl(done);
-              if (!url) {
-                reject(new Error(done.error || "La vista no devolvió imagen"));
-                return;
-              }
-              entries.push({ view: VIEWS[count][index], seed, job_id: job.job_id, url });
-              resolve();
-            },
-            () => {},
-            false
-          ).catch(reject);
-        });
-        if (index < prompts.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-        }
-      }
+      const entries = await runMultiviewGeneration({
+        refs,
+        prompt: $("editor-prompt")?.value || "",
+        negative: $("editor-negative")?.value || "",
+        count,
+        seed,
+        steps,
+        cfg,
+        onProgress: (msg) => setEditorStatus(msg),
+      });
       renderSheet(entries);
       setEditorStatus(`Hoja de contacto lista (${entries.length} vistas)`);
     } catch (error) {

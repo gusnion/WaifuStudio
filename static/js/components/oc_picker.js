@@ -19,6 +19,7 @@ import {
 import { attachReferenceFromUrl, fetchCharacterProfile } from "./prompt_popover.js";
 import { openLightbox } from "./lightbox.js";
 import { openTrainModal } from "./oc_train.js";
+import { runMultiviewGeneration, renderSheet } from "./editor_multiview.js";
 import { selectLora } from "./loras.js";
 import { refreshNegative } from "../tabs/image.js";
 
@@ -365,6 +366,7 @@ function characterRow(character) {
   const handlers = [
     ["Usar", () => useCharacter(character)],
     ["Generar LoRA", () => openTrainModal(character)],
+    ["8 vistas", () => generateCharacterMultiview(character)],
     ["Editar", () => editCharacter(character)],
     ["Duplicar", () => duplicateCharacter(character)],
     [
@@ -387,6 +389,11 @@ function characterRow(character) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = label;
+    if (label === "8 vistas") {
+      button.className = "oc-btn-multiview";
+      button.setAttribute("data-action", "multiview-8");
+      button.title = "Genera 8 vistas coherentes con Qwen usando la primera referencia";
+    }
     button.addEventListener("click", () => {
       Promise.resolve(handler()).catch((error) =>
         setOcStatus(error.message, true)
@@ -714,6 +721,81 @@ async function createCharacterSheet() {
   }
 }
 
+export async function generateCharacterMultiview(character) {
+  if (!character || !character.id) return;
+  state.activeCharacterId = character.id;
+  renderCharacters();
+  await loadCharacterRefs();
+
+  const refs = state.characterRefs || [];
+  const attachable = refs.filter((ref) => !isSheetRef(ref));
+  if (!attachable.length) {
+    setOcStatus(
+      `El OC «${character.name}» no tiene referencias válidas. Añade al menos una imagen de referencia antes de generar la multivista.`,
+      true
+    );
+    return;
+  }
+  const firstRef = attachable[0];
+
+  if (!state.editorLicenseAccepted) {
+    try {
+      const editorStatus = await api("/api/editor/status");
+      state.editorLicenseAccepted = Boolean(editorStatus && editorStatus.license && editorStatus.license.accepted);
+    } catch {
+      // Ignorar fallo puntual de red
+    }
+  }
+  if (!state.editorLicenseAccepted) {
+    setOcStatus("Acepta la licencia de Qwen-Image 2.1 en la pestaña Editor antes de generar multivista", true);
+    return;
+  }
+
+  setOcStatus(`Cargando referencia de «${character.name}»…`);
+  const res = await fetch(firstRef.url);
+  if (!res.ok) {
+    throw new Error(`Error al leer la referencia del OC (HTTP ${res.status})`);
+  }
+  const blob = await res.blob();
+  const refB64 = await readFileBase64(blob);
+
+  const charTags = (character.tags || []).join(", ");
+  const prompt = charTags
+    ? `${charTags}, character turnaround, full body, neutral background`
+    : "character turnaround, full body, neutral background";
+
+  setOcStatus(`Iniciando generación de 8 vistas para «${character.name}»…`);
+
+  const entries = await runMultiviewGeneration({
+    refs: [refB64],
+    prompt,
+    count: 8,
+    seed: 42,
+    steps: 25,
+    cfg: 1.0,
+    onProgress: (msg) => setOcStatus(`Multivista «${character.name}»: ${msg}`),
+    onViewGenerated: async (entry) => {
+      if (entry && entry.gen_id) {
+        try {
+          await postJson(`/api/characters/${character.id}/refs`, { gen_id: entry.gen_id });
+          await loadCharacterRefs();
+        } catch (err) {
+          console.error(`[oc_picker] Error guardando referencia de multivista para OC ${character.id}:`, err);
+        }
+      }
+    },
+  });
+
+  const ocResults = $("oc-multiview-results");
+  if (ocResults) {
+    renderSheet(entries, ocResults);
+  }
+
+  await loadCharacterRefs();
+  setOcStatus(`8 vistas generadas y guardadas como referencias para «${character.name}»`);
+  return entries;
+}
+
 function addOcTagsToPrompt() {
   if (!state.ocSelectedTags.length) {
     setOcStatus("Selecciona al menos un tag del catálogo", true);
@@ -908,6 +990,7 @@ export {
   loadCharacterRefs,
   removeCharacterRef,
   createCharacterSheet,
+  generateCharacterMultiview,
   addOcTagsToPrompt,
   openOcSaveModal,
   closeOcSaveModal,
