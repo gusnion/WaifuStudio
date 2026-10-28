@@ -6772,6 +6772,24 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn('<strong>Alcance beta:</strong> Solo Vídeo está marcado como beta.', html)
         self.assertNotIn('Vídeo y Estudio (Timeline) están marcados como beta', html)
 
+    def test_c31_oc_train_lora_connection(self):
+        """Item C-31: verifica que el botón de entrenar LoRA de OCMaker esté conectado al trainer existente."""
+        # 1. oc_picker.js tiene texto 'Generar LoRA' y llamada a openTrainModal
+        picker_path = Path(__file__).resolve().parents[1] / "static" / "js" / "components" / "oc_picker.js"
+        picker_content = picker_path.read_text(encoding="utf-8")
+        self.assertIn("Generar LoRA", picker_content, "oc_picker.js debe incluir la opción 'Generar LoRA'")
+        self.assertIn("openTrainModal", picker_content, "oc_picker.js debe invocar openTrainModal")
+
+        # 2. oc_train.js gestiona modal #oc-train-modal y endpoint /train
+        train_path = Path(__file__).resolve().parents[1] / "static" / "js" / "components" / "oc_train.js"
+        train_content = train_path.read_text(encoding="utf-8")
+        self.assertIn("oc-train-modal", train_content, "oc_train.js debe interactuar con el modal #oc-train-modal")
+        self.assertIn("/train", train_content, "oc_train.js debe invocar el endpoint /train")
+
+        # 3. index.html declara el modal #oc-train-modal
+        html = self.make_client().get("/").text
+        self.assertIn('id="oc-train-modal"', html, "index.html debe contener el elemento #oc-train-modal")
+
 
 if __name__ == "__main__":
     unittest.main()
