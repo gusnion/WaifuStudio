@@ -6622,16 +6622,23 @@ class TopbarNavigationStaticTests(ServerTestCase):
     def test_audio_tab_and_panel_specifications(self):
         html = self.make_client().get("/").text
 
-        # Panel audio y aviso de instalación pendiente
+        # 1. Existencia del botón y panel de audio
+        self.assertIn('id="tab-audio"', html)
+        self.assertIn('id="panel-audio"', html)
+
+        # 2. Panel audio y controles reales de audio
         panel_audio_match = re.search(r'<section[^>]*id="panel-audio"[^>]*>(.*?)</section>', html, re.DOTALL)
         self.assertIsNotNone(panel_audio_match, "No se encontró #panel-audio")
         panel_audio_html = panel_audio_match.group(1)
 
-        self.assertIn("pendiente de instalar", panel_audio_html.lower())
+        # Ya no debe existir aviso de instalación pendiente
+        self.assertNotIn("pendiente de instalar", panel_audio_html.lower())
 
-        # Sin botones falsos de generación
-        for forbidden in ("btn-generate", "btn-audio-generate", "btn-audio-cancel", 'type="submit"'):
-            self.assertNotIn(forbidden, panel_audio_html, f"panel-audio no debe incluir botón falso: {forbidden}")
+        # Controles reales implementados en C-16
+        self.assertIn('id="btn-audio-mode-b"', panel_audio_html)
+        self.assertIn('id="btn-audio-mode-a"', panel_audio_html)
+        self.assertIn('id="btn-audio-generate"', panel_audio_html)
+        self.assertIn('id="btn-audio-cancel"', panel_audio_html)
 
     def test_social_panel_blocks_links_and_no_remote_network(self):
         html = self.make_client().get("/").text
@@ -6749,6 +6756,14 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIsNotNone(media_1100_block, "No se encontró el bloque @media (max-width: 1100px)")
         media_css = media_1100_block.group(1)
         self.assertNotIn("font-size:", media_css, "No se debe reducir tipografía (font-size) en el bloque responsive de tabs")
+
+    def test_c23_estudio_no_beta_badge_and_guia_solo_video(self):
+        """Verifica que Estudio no tenga beta-badge y que la Guía indique que solo Vídeo está en beta."""
+        html = self.make_client().get("/").text
+        self.assertNotIn('Estudio <span class="beta-badge">', html)
+        self.assertNotIn('beta-badge', html)
+        self.assertIn('<strong>Alcance beta:</strong> Solo Vídeo está marcado como beta.', html)
+        self.assertNotIn('Vídeo y Estudio (Timeline) están marcados como beta', html)
 
 
 if __name__ == "__main__":
