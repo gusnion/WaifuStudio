@@ -5,7 +5,7 @@
 
 import { state, GROUP_LABELS, OC_TRAIT_GROUPS } from "../state.js";
 import { $, on, setStatus, setSelectValue, readFileBase64, option, showUiBanner } from "../dom.js";
-import { api, postJson, putJson } from "../api.js";
+import { api, postJson, putJson, pollJob } from "../api.js";
 import {
   addTagsToZone,
   renderZoneEditor,
@@ -22,7 +22,7 @@ import { openTrainModal } from "./oc_train.js";
 import { runMultiviewGeneration, renderSheet } from "./editor_multiview.js";
 import { selectLora } from "./loras.js";
 import { refreshNegative } from "../tabs/image.js";
-import { openPoseLibrary, initPoseLibrary } from "./pose_library.js";
+import { openPoseLibrary, initPoseLibrary, getSelectedPose } from "./pose_library.js";
 
 let ocSearchTimer = null;
 let ocConfirmResolver = null;
@@ -797,6 +797,90 @@ export async function generateCharacterMultiview(character) {
   return entries;
 }
 
+function buildPosePrompt(character, pose) {
+  const charTags = ((character && character.tags) || []).join(", ");
+  const poseText = `${pose.clase_es || "pose"}, ${pose.angulo_es || ""}`.replace(/,\s*$/, "");
+  const base = `${poseText}, same character, same outfit, full body, neutral background`;
+  return charTags ? `${charTags}, ${base}` : base;
+}
+
+// C-29: llamada rápida de pose desde OC Maker, sin abrir el Editor.
+// Usa la pose elegida en la librería y la primera referencia no-hoja del OC activo.
+async function generateCharacterPose() {
+  const character = characterById(state.activeCharacterId);
+  if (!character) {
+    setOcStatus("Selecciona un OC para generar la pose", true);
+    return null;
+  }
+  const pose = getSelectedPose();
+  if (!pose) {
+    setOcStatus("Elige una pose en «Poses» antes de generar", true);
+    return null;
+  }
+  await loadCharacterRefs();
+  const attachable = (state.characterRefs || []).filter((ref) => !isSheetRef(ref));
+  if (!attachable.length) {
+    setOcStatus(
+      `El OC «${character.name}» no tiene referencias válidas. Añade una imagen de referencia antes de generar la pose.`,
+      true
+    );
+    return null;
+  }
+  if (!state.editorLicenseAccepted) {
+    try {
+      const editorStatus = await api("/api/editor/status");
+      state.editorLicenseAccepted = Boolean(editorStatus && editorStatus.license && editorStatus.license.accepted);
+    } catch {
+      // Ignorar fallo puntual de red
+    }
+  }
+  if (!state.editorLicenseAccepted) {
+    setOcStatus("Acepta la licencia de Qwen-Image 2.1 en la pestaña Editor antes de generar la pose", true);
+    return null;
+  }
+
+  const button = $("btn-oc-pose-generate");
+  if (button) button.disabled = true;
+  try {
+    setOcStatus(`Cargando referencia de «${character.name}»…`);
+    const res = await fetch(attachable[0].url);
+    if (!res.ok) {
+      throw new Error(`Error al leer la referencia del OC (HTTP ${res.status})`);
+    }
+    const refB64 = await readFileBase64(await res.blob());
+    const job = await postJson("/api/editor/generate", {
+      prompt: buildPosePrompt(character, pose),
+      mode: "generate",
+      negative: "",
+      steps: 25,
+      cfg: 1,
+      size: { original: true },
+      seed: Math.floor(Math.random() * 2147483647),
+      preserve_structure: false,
+      ref_images_b64: [refB64],
+    });
+    setOcStatus(`Generando pose «${pose.clase_es} · ${pose.angulo_es}» para «${character.name}»…`);
+    const done = await new Promise((resolve, reject) => {
+      pollJob(
+        job.job_id,
+        (message, isError) => setOcStatus(`Pose «${character.name}»: ${message}`, Boolean(isError)),
+        resolve,
+        () => {},
+        false
+      ).catch(reject);
+    });
+    if (!done || done.status !== "done" || !done.gen_id) {
+      throw new Error((done && done.error) || "La pose no devolvió imagen");
+    }
+    await postJson(`/api/characters/${character.id}/refs`, { gen_id: done.gen_id });
+    await loadCharacterRefs();
+    setOcStatus(`Pose generada y guardada como nueva referencia de «${character.name}»`);
+    return done;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function addOcTagsToPrompt() {
   if (!state.ocSelectedTags.length) {
     setOcStatus("Selecciona al menos un tag del catálogo", true);
@@ -905,6 +989,9 @@ function initOcPicker() {
   on("btn-oc-add", "click", addOcTagsToPrompt);
   on("btn-oc-poses", "click", openPoseLibrary);
   initPoseLibrary();
+  on("btn-oc-pose-generate", "click", () => {
+    generateCharacterPose().catch((error) => setOcStatus(error.message, true));
+  });
   on("oc-modal", "click", (event) => {
     if (event.target === $("oc-modal")) {
       closeOcModal();
@@ -993,6 +1080,8 @@ export {
   loadCharacterRefs,
   removeCharacterRef,
   createCharacterSheet,
+  buildPosePrompt,
+  generateCharacterPose,
   addOcTagsToPrompt,
   openOcSaveModal,
   closeOcSaveModal,

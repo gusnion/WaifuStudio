@@ -818,6 +818,16 @@ input[type="checkbox"] {
   font-size: 0.75rem;
 }
 
+/* C-29: botón Generar pose (llamada rápida desde OC Maker) */
+.oc-pose-row {
+  flex-wrap: wrap;
+}
+
+#btn-oc-pose-generate:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .pose-box {
   width: min(1100px, 100%);
   max-height: 90vh;

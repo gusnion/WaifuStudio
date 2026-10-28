@@ -955,6 +955,37 @@ class PoseLibraryUiStaticTests(ServerTestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, css)
 
+    def test_c29_generar_pose_boton_handler_y_llamada(self):
+        """C-29: botón Generar pose → /api/editor/generate → nueva referencia del OC."""
+        html = self.make_client().get("/").text
+        self.assertIn('id="btn-oc-pose-generate"', html)
+        self.assertIn(">Generar pose<", html)
+        js = (self._root() / "static" / "js" / "components" / "oc_picker.js").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            "getSelectedPose",
+            "pollJob",
+            "async function generateCharacterPose()",
+            'on("btn-oc-pose-generate", "click"',
+            'postJson("/api/editor/generate"',
+            'mode: "generate"',
+            "size: { original: true }",
+            "cfg: 1,",
+            "pose.clase_es",
+            "pose.angulo_es",
+            "ref_images_b64: [refB64]",
+            "attachable[0].url",
+            "/api/characters/${character.id}/refs",
+            "gen_id: done.gen_id",
+            "Elige una pose",
+            "no tiene referencias válidas",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, js)
+        self.assertIn("generateCharacterPose,", js)
+        self.assertIn("#btn-oc-pose-generate", self.get_static_css())
+
     def test_dataset_de_poses_contrato_esperado(self):
         path = self._root() / "static" / "pose-skeletons.json"
         data = json.loads(path.read_text(encoding="utf-8"))
