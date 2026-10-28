@@ -26,7 +26,18 @@ const poseState = {
   pendingId: null,
   selected: null,
   loading: null,
+  activeCaller: "oc",
+  callerPoses: {},
 };
+
+let poseLibraryInitialized = false;
+const callerCallbacks = new Map();
+
+function registerPoseCallback(caller, callback) {
+  if (typeof callback === "function") {
+    callerCallbacks.set(caller, callback);
+  }
+}
 
 function normalizeText(value) {
   return String(value ?? "")
@@ -278,10 +289,18 @@ function updateSelectedIndicator() {
   if (clear) clear.classList.toggle("hidden", !pose);
 }
 
-function emitSelection() {
+function emitSelection(caller = null) {
   const pose = poseState.selected;
+  const active = caller || poseState.activeCaller || "oc";
   window.dispatchEvent(
-    new CustomEvent("waifu:pose-select", { detail: { pose: pose ? { ...pose } : null } }),
+    new CustomEvent("waifu:pose-select", {
+      detail: { pose: pose ? { ...pose } : null, caller: active },
+    }),
+  );
+  window.dispatchEvent(
+    new CustomEvent(`waifu:pose-select-${active}`, {
+      detail: { pose: pose ? { ...pose } : null },
+    }),
   );
 }
 
@@ -289,20 +308,58 @@ function confirmPose() {
   const pose = findPose(poseState.pendingId);
   if (!pose || !hasDetection(pose)) return;
   poseState.selected = pose;
-  updateSelectedIndicator();
-  emitSelection();
+  const caller = poseState.activeCaller || "oc";
+  if (!poseState.callerPoses) {
+    poseState.callerPoses = {};
+  }
+  poseState.callerPoses[caller] = pose;
+  if (caller === "oc") {
+    updateSelectedIndicator();
+  }
+  const cb = callerCallbacks.get(caller);
+  if (typeof cb === "function") {
+    cb(pose);
+  }
+  emitSelection(caller);
   closePoseLibrary();
 }
 
-function clearSelectedPose() {
+function clearSelectedPose(caller = null) {
+  const active = caller || poseState.activeCaller || "oc";
   poseState.selected = null;
   poseState.pendingId = null;
-  updateSelectedIndicator();
-  emitSelection();
+  if (poseState.callerPoses) {
+    poseState.callerPoses[active] = null;
+  }
+  if (active === "oc") {
+    updateSelectedIndicator();
+  }
+  emitSelection(active);
 }
 
-function getSelectedPose() {
+function getSelectedPose(caller = null) {
+  if (caller && poseState.callerPoses?.[caller]) {
+    return { ...poseState.callerPoses[caller] };
+  }
   return poseState.selected ? { ...poseState.selected } : null;
+}
+
+function drawPoseSkeleton(canvas, pose) {
+  return drawSkeleton(canvas, pose, skeletonBones());
+}
+
+function poseToDataUrl(pose, width = 512) {
+  const pw = Number(pose?.width) || 900;
+  const ph = Number(pose?.height) || 1200;
+  const targetW = width;
+  const targetH = Math.round(targetW * (ph / pw));
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  canvas.dataset.cssWidth = String(targetW);
+  canvas.dataset.cssHeight = String(targetH);
+  drawSkeleton(canvas, pose, skeletonBones());
+  return canvas.toDataURL();
 }
 
 function loadPoseLibrary() {
@@ -328,14 +385,34 @@ function loadPoseLibrary() {
   return poseState.loading;
 }
 
-function openPoseLibrary() {
+function openPoseLibrary(callerOrEvent) {
+  let caller = "oc";
+  if (typeof callerOrEvent === "string") {
+    caller = callerOrEvent;
+  } else if (callerOrEvent && callerOrEvent.target && callerOrEvent.target.id) {
+    const id = callerOrEvent.target.id;
+    if (id === "btn-image-poses") caller = "image";
+    else if (id === "btn-editor-poses") caller = "editor";
+    else if (id === "btn-oc-poses") caller = "oc";
+  } else {
+    const panelEd = $("panel-editor");
+    const panelImg = $("panel-image");
+    if (panelEd && panelEd.classList.contains("active")) {
+      caller = "editor";
+    } else if (panelImg && panelImg.classList.contains("active")) {
+      caller = "image";
+    }
+  }
+  poseState.activeCaller = caller;
+
   const modal = $("pose-modal");
   if (!modal) {
     console.error("openPoseLibrary: falta #pose-modal (¿UI desactualizada? recarga con Ctrl+F5)");
     return;
   }
   modal.classList.remove("hidden");
-  poseState.pendingId = poseState.selected ? poseState.selected.id : null;
+  const current = getSelectedPose(caller);
+  poseState.pendingId = current ? current.id : null;
   renderPreview();
   setPoseStatus("Cargando poses…");
   loadPoseLibrary()
@@ -352,6 +429,9 @@ function closePoseLibrary() {
 }
 
 function initPoseLibrary() {
+  if (poseLibraryInitialized) return;
+  poseLibraryInitialized = true;
+
   on("btn-pose-close", "click", closePoseLibrary);
   on("btn-pose-use", "click", confirmPose);
   on("btn-pose-more", "click", () => {
@@ -379,7 +459,7 @@ function initPoseLibrary() {
     if (only) only.checked = false;
     applyPoseFilters();
   });
-  on("btn-oc-pose-clear", "click", clearSelectedPose);
+  on("btn-oc-pose-clear", "click", () => clearSelectedPose("oc"));
   updateSelectedIndicator();
 }
 
@@ -388,6 +468,9 @@ export {
   filterPoses,
   hasDetection,
   drawSkeleton,
+  drawPoseSkeleton,
+  poseToDataUrl,
+  registerPoseCallback,
   loadPoseLibrary,
   openPoseLibrary,
   closePoseLibrary,

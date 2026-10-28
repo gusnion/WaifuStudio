@@ -111,6 +111,7 @@
               <div class="zone-toolbar">
                 <div class="enhance-row">
                   <button id="btn-enhance" type="button">Generar prompt</button>
+                  <button id="btn-image-poses" type="button" title="Librería de poses (esqueletos COCO-17 locales)">Poses</button>
                   <span id="llm-status" class="llm-status hidden" style="display: none !important;" title="">LLM: …</span>
                   <label class="inline-field control-inline">
                     <span>Fuerza</span>
@@ -122,6 +123,14 @@
                   </label>
                 </div>
                 <p id="enhance-hint" class="field-hint">Escribe la escena en lenguaje natural: se convierte en tags danbooru por zona. Tus tags ya insertadas se respetan (no se repiten).</p>
+                <div id="image-pose-badge" class="image-pose-badge hidden" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.35rem 0.6rem; background: var(--bg-surface, #181a20); border: 1px solid var(--border-color, #2b2e38); border-radius: 6px;">
+                  <canvas id="image-pose-thumb" class="pose-canvas" style="width: 48px; height: 64px; border-radius: 4px; background: #0e0f13; flex-shrink: 0;"></canvas>
+                  <div style="flex: 1; min-width: 0;">
+                    <strong id="image-pose-name" style="font-size: 0.85rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Pose</strong>
+                    <span id="image-pose-note" style="font-size: 0.75rem; color: var(--text-muted, #8b92a5); display: block;">Referencia visual (sin ControlNet)</span>
+                  </div>
+                  <button id="btn-image-pose-clear" type="button" title="Quitar miniatura de pose" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">✕</button>
+                </div>
               </div>
             </fieldset>
 
@@ -759,7 +768,10 @@
           </label>
           <p id="editor-edit-hint" class="field-hint">En «Editar» se trabaja sobre la imagen seleccionada en el visor de Imagen (o clic en la galería de abajo); describe el cambio.</p>
           <label class="field" id="editor-refs-field">
-            <span>Imágenes de referencia (hasta 10)</span>
+            <div class="field-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <span>Imágenes de referencia (hasta 10)</span>
+              <button id="btn-editor-poses" type="button" title="Librería de poses (adjuntar esqueleto COCO-17 como referencia)">Poses</button>
+            </div>
             <input id="editor-refs" type="file" accept="image/*" multiple>
           </label>
           <div id="editor-refs-preview" class="editor-refs"></div>

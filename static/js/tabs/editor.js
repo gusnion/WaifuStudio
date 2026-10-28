@@ -43,6 +43,11 @@ import { reloadImageViewerFirstPage, selectedImageView, imageViewUrl } from "./i
 import { loadGalleryTab, openGalleryModal } from "./gallery.js";
 import { switchTab } from "../main.js";
 import { ResolutionKit } from "../components/resolution_kit.js";
+import {
+  openPoseLibrary,
+  registerPoseCallback,
+  poseToDataUrl,
+} from "../components/pose_library.js";
 import { t } from "../i18n.js";
 
 let editorResolutionKit = null;
@@ -173,10 +178,31 @@ function updateEditorRefs() {
 function removeEditorRef(index) {
   const removed = state.editorRefs.splice(index, 1)[0];
   if (removed && removed.url) {
-    URL.revokeObjectURL(removed.url);
+    if (typeof removed.url === "string" && removed.url.startsWith("blob:")) {
+      URL.revokeObjectURL(removed.url);
+    }
   }
   updateEditorRefs();
   setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
+}
+
+function applyPoseToEditorRef(pose) {
+  if (!pose) return;
+  if (state.editorRefs.length >= EDITOR_REF_LIMIT) {
+    setEditorStatus(`Máximo ${EDITOR_REF_LIMIT} referencias (quita alguna)`, true);
+    return;
+  }
+  // C-33: convierte el esqueleto dibujado a PNG (dataURL) y adjúntalo como referencia para Qwen; no requiere los PNG originales
+  const dataUrl = poseToDataUrl(pose);
+  const b64 = dataUrl.includes(",") ? dataUrl.split(",", 2)[1] : dataUrl;
+  const refName = `pose_${pose.id || "skeleton"}.png`;
+  state.editorRefs.push({
+    name: refName,
+    b64,
+    url: dataUrl,
+  });
+  updateEditorRefs();
+  setEditorStatus(`Pose «${pose.clase_es || pose.id}» adjuntada como referencia (${state.editorRefs.length}/${EDITOR_REF_LIMIT})`);
 }
 
 async function addEditorRefs(fileList) {
@@ -248,7 +274,7 @@ async function setEditorEditSource(url, item) {
     return;
   }
   for (const ref of state.editorRefs) {
-    if (ref.url) {
+    if (ref.url && typeof ref.url === "string" && ref.url.startsWith("blob:")) {
       URL.revokeObjectURL(ref.url);
     }
   }
@@ -662,7 +688,7 @@ async function editEditorResult() {
     return;
   }
   for (const ref of state.editorRefs) {
-    if (ref.url) {
+    if (ref.url && typeof ref.url === "string" && ref.url.startsWith("blob:")) {
       URL.revokeObjectURL(ref.url);
     }
   }
@@ -835,6 +861,8 @@ function initEditorTab() {
       setEditorStatus(error.message, true)
     );
   });
+  on("btn-editor-poses", "click", () => openPoseLibrary("editor"));
+  registerPoseCallback("editor", applyPoseToEditorRef);
   on("btn-editor-generate", "click", generateEditor);
   on("editor-license-check", "change", () => {
     const check = $("editor-license-check");
@@ -949,6 +977,7 @@ export {
   editEditorResult,
   downloadEditorResult,
   generateEditor,
+  applyPoseToEditorRef,
   initEditorTab,
   loadEditorLoras,
 };

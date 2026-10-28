@@ -29,7 +29,13 @@ import {
   flushPendingZoneInputs,
   updateGenerateState,
   composePrompt,
+  mergeZonesText,
 } from "../components/prompt_zones.js";
+import {
+  openPoseLibrary,
+  registerPoseCallback,
+  drawPoseSkeleton,
+} from "../components/pose_library.js";
 import {
   readLorasPayload,
   applyLorasSelection,
@@ -709,10 +715,100 @@ function clearReference() {
   setStatus("Referencia quitada");
 }
 
+const POSE_CLASS_TAGS = {
+  "De pie": "standing",
+  "Sentada": "sitting",
+  "De rodillas": "kneeling",
+  "De rodillas / a cuatro patas": "all fours, kneeling",
+  "Tumbada boca abajo": "lying, on stomach",
+  "Sentada de lado": "sitting, from side",
+  "En cuclillas": "squatting",
+  "Inclinada hacia delante": "bent forward",
+  "Arqueada hacia atrás": "arched back",
+  "Girada / torcida": "twisted torso",
+  "De pie (coito)": "standing",
+  "Cara cerca": "close-up",
+  "Misionero": "missionary",
+  "Por detrás (doggy)": "from behind, all fours",
+  "Sentada (coito)": "sitting",
+  "Sentada de espaldas": "sitting, from behind",
+  "Encima (cowgirl)": "cowgirl position",
+  "De lado": "lying, on side",
+  "Sentada de frente": "sitting, front view",
+  "Estilo cute": "cute pose",
+  "Pecho juntado / escote marcado": "cleavage",
+  "Sexy / explícita": "sexy pose",
+};
 
+const POSE_ANGLE_TAGS = {
+  "Diagonal": "three-quarter view",
+  "Frontal": "front view",
+  "Desde arriba": "from above",
+  "Desde abajo": "from below",
+  "Lateral": "side view",
+};
+
+function formatPoseTagsForImage(pose) {
+  if (!pose) return "";
+  const parts = [];
+  if (pose.clase_es && POSE_CLASS_TAGS[pose.clase_es]) {
+    parts.push(POSE_CLASS_TAGS[pose.clase_es]);
+  }
+  if (pose.angulo_es && POSE_ANGLE_TAGS[pose.angulo_es]) {
+    parts.push(POSE_ANGLE_TAGS[pose.angulo_es]);
+  }
+  if (pose.clase_es && !parts.some((p) => p.includes(pose.clase_es.toLowerCase()))) {
+    parts.push(pose.clase_es.toLowerCase());
+  }
+  if (pose.angulo_es && !parts.some((p) => p.includes(pose.angulo_es.toLowerCase()))) {
+    parts.push(pose.angulo_es.toLowerCase());
+  }
+  return [...new Set(parts)].join(", ");
+}
+
+function applyPoseToImageTab(pose) {
+  if (!pose) return;
+  const tags = formatPoseTagsForImage(pose);
+
+  // 1. C-34: Inserta etiquetas/clase/ángulo en el prompt general y zonas
+  const promptGeneral = $("prompt-general");
+  if (promptGeneral && tags) {
+    const prev = promptGeneral.value.trim();
+    promptGeneral.value = prev ? `${prev}, ${tags}` : tags;
+  }
+  if (isTagPromptProfile(state.prompt_profile) && tags) {
+    mergeZonesText(tags).catch(() => {});
+  }
+
+  // 2. C-34: Muestra la miniatura del esqueleto
+  const badge = $("image-pose-badge");
+  const thumb = $("image-pose-thumb");
+  const name = $("image-pose-name");
+  const note = $("image-pose-note");
+  if (badge) {
+    badge.classList.remove("hidden");
+    if (name) name.textContent = `${pose.clase_es || "Pose"} · ${pose.angulo_es || ""}`;
+    if (note) note.textContent = "Referencia visual (sin ControlNet)";
+    if (thumb) {
+      drawPoseSkeleton(thumb, pose);
+    }
+  }
+
+  // 3. C-34: Sin ControlNet, no prometas aplicarlo
+  setStatus(`Pose «${pose.clase_es || "pose"} · ${pose.angulo_es || ""}» añadida al prompt (referencia visual, sin ControlNet)`);
+}
+
+function clearImagePosePreview() {
+  const badge = $("image-pose-badge");
+  if (badge) badge.classList.add("hidden");
+  setStatus("Miniatura de pose quitada");
+}
 
 function initImageTab() {
   on("btn-enhance", "click", enhancePrompt);
+  on("btn-image-poses", "click", () => openPoseLibrary("image"));
+  on("btn-image-pose-clear", "click", clearImagePosePreview);
+  registerPoseCallback("image", applyPoseToImageTab);
   on("btn-generate", "click", generate);
   on("btn-cancel", "click", cancelJob);
   on("btn-new-generation", "click", () => {
@@ -812,6 +908,8 @@ export {
   reuseGeneration,
   updateReferencePreview,
   clearReference,
+  applyPoseToImageTab,
+  clearImagePosePreview,
   getModelBadgeLabel,
   updateModelBadge,
   initImageTab,

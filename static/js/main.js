@@ -14,6 +14,7 @@ import { initOcTrain, closeTrainModal } from "./components/oc_train.js";
 import { initLoras, closeLoraLibrary, closeLoraModal } from "./components/loras.js";
 import { initVision, closeVisionModal } from "./components/vision.js";
 import { initPreprompts, closePrepromptModal } from "./components/preprompts.js";
+import { initPoseLibrary, closePoseLibrary } from "./components/pose_library.js";
 import { initImageTab, loadParams, loadFormats, loadModels, refreshNegative, applyStartupDefaults, refreshLlmStatus } from "./tabs/image.js";
 import { initImageViewer, loadImageViewer } from "./tabs/image_viewer.js";
 import { initVideoTab, applyVideoEngine, loadVideoViewer } from "./tabs/video.js";
@@ -224,7 +225,7 @@ function bind() {
       if (imageCompareActive) setImageCompareEnabled(false);
       if (editorCompareActive || editorCompareSelecting) setEditorCompareEnabled(false);
       if (upscaleCompareActive) setUpscaleCompareActive(false);
-      closeVisionModal(); closePrepromptModal(); closeLoraLibrary(); closeLoraModal();
+      closeVisionModal(); closePrepromptModal(); closeLoraLibrary(); closeLoraModal(); closePoseLibrary();
       const trainModal = $("oc-train-modal");
       if (trainModal && !trainModal.classList.contains("hidden")) { closeTrainModal(); return; }
       closeOcModal();
@@ -239,7 +240,7 @@ function bind() {
   });
   initHeader(); initI18n(); initTooltipHelp(); initFirstRun(); initTheme();
   initCompare(); initLightbox(); initPromptZones(); initPromptPopover();
-  initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts();
+  initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts(); initPoseLibrary();
   window.addEventListener("waifu:oc-open", () => switchTab("oc"));
   window.addEventListener("waifu:oc-close", () => switchTab("image"));
   window.addEventListener("waifu:switch-tab", (event) => {

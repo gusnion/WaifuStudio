@@ -7075,6 +7075,58 @@ class TopbarNavigationStaticTests(ServerTestCase):
         resp_ref = client.post("/api/characters/999999/refs", json={"gen_id": 1})
         self.assertEqual(resp_ref.status_code, 404)
 
+    def test_c37_panel_poses_accessible_from_image_editor_ocmaker(self):
+        """C-37: panel de poses accesible desde Imagen, Editor y OCMaker con el mismo modal."""
+        base_dir = Path(__file__).resolve().parents[1]
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-image-poses"', html)
+        self.assertIn('id="btn-editor-poses"', html)
+        self.assertIn('id="btn-oc-poses"', html)
+        self.assertIn('id="pose-modal"', html)
+
+        pose_js = (base_dir / "static" / "js" / "components" / "pose_library.js").read_text(encoding="utf-8")
+        self.assertIn("openPoseLibrary", pose_js)
+        self.assertIn("registerPoseCallback", pose_js)
+        self.assertIn("poseToDataUrl", pose_js)
+        self.assertIn("initPoseLibrary", pose_js)
+        self.assertIn("poseLibraryInitialized", pose_js, "initPoseLibrary debe ser idempotente")
+
+        main_js = (base_dir / "static" / "js" / "main.js").read_text(encoding="utf-8")
+        self.assertIn("initPoseLibrary();", main_js)
+        self.assertIn("closePoseLibrary();", main_js)
+
+    def test_c34_imagen_pose_prompt_tags_thumbnail_no_controlnet(self):
+        """C-34: al elegir pose en Imagen, inserta etiquetas/clase/ángulo en prompt, muestra miniatura sin ControlNet."""
+        base_dir = Path(__file__).resolve().parents[1]
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="image-pose-badge"', html)
+        self.assertIn('id="image-pose-thumb"', html)
+        self.assertIn('id="image-pose-name"', html)
+        self.assertIn('id="image-pose-note"', html)
+        self.assertIn('id="btn-image-pose-clear"', html)
+
+        img_js = (base_dir / "static" / "js" / "tabs" / "image.js").read_text(encoding="utf-8")
+        self.assertIn('openPoseLibrary("image")', img_js)
+        self.assertIn('registerPoseCallback("image"', img_js)
+        self.assertIn("formatPoseTagsForImage", img_js)
+        self.assertIn("applyPoseToImageTab", img_js)
+        self.assertIn("sin ControlNet", img_js)
+        self.assertIn("drawPoseSkeleton", img_js)
+
+    def test_c33_editor_pose_drawn_skeleton_to_png_dataurl_reference(self):
+        """C-33: al elegir pose en Editor, convierte el esqueleto dibujado a PNG (dataURL) y lo adjunta como referencia."""
+        base_dir = Path(__file__).resolve().parents[1]
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-editor-poses"', html)
+
+        ed_js = (base_dir / "static" / "js" / "tabs" / "editor.js").read_text(encoding="utf-8")
+        self.assertIn('openPoseLibrary("editor")', ed_js)
+        self.assertIn('registerPoseCallback("editor"', ed_js)
+        self.assertIn("applyPoseToEditorRef", ed_js)
+        self.assertIn("poseToDataUrl", ed_js)
+        self.assertIn("state.editorRefs.push", ed_js)
+        self.assertIn("updateEditorRefs()", ed_js)
+
 
 if __name__ == "__main__":
     unittest.main()
