@@ -1231,10 +1231,9 @@ class TestAudioMixStaticUI(unittest.TestCase):
         self.assertIn("btn-audio-mix-layers", js)
         self.assertIn("handleMixLayers", js)
         self.assertIn("renderMixResult", js)
-        self.assertIn("voice.wav", js)
-        self.assertIn("ambient.wav", js)
-        self.assertIn("mixed.wav", js)
-        self.assertIn("mixed.mp4", js)
+        self.assertIn("mixed_wav", js)
+        self.assertIn("voice_stem", js)
+        self.assertIn("ambient_stem", js)
 
 
 if __name__ == "__main__":

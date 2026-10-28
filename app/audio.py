@@ -1163,7 +1163,12 @@ async def api_audio_media(gen_id: int, name: str, request: Request) -> Any:
     return FileResponse(target, media_type=media_type)
 
 
-def _find_stem_file(gallery_dir: Path, prefixes: tuple[str, ...], extensions: tuple[str, ...]) -> Path | None:
+def _find_stem_file(
+    gallery_dir: Path,
+    prefixes: tuple[str, ...],
+    extensions: tuple[str, ...],
+    match_any_extension: bool = True,
+) -> Path | None:
     """Busca un archivo en el directorio de galería que coincida con prefijos o extensiones."""
     if not gallery_dir.is_dir():
         return None
@@ -1179,10 +1184,11 @@ def _find_stem_file(gallery_dir: Path, prefixes: tuple[str, ...], extensions: tu
             if any(name_lower.startswith(pref.lower()) for pref in prefixes):
                 return p
 
-    # Fallback: cualquier archivo con la extensión requerida
-    for p in entries:
-        if p.is_file() and p.suffix.lower() in extensions:
-            return p
+    # Fallback opcional: cualquier archivo con la extensión requerida
+    if match_any_extension:
+        for p in entries:
+            if p.is_file() and p.suffix.lower() in extensions:
+                return p
 
     return None
 
@@ -1202,11 +1208,11 @@ def find_latest_audio_gen_id(cfg: Any, st: Any, kind_type: str = "voice") -> int
             gdir = cfg.data_dir / "gallery" / str(gid)
             if kind_type == "voice":
                 if engine in ("irodori", "voice") or any("voice" in o for o in outputs):
-                    if _find_stem_file(gdir, ("voice",), (".wav",)):
+                    if _find_stem_file(gdir, ("voice",), (".wav",), match_any_extension=False):
                         return int(gid)
             elif kind_type == "ambient":
-                if engine in ("mmaudio", "ambient") or any("audio" in o for o in outputs):
-                    if _find_stem_file(gdir, ("audio", "ambient"), (".wav",)):
+                if (engine in ("mmaudio", "ambient") or any("audio" in o for o in outputs)) and engine != "irodori":
+                    if _find_stem_file(gdir, ("audio", "ambient"), (".wav",), match_any_extension=False):
                         return int(gid)
     except Exception:
         pass
@@ -1219,9 +1225,9 @@ def find_latest_audio_gen_id(cfg: Any, st: Any, kind_type: str = "voice") -> int
             subdirs.sort(key=lambda d: int(d.name), reverse=True)
             for sub in subdirs:
                 gid = int(sub.name)
-                if kind_type == "voice" and _find_stem_file(sub, ("voice",), (".wav",)):
+                if kind_type == "voice" and _find_stem_file(sub, ("voice",), (".wav",), match_any_extension=False):
                     return gid
-                if kind_type == "ambient" and _find_stem_file(sub, ("audio", "ambient"), (".wav",)):
+                if kind_type == "ambient" and _find_stem_file(sub, ("audio", "ambient"), (".wav",), match_any_extension=False):
                     return gid
         except OSError:
             pass
