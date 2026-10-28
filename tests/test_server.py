@@ -6790,6 +6790,71 @@ class TopbarNavigationStaticTests(ServerTestCase):
         html = self.make_client().get("/").text
         self.assertIn('id="oc-train-modal"', html, "index.html debe contener el elemento #oc-train-modal")
 
+    def test_c24_oc_maker_canonical_layout(self):
+        """Item C-24: verifica que OCMaker tenga layout canónico de dos columnas con las clases estándar."""
+        index_path = Path(__file__).resolve().parents[1] / "templates" / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+
+        # 1. Panel base #panel-oc incluye tab-canonical-layout
+        self.assertIn('id="panel-oc" class="panel tab-canonical-layout"', html)
+
+        # 2. #oc-modal y modal-box oc-maker incluyen clases canónicas
+        self.assertIn('id="oc-modal" class="modal hidden oc-modal tab-canonical-layout"', html)
+        self.assertIn('class="modal-box oc-maker tab-canonical-layout"', html)
+
+        # 3. Columna izquierda: aside con controls y tab-sidebar + fieldset con control-card
+        self.assertIn('aside class="controls oc-controls tab-sidebar"', html)
+        self.assertIn('fieldset class="control-card oc-section" id="oc-block-manage"', html)
+        self.assertIn('fieldset class="control-card oc-section" id="oc-block-catalog"', html)
+
+        # 4. Columna derecha: visor con gallery-panel y tab-viewport
+        self.assertIn('section class="gallery-panel tab-viewport oc-viewport oc-section"', html)
+
+        # 5. Preservación íntegra de IDs, formulario y controles requeridos
+        required_oc_ids = [
+            "oc-modal",
+            "btn-oc-add",
+            "btn-oc-close",
+            "oc-status",
+            "oc-list",
+            "oc-form",
+            "oc-form-title",
+            "oc-form-name",
+            "oc-form-preprompt",
+            "oc-form-rating",
+            "oc-form-notes",
+            "btn-oc-save",
+            "btn-oc-new",
+            "btn-oc-cancel-edit",
+            "oc-catalog-note",
+            "oc-catalog-group",
+            "oc-catalog-search",
+            "oc-catalog-results",
+            "oc-selected",
+            "oc-extras-box",
+            "oc-extras-note",
+            "oc-extras",
+            "btn-oc-extras-move",
+            "oc-refs-title",
+            "oc-refs-note",
+            "oc-refs",
+            "btn-oc-sheet",
+        ]
+        for oc_id in required_oc_ids:
+            self.assertIn(f'id="{oc_id}"', html, f"index.html debe preservar el ID '{oc_id}' en OCMaker")
+
+        # 6. Formulario #oc-form intacto
+        self.assertIn('<form id="oc-form" class="oc-form">', html)
+
+        # 7. Reglas CSS canónicas en components.css
+        css_path = Path(__file__).resolve().parents[1] / "static" / "css" / "components.css"
+        css_content = css_path.read_text(encoding="utf-8")
+        self.assertIn(".modal-box.oc-maker.tab-canonical-layout", css_content)
+        self.assertIn(".oc-controls.tab-sidebar", css_content)
+        self.assertIn(".oc-viewport.tab-viewport", css_content)
+        self.assertIn(".control-card.oc-section", css_content)
+        self.assertIn("grid-template-columns: 420px 1fr", css_content)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1062,7 +1062,7 @@
       </section>
     </section>
 
-    <section id="panel-oc" class="panel" hidden></section>
+    <section id="panel-oc" class="panel tab-canonical-layout" hidden></section>
 
     <section id="panel-timeline" class="panel tab-canonical-layout" hidden>
       <aside class="controls tab-sidebar timeline-sidebar">
@@ -1639,35 +1639,22 @@
     </section>
   </main>
 
-  <div id="oc-modal" class="modal hidden">
-    <div class="modal-box oc-maker">
-      <div class="modal-header">
-        <h2>OC Maker</h2>
-        <span id="oc-status" class="oc-status">Listo</span>
-        <button id="btn-oc-close" type="button">Cerrar</button>
-      </div>
-      <div class="oc-body">
-        <section class="oc-section">
-          <h3>Catálogo</h3>
-          <p id="oc-catalog-note" class="oc-refs-note">Solo rasgos del personaje (pelo/ojos/cara/cuerpo); ropa/entorno se eligen en Composición (General).</p>
-          <div class="oc-catalog-controls">
-            <select id="oc-catalog-group" aria-label="Grupo de tags"></select>
-            <input id="oc-catalog-search" type="search" placeholder="Buscar tag...">
+  <div id="oc-modal" class="modal hidden oc-modal tab-canonical-layout">
+    <div class="modal-box oc-maker tab-canonical-layout">
+      <!-- Columna Izquierda: Controles y Formulario -->
+      <aside class="controls oc-controls tab-sidebar">
+        <!-- MÓDULO SUPERIOR: Acción Principal y Estado -->
+        <div class="generate-block oc-header-block">
+          <div class="generate-row">
+            <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
+            <button id="btn-oc-close" type="button">Cerrar</button>
           </div>
-          <div id="oc-catalog-results" class="oc-chips"></div>
-          <div class="oc-selected-box">
-            <h3>Seleccionados</h3>
-            <div id="oc-selected" class="oc-chips"></div>
-          </div>
-          <div id="oc-extras-box" class="oc-extras-box hidden">
-            <h3>Extras guardados</h3>
-            <p id="oc-extras-note" class="oc-refs-note">Ropa/entorno guardados en el OC (legacy). No definen al personaje; «Mover a General» los inserta en el prompt actual y, si confirmas, los quita del OC.</p>
-            <div id="oc-extras" class="oc-chips"></div>
-            <button id="btn-oc-extras-move" type="button">Mover a General</button>
-          </div>
-        </section>
-        <section class="oc-section">
-          <h3>Mis OCs</h3>
+          <p id="oc-status" class="status oc-status">Listo</p>
+        </div>
+
+        <!-- BLOQUE 1: Mis OCs y Formulario -->
+        <fieldset class="control-card oc-section" id="oc-block-manage">
+          <legend>1. Mis Personajes (OCs)</legend>
           <div id="oc-list" class="oc-list"></div>
           <form id="oc-form" class="oc-form">
             <h3 id="oc-form-title">Crear OC</h3>
@@ -1698,19 +1685,41 @@
               <button id="btn-oc-cancel-edit" type="button" class="hidden">Cancelar edición</button>
             </div>
           </form>
-        </section>
-        <section class="oc-section">
-          <h3>Referencias <span id="oc-refs-title" class="oc-refs-title"></span></h3>
-          <p id="oc-refs-note" class="oc-refs-note">Las hojas (badge «hoja») son catálogo para IPAdapter (M10); no se adjuntan solas como referencia I2I.</p>
-          <div id="oc-refs" class="oc-refs"></div>
+        </fieldset>
+
+        <!-- BLOQUE 2: Catálogo de Rasgos -->
+        <fieldset class="control-card oc-section" id="oc-block-catalog">
+          <legend>2. Catálogo de Rasgos</legend>
+          <p id="oc-catalog-note" class="oc-refs-note">Solo rasgos del personaje (pelo/ojos/cara/cuerpo); ropa/entorno se eligen en Composición (General).</p>
+          <div class="oc-catalog-controls">
+            <select id="oc-catalog-group" aria-label="Grupo de tags"></select>
+            <input id="oc-catalog-search" type="search" placeholder="Buscar tag...">
+          </div>
+          <div id="oc-catalog-results" class="oc-chips"></div>
+          <div class="oc-selected-box">
+            <h3>Seleccionados</h3>
+            <div id="oc-selected" class="oc-chips"></div>
+          </div>
+          <div id="oc-extras-box" class="oc-extras-box hidden">
+            <h3>Extras guardados</h3>
+            <p id="oc-extras-note" class="oc-refs-note">Ropa/entorno guardados en el OC (legacy). No definen al personaje; «Mover a General» los inserta en el prompt actual y, si confirmas, los quita del OC.</p>
+            <div id="oc-extras" class="oc-chips"></div>
+            <button id="btn-oc-extras-move" type="button">Mover a General</button>
+          </div>
+        </fieldset>
+      </aside>
+
+      <!-- Columna Derecha: Visor de Referencias / Galería -->
+      <section class="gallery-panel tab-viewport oc-viewport oc-section">
+        <div class="gallery-header">
+          <h2>Referencias <span id="oc-refs-title" class="oc-refs-title"></span></h2>
           <div class="oc-refs-actions">
             <button id="btn-oc-sheet" type="button" title="Genera una hoja catálogo para IPAdapter (M10); no se adjunta como referencia I2I" disabled>Crear hoja</button>
           </div>
-        </section>
-      </div>
-      <div class="modal-footer">
-        <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
-      </div>
+        </div>
+        <p id="oc-refs-note" class="oc-refs-note">Las hojas (badge «hoja») son catálogo para IPAdapter (M10); no se adjuntan solas como referencia I2I.</p>
+        <div id="oc-refs" class="oc-refs"></div>
+      </section>
     </div>
   </div>
 

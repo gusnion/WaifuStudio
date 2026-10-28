@@ -606,6 +606,143 @@ input[type="checkbox"] {
   letter-spacing: 0;
 }
 
+/* OCMaker: Layout Canónico de Dos Columnas (Item C-24) */
+#panel-oc.tab-canonical-layout.active {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+#oc-modal.oc-inline {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.modal-box.oc-maker.tab-canonical-layout,
+#oc-modal.oc-inline .modal-box.oc-maker {
+  display: grid !important;
+  grid-template-columns: 420px 1fr !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  gap: 1rem !important;
+  box-sizing: border-box !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+.modal-box.oc-maker.tab-canonical-layout:not(.active),
+#oc-modal.tab-canonical-layout:not(.active) {
+  display: grid !important;
+}
+
+.oc-controls.tab-sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.8rem !important;
+  overflow-y: auto !important;
+  padding-right: 0.4rem !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+.control-card.oc-section {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.oc-viewport.tab-viewport {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-sizing: border-box;
+  overflow-y: auto !important;
+  max-height: none !important;
+}
+
+.oc-viewport .gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.oc-viewport .gallery-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.oc-viewport .oc-refs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 120px;
+  align-content: start;
+}
+
+.oc-header-block {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 15 !important;
+  background: var(--bg) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+  padding: 0.2rem 0 0.65rem 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0.4rem !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  flex-shrink: 0 !important;
+}
+
+@media (max-width: 1100px) {
+  .modal-box.oc-maker.tab-canonical-layout,
+  #oc-modal.oc-inline .modal-box.oc-maker {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto !important;
+    overflow-y: auto !important;
+  }
+}
+
 .oc-save-box {
   width: min(420px, 100%);
 }
@@ -1332,7 +1469,8 @@ input[type="checkbox"] {
   box-sizing: border-box !important;
 }
 
-.tab-canonical-layout:not(.active) {
+.tab-canonical-layout.panel:not(.active),
+.tab-canonical-layout:not(.active):not(.oc-maker):not(#oc-modal) {
   display: none !important;
 }
 
