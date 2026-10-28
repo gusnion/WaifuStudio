@@ -11,6 +11,7 @@ Verifica:
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -31,6 +32,13 @@ from app.audio import (
 )
 from app.config import EngineConfig
 from app.engine import EngineError
+from app.irodori import (
+    DEFAULT_IRODORI_PORT,
+    DEFAULT_IRODORI_URL,
+    detect_irodori,
+    get_irodori_dir,
+    get_irodori_url,
+)
 from app.server import create_app
 from app.store import Store
 
@@ -228,6 +236,46 @@ class TestAudioRouter(unittest.TestCase):
         self.assertEqual(data.get("sample_rate_hz"), 48000)
         self.assertFalse(data.get("irodori_installed"))
         self.assertIn("localhost:8291", data.get("irodori_reason", ""))
+        self.assertEqual(data.get("irodori_status"), "absent")
+
+    @patch("app.audio.detect_irodori")
+    def test_api_audio_status_simulated_present(self, mock_detect: MagicMock) -> None:
+        mock_detect.return_value = {
+            "installed": True,
+            "status": "installed",
+            "directory": "E:/IA/WAIFU/tools/irodori",
+            "directory_exists": True,
+            "service_url": "http://127.0.0.1:8291",
+            "service_online": True,
+            "reason": "Irodori microservicio listo y conectado en http://127.0.0.1:8291.",
+        }
+        res = self.client.get("/api/audio/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data.get("irodori_installed"))
+        self.assertEqual(data.get("irodori_status"), "installed")
+        self.assertTrue(data.get("irodori_dir_exists"))
+        self.assertTrue(data.get("irodori_service_online"))
+        self.assertIn("listo", data.get("irodori_reason", ""))
+
+    @patch("app.audio.detect_irodori")
+    def test_api_audio_status_simulated_offline(self, mock_detect: MagicMock) -> None:
+        mock_detect.return_value = {
+            "installed": False,
+            "status": "offline",
+            "directory": "E:/IA/WAIFU/tools/irodori",
+            "directory_exists": True,
+            "service_url": "http://127.0.0.1:8291",
+            "service_online": False,
+            "reason": "tools/irodori presente pero el microservicio no responde en localhost:8291.",
+        }
+        res = self.client.get("/api/audio/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertFalse(data.get("irodori_installed"))
+        self.assertEqual(data.get("irodori_status"), "offline")
+        self.assertTrue(data.get("irodori_dir_exists"))
+        self.assertFalse(data.get("irodori_service_online"))
 
     def test_api_audio_generate_rejects_voice_with_reason(self) -> None:
         res = self.client.post("/api/audio/generate", json={"voice_enabled": True})
@@ -345,6 +393,62 @@ class TestRunAudioGeneration(unittest.TestCase):
         # Comprueba llamadas a extracción y muxing
         mock_extract.assert_called_once()
         mock_mux.assert_called_once()
+
+
+
+class TestIrodoriDetector(unittest.TestCase):
+    """Pruebas offline del detector opcional de Irodori en app/irodori.py."""
+
+    def test_detect_absent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            missing_dir = Path(td) / "tools" / "irodori_absent"
+            res = detect_irodori(irodori_dir=missing_dir)
+            self.assertFalse(res["installed"])
+            self.assertEqual(res["status"], "absent")
+            self.assertFalse(res["directory_exists"])
+            self.assertFalse(res["service_online"])
+            self.assertIn("no encontrado", res["reason"])
+            self.assertIn("localhost:8291", res["reason"])
+
+    def test_detect_present_directory_service_offline(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tool_dir = Path(td) / "tools" / "irodori"
+            tool_dir.mkdir(parents=True, exist_ok=True)
+            res = detect_irodori(
+                irodori_dir=tool_dir,
+                probe_fn=lambda url: False,
+            )
+            self.assertFalse(res["installed"])
+            self.assertEqual(res["status"], "offline")
+            self.assertTrue(res["directory_exists"])
+            self.assertFalse(res["service_online"])
+            self.assertIn("detenido o no responde", res["reason"])
+
+    def test_detect_present_directory_service_online_installed(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tool_dir = Path(td) / "tools" / "irodori"
+            tool_dir.mkdir(parents=True, exist_ok=True)
+            res = detect_irodori(
+                irodori_dir=tool_dir,
+                probe_fn=lambda url: True,
+            )
+            self.assertTrue(res["installed"])
+            self.assertEqual(res["status"], "installed")
+            self.assertTrue(res["directory_exists"])
+            self.assertTrue(res["service_online"])
+            self.assertIn("listo", res["reason"])
+
+    def test_configurable_env_path(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            custom_dir = Path(td) / "custom_irodori"
+            custom_dir.mkdir()
+            with patch.dict(os.environ, {"IRODORI_PATH": str(custom_dir)}):
+                self.assertEqual(get_irodori_dir(), custom_dir.resolve())
+
+    def test_configurable_env_url(self) -> None:
+        custom_url = "http://127.0.0.1:9299"
+        with patch.dict(os.environ, {"IRODORI_URL": custom_url}):
+            self.assertEqual(get_irodori_url(), custom_url)
 
 
 if __name__ == "__main__":

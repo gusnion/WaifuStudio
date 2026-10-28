@@ -10,6 +10,76 @@ import { state } from "../state.js";
 
 let selectedClip = null;
 let activeAudioJobId = null;
+let irodoriStatusCache = null;
+
+export function updateIrodoriUI(statusData) {
+  irodoriStatusCache = statusData;
+  const checkbox = $("audio-engine-irodori");
+  if (!checkbox) return;
+
+  const label = checkbox.closest("label") || checkbox.parentElement;
+  const badge = label ? label.querySelector(".badge") : null;
+  const hint = label?.nextElementSibling?.classList?.contains("field-hint")
+    ? label.nextElementSibling
+    : null;
+
+  const isInstalled = Boolean(statusData?.irodori_installed);
+  const status = statusData?.irodori_status || (isInstalled ? "installed" : "absent");
+  const reason = statusData?.irodori_reason || (isInstalled ? "Irodori microservicio listo en localhost:8291" : "Irodori no disponible");
+
+  if (isInstalled) {
+    checkbox.disabled = false;
+    checkbox.style.cursor = "pointer";
+    if (label) {
+      label.style.opacity = "1";
+      label.style.cursor = "pointer";
+      label.title = reason;
+    }
+    if (badge) {
+      badge.textContent = "Instalado";
+      badge.style.background = "#28a745";
+      badge.style.color = "#fff";
+    }
+    if (hint) {
+      hint.textContent = reason;
+      hint.style.color = "var(--text-muted, #8e90a6)";
+    }
+  } else {
+    checkbox.disabled = true;
+    checkbox.checked = false;
+    checkbox.style.cursor = "not-allowed";
+    if (label) {
+      label.style.opacity = "0.6";
+      label.style.cursor = "not-allowed";
+      label.title = reason;
+    }
+    if (badge) {
+      badge.textContent = status === "offline" ? "Servicio Offline" : "Deshabilitado";
+      badge.style.background = status === "offline" ? "#d97706" : "#444";
+      badge.style.color = "#bbb";
+    }
+    if (hint) {
+      hint.textContent = reason;
+      hint.style.color = status === "offline" ? "#e06c75" : "var(--text-muted, #8e90a6)";
+    }
+  }
+}
+
+export async function refreshAudioStatus() {
+  try {
+    const data = await api("/api/audio/status");
+    updateIrodoriUI(data);
+    return data;
+  } catch (err) {
+    console.error("[audio] Error al consultar /api/audio/status:", err);
+    updateIrodoriUI({
+      irodori_installed: false,
+      irodori_status: "absent",
+      irodori_reason: `No se pudo consultar estado de Irodori (${err.message})`,
+    });
+    return null;
+  }
+}
 
 function setAudioStatus(text, isError = false) {
   const el = $("audio-status");
@@ -136,6 +206,9 @@ async function handleGenerateAudio() {
     }
   }
 
+  const irodoriCheckbox = $("audio-engine-irodori");
+  const voiceEnabled = Boolean(irodoriCheckbox?.checked && !irodoriCheckbox?.disabled);
+
   const payload = {
     video_path: selectedClip.path,
     source_gen_id: selectedClip.gen_id || null,
@@ -147,6 +220,7 @@ async function handleGenerateAudio() {
     cfg,
     seed,
     action,
+    voice_enabled: voiceEnabled,
   };
 
   const btnGen = $("btn-audio-generate");
@@ -299,4 +373,5 @@ export function initAudioTab() {
   });
 
   loadAudioClips();
+  refreshAudioStatus();
 }

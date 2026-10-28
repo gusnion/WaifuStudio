@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from app.config import APP_ROOT
 from app.engine import ComfyEngine, EngineError, JobCancelledError
+from app.irodori import detect_irodori
 from app.progress import ProgressTracker
 from app.routes.jobs import _JOBS
 from app.timeline import has_audio_stream
@@ -374,12 +375,17 @@ def run_audio_generation(
 
 @router.get("/status")
 async def api_audio_status() -> dict[str, Any]:
-    """Reporta el estado del motor MMAudio y la no disponibilidad justificada de Irodori."""
+    """Reporta el estado del motor MMAudio y la disponibilidad/detección de Irodori."""
+    irodori_info = detect_irodori()
     return {
         "mmaudio_installed": True,
         "sample_rate_hz": AUDIO_TARGET_SAMPLE_RATE,
-        "irodori_installed": False,
-        "irodori_reason": IRODORI_DISABLED_REASON,
+        "irodori_installed": bool(irodori_info.get("installed", False)),
+        "irodori_status": irodori_info.get("status", "absent"),
+        "irodori_reason": irodori_info.get("reason", IRODORI_DISABLED_REASON),
+        "irodori_dir_exists": bool(irodori_info.get("directory_exists", False)),
+        "irodori_service_online": bool(irodori_info.get("service_online", False)),
+        "irodori_url": irodori_info.get("service_url", "http://127.0.0.1:8291"),
     }
 
 
@@ -447,7 +453,13 @@ async def api_audio_probe(payload: dict[str, Any], request: Request) -> dict[str
 async def api_audio_generate(payload: dict[str, Any], request: Request) -> dict[str, Any]:
     """Encola un trabajo de audio Modo B (MMAudio condicionado a frames)."""
     if payload.get("voice_enabled") or payload.get("engine_voice"):
-        raise HTTPException(status_code=400, detail=IRODORI_DISABLED_REASON)
+        irodori_info = detect_irodori()
+        if not irodori_info.get("installed"):
+            raise HTTPException(status_code=400, detail=irodori_info.get("reason") or IRODORI_DISABLED_REASON)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Síntesis de voz con Irodori aún no conectada a la inferencia ({irodori_info.get('reason')}).",
+        )
 
     cfg = request.app.state.config
     st = request.app.state.store
