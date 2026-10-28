@@ -990,7 +990,6 @@ export {
   loadCharacterRefs,
   removeCharacterRef,
   createCharacterSheet,
-  generateCharacterMultiview,
   addOcTagsToPrompt,
   openOcSaveModal,
   closeOcSaveModal,
