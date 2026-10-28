@@ -1,20 +1,27 @@
-"""Tests unitarios offline para AUDIO Modo B con MMAudio (C-16).
+"""Tests unitarios offline para AUDIO: Modo B con MMAudio (C-16) y Modo A con voz Irodori (C-18).
 
 Verifica:
 - Construcción y conexiones del grafo ComfyUI (VHS_LoadVideoPath -> MMAudioSampler -> VHS_VideoCombine).
 - Herencia de duración y estandarización a 48 kHz.
 - Comandos FFmpeg para reemplazar pista y mezclar con pista existente preservando el original.
-- Rechazo explícito con motivo si se solicita síntesis de voz (Irodori deshabilitado).
+- Rechazo explícito con motivo si se solicita voz en Modo B (la voz va por /api/audio/voice).
 - Endpoints de status y validación en la API FastAPI.
 - Runner monohilo FIFO (run_audio_generation) con actualización de outputs en Store.
+- C-18: POST /api/audio/voice contra Irodori con HTTP mock (sin red), guardado de WAV en gallery y
+  test estático de la UI (paleta de emojis, referencia de voz, enlace a audio.css).
 """
 
 from __future__ import annotations
 
+import base64
+import io
+import json
 import os
 import sqlite3
 import tempfile
 import unittest
+import urllib.error
+import wave
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -24,12 +31,18 @@ from fastapi.testclient import TestClient
 from app.audio import (
     AUDIO_TARGET_SAMPLE_RATE,
     IRODORI_DISABLED_REASON,
+    VOICE_EMOJI_PALETTE,
+    IrodoriSpeechError,
+    build_irodori_speech_body,
     build_mmaudio_mode_b_graph,
     extract_48k_wav,
     mux_video_audio,
     probe_clip_audio,
+    request_irodori_speech,
     run_audio_generation,
+    wav_duration_seconds,
 )
+
 from app.config import EngineConfig
 from app.engine import EngineError
 from app.irodori import (
@@ -56,6 +69,16 @@ CREATE TABLE IF NOT EXISTS generations (
     kind TEXT NOT NULL DEFAULT 'image'
 )
 """
+
+_IRODORI_ABSENT = {
+    "installed": False,
+    "status": "absent",
+    "directory": "E:/IA/WAIFU/tools/irodori_absent",
+    "directory_exists": False,
+    "service_url": "http://127.0.0.1:8291",
+    "service_online": False,
+    "reason": "Irodori TTS no disponible: directorio no encontrado (microservicio localhost:8291 ausente).",
+}
 
 
 class TestAudioGraph(unittest.TestCase):
@@ -228,7 +251,8 @@ class TestAudioRouter(unittest.TestCase):
         self.client.close()
         self.td.cleanup()
 
-    def test_api_audio_status(self) -> None:
+    @patch("app.audio.detect_irodori", return_value=_IRODORI_ABSENT)
+    def test_api_audio_status(self, _mock_detect: MagicMock) -> None:
         res = self.client.get("/api/audio/status")
         self.assertEqual(res.status_code, 200)
         data = res.json()
@@ -277,11 +301,19 @@ class TestAudioRouter(unittest.TestCase):
         self.assertTrue(data.get("irodori_dir_exists"))
         self.assertFalse(data.get("irodori_service_online"))
 
-    def test_api_audio_generate_rejects_voice_with_reason(self) -> None:
+    @patch("app.audio.detect_irodori", return_value=_IRODORI_ABSENT)
+    def test_api_audio_generate_rejects_voice_with_reason(self, _mock_detect: MagicMock) -> None:
         res = self.client.post("/api/audio/generate", json={"voice_enabled": True})
         self.assertEqual(res.status_code, 400)
         data = res.json()
         self.assertIn("Irodori TTS no disponible", data.get("detail", ""))
+
+    @patch("app.audio.detect_irodori")
+    def test_api_audio_generate_voice_in_mode_b_points_to_mode_a(self, mock_detect: MagicMock) -> None:
+        mock_detect.return_value = {"installed": True, "status": "installed", "reason": "listo"}
+        res = self.client.post("/api/audio/generate", json={"voice_enabled": True})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("/api/audio/voice", res.json().get("detail", ""))
 
     def test_api_audio_generate_missing_clip_404(self) -> None:
         res = self.client.post("/api/audio/generate", json={"video_path": "non_existent.mp4"})
@@ -449,6 +481,293 @@ class TestIrodoriDetector(unittest.TestCase):
         custom_url = "http://127.0.0.1:9299"
         with patch.dict(os.environ, {"IRODORI_URL": custom_url}):
             self.assertEqual(get_irodori_url(), custom_url)
+
+
+def _make_wav_bytes(seconds: float = 0.5, rate: int = 8000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(b"\x00\x00" * int(seconds * rate))
+    return buf.getvalue()
+
+
+def _fake_urlopen_response(data: bytes, seed: str | None = "777") -> MagicMock:
+    resp = MagicMock()
+    resp.read.return_value = data
+    resp.headers = {"X-Irodori-Seed": seed} if seed is not None else {}
+    resp.__enter__.return_value = resp
+    resp.__exit__.return_value = False
+    return resp
+
+
+class TestIrodoriSpeechClient(unittest.TestCase):
+    """Cuerpo y llamada HTTP a POST /v1/audio/speech con urlopen mockeado (sin red)."""
+
+    def test_body_without_reference_uses_none_voice_and_caption(self) -> None:
+        body = build_irodori_speech_body("hola \U0001F975", caption="voz baja", seed=42)
+        self.assertEqual(body["model"], "irodori-tts")
+        self.assertEqual(body["input"], "hola \U0001F975")
+        self.assertEqual(body["response_format"], "wav")
+        self.assertEqual(body["voice"], "none")
+        self.assertEqual(body["irodori"], {"seed": 42, "caption": "voz baja"})
+
+    def test_body_with_ref_wav_or_ref_embed_omits_none_voice(self) -> None:
+        wav_body = build_irodori_speech_body("hola", ref_wav="C:/refs/a.wav")
+        self.assertEqual(wav_body["irodori"]["ref_wav"], "C:/refs/a.wav")
+        self.assertNotIn("voice", wav_body)
+        self.assertNotIn("ref_embed", wav_body["irodori"])
+
+        embed_body = build_irodori_speech_body("hola", ref_embed="C:/refs/a.speaker.safetensors")
+        self.assertEqual(embed_body["irodori"]["ref_embed"], "C:/refs/a.speaker.safetensors")
+        self.assertNotIn("voice", embed_body)
+        self.assertNotIn("ref_wav", embed_body["irodori"])
+
+    def test_request_posts_json_to_default_8291_and_returns_wav_and_seed(self) -> None:
+        wav = _make_wav_bytes()
+        env = {k: v for k, v in os.environ.items() if k != "IRODORI_URL"}
+        with patch.dict(os.environ, env, clear=True), patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(wav, "123")
+        ) as mock_open:
+            data, seed = request_irodori_speech(build_irodori_speech_body("\U0001F975 hola", seed=5))
+
+        self.assertEqual(data, wav)
+        self.assertEqual(seed, 123)
+        req = mock_open.call_args[0][0]
+        self.assertEqual(req.full_url, "http://127.0.0.1:8291/v1/audio/speech")
+        self.assertEqual(req.get_method(), "POST")
+        sent = json.loads(req.data.decode("utf-8"))
+        self.assertEqual(sent["model"], "irodori-tts")
+        self.assertEqual(sent["response_format"], "wav")
+        self.assertIn("\U0001F975", sent["input"])
+        self.assertEqual(sent["irodori"]["seed"], 5)
+        self.assertGreater(mock_open.call_args.kwargs["timeout"], 0)
+
+    def test_request_http_400_maps_to_400_with_detail(self) -> None:
+        err = urllib.error.HTTPError(
+            "http://127.0.0.1:8291/v1/audio/speech", 400, "Bad Request", {}, io.BytesIO(b'{"detail": "Unsupported model"}')
+        )
+        with patch("app.audio.urllib.request.urlopen", side_effect=err):
+            with self.assertRaises(IrodoriSpeechError) as ctx:
+                request_irodori_speech({"model": "x", "input": "y"}, base_url="http://127.0.0.1:8291")
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("Unsupported model", ctx.exception.detail)
+
+    def test_request_connection_refused_maps_to_503(self) -> None:
+        with patch("app.audio.urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+            with self.assertRaises(IrodoriSpeechError) as ctx:
+                request_irodori_speech({"model": "x", "input": "y"}, base_url="http://127.0.0.1:8291")
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertIn("8291", ctx.exception.detail)
+
+    def test_wav_duration_seconds(self) -> None:
+        self.assertAlmostEqual(wav_duration_seconds(_make_wav_bytes(0.5, 8000)), 0.5, places=2)
+        self.assertIsNone(wav_duration_seconds(b"no-wav"))
+
+
+class TestAudioVoiceRoute(unittest.TestCase):
+    """POST /api/audio/voice (Modo A): Irodori mockeado, WAV guardado en gallery y servido."""
+
+    def setUp(self) -> None:
+        self.td = tempfile.TemporaryDirectory()
+        self.root = Path(self.td.name)
+        self.cfg = EngineConfig(
+            comfy_root=self.root / "comfy",
+            comfy_url="http://127.0.0.1:8288",
+            data_dir=self.root / "data",
+        )
+        self.cfg.comfy_output_dir.mkdir(parents=True, exist_ok=True)
+        self.cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        db_path = self.cfg.data_dir / "waifu.db"
+        with closing(sqlite3.connect(str(db_path))) as conn:
+            conn.executescript(_OLD_SCHEMA)
+        self.store = Store(db_path)
+        self.store.init()
+        self.client = TestClient(create_app(config=self.cfg, store=self.store))
+        self.wav = _make_wav_bytes()
+
+    def tearDown(self) -> None:
+        self.client.close()
+        self.td.cleanup()
+
+    def _sent_body(self, mock_open: MagicMock) -> dict:
+        return json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+
+    def test_voice_success_saves_wav_in_gallery_and_serves_it(self) -> None:
+        text = " ".join(VOICE_EMOJI_PALETTE) + " no pares"
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(self.wav, "99")
+        ) as mock_open:
+            res = self.client.post(
+                "/api/audio/voice", json={"text": text, "caption": "voz suave", "seed": 7}
+            )
+
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertEqual(data["name"], f"voice_{data['gen_id']}.wav")
+        self.assertEqual(data["url"], f"/api/audio/media/{data['gen_id']}/{data['name']}")
+        self.assertEqual(data["seed"], 99)
+        self.assertEqual(data["ref"], "none")
+        self.assertFalse(data["has_ref"])
+        self.assertAlmostEqual(data["duration"], 0.5, places=2)
+
+        sent = self._sent_body(mock_open)
+        self.assertEqual(sent["input"], text)
+        self.assertEqual(sent["voice"], "none")
+        self.assertEqual(sent["irodori"]["caption"], "voz suave")
+        self.assertEqual(sent["irodori"]["seed"], 7)
+
+        saved = self.cfg.data_dir / "gallery" / str(data["gen_id"]) / data["name"]
+        self.assertEqual(saved.read_bytes(), self.wav)
+        stored = self.store.get(data["gen_id"])
+        self.assertEqual(stored["status"], "done")
+        self.assertEqual(stored["kind"], "audio")
+        self.assertEqual(stored["outputs"], [data["name"]])
+
+        media = self.client.get(data["url"])
+        self.assertEqual(media.status_code, 200)
+        self.assertEqual(media.headers["content-type"], "audio/wav")
+        self.assertEqual(media.content, self.wav)
+
+    def test_voice_negative_seed_gets_random_non_negative_seed(self) -> None:
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(self.wav, None)
+        ) as mock_open:
+            res = self.client.post("/api/audio/voice", json={"text": "hola", "seed": -1})
+        self.assertEqual(res.status_code, 200, res.text)
+        sent_seed = self._sent_body(mock_open)["irodori"]["seed"]
+        self.assertGreaterEqual(sent_seed, 0)
+        self.assertEqual(res.json()["seed"], sent_seed)
+
+    def test_voice_uploaded_ref_wav_is_stored_and_forwarded(self) -> None:
+        ref_bytes = _make_wav_bytes(0.2)
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(self.wav)
+        ) as mock_open:
+            res = self.client.post(
+                "/api/audio/voice",
+                json={
+                    "text": "hola",
+                    "ref_wav_data": base64.b64encode(ref_bytes).decode("ascii"),
+                    "ref_wav_name": "mi voz.wav",
+                },
+            )
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertEqual(data["ref"], "wav")
+        sent = self._sent_body(mock_open)
+        ref_path = Path(sent["irodori"]["ref_wav"])
+        self.assertEqual(ref_path.name, f"ref_{data['gen_id']}.wav")
+        self.assertEqual(ref_path.read_bytes(), ref_bytes)
+        self.assertNotIn("voice", sent)
+
+    def test_voice_ref_embed_path_is_forwarded_without_computing_inversion(self) -> None:
+        embed = self.root / "voz.speaker.safetensors"
+        embed.write_bytes(b"embed")
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(self.wav)
+        ) as mock_open:
+            res = self.client.post("/api/audio/voice", json={"text": "hola", "ref_embed": str(embed)})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["ref"], "embed")
+        self.assertEqual(self._sent_body(mock_open)["irodori"]["ref_embed"], str(embed))
+
+    def test_voice_validation_errors_do_not_call_irodori(self) -> None:
+        ref_wav = self.root / "a.wav"
+        ref_wav.write_bytes(self.wav)
+        embed = self.root / "a.pt"
+        embed.write_bytes(b"x")
+        cases = [
+            ({"text": "   "}, 400),
+            ({"text": "x" * 4097}, 400),
+            ({"text": "hola", "seed": "abc"}, 400),
+            ({"text": "hola", "ref_wav": "relativa.wav"}, 400),
+            ({"text": "hola", "ref_wav": str(self.root / "nope.wav")}, 404),
+            ({"text": "hola", "ref_embed": str(ref_wav)}, 400),
+            ({"text": "hola", "ref_wav": str(ref_wav), "ref_embed": str(embed)}, 400),
+            ({"text": "hola", "ref_wav_data": "###", "ref_wav_name": "a.wav"}, 400),
+            ({"text": "hola", "ref_wav_data": "AAAA", "ref_wav_name": "a.txt"}, 400),
+        ]
+        with patch("app.audio.urllib.request.urlopen") as mock_open:
+            for payload, expected in cases:
+                res = self.client.post("/api/audio/voice", json=payload)
+                self.assertEqual(res.status_code, expected, f"{payload} -> {res.text}")
+            mock_open.assert_not_called()
+
+    def test_voice_irodori_offline_returns_503_and_marks_error(self) -> None:
+        with patch("app.audio.urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+            res = self.client.post("/api/audio/voice", json={"text": "hola"})
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("8291", res.json()["detail"])
+        rows = self.store.list(kind="audio", limit=5)
+        self.assertEqual(rows[0]["status"], "error")
+
+    def test_voice_non_wav_response_is_502(self) -> None:
+        with patch(
+            "app.audio.urllib.request.urlopen", return_value=_fake_urlopen_response(b"<html>oops</html>")
+        ):
+            res = self.client.post("/api/audio/voice", json={"text": "hola"})
+        self.assertEqual(res.status_code, 502)
+
+
+class TestAudioVoiceStaticUI(unittest.TestCase):
+    """Test estático: Modo A en index.html / audio.js / audio.css (sin servidor)."""
+
+    ROOT = Path(__file__).resolve().parents[1]
+
+    @staticmethod
+    def _norm(value: str) -> str:
+        return value.replace("\ufe0f", "")
+
+    def _read(self, rel: str) -> str:
+        return (self.ROOT / rel).read_text(encoding="utf-8")
+
+    def _panel_audio(self) -> str:
+        html = self._read("templates/index.html")
+        start = html.index('id="panel-audio"')
+        return html[start : html.index('id="panel-social"', start)]
+
+    def test_panel_has_voice_mode_controls(self) -> None:
+        panel = self._panel_audio()
+        for element_id in (
+            "audio-voice-text",
+            "audio-voice-palette",
+            "audio-voice-caption",
+            "audio-voice-seed",
+            "audio-voice-ref-file",
+            "audio-voice-ref-embed",
+            "btn-audio-voice-generate",
+            "audio-voice-preview",
+            "btn-audio-voice-download",
+            "audio-mode-a-sidebar",
+            "audio-mode-b-sidebar",
+        ):
+            self.assertIn(f'id="{element_id}"', panel, element_id)
+        self.assertNotIn("no disponible en este hito", panel)
+        self.assertNotIn("C-17", panel)
+
+    def test_palette_contains_all_seven_emojis(self) -> None:
+        panel = self._norm(self._panel_audio())
+        self.assertEqual(len(VOICE_EMOJI_PALETTE), 7)
+        for emoji in VOICE_EMOJI_PALETTE:
+            self.assertIn(f'data-emoji="{self._norm(emoji)}"', panel, emoji.encode("unicode_escape"))
+        self.assertEqual(panel.count('class="audio-emoji-btn'), 7)
+
+    def test_js_wires_voice_endpoint_and_palette(self) -> None:
+        js = self._read("static/js/tabs/audio.js")
+        self.assertIn("/api/audio/voice", js)
+        self.assertIn("btn-audio-voice-generate", js)
+        self.assertIn("audio-voice-palette", js)
+        self.assertIn("ref_wav_data", js)
+        self.assertIn("ref_embed", js)
+        self.assertIn("insertEmojiAtCursor", js)
+
+    def test_audio_css_exists_and_is_linked(self) -> None:
+        self.assertIn('href="/static/css/tabs/audio.css"', self._read("templates/index.html"))
+        css = self._read("static/css/tabs/audio.css")
+        self.assertIn(".audio-emoji-palette", css)
+        self.assertIn(".audio-mode-group", css)
 
 
 if __name__ == "__main__":

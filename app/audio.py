@@ -5,20 +5,32 @@ Qué hace:
 - Hereda la duración del clip, estandariza a 48 kHz y reemplaza o mezcla con la pista existente.
 - Guarda un WAV aparte (48 kHz) y un MP4 nuevo con la pista procesada; el clip original permanece intacto.
 - Proporciona endpoints (/api/audio/*) y runner monohilo FIFO compatible con la cola de WaifuStudio.
-- Irodori (TTS/voz) se expone deshabilitado con motivo transparente hasta su despliegue en :8291.
+- Irodori (TTS/voz, Modo A, C-18): POST /api/audio/voice llama a /v1/audio/speech del microservicio
+  local (:8291, modelo irodori-tts, response_format wav), con caption/seed y referencia opcional
+  (ref_wav subido o por ruta, o ref_embed = Speaker Inversion ya calculado). Guarda el WAV en gallery.
+  No calcula Speaker Inversion: solo reenvía un ref_embed existente (la API de Irodori lo expone así).
 
-Dependencias: app.config, app.engine, app.progress, app.store, app.video, app.timeline.
+Dependencias: app.config, app.engine, app.progress, app.store, app.video, app.timeline, app.irodori.
 """
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import binascii
 import copy
+import io
 import json
 import logging
 import os
+import random
 import shutil
 import subprocess
+import threading
+import urllib.error
+import urllib.request
 import uuid
+import wave
 from pathlib import Path
 from typing import Any, Callable
 
@@ -27,7 +39,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from app.config import APP_ROOT
 from app.engine import ComfyEngine, EngineError, JobCancelledError
-from app.irodori import detect_irodori
+from app.irodori import detect_irodori, get_irodori_url
 from app.progress import ProgressTracker
 from app.routes.jobs import _JOBS
 from app.timeline import has_audio_stream
@@ -44,7 +56,128 @@ IRODORI_DISABLED_REASON = (
     "para síntesis de voz no verbal). Programado para C-17."
 )
 
+IRODORI_MODEL_NAME = "irodori-tts"
+IRODORI_SPEECH_TIMEOUT_S = 300.0
+VOICE_MAX_TEXT_CHARS = 4096
+VOICE_MAX_CAPTION_CHARS = 1000
+VOICE_MAX_REF_BYTES = 25 * 1024 * 1024
+VOICE_REF_AUDIO_EXTS = (".wav", ".flac", ".mp3", ".m4a", ".ogg", ".opus", ".aac", ".webm")
+VOICE_REF_EMBED_EXTS = (".pt", ".pth", ".safetensors")
+# Paleta de emojis de Modo A (se escriben tal cual en `input`; Irodori los interpreta como estilo vocal).
+VOICE_EMOJI_PALETTE = (
+    "\U0001F975",  # 🥵
+    "\U0001F32C\uFE0F",  # 🌬️
+    "\U0001F62E\u200D\U0001F4A8",  # 😮‍💨
+    "\U0001F445",  # 👅
+    "\U0001F48B",  # 💋
+    "\U0001F97A",  # 🥺
+    "\U0001F616",  # 😖
+)
+
+# Irodori procesa una síntesis a la vez; serializa también las llamadas desde la webapp.
+_VOICE_LOCK = threading.Lock()
+
 router = APIRouter(prefix="/api/audio", tags=["audio"])
+
+
+class IrodoriSpeechError(Exception):
+    """Fallo al sintetizar voz con el microservicio Irodori (status HTTP sugerido + detalle)."""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+def build_irodori_speech_body(
+    text: str,
+    *,
+    caption: str | None = None,
+    seed: int | None = None,
+    ref_wav: str | Path | None = None,
+    ref_embed: str | Path | None = None,
+) -> dict[str, Any]:
+    """Construye el cuerpo de POST /v1/audio/speech (modelo irodori-tts, WAV).
+
+    Sin referencia usa la voz integrada `none` (Voice Design por caption). `ref_wav` y `ref_embed`
+    viajan dentro de `irodori` y son rutas locales legibles por el microservicio.
+    """
+    options: dict[str, Any] = {}
+    if seed is not None:
+        options["seed"] = int(seed)
+    if caption:
+        options["caption"] = caption
+    body: dict[str, Any] = {
+        "model": IRODORI_MODEL_NAME,
+        "input": text,
+        "response_format": "wav",
+        "irodori": options,
+    }
+    if ref_wav:
+        options["ref_wav"] = str(ref_wav)
+    elif ref_embed:
+        options["ref_embed"] = str(ref_embed)
+    else:
+        body["voice"] = "none"
+    return body
+
+
+def request_irodori_speech(
+    body: dict[str, Any],
+    *,
+    base_url: str | None = None,
+    timeout: float = IRODORI_SPEECH_TIMEOUT_S,
+) -> tuple[bytes, int | None]:
+    """Llama a POST {base_url}/v1/audio/speech y devuelve (bytes WAV, seed usada si el header la expone)."""
+    url = (base_url or get_irodori_url()).rstrip("/") + "/v1/audio/speech"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "audio/wav"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read()
+            seed_header = resp.headers.get("X-Irodori-Seed") if getattr(resp, "headers", None) else None
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            raw = exc.read().decode("utf-8", errors="replace")
+            try:
+                parsed = json.loads(raw)
+                err = parsed.get("error") if isinstance(parsed, dict) else None
+                detail = str(
+                    (parsed.get("detail") if isinstance(parsed, dict) else None)
+                    or (err.get("message") if isinstance(err, dict) else err)
+                    or raw
+                )
+            except ValueError:
+                detail = raw
+        except Exception:
+            detail = ""
+        status = 400 if exc.code in (400, 422) else (503 if exc.code == 503 else 502)
+        raise IrodoriSpeechError(status, f"Irodori respondió HTTP {exc.code}: {detail[:500] or exc.reason}") from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise IrodoriSpeechError(
+            503, f"Irodori no responde en {url} ({exc}). Arranca el microservicio en localhost:8291."
+        ) from exc
+
+    try:
+        seed_used = int(str(seed_header).strip()) if seed_header is not None else None
+    except ValueError:
+        seed_used = None
+    return data, seed_used
+
+
+def wav_duration_seconds(data: bytes) -> float | None:
+    """Duración en segundos de un WAV PCM en memoria, o None si no se puede leer."""
+    try:
+        with wave.open(io.BytesIO(data), "rb") as wf:
+            rate = wf.getframerate()
+            return round(wf.getnframes() / float(rate), 3) if rate > 0 else None
+    except (wave.Error, EOFError):
+        return None
 
 
 def build_mmaudio_mode_b_graph(job: dict[str, Any]) -> dict[str, Any]:
@@ -458,7 +591,7 @@ async def api_audio_generate(payload: dict[str, Any], request: Request) -> dict[
             raise HTTPException(status_code=400, detail=irodori_info.get("reason") or IRODORI_DISABLED_REASON)
         raise HTTPException(
             status_code=400,
-            detail=f"Síntesis de voz con Irodori aún no conectada a la inferencia ({irodori_info.get('reason')}).",
+            detail="La voz (Irodori) no se genera en Modo B: usa Modo A (POST /api/audio/voice).",
         )
 
     cfg = request.app.state.config
@@ -558,6 +691,126 @@ async def api_audio_generate(payload: dict[str, Any], request: Request) -> dict[
         "duration": duration,
         "action": action,
         "sample_rate": AUDIO_TARGET_SAMPLE_RATE,
+    }
+
+
+def _resolve_voice_ref_path(raw: Any, field: str, allowed_exts: tuple[str, ...]) -> Path | None:
+    """Valida una ruta local (absoluta, existente, extensión permitida) para ref_wav/ref_embed."""
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    cand = Path(value).expanduser()
+    if not cand.is_absolute():
+        raise HTTPException(status_code=400, detail=f"{field} debe ser una ruta absoluta.")
+    if cand.suffix.lower() not in allowed_exts:
+        raise HTTPException(
+            status_code=400, detail=f"{field}: extensión no soportada ({', '.join(allowed_exts)})."
+        )
+    if not cand.is_file():
+        raise HTTPException(status_code=404, detail=f"{field} no encontrado: {cand}")
+    return cand
+
+
+@router.post("/voice")
+async def api_audio_voice(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Modo A: sintetiza voz con Irodori (texto con emojis + caption/seed + referencia opcional).
+
+    Campos: text, caption, seed (-1 = aleatoria), ref_wav (ruta absoluta) | ref_wav_data (base64) +
+    ref_wav_name | ref_embed (ruta a Speaker Inversion ya calculado). Guarda `voice_<id>.wav` en gallery.
+    """
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
+    if len(text) > VOICE_MAX_TEXT_CHARS:
+        raise HTTPException(status_code=400, detail=f"Texto demasiado largo (máx. {VOICE_MAX_TEXT_CHARS} caracteres).")
+
+    caption = str(payload.get("caption") or "").strip()
+    if len(caption) > VOICE_MAX_CAPTION_CHARS:
+        raise HTTPException(status_code=400, detail=f"Caption demasiado largo (máx. {VOICE_MAX_CAPTION_CHARS}).")
+
+    raw_seed = payload.get("seed")
+    try:
+        seed = int(raw_seed) if raw_seed is not None and str(raw_seed).strip() != "" else -1
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="seed debe ser un entero.")
+    if seed < 0:
+        seed = random.randint(0, 2**31 - 1)
+
+    upload_b64 = str(payload.get("ref_wav_data") or "").strip()
+    upload_name = Path(str(payload.get("ref_wav_name") or "reference.wav")).name
+    ref_wav_path = _resolve_voice_ref_path(payload.get("ref_wav"), "ref_wav", VOICE_REF_AUDIO_EXTS)
+    ref_embed_path = _resolve_voice_ref_path(payload.get("ref_embed"), "ref_embed", VOICE_REF_EMBED_EXTS)
+
+    if sum(1 for ref in (upload_b64, ref_wav_path, ref_embed_path) if ref) > 1:
+        raise HTTPException(status_code=400, detail="Usa una sola referencia: ref_wav, ref_wav_data o ref_embed.")
+
+    upload_bytes = b""
+    if upload_b64:
+        if Path(upload_name).suffix.lower() not in VOICE_REF_AUDIO_EXTS:
+            raise HTTPException(status_code=400, detail=f"ref_wav_name: extensión no soportada ({', '.join(VOICE_REF_AUDIO_EXTS)}).")
+        try:
+            upload_bytes = base64.b64decode(upload_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=400, detail="ref_wav_data no es base64 válido.")
+        if not upload_bytes or len(upload_bytes) > VOICE_MAX_REF_BYTES:
+            raise HTTPException(status_code=400, detail="La referencia de voz está vacía o supera 25 MB.")
+
+    cfg = request.app.state.config
+    st = request.app.state.store
+
+    ref_kind = "wav" if (upload_b64 or ref_wav_path) else ("embed" if ref_embed_path else "none")
+    stored_params = {
+        "engine": "irodori",
+        "mode": "a",
+        "caption": caption,
+        "seed": seed,
+        "ref": ref_kind,
+        "ref_name": upload_name if upload_b64 else (ref_wav_path or ref_embed_path or Path("")).name,
+        "response_format": "wav",
+    }
+    gen_id = st.add(IRODORI_MODEL_NAME, text, "", stored_params, status="running", kind="audio")
+
+    try:
+        gallery_dir = cfg.data_dir / "gallery" / str(gen_id)
+        gallery_dir.mkdir(parents=True, exist_ok=True)
+        if upload_b64:
+            ref_wav_path = gallery_dir / f"ref_{gen_id}{Path(upload_name).suffix.lower()}"
+            ref_wav_path.write_bytes(upload_bytes)
+
+        body = build_irodori_speech_body(
+            text, caption=caption or None, seed=seed, ref_wav=ref_wav_path, ref_embed=ref_embed_path
+        )
+
+        def _synthesize() -> tuple[bytes, int | None]:
+            with _VOICE_LOCK:
+                return request_irodori_speech(body)
+
+        wav_bytes, seed_used = await asyncio.to_thread(_synthesize)
+        if not wav_bytes.startswith(b"RIFF"):
+            raise IrodoriSpeechError(502, "Irodori no devolvió un WAV válido.")
+
+        wav_name = f"voice_{gen_id}.wav"
+        (gallery_dir / wav_name).write_bytes(wav_bytes)
+    except IrodoriSpeechError as exc:
+        st.update(gen_id, status="error", error=exc.detail)
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    except Exception as exc:
+        st.update(gen_id, status="error", error=str(exc))
+        raise HTTPException(status_code=500, detail=f"Fallo en síntesis de voz o guardado en gallery: {exc}")
+
+    outputs = [wav_name]
+    st.update(gen_id, status="done", outputs=outputs, kind="audio")
+    return {
+        "gen_id": gen_id,
+        "name": wav_name,
+        "outputs": outputs,
+        "url": f"/api/audio/media/{gen_id}/{wav_name}",
+        "seed": seed_used if seed_used is not None else seed,
+        "duration": wav_duration_seconds(wav_bytes),
+        "bytes": len(wav_bytes),
+        "caption": caption,
+        "ref": ref_kind,
+        "has_ref": ref_kind != "none",
     }
 
 

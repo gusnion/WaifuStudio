@@ -1,7 +1,9 @@
-// WaifuStudio — Pestaña de Audio (Modo B con MMAudio)
+// WaifuStudio — Pestaña de Audio (Modo B con MMAudio, Modo A con voz Irodori)
 // Qué hace: selección de clips de vídeo, herencia de duración/fps, configuración de prompts MMAudio,
 //           reemplazar/mezclar pista, encolado en FIFO y previsualización de MP4 con audio y WAV master 48 kHz.
-// Qué no hace: no sintetiza voz (Irodori deshabilitado hasta C-17), no re-renderiza el vídeo original.
+//           Modo A (C-18): texto con paleta de emojis, caption/seed, referencia de voz opcional (ref_wav o
+//           ref_embed) y reproducción/descarga del WAV de Irodori vía POST /api/audio/voice.
+// Qué no hace: no calcula Speaker Inversion (solo reenvía un ref_embed existente), no re-renderiza el vídeo original.
 // Dependencias: static/js/dom.js, static/js/api.js, static/js/state.js.
 
 import { $, on } from "../dom.js";
@@ -28,20 +30,22 @@ export function updateIrodoriUI(statusData) {
   const reason = statusData?.irodori_reason || (isInstalled ? "Irodori microservicio listo en localhost:8291" : "Irodori no disponible");
 
   if (isInstalled) {
-    checkbox.disabled = false;
-    checkbox.style.cursor = "pointer";
+    // La voz se genera en Modo A (/api/audio/voice); en Modo B el checkbox permanece deshabilitado.
+    checkbox.disabled = true;
+    checkbox.checked = false;
+    checkbox.style.cursor = "not-allowed";
     if (label) {
       label.style.opacity = "1";
-      label.style.cursor = "pointer";
+      label.style.cursor = "default";
       label.title = reason;
     }
     if (badge) {
-      badge.textContent = "Instalado";
+      badge.textContent = "Instalado · Modo A";
       badge.style.background = "#28a745";
       badge.style.color = "#fff";
     }
     if (hint) {
-      hint.textContent = reason;
+      hint.textContent = `${reason} La voz se genera en Modo A.`;
       hint.style.color = "var(--text-muted, #8e90a6)";
     }
   } else {
@@ -314,8 +318,152 @@ function renderAudioResult(jobData) {
   resultCard.scrollIntoView({ behavior: "smooth" });
 }
 
+const VOICE_MAX_REF_BYTES = 25 * 1024 * 1024;
+const VOICE_REQUEST_TIMEOUT_MS = 330000;
+let voiceBusy = false;
+
+export function insertEmojiAtCursor(textarea, emoji) {
+  if (!textarea || !emoji) return;
+  const value = textarea.value || "";
+  const start = typeof textarea.selectionStart === "number" ? textarea.selectionStart : value.length;
+  const end = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : start;
+  textarea.value = value.slice(0, start) + emoji + value.slice(end);
+  const caret = start + emoji.length;
+  if (typeof textarea.setSelectionRange === "function") textarea.setSelectionRange(caret, caret);
+  if (typeof textarea.focus === "function") textarea.focus();
+}
+
+function setVoiceStatus(text, isError = false) {
+  const el = $("audio-voice-status");
+  if (!el) return;
+  el.textContent = text || "";
+  el.style.color = isError ? "var(--accent, #e06c75)" : "var(--text-muted, #8e90a6)";
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo de referencia"));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderVoiceResult(res) {
+  const card = $("audio-voice-result-card");
+  const empty = $("audio-voice-empty-card");
+  const player = $("audio-voice-preview");
+  const download = $("btn-audio-voice-download");
+  const meta = $("audio-voice-result-meta");
+  if (!card || !res?.url) return;
+
+  if (player) {
+    player.src = res.url;
+    player.load();
+  }
+  if (download) {
+    download.href = res.url;
+    download.setAttribute("download", `waifu_voice_${res.gen_id}.wav`);
+  }
+  if (meta) {
+    const secs = typeof res.duration === "number" ? `${res.duration.toFixed(1)} s · ` : "";
+    meta.textContent = `${secs}seed ${res.seed}${res.has_ref ? " · con referencia" : ""}`;
+  }
+  card.style.display = "block";
+  if (empty) empty.style.display = "none";
+}
+
+async function handleGenerateVoice() {
+  if (voiceBusy) return;
+  const text = $("audio-voice-text")?.value?.trim() || "";
+  if (!text) {
+    setVoiceStatus("Escribe el texto (puedes usar la paleta de emojis).", true);
+    return;
+  }
+
+  const caption = $("audio-voice-caption")?.value?.trim() || "";
+  const seedInput = parseInt($("audio-voice-seed")?.value, 10);
+  const payload = { text, caption, seed: isNaN(seedInput) || seedInput < 0 ? -1 : seedInput };
+
+  const file = $("audio-voice-ref-file")?.files?.[0] || null;
+  const refEmbed = $("audio-voice-ref-embed")?.value?.trim() || "";
+  if (file && refEmbed) {
+    setVoiceStatus("Usa una sola referencia: archivo de audio o ref_embed.", true);
+    return;
+  }
+
+  const btn = $("btn-audio-voice-generate");
+  voiceBusy = true;
+  if (btn) btn.disabled = true;
+  setVoiceStatus("Sintetizando voz con Irodori...");
+
+  try {
+    if (file) {
+      if (file.size > VOICE_MAX_REF_BYTES) throw new Error("La referencia supera 25 MB");
+      payload.ref_wav_data = await fileToBase64(file);
+      payload.ref_wav_name = file.name;
+    } else if (refEmbed) {
+      payload.ref_embed = refEmbed;
+    }
+
+    const res = await api("/api/audio/voice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      timeoutMs: VOICE_REQUEST_TIMEOUT_MS,
+    });
+    renderVoiceResult(res);
+    setVoiceStatus(`Voz generada y guardada en la galería (Gen #${res.gen_id}).`, false);
+  } catch (err) {
+    console.error("[audio] Error al sintetizar voz:", err);
+    setVoiceStatus(`Error: ${err.message}`, true);
+  } finally {
+    voiceBusy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+function setAudioMode(mode) {
+  const isA = mode === "a";
+  $("btn-audio-mode-a")?.classList.toggle("active", isA);
+  $("btn-audio-mode-b")?.classList.toggle("active", !isA);
+  const toggle = (id, hidden) => {
+    const el = $(id);
+    if (el) el.hidden = hidden;
+  };
+  toggle("audio-mode-a-sidebar", !isA);
+  toggle("audio-mode-a-viewport", !isA);
+  toggle("audio-mode-b-sidebar", isA);
+  toggle("audio-mode-b-viewport", isA);
+  const hint = $("audio-mode-hint");
+  if (hint) {
+    hint.textContent = isA
+      ? "Modo A: voz con Irodori TTS. Texto con emojis, caption/seed y referencia de voz opcional; genera un WAV en la galería."
+      : "Modo B: hereda duración y sincroniza audio condicionado a los fotogramas del clip sin regenerar vídeo.";
+  }
+  const notice = $("audio-mode-a-notice");
+  if (notice) notice.style.display = isA ? "inline-flex" : "none";
+}
+
 export function initAudioTab() {
   on("btn-audio-generate", "click", handleGenerateAudio);
+  on("btn-audio-voice-generate", "click", handleGenerateVoice);
+
+  const palette = $("audio-voice-palette");
+  if (palette) {
+    palette.addEventListener("click", (event) => {
+      const btn = event.target?.closest?.(".audio-emoji-btn");
+      if (btn) insertEmojiAtCursor($("audio-voice-text"), btn.dataset.emoji || "");
+    });
+  }
+
+  on("btn-audio-voice-random-seed", "click", () => {
+    const seedEl = $("audio-voice-seed");
+    if (seedEl) seedEl.value = Math.floor(Math.random() * 2147483647);
+  });
 
   on("btn-audio-cancel", "click", async () => {
     if (activeAudioJobId) {
@@ -350,21 +498,9 @@ export function initAudioTab() {
     if (seedEl) seedEl.value = Math.floor(Math.random() * 2147483647);
   });
 
-  on("btn-audio-mode-a", "click", () => {
-    $("btn-audio-mode-a")?.classList.add("active");
-    $("btn-audio-mode-b")?.classList.remove("active");
-    $("audio-mode-hint").textContent = "Modo A: duración libre sin vídeo de referencia. MMAudio genera audio ambiental puro.";
-    $("audio-mode-a-notice").style.display = "inline-flex";
-    $("audio-clip-selector-card").style.opacity = "0.4";
-  });
+  on("btn-audio-mode-a", "click", () => setAudioMode("a"));
 
-  on("btn-audio-mode-b", "click", () => {
-    $("btn-audio-mode-b")?.classList.add("active");
-    $("btn-audio-mode-a")?.classList.remove("active");
-    $("audio-mode-hint").textContent = "Modo B: hereda duración y sincroniza audio condicionado a los fotogramas del clip sin regenerar vídeo.";
-    $("audio-mode-a-notice").style.display = "none";
-    $("audio-clip-selector-card").style.opacity = "1";
-  });
+  on("btn-audio-mode-b", "click", () => setAudioMode("b"));
 
   on("btn-audio-send-timeline", "click", () => {
     setAudioStatus("Pista preparada para el Timeline.", false);

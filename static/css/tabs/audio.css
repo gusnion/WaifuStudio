@@ -1,0 +1,33 @@
+/* WaifuStudio — Estilos de la Pestaña Audio (Modo A voz Irodori)
+ * Qué hace: grupos de modo (A/B) sin romper el layout de la barra lateral y paleta de emojis de voz.
+ * Qué no hace: no redefine controles genéricos ni estilos de otras pestañas.
+ * Dependencias: static/css/base.css y static/css/components.css.
+ */
+
+.audio-mode-group {
+  display: contents;
+}
+
+.audio-mode-group[hidden] {
+  display: none;
+}
+
+.audio-emoji-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.audio-emoji-btn {
+  min-width: 2.4rem;
+  padding: 4px 8px;
+  font-size: 1.15rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.audio-emoji-btn:focus-visible {
+  outline: 2px solid var(--primary, #5c7cfa);
+  outline-offset: 1px;
+}

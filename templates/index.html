@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/static/css/tabs/timeline.css">
   <link rel="stylesheet" href="/static/css/tabs/guide.css">
   <link rel="stylesheet" href="/static/css/tabs/gallery.css">
+<link rel="stylesheet" href="/static/css/tabs/audio.css">
   <link rel="stylesheet" href="/static/css/design-v2.css">
   <link rel="stylesheet" href="/static/css/light-theme.css">
   <script>
@@ -1420,10 +1421,57 @@
           </div>
           <p id="audio-mode-hint" class="field-hint" style="margin-top:0.4rem;">Modo B: hereda duración y sincroniza audio condicionado a los fotogramas del clip sin regenerar vídeo.</p>
           <div id="audio-mode-a-notice" class="audio-notice-badge" style="display:none; margin-top:0.4rem; font-size:0.75rem; color:#f0ad4e;">
-            ⚠️ Modo A: MMAudio sin vídeo es experimental. Síntesis de voz (Irodori) no disponible en este hito.
+            🎙️ Modo A: voz con Irodori TTS (localhost:8291). Requiere el microservicio en línea; el WAV se guarda en la galería.
           </div>
         </div>
 
+        <div id="audio-mode-a-sidebar" class="audio-mode-group" hidden>
+          <div class="control-card" id="audio-voice-card">
+            <h3>Voz (Irodori TTS)</h3>
+            <label class="field">
+              <span class="field-label">Texto con emojis:</span>
+              <textarea id="audio-voice-text" rows="4" maxlength="4096" class="textarea" placeholder="Ej.: 🥵 no pares... 😮‍💨 más cerca 💋"></textarea>
+            </label>
+            <div id="audio-voice-palette" class="audio-emoji-palette" role="group" aria-label="Paleta de emojis de voz">
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="🥵" title="Acalorada / jadeante" aria-label="🥵">🥵</button>
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="🌬️" title="Soplido / respiración" aria-label="🌬️">🌬️</button>
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="😮‍💨" title="Suspiro / exhalación" aria-label="😮‍💨">😮‍💨</button>
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="👅" title="Lengua / sonido húmedo" aria-label="👅">👅</button>
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="💋" title="Beso" aria-label="💋">💋</button>
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="🥺" title="Súplica / voz temblorosa" aria-label="🥺">🥺</button>
+              <button type="button" class="audio-emoji-btn secondary" data-emoji="😖" title="Gemido / tensión" aria-label="😖">😖</button>
+            </div>
+            <p class="field-hint">Haz clic en un emoji para insertarlo en la posición del cursor.</p>
+
+            <label class="field">
+              <span class="field-label">Caption de voz (opcional):</span>
+              <input type="text" id="audio-voice-caption" maxlength="1000" placeholder="Ej.: 落ち着いた低めの女性の声。">
+            </label>
+
+            <label class="field">
+              <span class="field-label">Seed (-1 = aleatoria):</span>
+              <div style="display:flex; gap:0.3rem;">
+                <input type="number" id="audio-voice-seed" value="-1" style="flex:1;">
+                <button id="btn-audio-voice-random-seed" class="secondary" type="button" style="font-size:0.75rem;">🎲</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Voz de referencia (ref_wav, opcional):</span>
+              <input type="file" id="audio-voice-ref-file" accept="audio/*,.wav,.flac,.mp3,.m4a,.ogg,.opus,.aac,.webm">
+            </label>
+            <label class="field">
+              <span class="field-label">Ruta ref_embed (Speaker Inversion ya calculado, opcional):</span>
+              <input type="text" id="audio-voice-ref-embed" placeholder="E:\ruta\voz.speaker.safetensors">
+            </label>
+            <p class="field-hint">Usa una sola referencia: archivo de audio o ref_embed. Sin referencia se usa solo el caption. Esta pestaña no calcula Speaker Inversion.</p>
+
+            <button id="btn-audio-voice-generate" class="primary btn-primary" type="button" style="width:100%; margin-top:0.75rem; padding:8px;">🎙️ Generar Voz</button>
+            <div id="audio-voice-status" class="field-hint" style="margin-top:0.5rem; min-height:1.2rem;"></div>
+          </div>
+        </div>
+
+        <div id="audio-mode-b-sidebar" class="audio-mode-group">
         <div class="control-card" id="audio-clip-selector-card">
           <h3>Clip de Vídeo (Modo B)</h3>
           <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.4rem;">
@@ -1452,14 +1500,14 @@
           </label>
           <p class="field-hint">Generación ambiental condicionada a frames. Resampleo automático a 48 kHz.</p>
 
-          <label class="field field-inline" style="display:flex; align-items:center; justify-content:space-between; margin-top:0.6rem; opacity:0.6; cursor:not-allowed;" title="Irodori no está disponible todavía en esta instancia. Requiere microservicio en localhost:8291.">
-            <span><strong>Voz (Irodori TTS)</strong> <span class="badge" style="font-size:0.65rem; background:#444; color:#bbb; padding:1px 4px; border-radius:3px;">No disponible</span></span>
+          <label class="field field-inline" style="display:flex; align-items:center; justify-content:space-between; margin-top:0.6rem; opacity:0.6; cursor:not-allowed;" title="La voz Irodori se genera en Modo A (no se mezcla en Modo B). Requiere microservicio en localhost:8291.">
+            <span><strong>Voz (Irodori TTS)</strong> <span class="badge" style="font-size:0.65rem; background:#444; color:#bbb; padding:1px 4px; border-radius:3px;">Modo A</span></span>
             <input type="checkbox" id="audio-engine-irodori" disabled>
           </label>
-          <p class="field-hint" style="font-size:0.72rem; color:var(--text-muted,#888);">Irodori (TTS / gemidos) no disponible todavía en este hito (previsto C-17 en :8291).</p>
+          <p class="field-hint" style="font-size:0.72rem; color:var(--text-muted,#888);">La voz (Irodori TTS en :8291) se genera en Modo A; en Modo B solo se crea el ambiente MMAudio.</p>
         </div>
 
-        <div class="control-card">
+        <div class="control-card" id="audio-params-card">
           <h3>Pista & Parámetros</h3>
           <label class="field-label" style="font-size:0.78rem;">Tratamiento de pista existente:</label>
           <div style="display:flex; gap:0.8rem; margin:0.3rem 0 0.5rem 0; font-size:0.8rem;">
@@ -1505,9 +1553,30 @@
           </div>
           <div id="audio-progress-text" class="field-hint" style="text-align:right; font-size:0.72rem;"></div>
         </div>
+        </div>
       </div>
 
       <div class="tab-viewport">
+        <div id="audio-mode-a-viewport" class="audio-mode-group" hidden>
+          <div id="audio-voice-result-card" class="control-card" style="display:none; margin-bottom:1.5rem;">
+            <div class="gallery-header" style="margin-bottom:0.6rem;">
+              <h3>Resultado Modo A (Voz Irodori)</h3>
+              <span id="audio-voice-result-meta" class="badge" style="background:#333; color:#ccc; font-size:0.75rem; padding:2px 6px; border-radius:3px;"></span>
+            </div>
+            <audio id="audio-voice-preview" controls style="width:100%;"></audio>
+            <div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
+              <a id="btn-audio-voice-download" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar WAV</a>
+            </div>
+            <p class="field-hint" style="margin-top:0.5rem; font-size:0.75rem;">El WAV queda guardado en la galería (tipo audio) y se reproduce desde /api/audio/media.</p>
+          </div>
+          <div id="audio-voice-empty-card" class="audio-notice-card">
+            <span class="notice-icon" aria-hidden="true">🎙️</span>
+            <h2>Audio Modo A (Voz Irodori TTS)</h2>
+            <p>Escribe el texto, añade emojis de la paleta y, si quieres, una voz de referencia o un caption. Irodori sintetiza el WAV en local (localhost:8291).</p>
+          </div>
+        </div>
+
+        <div id="audio-mode-b-viewport" class="audio-mode-group">
         <div id="audio-result-card" class="control-card" style="display:none; margin-bottom:1.5rem;">
           <div class="gallery-header" style="margin-bottom:0.6rem;">
             <h3>Resultado Modo B (MP4 Nuevo + WAV Aislado)</h3>
@@ -1554,6 +1623,7 @@
           <div id="audio-gallery-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:0.6rem; margin-top:0.6rem; max-height:400px; overflow-y:auto;">
             <p class="field-hint">Cargando clips...</p>
           </div>
+        </div>
         </div>
       </div>
     </section>
@@ -1652,6 +1722,7 @@
           </div>
           <div class="oc-pose-row">
             <span id="oc-pose-selected" class="oc-refs-note">Pose: ninguna</span>
+            <button id="btn-oc-pose-generate" type="button" title="Genera la pose elegida con la primera referencia del OC activo y la guarda como nueva referencia (sin abrir el Editor)">Generar pose</button>
             <button id="btn-oc-pose-clear" class="hidden" type="button">Quitar pose</button>
           </div>
           <p id="oc-status" class="status oc-status">Listo</p>
