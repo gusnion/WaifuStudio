@@ -388,6 +388,234 @@ input[type="checkbox"] {
   min-height: 1.6rem;
 }
 
+.oc-catalog-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.oc-category-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--panel-2, #181822);
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  transition: border-color 0.15s ease;
+}
+
+.oc-category-card:hover {
+  border-color: var(--accent-subtle, #444);
+}
+
+.oc-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border, #2a2a3a);
+  padding-bottom: 0.35rem;
+}
+
+.oc-category-title-box {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.oc-category-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.oc-category-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-bright, #fff);
+  letter-spacing: 0.02em;
+}
+
+.oc-category-badge {
+  font-size: 0.7rem;
+  color: var(--muted, #888);
+  background: var(--panel, #12121a);
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+}
+
+.oc-category-badge.has-selected {
+  background: rgba(180, 80, 255, 0.15);
+  border-color: var(--accent, #b450ff);
+  color: var(--accent, #b450ff);
+  font-weight: 600;
+}
+
+.oc-trait-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+  gap: 0.35rem;
+}
+
+.oc-trait-card {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--panel, #12121a);
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.oc-trait-card:hover {
+  background: var(--panel-hover, #20202e);
+  border-color: var(--border-hover, #4a4a5e);
+}
+
+.oc-trait-card.selected {
+  background: rgba(180, 80, 255, 0.18);
+  border-color: var(--accent, #b450ff);
+  box-shadow: 0 0 6px rgba(180, 80, 255, 0.25);
+}
+
+.oc-trait-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: bold;
+  background: var(--panel-2, #181822);
+  border: 1px solid var(--border, #2a2a3a);
+  color: var(--muted, #888);
+}
+
+.oc-trait-card.selected .oc-trait-check {
+  background: var(--accent, #b450ff);
+  border-color: var(--accent, #b450ff);
+  color: #fff;
+}
+
+.oc-trait-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.oc-trait-label {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text, #ddd);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oc-trait-card.selected .oc-trait-label {
+  color: #fff;
+  font-weight: 600;
+}
+
+.oc-trait-subtag {
+  font-size: 0.65rem;
+  color: var(--muted, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oc-trait-card.selected .oc-trait-subtag {
+  color: var(--accent-light, #e0b0ff);
+}
+
+.oc-selected-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 11rem;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.oc-selected-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: var(--panel-2, #181822);
+  border: 1px solid var(--border, #2a2a3a);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+.oc-selected-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent, #b450ff);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.oc-selected-cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.oc-selected-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  background: var(--panel, #12121a);
+  border: 1px solid var(--accent, #b450ff);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  color: var(--text-bright, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.oc-selected-card-tag {
+  font-weight: 500;
+}
+
+.oc-selected-card-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted, #888);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.oc-selected-card-remove:hover {
+  background: rgba(255, 60, 60, 0.2);
+  border-color: #ff4d4f;
+  color: #ff4d4f;
+}
+
 .oc-selected-box {
   display: flex;
   flex-direction: column;

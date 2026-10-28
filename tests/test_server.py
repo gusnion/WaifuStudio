@@ -6922,6 +6922,45 @@ class TopbarNavigationStaticTests(ServerTestCase):
         html = self.make_client().get("/").text
         self.assertIn('id="oc-train-modal"', html, "index.html debe contener el elemento #oc-train-modal")
 
+    def test_c32_oc_catalog_card_panel_grouped_by_category(self):
+        """Item C-32: catálogo de rasgos de OCMaker convertido a panel de tarjetas visuales agrupadas por categoría."""
+        base_dir = Path(__file__).resolve().parents[1]
+
+        # 1. Contenedores y botones en templates/index.html
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="oc-catalog-results"', html, "index.html debe declarar #oc-catalog-results")
+        self.assertIn('id="oc-selected"', html, "index.html debe declarar #oc-selected")
+        self.assertIn('id="btn-oc-add"', html, "index.html debe declarar #btn-oc-add para aplicar al prompt")
+        self.assertIn('id="oc-catalog-group"', html, "index.html debe declarar selector #oc-catalog-group")
+        self.assertIn('id="oc-catalog-search"', html, "index.html debe declarar buscador #oc-catalog-search")
+        self.assertIn('class="oc-catalog-panel', html, "index.html debe incluir la clase oc-catalog-panel")
+        self.assertIn('class="oc-selected-panel', html, "index.html debe incluir la clase oc-selected-panel")
+
+        # 2. Lógica visual de agrupación en categorías en static/js/components/oc_picker.js
+        picker_code = (base_dir / "static" / "js" / "components" / "oc_picker.js").read_text(encoding="utf-8")
+        self.assertIn("OC_TRAIT_GROUPS", picker_code, "oc_picker.js debe usar OC_TRAIT_GROUPS")
+        self.assertIn("renderOcCatalogResults", picker_code, "oc_picker.js debe definir renderOcCatalogResults")
+        self.assertIn("renderOcSelected", picker_code, "oc_picker.js debe definir renderOcSelected")
+        self.assertIn("toggleOcTag", picker_code, "oc_picker.js debe proveer toggleOcTag para selección/edición")
+        self.assertIn("addOcTagsToPrompt", picker_code, "oc_picker.js debe mantener addOcTagsToPrompt")
+        self.assertIn("oc-category-card", picker_code, "oc_picker.js debe generar tarjetas de categoría")
+        self.assertIn("oc-trait-card", picker_code, "oc_picker.js debe generar tarjetas individuales de rasgos")
+        self.assertIn("oc-trait-grid", picker_code, "oc_picker.js debe usar el grid de rasgos")
+        self.assertIn("oc-selected-card", picker_code, "oc_picker.js debe renderizar tarjetas seleccionadas")
+        self.assertIn("oc-selected-group", picker_code, "oc_picker.js debe agrupar los seleccionados por categoría")
+
+        # 3. Reglas CSS visuales en static/css/components.css
+        css = (base_dir / "static" / "css" / "components.css").read_text(encoding="utf-8")
+        self.assertIn(".oc-catalog-panel", css, "components.css debe definir .oc-catalog-panel")
+        self.assertIn(".oc-category-card", css, "components.css debe definir .oc-category-card")
+        self.assertIn(".oc-category-header", css, "components.css debe definir .oc-category-header")
+        self.assertIn(".oc-trait-grid", css, "components.css debe definir .oc-trait-grid")
+        self.assertIn(".oc-trait-card", css, "components.css debe definir .oc-trait-card")
+        self.assertIn(".oc-trait-card.selected", css, "components.css debe estilizar .oc-trait-card.selected")
+        self.assertIn(".oc-selected-panel", css, "components.css debe definir .oc-selected-panel")
+        self.assertIn(".oc-selected-group", css, "components.css debe definir .oc-selected-group")
+        self.assertIn(".oc-selected-card", css, "components.css debe definir .oc-selected-card")
+
     def test_c24_oc_maker_canonical_layout(self):
         """Item C-24: verifica que OCMaker tenga layout canónico de dos columnas con las clases estándar."""
         index_path = Path(__file__).resolve().parents[1] / "templates" / "index.html"

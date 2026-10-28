@@ -108,6 +108,60 @@ function isSheetRef(ref) {
   return refFilename(ref).startsWith("sheet_");
 }
 
+const OC_CATEGORY_ICONS = {
+  hair: "💇",
+  eyes: "👁️",
+  face: "✨",
+  body: "👤",
+  other: "🏷️",
+};
+
+const OC_CATEGORY_TITLES = {
+  hair: "Pelo",
+  eyes: "Ojos",
+  face: "Cara",
+  body: "Cuerpo",
+  other: "Otros rasgos",
+};
+
+const KNOWN_TRAIT_GROUPS = {
+  "long hair": "hair", "short hair": "hair", "twintails": "hair", "ponytail": "hair",
+  "side ponytail": "hair", "bob cut": "hair", "braid": "hair", "hime cut": "hair",
+  "drill hair": "hair", "ahoge": "hair",
+  "heterochromia": "eyes", "red eyes": "eyes", "blue eyes": "eyes", "green eyes": "eyes",
+  "purple eyes": "eyes", "yellow eyes": "eyes", "closed eyes": "eyes", "tsurime": "eyes", "tareme": "eyes",
+  "freckles": "face", "mole under eye": "face", "blush": "face", "pointy ears": "face",
+  "fang": "face", "sharp teeth": "face", "pale skin": "face", "dark skin": "face",
+  "large breasts": "body", "medium breasts": "body", "small breasts": "body",
+  "wide hips": "body", "thick thighs": "body", "muscular": "body", "chubby": "body",
+  "abs": "body", "flat chest": "body",
+};
+
+const tagCategoryCache = new Map();
+
+function getOcTagGroup(tag) {
+  const folded = String(tag || "").toLowerCase().trim();
+  if (tagCategoryCache.has(folded)) {
+    return tagCategoryCache.get(folded);
+  }
+  if (KNOWN_TRAIT_GROUPS[folded]) {
+    return KNOWN_TRAIT_GROUPS[folded];
+  }
+  if (folded.includes("hair") || folded.includes("bangs") || folded.includes("ponytail") || folded.includes("braid")) {
+    return "hair";
+  }
+  if (folded.includes("eye") || folded.includes("pupil")) {
+    return "eyes";
+  }
+  if (folded.includes("skin") || folded.includes("ear") || folded.includes("fang") || folded.includes("face") || folded.includes("freckle") || folded.includes("mole")) {
+    return "face";
+  }
+  if (folded.includes("breast") || folded.includes("body") || folded.includes("thigh") || folded.includes("hip") || folded.includes("waist") || folded.includes("chest")) {
+    return "body";
+  }
+  return "other";
+}
+
 function isOcTagSelected(tag) {
   const folded = tag.toLowerCase();
   return state.ocSelectedTags.some((item) => item.toLowerCase() === folded);
@@ -115,50 +169,188 @@ function isOcTagSelected(tag) {
 
 function renderOcCatalogResults() {
   const container = $("oc-catalog-results");
+  if (!container) return;
   container.replaceChildren();
-  if (!state.ocCatalogItems.length) {
+  if (!state.ocCatalogItems || !state.ocCatalogItems.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
     empty.textContent = "Sin resultados.";
     container.appendChild(empty);
     return;
   }
+
+  const groupFilter = $("oc-catalog-group") ? $("oc-catalog-group").value : "";
+  const activeGroups = groupFilter ? [groupFilter] : OC_TRAIT_GROUPS;
+
+  const grouped = new Map();
+  for (const g of activeGroups) {
+    grouped.set(g, []);
+  }
+
   for (const item of state.ocCatalogItems) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "oc-chip";
-    chip.textContent =
-      item.label && item.label !== item.tag
-        ? `${item.label} · ${item.tag}`
-        : item.tag;
-    chip.title = item.tag;
-    chip.classList.toggle("selected", isOcTagSelected(item.tag));
-    chip.addEventListener("click", () => toggleOcTag(item.tag));
-    container.appendChild(chip);
+    const g = item.group || groupFilter || getOcTagGroup(item.tag) || "hair";
+    if (grouped.has(g)) {
+      grouped.get(g).push(item);
+    } else {
+      grouped.set(g, [item]);
+    }
+  }
+
+  let renderedAny = false;
+
+  for (const [groupKey, items] of grouped.entries()) {
+    if (!items.length) continue;
+    renderedAny = true;
+
+    const card = document.createElement("div");
+    card.className = "oc-category-card";
+    card.dataset.category = groupKey;
+
+    const header = document.createElement("div");
+    header.className = "oc-category-header";
+
+    const titleBox = document.createElement("div");
+    titleBox.className = "oc-category-title-box";
+
+    const icon = document.createElement("span");
+    icon.className = "oc-category-icon";
+    icon.textContent = OC_CATEGORY_ICONS[groupKey] || "🏷️";
+
+    const title = document.createElement("h4");
+    title.className = "oc-category-title";
+    title.textContent = GROUP_LABELS[groupKey] || OC_CATEGORY_TITLES[groupKey] || groupKey;
+
+    titleBox.append(icon, title);
+
+    const countSelected = items.filter((it) => isOcTagSelected(it.tag)).length;
+    const badge = document.createElement("span");
+    badge.className = "oc-category-badge";
+    if (countSelected > 0) {
+      badge.classList.add("has-selected");
+      badge.textContent = `${countSelected} sel. / ${items.length}`;
+    } else {
+      badge.textContent = `${items.length}`;
+    }
+
+    header.append(titleBox, badge);
+    card.appendChild(header);
+
+    const grid = document.createElement("div");
+    grid.className = "oc-trait-grid";
+
+    for (const item of items) {
+      const isSelected = isOcTagSelected(item.tag);
+      const traitCard = document.createElement("button");
+      traitCard.type = "button";
+      traitCard.className = "oc-trait-card oc-chip" + (isSelected ? " selected" : "");
+      traitCard.title = item.tag;
+
+      const check = document.createElement("span");
+      check.className = "oc-trait-check";
+      check.textContent = isSelected ? "✓" : "+";
+
+      const info = document.createElement("div");
+      info.className = "oc-trait-info";
+
+      const label = document.createElement("span");
+      label.className = "oc-trait-label";
+      label.textContent = item.label || item.tag;
+      info.appendChild(label);
+
+      if (item.label && item.label.toLowerCase() !== item.tag.toLowerCase()) {
+        const subtag = document.createElement("span");
+        subtag.className = "oc-trait-subtag";
+        subtag.textContent = item.tag;
+        info.appendChild(subtag);
+      }
+
+      traitCard.append(check, info);
+      traitCard.addEventListener("click", () => toggleOcTag(item.tag));
+      grid.appendChild(traitCard);
+    }
+
+    card.appendChild(grid);
+    container.appendChild(card);
+  }
+
+  if (!renderedAny) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin resultados para el filtro actual.";
+    container.appendChild(empty);
   }
 }
 
 function renderOcSelected() {
   const container = $("oc-selected");
+  if (!container) return;
   container.replaceChildren();
-  if (!state.ocSelectedTags.length) {
+  if (!state.ocSelectedTags || !state.ocSelectedTags.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
     empty.textContent = "Ningún tag seleccionado.";
     container.appendChild(empty);
     return;
   }
+
+  const grouped = new Map();
+  for (const g of [...OC_TRAIT_GROUPS, "other"]) {
+    grouped.set(g, []);
+  }
+
   for (const tag of state.ocSelectedTags) {
-    const chip = document.createElement("span");
-    chip.className = "oc-selected-chip";
-    const text = document.createElement("span");
-    text.textContent = tag;
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.textContent = "quitar";
-    remove.addEventListener("click", () => toggleOcTag(tag));
-    chip.append(text, remove);
-    container.appendChild(chip);
+    const g = getOcTagGroup(tag);
+    if (grouped.has(g)) {
+      grouped.get(g).push(tag);
+    } else {
+      grouped.get("other").push(tag);
+    }
+  }
+
+  for (const [groupKey, tags] of grouped.entries()) {
+    if (!tags.length) continue;
+
+    const groupCard = document.createElement("div");
+    groupCard.className = "oc-selected-group";
+    groupCard.dataset.category = groupKey;
+
+    const groupTitle = document.createElement("div");
+    groupTitle.className = "oc-selected-group-title";
+
+    const icon = document.createElement("span");
+    icon.textContent = OC_CATEGORY_ICONS[groupKey] || "🏷️";
+
+    const label = document.createElement("span");
+    label.textContent = `${GROUP_LABELS[groupKey] || OC_CATEGORY_TITLES[groupKey] || "Otros"} (${tags.length})`;
+
+    groupTitle.append(icon, label);
+    groupCard.appendChild(groupTitle);
+
+    const row = document.createElement("div");
+    row.className = "oc-selected-cards-row";
+
+    for (const tag of tags) {
+      const card = document.createElement("div");
+      card.className = "oc-selected-card oc-selected-chip";
+
+      const text = document.createElement("span");
+      text.className = "oc-selected-card-tag";
+      text.textContent = tag;
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "oc-selected-card-remove";
+      remove.textContent = "✕";
+      remove.title = `Quitar ${tag}`;
+      remove.setAttribute("aria-label", `Quitar ${tag}`);
+      remove.addEventListener("click", () => toggleOcTag(tag));
+
+      card.append(text, remove);
+      row.appendChild(card);
+    }
+
+    groupCard.appendChild(row);
+    container.appendChild(groupCard);
   }
 }
 
@@ -223,14 +415,21 @@ async function refreshOcCatalog() {
       params.set("q", query);
     }
     const data = await api(`/api/tags?${params.toString()}`);
-    items = data.items || [];
+    items = (data.items || []).map((item) => ({
+      ...item,
+      group: item.group || group,
+    }));
   } else {
     const results = await Promise.all(
-      OC_TRAIT_GROUPS.map((name) =>
-        api(`/api/tags?group=${encodeURIComponent(name)}`)
-      )
+      OC_TRAIT_GROUPS.map(async (name) => {
+        const data = await api(`/api/tags?group=${encodeURIComponent(name)}`);
+        return (data.items || []).map((item) => ({
+          ...item,
+          group: item.group || name,
+        }));
+      })
     );
-    items = results.flatMap((data) => data.items || []);
+    items = results.flat();
     if (query) {
       const needle = query.toLowerCase();
       items = items.filter(
@@ -238,6 +437,11 @@ async function refreshOcCatalog() {
           item.tag.toLowerCase().includes(needle) ||
           String(item.label || "").toLowerCase().includes(needle)
       );
+    }
+  }
+  for (const item of items) {
+    if (item && item.tag && item.group) {
+      tagCategoryCache.set(item.tag.toLowerCase(), item.group);
     }
   }
   state.ocCatalogItems = items;
@@ -1046,6 +1250,7 @@ export {
   refFilename,
   isSheetRef,
   isOcTagSelected,
+  getOcTagGroup,
   renderOcCatalogResults,
   renderOcSelected,
   renderOcExtras,
