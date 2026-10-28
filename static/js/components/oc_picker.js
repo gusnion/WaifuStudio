@@ -17,6 +17,7 @@ import {
   mergeZonesText,
 } from "./prompt_zones.js";
 import { attachReferenceFromUrl, fetchCharacterProfile } from "./prompt_popover.js";
+import { openLightbox } from "./lightbox.js";
 import { openTrainModal } from "./oc_train.js";
 import { selectLora } from "./loras.js";
 import { refreshNegative } from "../tabs/image.js";
@@ -495,6 +496,10 @@ async function loadCharacterRefs() {
     img.src = ref.url;
     img.alt = `Referencia ${ref.id}`;
     img.loading = "lazy";
+    img.style.cursor = "pointer";
+    img.addEventListener("click", () => {
+      openLightbox(ref.url, img.alt);
+    });
     figure.appendChild(img);
     if (isSheetRef(ref)) {
       const badge = document.createElement("span");

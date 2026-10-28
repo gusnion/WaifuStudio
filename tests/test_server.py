@@ -4730,9 +4730,17 @@ class LightboxUiStaticTests(ServerTestCase):
             "{ passive: false }",
             'on("editor-preview", "click"',
             'on("gallery-modal-media", "click"',
+            "openLightbox(ref.url, img.alt)",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)
+
+    def test_oc_refs_clicables_abren_lightbox(self):
+        text = self.get_static_js()
+        self.assertIn("openLightbox(ref.url, img.alt)", text)
+        index_html = self.make_client().get("/").text
+        self.assertIn('id="oc-refs"', index_html)
+        self.assertIn('id="lightbox"', index_html)
 
 
 class SeedDiceUiStaticTests(ServerTestCase):
