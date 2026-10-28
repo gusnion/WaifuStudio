@@ -105,7 +105,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 
 ## 6. Rangos de Líneas de `templates/index.html` y Cascada CSS
 
-- **Secciones en `templates/index.html` (2.036 líneas; no leer entero)**:
+- **Secciones en `templates/index.html` (2.037 líneas; no leer entero)**:
   - `L1–L63`: Header global, `nav.tabs`, acciones de Guía/Addons.
   - `L76–L354`: `#panel-image` | `L355–L721`: `#panel-video` | `L722–L915`: `#panel-editor` | `L916–L1064`: `#panel-upscaler` | `L1065–L1066`: `#panel-oc` | `L1067–L1180`: `#panel-timeline` | `L1181–L1232`: `#panel-gallery` | `L1233–L1397`: `#panel-guide` | `L1398–L1412`: `#panel-addons`.
   - `L1413–L2029`: modales OC/LoRA/Visión/Galería y `#lightbox` (L2030–L2036).
