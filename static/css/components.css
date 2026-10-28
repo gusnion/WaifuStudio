@@ -800,6 +800,154 @@ input[type="checkbox"] {
   font-size: 0.8rem;
 }
 
+/* OCMaker: librería de poses (Item C-27) */
+.oc-pose-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.oc-pose-row .oc-refs-note {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.oc-pose-row button {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.pose-box {
+  width: min(1100px, 100%);
+  max-height: 90vh;
+}
+
+.pose-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(130px, 1fr)) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pose-only {
+  gap: 0.4rem;
+  padding-top: 0;
+  white-space: nowrap;
+}
+
+.pose-body {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 0.8rem;
+  min-height: 0;
+  padding: 0.8rem 1rem;
+  overflow: hidden;
+}
+
+.pose-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: 62vh;
+}
+
+.pose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 0.5rem;
+  align-content: start;
+}
+
+.pose-grid .empty {
+  grid-column: 1 / -1;
+}
+
+.pose-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.35rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-align: center;
+}
+
+.pose-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.pose-card.no-detection {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pose-canvas {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pose-card-label {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.pose-card-sub {
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+
+.pose-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.pose-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pose-preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.pose-preview-info span,
+.pose-preview-info code {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+@media (max-width: 800px) {
+  .pose-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pose-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
 .zone-insert {
   display: flex;
   gap: 0.35rem;

@@ -885,6 +885,99 @@ class LoraUploadRouteTests(ServerTestCase):
         )
 
 
+class PoseLibraryUiStaticTests(ServerTestCase):
+    """C-27: librería de poses de OC Maker (estática, sin red ni PNGs)."""
+
+    def _root(self) -> Path:
+        return Path(__file__).resolve().parent.parent
+
+    def test_index_incluye_boton_y_modal_de_poses(self):
+        text = self.make_client().get("/").text
+        for marker in (
+            'id="btn-oc-poses"',
+            ">Poses<",
+            'id="oc-pose-selected"',
+            'id="btn-oc-pose-clear"',
+            'id="pose-modal"',
+            'id="btn-pose-close"',
+            'id="pose-status"',
+            'id="pose-search"',
+            'id="pose-filter-sistema"',
+            'id="pose-filter-clase"',
+            'id="pose-filter-angulo"',
+            'id="pose-only-detected"',
+            'id="btn-pose-reset"',
+            'id="pose-grid"',
+            'id="btn-pose-more"',
+            'id="pose-preview"',
+            'id="btn-pose-use"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+    def test_modulo_pose_library_local_sin_red_ni_png(self):
+        js = (self._root() / "static" / "js" / "components" / "pose_library.js").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            '"/static/pose-skeletons.json"',
+            "getContext(\"2d\")",
+            "document.createElement(\"canvas\")",
+            "sin detección",
+            "filterPoses",
+            "sistema_es",
+            "clase_es",
+            "angulo_es",
+            "waifu:pose-select",
+            "export {",
+            "initPoseLibrary",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, js)
+        self.assertNotIn("http://", js)
+        self.assertNotIn("https://", js)
+        self.assertNotIn(".png", js.lower())
+        self.assertNotIn("new Image(", js)
+        self.assertNotIn("<img", js)
+        self.assertEqual(len(re.findall(r"\bfetch\(", js)), 1)
+
+    def test_oc_picker_conecta_la_libreria_de_poses(self):
+        js = (self._root() / "static" / "js" / "components" / "oc_picker.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('from "./pose_library.js"', js)
+        self.assertIn('on("btn-oc-poses", "click", openPoseLibrary);', js)
+        self.assertIn("initPoseLibrary();", js)
+
+    def test_css_incluye_estilos_de_poses(self):
+        css = self.get_static_css()
+        for marker in (".pose-box", ".pose-grid", ".pose-card", ".pose-canvas", ".pose-filters"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, css)
+
+    def test_dataset_de_poses_contrato_esperado(self):
+        path = self._root() / "static" / "pose-skeletons.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        poses = data["poses"]
+        self.assertEqual(data["count"], len(poses))
+        self.assertEqual(len(data["keypoint_names"]), 17)
+        self.assertTrue(data["skeleton"])
+        con_pose = [p for p in poses if p.get("keypoints")]
+        sin_pose = [p for p in poses if not p.get("keypoints")]
+        self.assertTrue(con_pose)
+        self.assertTrue(sin_pose)
+        for pose in poses:
+            for field in ("id", "sistema_es", "clase_es", "angulo_es"):
+                self.assertTrue(pose.get(field), (pose.get("id"), field))
+        for pose in con_pose:
+            self.assertEqual(len(pose["keypoints"]), 17, pose["id"])
+            for kp in pose["keypoints"]:
+                self.assertEqual(len(kp), 3, pose["id"])
+        # El endpoint estático sirve el JSON localmente.
+        response = self.make_client().get("/static/pose-skeletons.json")
+        self.assertEqual(response.status_code, 200)
+
+
 class LoraLibraryUiStaticTests(ServerTestCase):
     def test_index_incluye_gestion_de_biblioteca(self):
         text = self.make_client().get("/").text

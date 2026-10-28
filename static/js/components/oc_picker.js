@@ -22,6 +22,7 @@ import { openTrainModal } from "./oc_train.js";
 import { runMultiviewGeneration, renderSheet } from "./editor_multiview.js";
 import { selectLora } from "./loras.js";
 import { refreshNegative } from "../tabs/image.js";
+import { openPoseLibrary, initPoseLibrary } from "./pose_library.js";
 
 let ocSearchTimer = null;
 let ocConfirmResolver = null;
@@ -902,6 +903,8 @@ function initOcPicker() {
   on("btn-oc", "click", openOcModal);
   on("btn-oc-close", "click", closeOcModal);
   on("btn-oc-add", "click", addOcTagsToPrompt);
+  on("btn-oc-poses", "click", openPoseLibrary);
+  initPoseLibrary();
   on("oc-modal", "click", (event) => {
     if (event.target === $("oc-modal")) {
       closeOcModal();
