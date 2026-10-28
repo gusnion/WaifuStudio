@@ -24,7 +24,7 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 
 | Componente | Licencia | ¿Redistribuible en el repo? | Estado |
 | --- | --- | --- | --- |
-| Anima (circlestone-labs) | circlestone-labs-non-commercial-license v1.2 | No (solo descarga desde origen con Attribution Notice) | Identificada |
+| Anima (circlestone-labs) | circlestone-labs-non-commercial-license v1.2 | No (solo descarga desde origen con Attribution Notice) | `install/manifest/licenses/LICENSE_CIRCLESTONE-ANIMA.md` |
 | AniDream TrueHentai v1.0 (Civitai 2895658 / v3273573) | Anima License (CircleStone Labs LLC) — no comercial; built on NVIDIA Cosmos | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-26 |
 | Juggernaut XL Ragnarok (Civitai 133005 / v1759168) | OpenRAIL++-M; flags `allowCommercialUse=Image,RentCivit`, `allowNoCredit=false`; el autor pide shoutout | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-24 |
 | RealVisXL V5.0 BakedVAE (Civitai 139562 / v789646) | OpenRAIL++-M; flags `allowCommercialUse=Image,RentCivit,Rent`, `allowNoCredit=false`; **atribucion requerida** | No (descarga desde Civitai; los pesos no viajan en el repo) | Identificada 2026-10-24 |
@@ -35,13 +35,13 @@ registrado. Este archivo solo inventaria licencias y condiciones de redistribuci
 | MMAudio (Kijai safetensors) | MIT (repo) | Si, con avisos | Activo; `manifest.wan.json` |
 | ComfyUI-VideoHelperSuite | MIT | Si, con avisos | Activo; commit `4d907be` |
 | BigVGAN v2 44 kHz (NVIDIA) | NVIDIA license (modelo) | No se redistribuye | Descargado por MMAudio en runtime |
-| FFmpeg/FFprobe (BtbN win64-gpl 8.1) | GPL-3.0 (build GPL) | No se redistribuye | Descarga fijada por URL/SHA256; binarios separados |
+| FFmpeg/FFprobe (9.0.2-essentials_build-www.gyan.dev; SHA256 3256173F...ED8EDEC) | GPL-3.0 (build GPL) | No se redistribuye | Descarga fijada por URL/SHA256; binarios separados |
 | Animagine XL 4.0 Opt | Fair AI Public License 1.0-SD | No se redistribuye | Activo; Civitai/HF |
 | `lopi999` NSFW LoRAs | Sin licencia declarada | No se redistribuye | Opcional; no usar comercialmente |
 | `rzgar` Uncensored 4-step LoRAs | Apache-2.0 | Si, con avisos | Opcional; descargado, no activo por defecto |
 | RealESRGAN (upscaler) | BSD-3-Clause | Si, con avisos | Texto archivado (`install/manifest/licenses/BSD-3-CLAUSE.txt`) |
 | MiniMax H3 (pesos empaquetados por Comfy-Org) | Licencia community de MiniMax | No se redistribuye (descarga origen) | Identificada |
-| Qwen-Image 2.1 (Editor M10, GGUF comunitario) | qwen-research (Qwen License) | No se redistribuye | Identificada |
+| Qwen-Image 2.1 (Editor M10, GGUF comunitario) | qwen-research (Qwen License) | No se redistribuye | `install/manifest/licenses/LICENSE_QWEN-IMAGE.txt` |
 | LLM M12: Qwen3.5-9B-abliterated (lukey03), texto Q4_K_M | Apache-2.0 | No se redistribuye (descarga origen) | Identificada (Apache-2.0) |
 | mmproj-F16 (unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | No se redistribuye | Identificada (Apache-2.0) |
 | llama.cpp stock b11146 (ggml-org) + cudart CUDA | MIT (llama.cpp) / NVIDIA redistribuible | No se redistribuye | Identificada (MIT) |
@@ -89,3 +89,7 @@ aiohttp (Apache-2.0 AND MIT), Pillow (HPND).
    **VERIFICADO 2026-09-30**: el repo publico solo lleva codigo; los registros de
    usuario viven en `data/` (no versionado) y los pesos se descargan o aportan
    aparte.
+
+| Irodori-TTS (servidor y pesos) | MIT (servidor); pesos del autor | No se redistribuyen los pesos | `LICENSE_IRODORI-MIT.txt` |
+| Wan 2.2 NSFW AIO v10 (GGUF comunitario) | Apache-2.0 declarada por uploader | No se redistribuye | Identificada |
+| POSE-DB-01 (esqueletos derivados) | autorizacion del autor; no redistribuir PNG | Solo datos derivados locales | Identificada |
