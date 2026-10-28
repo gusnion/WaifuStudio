@@ -572,7 +572,7 @@ async function openOcSaveModal(item) {
   await loadCharacters();
   const select = $("oc-save-select");
   select.replaceChildren();
-  select.appendChild(option("", " Eelegir OC  E));
+  select.appendChild(option("", "Elegir OC"));
   for (const character of state.characters) {
     select.appendChild(option(String(character.id), character.name));
   }
