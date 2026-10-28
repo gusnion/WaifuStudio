@@ -6863,6 +6863,57 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn(".control-card.oc-section", css_content)
         self.assertIn("grid-template-columns: 420px 1fr", css_content)
 
+    def test_c30_oc_card_actions_and_no_native_dialogs(self):
+        """Item C-30: panel de personajes guardados con abrir, duplicar, renombrar y borrar sin dialogos nativos."""
+        picker_path = Path(__file__).resolve().parents[1] / "static" / "js" / "components" / "oc_picker.js"
+        picker_content = picker_path.read_text(encoding="utf-8")
+
+        # 1. Sin dialogos nativos en oc_picker.js
+        self.assertNotIn("window.confirm", picker_content, "oc_picker.js no debe usar window.confirm")
+        self.assertNotIn("window.prompt", picker_content, "oc_picker.js no debe usar window.prompt")
+        self.assertNotIn("window.alert", picker_content, "oc_picker.js no debe usar window.alert")
+        self.assertNotRegex(picker_content, r"\bconfirm\s*\(", "oc_picker.js no debe invocar confirm() nativo")
+        self.assertNotRegex(picker_content, r"\balert\s*\(", "oc_picker.js no debe invocar alert() nativo")
+        self.assertNotRegex(picker_content, r"\b(window\.)?prompt\s*\(", "oc_picker.js no debe invocar prompt() nativo")
+
+        # 2. Handlers de rename y confirm en oc_picker.js
+        self.assertIn("renameCharacter", picker_content, "oc_picker.js debe definir renameCharacter")
+        self.assertIn("handleRename", picker_content, "oc_picker.js debe proveer handleRename")
+        self.assertIn("Renombrar", picker_content, "oc_picker.js debe incluir boton o accion Renombrar")
+        self.assertIn("oc-rename-input", picker_content, "oc_picker.js debe incluir entrada de renombrado en la tarjeta")
+        self.assertIn("showOcConfirmModal", picker_content, "oc_picker.js debe definir showOcConfirmModal")
+        self.assertIn("handleConfirmAccept", picker_content, "oc_picker.js debe definir handleConfirmAccept")
+        self.assertIn("handleConfirmCancel", picker_content, "oc_picker.js debe definir handleConfirmCancel")
+        self.assertIn("closeOcConfirmModal", picker_content, "oc_picker.js debe definir closeOcConfirmModal")
+
+        # 3. Modal propio con Cancelar/Confirmar en templates/index.html
+        index_path = Path(__file__).resolve().parents[1] / "templates" / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+        self.assertIn('id="oc-confirm-modal"', html, "index.html debe declarar el modal #oc-confirm-modal")
+        self.assertIn('id="btn-oc-confirm-cancel"', html, "index.html debe declarar #btn-oc-confirm-cancel")
+        self.assertIn('id="btn-oc-confirm-accept"', html, "index.html debe declarar #btn-oc-confirm-accept")
+
+        # 4. Estilos en components.css
+        css_path = Path(__file__).resolve().parents[1] / "static" / "css" / "components.css"
+        css_content = css_path.read_text(encoding="utf-8")
+        self.assertIn(".oc-item-rename", css_content, "components.css debe estilizar .oc-item-rename")
+        self.assertIn(".oc-confirm-box", css_content, "components.css debe estilizar .oc-confirm-box")
+
+        # 5. Persistencia SQLite y endpoint PUT para renombrado sin tocar esquema
+        client = self.make_client()
+        created = client.post("/api/characters", json={"name": "TestRenamable", "tags": ["black hair"]})
+        self.assertEqual(created.status_code, 200)
+        char_id = created.json()["id"]
+
+        renamed = client.put(f"/api/characters/{char_id}", json={"name": "TestRenamed"})
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(renamed.json()["name"], "TestRenamed")
+        self.assertEqual(renamed.json()["tags"], ["black hair"])
+
+        persisted = client.get(f"/api/characters/{char_id}").json()
+        self.assertEqual(persisted["name"], "TestRenamed")
+        self.assertEqual(persisted["tags"], ["black hair"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,6 +23,63 @@ import { selectLora } from "./loras.js";
 import { refreshNegative } from "../tabs/image.js";
 
 let ocSearchTimer = null;
+let ocConfirmResolver = null;
+
+function showOcConfirmModal({
+  title = "Confirmar",
+  message = "¿Estás seguro de realizar esta acción?",
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
+  isDanger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    ocConfirmResolver = resolve;
+    const modal = $("oc-confirm-modal");
+    if (!modal) {
+      resolve(false);
+      return;
+    }
+    const titleEl = $("oc-confirm-title");
+    if (titleEl) {
+      titleEl.textContent = title;
+    }
+    const msgEl = $("oc-confirm-message");
+    if (msgEl) {
+      msgEl.textContent = message;
+    }
+    const btnAccept = $("btn-oc-confirm-accept");
+    if (btnAccept) {
+      btnAccept.textContent = confirmText;
+      btnAccept.classList.toggle("danger", Boolean(isDanger));
+      btnAccept.classList.toggle("primary", !isDanger);
+    }
+    const btnCancel = $("btn-oc-confirm-cancel");
+    if (btnCancel) {
+      btnCancel.textContent = cancelText;
+    }
+    modal.classList.remove("hidden");
+  });
+}
+
+function closeOcConfirmModal(result = false) {
+  const modal = $("oc-confirm-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+  if (ocConfirmResolver) {
+    const resolve = ocConfirmResolver;
+    ocConfirmResolver = null;
+    resolve(Boolean(result));
+  }
+}
+
+function handleConfirmAccept() {
+  closeOcConfirmModal(true);
+}
+
+function handleConfirmCancel() {
+  closeOcConfirmModal(false);
+}
 
 function setOcStatus(text, isError = false) {
   const el = $("oc-status");
@@ -125,23 +182,26 @@ async function moveOcExtrasToGeneral() {
   }
   const added = await mergeZonesText(extras.join(", "));
   let removed = false;
-  if (
-    state.ocEditingId != null &&
-    window.confirm(
-      `Extras insertados en General${
+  if (state.ocEditingId != null) {
+    const confirmed = await showOcConfirmModal({
+      title: "Mover extras a General",
+      message: `Extras insertados en General${
         added.length ? "" : " (ya estaban en el prompt)"
-      }. ¿Quitarlos también del OC?`
-    )
-  ) {
-    await api(`/api/characters/${state.ocEditingId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ extras: [] }),
+      }. ¿Quitarlos también del OC?`,
+      confirmText: "Confirmar",
+      cancelText: "Cancelar",
     });
-    state.ocExtras = [];
-    renderOcExtras();
-    await loadCharacters();
-    removed = true;
+    if (confirmed) {
+      await api(`/api/characters/${state.ocEditingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extras: [] }),
+      });
+      state.ocExtras = [];
+      renderOcExtras();
+      await loadCharacters();
+      removed = true;
+    }
   }
   setOcStatus(
     removed
@@ -246,10 +306,12 @@ function renderCharacters() {
 function characterRow(character) {
   const row = document.createElement("div");
   row.className = "oc-item";
+  row.dataset.id = String(character.id);
   row.classList.toggle("active", character.id === state.activeCharacterId);
   const header = document.createElement("div");
   header.className = "oc-item-header";
   const name = document.createElement("strong");
+  name.className = "oc-item-name";
   name.textContent = character.name;
   header.appendChild(name);
   if (character.id === state.activeCharacterId) {
@@ -264,6 +326,40 @@ function characterRow(character) {
   tags.textContent = `${(character.tags || []).join(", ") || "sin rasgos"}${
     extrasCount ? ` · +${extrasCount} extras` : ""
   }`;
+
+  // Entrada de renombrado directo en la tarjeta
+  const renameBox = document.createElement("form");
+  renameBox.className = "oc-item-rename hidden";
+  const renameInput = document.createElement("input");
+  renameInput.type = "text";
+  renameInput.className = "oc-rename-input";
+  renameInput.value = character.name;
+  renameInput.placeholder = "Nuevo nombre";
+  const renameSaveBtn = document.createElement("button");
+  renameSaveBtn.type = "submit";
+  renameSaveBtn.className = "oc-rename-save primary";
+  renameSaveBtn.textContent = "Guardar";
+  const renameCancelBtn = document.createElement("button");
+  renameCancelBtn.type = "button";
+  renameCancelBtn.className = "oc-rename-cancel";
+  renameCancelBtn.textContent = "Cancelar";
+  renameBox.append(renameInput, renameSaveBtn, renameCancelBtn);
+
+  renameBox.addEventListener("submit", (e) => {
+    e.preventDefault();
+    renameCharacter(character, renameInput.value)
+      .then(() => {
+        renameBox.classList.add("hidden");
+      })
+      .catch((error) => setOcStatus(error.message, true));
+  });
+
+  renameCancelBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    renameInput.value = character.name;
+    renameBox.classList.add("hidden");
+  });
+
   const actions = document.createElement("div");
   actions.className = "oc-item-actions";
   const handlers = [
@@ -271,6 +367,20 @@ function characterRow(character) {
     ["Generar LoRA", () => openTrainModal(character)],
     ["Editar", () => editCharacter(character)],
     ["Duplicar", () => duplicateCharacter(character)],
+    [
+      "Renombrar",
+      () => {
+        const isHidden = renameBox.classList.contains("hidden");
+        if (isHidden) {
+          renameBox.classList.remove("hidden");
+          renameInput.value = character.name;
+          renameInput.focus();
+          renameInput.select();
+        } else {
+          renameBox.classList.add("hidden");
+        }
+      },
+    ],
     ["Eliminar", () => deleteCharacter(character)],
   ];
   for (const [label, handler] of handlers) {
@@ -284,7 +394,7 @@ function characterRow(character) {
     });
     actions.appendChild(button);
   }
-  row.append(header, tags, actions);
+  row.append(header, tags, renameBox, actions);
   return row;
 }
 
@@ -411,8 +521,53 @@ async function duplicateCharacter(character) {
   setOcStatus("Ajusta el nombre y guarda la copia");
 }
 
+async function renameCharacter(character, newName) {
+  const charId =
+    typeof character === "object" && character !== null
+      ? character.id
+      : character;
+  const targetChar =
+    typeof character === "object" && character !== null
+      ? character
+      : characterById(charId);
+  const name = String(newName || "").trim();
+  if (!name) {
+    setOcStatus("El nombre es obligatorio", true);
+    return;
+  }
+  if (targetChar && targetChar.name === name) {
+    setOcStatus(`El OC ya se llama «${name}»`);
+    return;
+  }
+  await putJson(`/api/characters/${charId}`, { name });
+  if (targetChar) {
+    targetChar.name = name;
+  }
+  if (state.ocEditingId === charId) {
+    const formName = $("oc-form-name");
+    if (formName) {
+      formName.value = name;
+    }
+    updateOcFormMode();
+  }
+  await loadCharacters();
+  if (state.activeCharacterId === charId) {
+    await loadCharacterRefs();
+  }
+  setOcStatus(`OC renombrado a «${name}»`);
+}
+
+const handleRename = renameCharacter;
+
 async function deleteCharacter(character) {
-  if (!window.confirm(`¿Eliminar el OC «${character.name}» y sus referencias?`)) {
+  const confirmed = await showOcConfirmModal({
+    title: "Eliminar personaje",
+    message: `¿Eliminar el OC «${character.name}» y sus referencias?`,
+    confirmText: "Confirmar",
+    cancelText: "Cancelar",
+    isDanger: true,
+  });
+  if (!confirmed) {
     return;
   }
   await api(`/api/characters/${character.id}`, { method: "DELETE" });
@@ -426,6 +581,9 @@ async function deleteCharacter(character) {
   await loadCharacterRefs();
   setOcStatus(`OC «${character.name}» eliminado`);
 }
+
+const confirmDelete = deleteCharacter;
+const confirmDeleteCharacter = deleteCharacter;
 
 async function saveCharacter(event) {
   event.preventDefault();
@@ -700,6 +858,14 @@ function initOcPicker() {
       closeOcSaveModal();
     }
   });
+  on("btn-oc-confirm-accept", "click", handleConfirmAccept);
+  on("btn-oc-confirm-cancel", "click", handleConfirmCancel);
+  on("btn-oc-confirm-close", "click", handleConfirmCancel);
+  on("oc-confirm-modal", "click", (event) => {
+    if (event.target === $("oc-confirm-modal")) {
+      handleConfirmCancel();
+    }
+  });
 }
 
 export {
@@ -712,6 +878,10 @@ export {
   renderOcSelected,
   renderOcExtras,
   moveOcExtrasToGeneral,
+  showOcConfirmModal,
+  closeOcConfirmModal,
+  handleConfirmAccept,
+  handleConfirmCancel,
   refreshOcCatalog,
   loadOcCatalog,
   loadOcPreprompts,
@@ -729,7 +899,11 @@ export {
   useCharacter,
   editCharacter,
   duplicateCharacter,
+  renameCharacter,
+  handleRename,
   deleteCharacter,
+  confirmDelete,
+  confirmDeleteCharacter,
   saveCharacter,
   loadCharacterRefs,
   removeCharacterRef,

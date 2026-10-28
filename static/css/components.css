@@ -501,6 +501,26 @@ input[type="checkbox"] {
   font-size: 0.78rem;
 }
 
+.oc-item-rename {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.oc-item-rename input.oc-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+}
+
+.oc-item-rename button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+}
+
 .oc-form {
   display: flex;
   flex-direction: column;
@@ -741,6 +761,28 @@ input[type="checkbox"] {
     grid-template-rows: auto auto !important;
     overflow-y: auto !important;
   }
+}
+
+.oc-confirm-box {
+  width: min(440px, 94vw);
+}
+
+.oc-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.oc-confirm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border);
 }
 
 .oc-save-box {
