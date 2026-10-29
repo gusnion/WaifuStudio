@@ -231,6 +231,8 @@ function bind() {
       closeVisionModal(); closePrepromptModal(); closeLoraLibrary(); closeLoraModal(); closePoseLibrary();
       const trainModal = $("oc-train-modal");
       if (trainModal && !trainModal.classList.contains("hidden")) { closeTrainModal(); return; }
+      const panelOc = $("panel-oc");
+      if (panelOc && !panelOc.hidden) return;
       closeOcModal();
       const panelSocial = $("panel-social");
       if (panelSocial && !panelSocial.hidden) {

@@ -1196,11 +1196,6 @@ function initOcPicker() {
   on("btn-oc-pose-generate", "click", () => {
     generateCharacterPose().catch((error) => setOcStatus(error.message, true));
   });
-  on("oc-modal", "click", (event) => {
-    if (event.target === $("oc-modal")) {
-      closeOcModal();
-    }
-  });
   on("oc-catalog-group", "change", () => {
     refreshOcCatalog().catch((error) => setOcStatus(error.message, true));
   });
