@@ -213,6 +213,28 @@ def list_upscalers() -> list[dict[str, Any]]:
     return [copy.deepcopy(upscaler) for upscaler in upscalers().values()]
 
 
+def list_upscalers_with_availability(config: Any = None) -> list[dict[str, Any]]:
+    """Catalogo con ``available`` segun exista el archivo en disco.
+
+    La UI usa ``available`` para deshabilitar modelos fantasma; los runners
+    antiguos conservan el fallback interno de ``resolve_upscale_model_file``.
+    """
+    items = list_upscalers()
+    if not config or not hasattr(config, "comfy_root"):
+        return items
+    models_dir = Path(config.comfy_root) / "models" / "upscale_models"
+    for item in items:
+        filename = item.get("file")
+        available = bool(filename and (models_dir / filename).is_file())
+        item["available"] = available
+        if not available:
+            item["unavailable_reason"] = (
+                f"Falta {filename} en ComfyUI/models/upscale_models"
+            )
+    return items
+
+
+
 def get_upscaler(upscaler_id: object) -> dict[str, Any]:
     """Upscaler por id estricto; EngineError si no existe o no es texto."""
     entry = (

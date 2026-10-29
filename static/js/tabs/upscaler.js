@@ -40,12 +40,47 @@ function upscaleSourceKind() {
 }
 
 function upscaleModelNote() {
-  const model = state.upscalers.find(
-    (item) => item.id === $("upscale-model").value
-  );
-  $("upscale-model-note").textContent = model
-    ? `Escala ×${model.scale}${model.note ? ` · ${model.note}` : ""}`
-    : "Cargando modelos…";
+  const selectedId = $("upscale-model").value;
+  const model = state.upscalers.find((item) => item.id === selectedId);
+  const missing = state.upscalers.filter((item) => item.available === false);
+  const missingNote = missing.length
+    ? ` · No disponibles (faltan en ComfyUI/models/upscale_models): ${missing.map((m) => m.file || m.id).join(", ")}`
+    : "";
+  if (!state.upscalers.length) {
+    $("upscale-model-note").textContent = "Cargando modelos…";
+    return;
+  }
+  if (!model) {
+    $("upscale-model-note").textContent = missing.length
+      ? `Sin modelos disponibles (faltan en ComfyUI/models/upscale_models: ${missing.map((m) => m.file || m.id).join(", ")})`
+      : "Elige un modelo de escalado";
+    return;
+  }
+  if (model.available === false) {
+    $("upscale-model-note").textContent = `No disponible: falta ${model.file || model.id} en ComfyUI/models/upscale_models`;
+    return;
+  }
+  $("upscale-model-note").textContent = `Escala ×${model.scale}${model.note ? ` · ${model.note}` : ""}${missingNote}`;
+}
+
+function validateSelectedUpscaleModel(modelId) {
+  if (!modelId) {
+    setUpscaleStatus("Elige un modelo de escalado", true);
+    return null;
+  }
+  const entry = state.upscalers.find((item) => item.id === modelId);
+  if (entry && entry.available === false) {
+    setUpscaleStatus(
+      `Modelo no disponible: falta ${entry.file || entry.id} en ComfyUI/models/upscale_models`,
+      true
+    );
+    return null;
+  }
+  if (state.upscalers.length > 0 && !entry) {
+    setUpscaleStatus(`Modelo de escalado no disponible: ${modelId}`, true);
+    return null;
+  }
+  return modelId;
 }
 
 function upscaleCkptNote() {
@@ -97,11 +132,34 @@ async function loadUpscaleModels() {
   const previous = select.value;
   select.replaceChildren();
   for (const model of state.upscalers) {
-    select.appendChild(
-      option(model.id, `${model.label || model.id} (×${model.scale})`)
-    );
+    const available = model.available !== false;
+    const label = available
+      ? `${model.label || model.id} (×${model.scale})`
+      : `${model.label || model.id} (×${model.scale}) — No disponible (falta ${model.file || "archivo"})`;
+    const opt = option(model.id, label);
+    if (!available) {
+      opt.disabled = true;
+      opt.setAttribute("disabled", "disabled");
+      opt.setAttribute(
+        "title",
+        `No disponible: falta ${model.file || model.id} en ComfyUI/models/upscale_models`
+      );
+    }
+    select.appendChild(opt);
   }
-  setSelectValue(select, previous);
+  const previousAvailable = state.upscalers.find(
+    (item) => item.id === previous && item.available !== false
+  );
+  const firstAvailable = state.upscalers.find((item) => item.available !== false);
+  if (previousAvailable) {
+    setSelectValue(select, previousAvailable.id);
+    select.value = previousAvailable.id;
+  } else if (firstAvailable) {
+    setSelectValue(select, firstAvailable.id);
+    select.value = firstAvailable.id;
+  } else {
+    select.value = "";
+  }
   upscaleModelNote();
   loadUpscaleInterpolation(data.frame_interpolation);
 }

@@ -23,6 +23,7 @@ from app.upscale import (
     frame_interpolation,
     get_upscaler,
     list_upscalers,
+    list_upscalers_with_availability,
     parse_denoise,
     parse_fps,
     parse_passes,
@@ -37,10 +38,11 @@ router = APIRouter()
 
 
 @router.get("/api/upscale/models")
-async def api_upscale_models() -> dict:
-    """Catalogo de upscalers (M10-2d U1/U2/U3): id/label/file/scale/note,
+async def api_upscale_models(request: Request) -> dict:
+    """Catalogo de upscalers (M10-2d U1/U2/U3): id/label/file/scale/note/available,
     kinds y la seccion ``frame_interpolation`` (ckpts RIFE + multipliers)."""
-    items = list_upscalers()
+    cfg = getattr(request.app.state, "config", None)
+    items = list_upscalers_with_availability(cfg)
     return {
         "items": items,
         "models": items,
