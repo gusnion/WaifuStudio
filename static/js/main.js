@@ -14,7 +14,7 @@ import { initOcTrain, closeTrainModal } from "./components/oc_train.js";
 import { initLoras, closeLoraLibrary, closeLoraModal } from "./components/loras.js";
 import { initVision, closeVisionModal } from "./components/vision.js";
 import { initPreprompts, closePrepromptModal } from "./components/preprompts.js";
-import { initPoseLibrary, closePoseLibrary } from "./components/pose_library.js";
+import { initPoseLibrary, openPoseLibrary, closePoseLibrary } from "./components/pose_library.js";
 import { initImageTab, loadParams, loadFormats, loadModels, refreshNegative, applyStartupDefaults, refreshLlmStatus } from "./tabs/image.js";
 import { initImageViewer, loadImageViewer } from "./tabs/image_viewer.js";
 import { initVideoTab, applyVideoEngine, loadVideoViewer } from "./tabs/video.js";
@@ -220,6 +220,7 @@ function bind() {
     on("tab-addons", "click", () => switchTab("addons"));
   }
   on("btn-seed-random", "click", () => toggleSeedRandom());
+  on("btn-pose-open-image", "click", () => openPoseLibrary("image"));
   on("btn-video-seed-random", "click", () => toggleSeedRandom(setVideoStatus));
   on("btn-editor-seed-random", "click", () => toggleSeedRandom(setEditorStatus));
   document.addEventListener("keydown", (event) => {
