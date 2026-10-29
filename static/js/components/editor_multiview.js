@@ -150,7 +150,7 @@ export function initEditorMultiview() {
         onProgress: (msg) => setEditorStatus(msg),
       });
       renderSheet(entries);
-      setEditorStatus(`Hoja de contacto lista (${entries.length} vistas)`);
+      setEditorStatus(`Multivista lista (${entries.length} vistas)`);
     } catch (error) {
       setEditorStatus(error.message, true);
     } finally {
