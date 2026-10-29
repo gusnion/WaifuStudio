@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.engine import EngineError
-from app.poses import download_pose_index, load_pose_index, pose_status
+from app.poses import download_pose_index, load_pose_index, load_pose_tags, pose_status
 
 router = APIRouter()
 
@@ -37,3 +37,8 @@ async def api_poses_list(request: Request) -> dict[str, Any]:
         "items": items,
         "count": len(items),
     }
+
+
+@router.get("/api/poses/tags")
+async def api_poses_tags() -> dict[str, Any]:
+    return load_pose_tags()
