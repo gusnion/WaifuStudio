@@ -226,6 +226,7 @@ class ReadRoutesTests(ServerTestCase):
                 "unet_name",
                 "defaults",
                 "prompt_profile",
+                "prompt_profile_info",
             },
         )
         self.assertEqual(models[0]["family"], "anima")
