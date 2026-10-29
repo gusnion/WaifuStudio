@@ -1050,6 +1050,22 @@ export function initTimelineTab() {
     }
     addTimelineClip(item, url, item.kind === "video");
   });
+  window.addEventListener("waifu:timeline-audio-add", async (event) => {
+    const detail = event.detail || {};
+    const track = detail.track;
+    if (!track || !track.url) return;
+    const data = state.current.data;
+    if (!Array.isArray(data.audio_tracks)) data.audio_tracks = [];
+    data.audio_tracks.push(track);
+    renderAudioTrack();
+    const saved = await saveCurrentProject({ silent: true });
+    setTimelineStatus(
+      saved
+        ? `Audio añadido al Timeline: ${detail.name || "pista"}`
+        : `Audio añadido, pero no se pudo guardar el proyecto: ${detail.name || "pista"}`,
+      !saved
+    );
+  });
   const trackVideo = $("timeline-track-video");
   if (trackVideo) { trackVideo.addEventListener("click", handleTrackClick); trackVideo.addEventListener("change", handleTrackChange); }
   const trackAudio = $("timeline-track-audio");

@@ -16,60 +16,36 @@ let irodoriStatusCache = null;
 let lastVoiceGenId = null;
 let lastAmbientGenId = null;
 let lastVideoGenId = null;
+let lastVoiceResult = null;
+let lastAmbientResult = null;
+let lastMixResult = null;
+let activeAudioResult = "ambient";
 let mixBusy = false;
 
 export function updateIrodoriUI(statusData) {
   irodoriStatusCache = statusData;
-  const checkbox = $("audio-engine-irodori");
-  if (!checkbox) return;
-
-  const label = checkbox.closest("label") || checkbox.parentElement;
-  const badge = label ? label.querySelector(".badge") : null;
-  const hint = label?.nextElementSibling?.classList?.contains("field-hint")
-    ? label.nextElementSibling
-    : null;
+  const badge = $("audio-engine-irodori-badge");
+  const hint = $("audio-engine-irodori-hint");
+  if (!badge && !hint) return;
 
   const isInstalled = Boolean(statusData?.irodori_installed);
   const status = statusData?.irodori_status || (isInstalled ? "installed" : "absent");
   const reason = statusData?.irodori_reason || (isInstalled ? "Irodori microservicio listo en localhost:8291" : "Irodori no disponible");
 
-  if (isInstalled) {
-    // La voz se genera en Modo A (/api/audio/voice); en Modo B el checkbox permanece deshabilitado.
-    checkbox.disabled = true;
-    checkbox.checked = false;
-    checkbox.style.cursor = "not-allowed";
-    if (label) {
-      label.style.opacity = "1";
-      label.style.cursor = "default";
-      label.title = reason;
-    }
-    if (badge) {
-      badge.textContent = "Instalado · Modo A";
-      badge.style.background = "#28a745";
-      badge.style.color = "#fff";
-    }
-    if (hint) {
-      hint.textContent = `${reason} La voz se genera en Modo A.`;
-      hint.style.color = "var(--text-muted, #8e90a6)";
-    }
-  } else {
-    checkbox.disabled = true;
-    checkbox.checked = false;
-    checkbox.style.cursor = "not-allowed";
-    if (label) {
-      label.style.opacity = "0.6";
-      label.style.cursor = "not-allowed";
-      label.title = reason;
-    }
-    if (badge) {
-      badge.textContent = status === "offline" ? "Servicio Offline" : "Deshabilitado";
-      badge.style.background = status === "offline" ? "#d97706" : "#444";
-      badge.style.color = "#bbb";
-    }
-    if (hint) {
-      hint.textContent = reason;
-      hint.style.color = status === "offline" ? "#e06c75" : "var(--text-muted, #8e90a6)";
-    }
+  if (badge) {
+    badge.textContent = isInstalled
+      ? "Instalado"
+      : status === "offline"
+      ? "Servicio offline"
+      : "No instalado";
+    badge.style.background = isInstalled ? "#28a745" : status === "offline" ? "#d97706" : "#444";
+    badge.style.color = isInstalled || status === "offline" ? "#fff" : "#bbb";
+  }
+  if (hint) {
+    hint.textContent = isInstalled
+      ? `${reason} La voz se genera en Modo A.`
+      : reason;
+    hint.style.color = status === "offline" ? "#e06c75" : "var(--text-muted, #8e90a6)";
   }
 }
 
@@ -108,6 +84,46 @@ function setAudioProgress(percent = 0, text = "") {
   txt.textContent = text || (valid ? `${Math.round(percent)}%` : "");
 }
 
+function audioResultAvailability() {
+  return {
+    ambient: Boolean(lastAmbientResult),
+    voice: Boolean(lastVoiceResult),
+    mix: Boolean(lastMixResult),
+  };
+}
+
+function updateAudioResultTabs() {
+  const available = audioResultAvailability();
+  document.querySelectorAll("[data-audio-result]").forEach((btn) => {
+    const key = btn.dataset.audioResult;
+    const ok = Boolean(available[key]);
+    btn.disabled = !ok;
+    btn.classList.toggle("active", ok && key === activeAudioResult);
+    btn.setAttribute("aria-selected", ok && key === activeAudioResult ? "true" : "false");
+  });
+}
+
+function showAudioResult(key) {
+  const available = audioResultAvailability();
+  if (!available[key]) return;
+  if (key === "voice") setAudioMode("a");
+  else if (key === "ambient") setAudioMode("b");
+  const cards = {
+    ambient: $("audio-result-card"),
+    voice: $("audio-voice-result-card"),
+    mix: $("audio-mix-result-card"),
+  };
+  for (const [name, card] of Object.entries(cards)) {
+    if (card) card.style.display = name === key ? "block" : "none";
+  }
+  const ambientEmpty = $("audio-empty-card");
+  if (ambientEmpty) ambientEmpty.style.display = "none";
+  const voiceEmpty = $("audio-voice-empty-card");
+  if (voiceEmpty) voiceEmpty.style.display = "none";
+  activeAudioResult = key;
+  updateAudioResultTabs();
+}
+
 export async function loadAudioClips() {
   const grid = $("audio-gallery-grid");
   if (!grid) return;
@@ -131,6 +147,7 @@ export async function loadAudioClips() {
       card.style.transition = "transform 0.15s, border-color 0.15s";
 
       card.innerHTML = `
+        <video class="audio-clip-thumb" src="${clip.url || ""}" preload="metadata" muted playsinline></video>
         <div style="font-weight:600; font-size:0.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${clip.name}</div>
         <div style="font-size:0.7rem; color:var(--text-muted, #888); margin-top:2px;">Gen #${clip.gen_id}</div>
       `;
@@ -179,6 +196,26 @@ export async function selectClip(clipSource) {
     $("audio-selected-path").value = selectedClip.path || "";
     $("audio-selected-gen-id").value = selectedClip.gen_id || "";
 
+    const preview = $("audio-clip-preview");
+    const previewUrl = clipSource.url
+      || (selectedClip.gen_id ? `/media/${selectedClip.gen_id}/${encodeURIComponent(selectedClip.name)}` : "");
+    if (preview) {
+      if (previewUrl) {
+        preview.src = previewUrl;
+        preview.hidden = false;
+        preview.load();
+      } else {
+        preview.removeAttribute("src");
+        preview.hidden = true;
+      }
+    }
+    const durationBadge = $("audio-clip-duration-badge");
+    if (durationBadge) {
+      durationBadge.hidden = false;
+      durationBadge.classList.remove("hidden");
+    }
+    updateMixAvailability();
+
     if (selectedClip.gen_id) {
       lastVideoGenId = selectedClip.gen_id;
       const vidInput = $("audio-mix-video-id");
@@ -188,14 +225,36 @@ export async function selectClip(clipSource) {
     const btnGen = $("btn-audio-generate");
     if (btnGen) {
       btnGen.disabled = false;
-      btnGen.textContent = `🎵 Generar Audio (${Number(selectedClip.duration).toFixed(1)} s)`;
+      btnGen.textContent = `🎵 Generar ambiente (${Number(selectedClip.duration).toFixed(1)} s)`;
     }
 
-    setAudioStatus(`Clip listo: ${selectedClip.name} (${Number(selectedClip.duration).toFixed(2)} s heredados)`, false);
+    setAudioStatus(`Clip listo: ${selectedClip.name} (${Number(selectedClip.duration).toFixed(2)} s)`, false);
   } catch (err) {
     console.error("[audio] Error al inspeccionar clip:", err);
+    const preview = $("audio-clip-preview");
+    if (preview) {
+      preview.removeAttribute("src");
+      preview.hidden = true;
+    }
+    const durationBadge = $("audio-clip-duration-badge");
+    if (durationBadge) durationBadge.classList.add("hidden");
     setAudioStatus(`Error al cargar clip: ${err.message}`, true);
   }
+}
+
+function updateMixAvailability() {
+  const mute = Boolean(selectedClip && selectedClip.has_audio === false);
+  const mixRadio = document.querySelector('input[name="audio-track-action"][value="mix"]');
+  const replaceRadio = document.querySelector('input[name="audio-track-action"][value="replace"]');
+  if (mixRadio) {
+    mixRadio.disabled = mute;
+    mixRadio.title = mute ? "El clip es mudo: no hay pista que mezclar." : "";
+    if (mute && mixRadio.checked && replaceRadio) replaceRadio.checked = true;
+  }
+  const label = $("audio-track-mix-label");
+  if (label) label.classList.toggle("disabled", mute);
+  const hint = $("audio-mix-mute-hint");
+  if (hint) hint.hidden = !mute;
 }
 
 async function handleGenerateAudio() {
@@ -219,9 +278,7 @@ async function handleGenerateAudio() {
       break;
     }
   }
-
-  const irodoriCheckbox = $("audio-engine-irodori");
-  const voiceEnabled = Boolean(irodoriCheckbox?.checked && !irodoriCheckbox?.disabled);
+  if (selectedClip.has_audio === false && action === "mix") action = "replace";
 
   const payload = {
     video_path: selectedClip.path,
@@ -234,7 +291,7 @@ async function handleGenerateAudio() {
     cfg,
     seed,
     action,
-    voice_enabled: voiceEnabled,
+    voice_enabled: false,
   };
 
   const btnGen = $("btn-audio-generate");
@@ -327,10 +384,8 @@ function renderAudioResult(jobData) {
     downloadWavBtn.setAttribute("download", `waifu_audio_${gid}_48k.wav`);
   }
 
-  resultCard.style.display = "block";
-  if (emptyCard) emptyCard.style.display = "none";
-
-  resultCard.scrollIntoView({ behavior: "smooth" });
+  lastAmbientResult = jobData;
+  showAudioResult("ambient");
 }
 
 const VOICE_MAX_REF_BYTES = 25 * 1024 * 1024;
@@ -520,8 +575,8 @@ function renderVoiceResult(res) {
     const tramosStr = res.chunks && res.chunks > 1 ? ` · ${res.chunks} tramos (crossfade 0,3 s)` : "";
     meta.textContent = `${secs}seed ${res.seed}${res.has_ref ? " · con referencia" : ""}${tramosStr}`;
   }
-  card.style.display = "block";
-  if (empty) empty.style.display = "none";
+  lastVoiceResult = res;
+  showAudioResult("voice");
 }
 
 async function handleGenerateVoice() {
@@ -560,21 +615,12 @@ async function handleGenerateVoice() {
   voiceBusy = true;
   if (btn) btn.disabled = true;
 
-  let progressInterval = null;
   if (isLong) {
-    setVoiceProgress(10, `Iniciando síntesis (tramo 1/${expectedChunks})...`);
-    setVoiceStatus(`Sintetizando voz en ${expectedChunks} tramos con crossfade de 0,3 s...`);
-    let simulated = 10;
-    progressInterval = setInterval(() => {
-      if (simulated < 85) {
-        simulated += 6;
-        const curTramo = Math.min(expectedChunks, Math.max(1, Math.ceil((simulated / 85) * expectedChunks)));
-        setVoiceProgress(simulated, `Sintetizando tramo ${curTramo}/${expectedChunks}...`);
-      }
-    }, 2000);
+    setVoiceProgress(20, `Sintetizando voz en ${expectedChunks} tramos (sin progreso simulado)...`);
+    setVoiceStatus(`Sintetizando voz en ${expectedChunks} tramos con crossfade de 0,3 s. Puede tardar varios minutos.`);
   } else {
-    setVoiceProgress(15, "Sintetizando voz con Irodori...");
-    setVoiceStatus("Sintetizando voz con Irodori...");
+    setVoiceProgress(20, "Sintetizando voz con Irodori...");
+    setVoiceStatus("Sintetizando voz con Irodori. Puede tardar varios minutos.");
   }
 
   try {
@@ -593,11 +639,6 @@ async function handleGenerateVoice() {
       timeoutMs: VOICE_REQUEST_TIMEOUT_MS,
     });
 
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      progressInterval = null;
-    }
-
     if (isLong) {
       setVoiceProgress(100, `Completado: ${res.chunks || expectedChunks} tramos concatenados`);
       setVoiceStatus(`Voz continua generada (${res.chunks || expectedChunks} tramos con crossfade de 0,3 s, Gen #${res.gen_id}).`, false);
@@ -609,14 +650,9 @@ async function handleGenerateVoice() {
     renderVoiceResult(res);
   } catch (err) {
     console.error("[audio] Error al sintetizar voz:", err);
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      progressInterval = null;
-    }
     setVoiceProgress(-1);
     setVoiceStatus(`Error: ${err.message}`, true);
   } finally {
-    if (progressInterval) clearInterval(progressInterval);
     voiceBusy = false;
     if (btn) btn.disabled = false;
     setTimeout(() => {
@@ -640,11 +676,16 @@ function setAudioMode(mode) {
   const hint = $("audio-mode-hint");
   if (hint) {
     hint.textContent = isA
-      ? "Modo A: voz con Irodori TTS. Texto con emojis, caption/seed y referencia de voz opcional; genera un WAV en la galería."
-      : "Modo B: hereda duración y sincroniza audio condicionado a los fotogramas del clip sin regenerar vídeo.";
+      ? "Modo A: voz con Irodori TTS. Escribe el texto, ajusta la voz y genera un WAV en la galería."
+      : "Modo B: ambiente desde un clip de vídeo. Elige clip, ajusta el ambiente y genera sin regenerar vídeo.";
   }
   const notice = $("audio-mode-a-notice");
   if (notice) notice.style.display = isA ? "inline-flex" : "none";
+  const voiceEmpty = $("audio-voice-empty-card");
+  if (voiceEmpty) voiceEmpty.style.display = isA && !lastVoiceResult ? "" : "none";
+  const ambientEmpty = $("audio-empty-card");
+  if (ambientEmpty) ambientEmpty.style.display = !isA && !lastAmbientResult ? "" : "none";
+  updateAudioResultTabs();
 }
 
 function setMixStatus(text, isError = false) {
@@ -727,8 +768,8 @@ export function renderMixResult(res) {
     if (btnMp4) btnMp4.style.display = "none";
   }
 
-  card.style.display = "block";
-  card.scrollIntoView({ behavior: "smooth" });
+  lastMixResult = res;
+  showAudioResult("mix");
 }
 
 export async function handleMixLayers() {
@@ -764,10 +805,54 @@ export async function handleMixLayers() {
   }
 }
 
+async function sendAmbientToTimeline() {
+  const res = lastAmbientResult;
+  const wav = res && Array.isArray(res.outputs)
+    ? res.outputs.find((item) => String(item.name || "").toLowerCase().endsWith(".wav"))
+    : null;
+  if (!res || !wav) {
+    setAudioStatus("Genera primero un ambiente para enviarlo al Timeline.", true);
+    return;
+  }
+  const url = wav.url || `/api/audio/media/${res.gen_id}/${encodeURIComponent(wav.name)}`;
+  setAudioStatus("Enviando audio al Timeline...");
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`No se pudo descargar el WAV (${response.status})`);
+    const blob = await response.blob();
+    const audioB64 = await fileToBase64(new File([blob], wav.name, { type: blob.type || "audio/wav" }));
+    const uploaded = await postJson("/api/timeline/upload_audio", { filename: wav.name, audio_b64: audioB64 });
+    if (!uploaded || !uploaded.audio_url) throw new Error("La subida no devolvió URL");
+    window.dispatchEvent(new CustomEvent("waifu:timeline-audio-add", {
+      detail: {
+        name: wav.name,
+        track: {
+          source_path: uploaded.audio_path || uploaded.audio_url,
+          url: uploaded.audio_url,
+          start_time: 0,
+          volume: 1.0,
+        },
+      },
+    }));
+    setAudioStatus(`Audio enviado al Timeline: ${wav.name}`, false);
+    const tabTimeline = $("tab-timeline");
+    if (tabTimeline) tabTimeline.click();
+  } catch (err) {
+    setAudioStatus(`No se pudo enviar al Timeline: ${err.message}`, true);
+  }
+}
+
 export function initAudioTab() {
   on("btn-audio-generate", "click", handleGenerateAudio);
   on("btn-audio-voice-generate", "click", handleGenerateVoice);
   on("btn-audio-mix-layers", "click", handleMixLayers);
+  on("btn-audio-send-timeline", "click", sendAmbientToTimeline);
+
+  document.querySelectorAll("[data-audio-result]").forEach((btn) => {
+    btn.addEventListener("click", () => showAudioResult(btn.dataset.audioResult));
+  });
+  updateAudioResultTabs();
+  updateMixAvailability();
 
   const palette = $("audio-voice-palette");
   if (palette) {
@@ -824,13 +909,8 @@ export function initAudioTab() {
 
   on("btn-audio-mode-b", "click", () => setAudioMode("b"));
 
-  on("btn-audio-send-timeline", "click", () => {
-    setAudioStatus("Pista preparada para el Timeline.", false);
-    const tabTimeline = $("tab-timeline");
-    if (tabTimeline) tabTimeline.click();
-  });
-
   loadAudioClips();
   refreshAudioStatus();
   updateLatestMixDefaults();
+  setAudioMode("b");
 }

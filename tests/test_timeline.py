@@ -689,6 +689,7 @@ class TimelineRouteTests(unittest.TestCase):
         self.assertIn("TIMELINE_AI_ACTIONS", js)
         self.assertIn("insert_image", js)
         self.assertIn("anima_aestheticv11", js)
+        self.assertIn("waifu:timeline-audio-add", js)
 
 
 if __name__ == "__main__":

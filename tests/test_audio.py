@@ -1079,6 +1079,67 @@ class TestAudioVoiceStaticUI(unittest.TestCase):
         self.assertIn(".audio-emoji-palette", css)
         self.assertIn(".audio-mode-group", css)
 
+    def test_w16b_audio_has_three_numbered_steps(self) -> None:
+        panel = self._panel_audio()
+        for element_id in (
+            "audio-step-1",
+            "audio-step-2-a",
+            "audio-step-2-b",
+            "audio-step-3",
+            "audio-clip-preview",
+            "audio-clip-duration-badge",
+            "audio-mix-mute-hint",
+            "audio-result-tabs",
+        ):
+            self.assertIn(f'id="{element_id}"', panel, element_id)
+        self.assertIn("1. Tarea y entrada", panel)
+        self.assertIn("2. Ajustes y generar", panel)
+        self.assertIn("3. Resultado", panel)
+
+        # El paso 3 tiene un solo visor con pestañas y los stems son secundarios.
+        self.assertIn('data-audio-result="ambient"', panel)
+        self.assertIn('data-audio-result="voice"', panel)
+        self.assertIn('data-audio-result="mix"', panel)
+        self.assertIn('<details id="audio-mix-card"', panel)
+
+        # Los checkboxes de motor falsos ya no existen.
+        self.assertNotIn('id="audio-engine-mmaudio"', panel)
+        self.assertNotIn('id="audio-engine-irodori"', panel)
+
+        # "Heredada" no se muestra antes de seleccionar el clip.
+        badge_start = panel.index('id="audio-clip-duration-badge"')
+        badge = panel[badge_start:panel.index(">", badge_start) + 1]
+        self.assertIn("hidden", badge)
+
+        # Avisos de japonés/SilentCipher junto a la voz, antes de los ajustes.
+        voice = panel.index('id="audio-voice-text"')
+        notice = panel.index('id="audio-notice-japanese"')
+        step2a = panel.index('id="audio-step-2-a"')
+        self.assertLess(voice, notice)
+        self.assertLess(notice, step2a)
+        self.assertIn('id="audio-notice-silentcipher"', panel)
+
+    def test_w16b_audio_js_wires_steps_mute_and_result_tabs(self) -> None:
+        js = self._read("static/js/tabs/audio.js")
+        self.assertIn("showAudioResult", js)
+        self.assertIn("updateAudioResultTabs", js)
+        self.assertIn("updateMixAvailability", js)
+        self.assertIn("selectedClip.has_audio === false", js)
+        self.assertIn("mixRadio.disabled = mute", js)
+        self.assertIn("waifu:timeline-audio-add", js)
+        self.assertIn("/api/timeline/upload_audio", js)
+        self.assertNotIn("setInterval", js)
+        self.assertNotIn("simulated", js)
+        self.assertNotIn('$("audio-engine-irodori")', js)
+        self.assertNotIn('$("audio-engine-mmaudio")', js)
+
+    def test_w16b_audio_css_has_step_and_sticky_cta(self) -> None:
+        css = self._read("static/css/tabs/audio.css")
+        self.assertIn(".audio-step", css)
+        self.assertIn(".audio-cta-sticky", css)
+        self.assertIn(".audio-result-tabs", css)
+        self.assertIn(".audio-stems-panel", css)
+
 
 class TestAudioMixRouter(unittest.TestCase):
     """Comprueba el endpoint POST /api/audio/mix (C-20: capas, stems y avisos)."""
