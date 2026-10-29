@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import APP_ROOT
@@ -20,6 +20,18 @@ TEMPLATES_DIR = APP_ROOT / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter()
+
+
+@router.get("/api/skill")
+async def get_skill() -> FileResponse:
+    skill_file = APP_ROOT / "SKILL.md"
+    if not skill_file.is_file():
+        raise HTTPException(status_code=404, detail="SKILL.md no encontrado")
+    return FileResponse(
+        path=skill_file,
+        media_type="text/markdown",
+        filename="SKILL.md",
+    )
 
 
 @router.get("/api/first-run")
