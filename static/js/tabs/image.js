@@ -844,7 +844,7 @@ function applyPoseToImageTab(pose) {
   if (badge) {
     badge.classList.remove("hidden");
     if (name) name.textContent = `${pose.clase_es || "Pose"} · ${pose.angulo_es || ""}`;
-    if (note) note.textContent = "Referencia visual (sin ControlNet)";
+    if (note) note.textContent = "Referencia visual de pose";
     if (thumb) {
       drawPoseSkeleton(thumb, pose);
     }
