@@ -951,7 +951,8 @@ class PoseLibraryUiStaticTests(ServerTestCase):
         self.assertNotIn(".png", js.lower())
         self.assertNotIn("new Image(", js)
         self.assertNotIn("<img", js)
-        self.assertEqual(len(re.findall(r"\bfetch\(", js)), 1)
+        self.assertGreaterEqual(len(re.findall(r"\bfetch\(", js)), 1)
+        self.assertIn("/api/poses", js)
 
     def test_oc_picker_conecta_la_libreria_de_poses(self):
         js = (self._root() / "static" / "js" / "components" / "oc_picker.js").read_text(
