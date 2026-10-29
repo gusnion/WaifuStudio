@@ -5,7 +5,6 @@
  */
 
 .tab,
-.oc-button,
 button {
   font: inherit;
   color: var(--text);
@@ -20,11 +19,6 @@ button {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-}
-
-.oc-button {
-  margin-left: auto;
-  border-color: var(--accent-2);
 }
 
 button.primary {
@@ -239,11 +233,6 @@ input[type="checkbox"] {
 .modal-header h2 {
   margin: 0;
   font-size: 1rem;
-}
-
-.modal-box.oc-maker {
-  width: min(1100px, 100%);
-  max-height: 90vh;
 }
 
 .oc-status {
@@ -755,6 +744,37 @@ input[type="checkbox"] {
   font-size: 0.78rem;
 }
 
+.oc-item-menu {
+  display: grid;
+  flex-basis: 100%;
+  gap: 0.25rem;
+  min-width: 9rem;
+  margin-top: 0.2rem;
+  padding: 0.35rem;
+  background: var(--panel-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.oc-item-menu.hidden {
+  display: none;
+}
+
+.oc-item-menu button {
+  width: 100%;
+  text-align: left;
+}
+
+.oc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
 .oc-item-rename {
   display: flex;
   align-items: center;
@@ -882,52 +902,15 @@ input[type="checkbox"] {
 
 /* OCMaker: Layout Canónico de Dos Columnas (Item C-24) */
 #panel-oc.tab-canonical-layout.active {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-}
-
-#oc-modal.oc-inline {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.modal-box.oc-maker.tab-canonical-layout,
-#oc-modal.oc-inline .modal-box.oc-maker {
   display: grid !important;
   grid-template-columns: 420px 1fr !important;
   grid-template-rows: minmax(0, 1fr) !important;
-  min-height: 0 !important;
-  height: 100% !important;
-  width: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
   gap: 1rem !important;
-  box-sizing: border-box !important;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
   padding: 0 !important;
-  margin: 0 !important;
   overflow: hidden !important;
-}
-
-.modal-box.oc-maker.tab-canonical-layout:not(.active),
-#oc-modal.tab-canonical-layout:not(.active) {
-  display: grid !important;
 }
 
 .oc-controls.tab-sidebar {
@@ -1009,8 +992,7 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 1100px) {
-  .modal-box.oc-maker.tab-canonical-layout,
-  #oc-modal.oc-inline .modal-box.oc-maker {
+  #panel-oc.tab-canonical-layout.active {
     grid-template-columns: 1fr !important;
     grid-template-rows: auto auto !important;
     overflow-y: auto !important;
@@ -1975,7 +1957,7 @@ input[type="checkbox"] {
 }
 
 .tab-canonical-layout.panel:not(.active),
-.tab-canonical-layout:not(.active):not(.oc-maker):not(#oc-modal) {
+.tab-canonical-layout:not(.active) {
   display: none !important;
 }
 

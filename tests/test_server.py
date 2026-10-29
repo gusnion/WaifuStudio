@@ -6934,10 +6934,10 @@ class TopbarNavigationStaticTests(ServerTestCase):
 
     def test_c31_oc_train_lora_connection(self):
         """Item C-31: verifica que el botón de entrenar LoRA de OCMaker esté conectado al trainer existente."""
-        # 1. oc_picker.js tiene texto 'Generar LoRA' y llamada a openTrainModal
+        # 1. oc_picker.js conecta el botón de cabecera con openTrainModal
         picker_path = Path(__file__).resolve().parents[1] / "static" / "js" / "components" / "oc_picker.js"
         picker_content = picker_path.read_text(encoding="utf-8")
-        self.assertIn("Generar LoRA", picker_content, "oc_picker.js debe incluir la opción 'Generar LoRA'")
+        self.assertIn("btn-oc-train", picker_content, "oc_picker.js debe conectar el botón de cabecera")
         self.assertIn("openTrainModal", picker_content, "oc_picker.js debe invocar openTrainModal")
 
         # 2. oc_train.js gestiona modal #oc-train-modal y endpoint /train
@@ -6997,9 +6997,11 @@ class TopbarNavigationStaticTests(ServerTestCase):
         # 1. Panel base #panel-oc incluye tab-canonical-layout
         self.assertIn('id="panel-oc" class="panel tab-canonical-layout"', html)
 
-        # 2. #oc-modal y modal-box oc-maker incluyen clases canónicas
-        self.assertIn('id="oc-modal" class="modal hidden oc-modal tab-canonical-layout"', html)
-        self.assertIn('class="modal-box oc-maker tab-canonical-layout"', html)
+        # 2. OC Maker es una pestaña real: no hay modal ni botón de cierre
+        self.assertNotIn('id="oc-modal"', html)
+        self.assertNotIn('id="btn-oc"', html)
+        self.assertNotIn('id="btn-oc-close"', html)
+        self.assertIn('id="btn-oc-train"', html)
 
         # 3. Columna izquierda: aside con controls y tab-sidebar + fieldset con control-card
         self.assertIn('aside class="controls oc-controls tab-sidebar"', html)
@@ -7011,9 +7013,8 @@ class TopbarNavigationStaticTests(ServerTestCase):
 
         # 5. Preservación íntegra de IDs, formulario y controles requeridos
         required_oc_ids = [
-            "oc-modal",
             "btn-oc-add",
-            "btn-oc-close",
+            "btn-oc-train",
             "oc-status",
             "oc-list",
             "oc-form",
@@ -7048,11 +7049,37 @@ class TopbarNavigationStaticTests(ServerTestCase):
         # 7. Reglas CSS canónicas en components.css
         css_path = Path(__file__).resolve().parents[1] / "static" / "css" / "components.css"
         css_content = css_path.read_text(encoding="utf-8")
-        self.assertIn(".modal-box.oc-maker.tab-canonical-layout", css_content)
+        self.assertIn("#panel-oc.tab-canonical-layout.active", css_content)
         self.assertIn(".oc-controls.tab-sidebar", css_content)
         self.assertIn(".oc-viewport.tab-viewport", css_content)
         self.assertIn(".control-card.oc-section", css_content)
         self.assertIn("grid-template-columns: 420px 1fr", css_content)
+        self.assertNotIn("#oc-modal", css_content)
+
+    def test_w17d_oc_maker_tab_real(self):
+        """W17d: OC Maker es pestaña real, con menú por personaje y Escape de diálogos."""
+        root = Path(__file__).resolve().parents[1]
+        html = (root / "templates" / "index.html").read_text(encoding="utf-8")
+        picker = (root / "static" / "js" / "components" / "oc_picker.js").read_text(encoding="utf-8")
+        main = (root / "static" / "js" / "main.js").read_text(encoding="utf-8")
+        i18n = (root / "static" / "js" / "i18n-data.js").read_text(encoding="utf-8")
+
+        self.assertNotIn('id="oc-modal"', html)
+        self.assertNotIn('id="btn-oc"', html)
+        self.assertNotIn('id="btn-oc-close"', html)
+        self.assertIn('id="btn-oc-train"', html)
+        self.assertNotIn("panel.appendChild(modal)", picker)
+        self.assertNotIn("oc-inline", picker)
+        self.assertIn("oc-item-menu", picker)
+        self.assertIn('t("Usar")', picker)
+        self.assertIn('t("Más")', picker)
+        self.assertIn('"8 vistas"', picker)
+        self.assertIn("t(label)", picker)
+        self.assertIn("closeOcConfirmModal(false)", main)
+        self.assertIn("closeOcSaveModal()", main)
+        self.assertNotIn("closeOcModal()", main)
+        for key in ("Usar", "Duplicar", "8 vistas", "Generar LoRA", "Generar pose", "Entrenar LoRA"):
+            self.assertIn(f'"{key}":', i18n, key)
 
     def test_c30_oc_card_actions_and_no_native_dialogs(self):
         """Item C-30: panel de personajes guardados con abrir, duplicar, renombrar y borrar sin dialogos nativos."""

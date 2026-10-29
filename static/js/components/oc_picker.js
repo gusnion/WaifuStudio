@@ -23,6 +23,7 @@ import { runMultiviewGeneration, renderSheet } from "./editor_multiview.js";
 import { selectLora } from "./loras.js";
 import { refreshNegative } from "../tabs/image.js";
 import { openPoseLibrary, initPoseLibrary, getSelectedPose } from "./pose_library.js";
+import { t } from "../i18n.js";
 
 let ocSearchTimer = null;
 let ocConfirmResolver = null;
@@ -498,9 +499,19 @@ function renderCharacters() {
   const container = $("oc-list");
   container.replaceChildren();
   if (!state.characters.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty";
-    empty.textContent = "Sin OCs guardados.";
+    const empty = document.createElement("div");
+    empty.className = "oc-empty";
+    const text = document.createElement("p");
+    text.className = "empty";
+    text.textContent = "Sin OCs guardados. Crea el primero con el formulario de abajo.";
+    const create = document.createElement("button");
+    create.type = "button";
+    create.className = "primary";
+    create.textContent = t("Crear OC");
+    create.addEventListener("click", () => {
+      startNewOc().catch((error) => setOcStatus(error.message, true));
+    });
+    empty.append(text, create);
     container.appendChild(empty);
     return;
   }
@@ -568,44 +579,60 @@ function characterRow(character) {
 
   const actions = document.createElement("div");
   actions.className = "oc-item-actions";
-  const handlers = [
-    ["Usar", () => useCharacter(character)],
-    ["Generar LoRA", () => openTrainModal(character)],
+  const useButton = document.createElement("button");
+  useButton.type = "button";
+  useButton.className = "primary";
+  useButton.textContent = t("Usar");
+  useButton.addEventListener("click", () => {
+    Promise.resolve(useCharacter(character)).catch((error) => setOcStatus(error.message, true));
+  });
+  const moreButton = document.createElement("button");
+  moreButton.type = "button";
+  moreButton.textContent = t("Más");
+  moreButton.setAttribute("aria-haspopup", "menu");
+  moreButton.setAttribute("aria-expanded", "false");
+  const menu = document.createElement("div");
+  menu.className = "oc-item-menu hidden";
+  menu.setAttribute("role", "menu");
+  moreButton.addEventListener("click", () => {
+    const opening = menu.classList.contains("hidden");
+    menu.classList.toggle("hidden", !opening);
+    moreButton.setAttribute("aria-expanded", opening ? "true" : "false");
+  });
+
+  const menuItems = [
     ["8 vistas", () => generateCharacterMultiview(character)],
     ["Editar", () => editCharacter(character)],
     ["Duplicar", () => duplicateCharacter(character)],
     [
       "Renombrar",
       () => {
-        const isHidden = renameBox.classList.contains("hidden");
-        if (isHidden) {
-          renameBox.classList.remove("hidden");
-          renameInput.value = character.name;
-          renameInput.focus();
-          renameInput.select();
-        } else {
-          renameBox.classList.add("hidden");
-        }
+        renameBox.classList.remove("hidden");
+        renameInput.value = character.name;
+        renameInput.focus();
+        renameInput.select();
       },
     ],
     ["Eliminar", () => deleteCharacter(character)],
   ];
-  for (const [label, handler] of handlers) {
+  for (const [label, handler] of menuItems) {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = label;
+    button.setAttribute("role", "menuitem");
+    button.textContent = t(label);
     if (label === "8 vistas") {
       button.className = "oc-btn-multiview";
       button.setAttribute("data-action", "multiview-8");
       button.title = "Genera 8 vistas coherentes con Qwen usando la primera referencia";
     }
     button.addEventListener("click", () => {
-      Promise.resolve(handler()).catch((error) =>
-        setOcStatus(error.message, true)
-      );
+      menu.classList.add("hidden");
+      moreButton.setAttribute("aria-expanded", "false");
+      Promise.resolve(handler()).catch((error) => setOcStatus(error.message, true));
     });
-    actions.appendChild(button);
+    menu.appendChild(button);
   }
+  actions.append(useButton, moreButton, menu);
   row.append(header, tags, renameBox, actions);
   return row;
 }
@@ -714,7 +741,7 @@ async function useCharacter(character) {
   } else if (refs.length) {
     refNote = " (solo hojas: sin referencia I2I)";
   }
-  closeOcModal();
+  $("tab-image")?.click();
   setStatus(
     `OC «${character.name}» cargado (${profile.mode})${loraNote}${extrasNote}${refNote}`
   );
@@ -858,6 +885,10 @@ async function loadCharacterRefs() {
   if (state.activeCharacterId == null) {
     title.textContent = "sin OC activo";
     button.disabled = true;
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Selecciona un OC de la lista o crea uno nuevo para ver sus referencias.";
+    container.appendChild(empty);
     return;
   }
   const character = characterById(state.activeCharacterId);
@@ -868,7 +899,7 @@ async function loadCharacterRefs() {
   if (!refs.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
-    empty.textContent = "Sin referencias. Añádelas desde la galería.";
+    empty.textContent = "Sin referencias. Usa «Añadir referencia» o la Galería.";
     container.appendChild(empty);
     return;
   }
@@ -1109,7 +1140,7 @@ function addOcTagsToPrompt() {
   const text = promptFromTags(state.ocSelectedTags);
   mergeZonesText(text)
     .then(() => {
-      closeOcModal();
+      $("tab-image")?.click();
       setStatus("Tags añadidos al prompt");
     })
     .catch((error) => setOcStatus(error.message, true));
@@ -1176,37 +1207,30 @@ async function confirmOcSave() {
 
 
 function openOcModal() {
-  try {
-    resetOcForm();
-    setOcStatus("Modo crear: formulario limpio");
-    window.dispatchEvent(new CustomEvent("waifu:oc-open"));
-  } catch (error) {
-    console.error("openOcModal: no se pudo abrir el OC Maker", error);
-    setOcStatus(`No se pudo abrir el OC Maker: ${error.message}`, true);
-    showUiBanner("OC Maker no disponible: recarga con Ctrl+F5");
-    return;
-  }
-  loadCharacters()
-    .then(loadCharacterRefs)
-    .catch((error) => setOcStatus(error.message, true));
+  // La pestaña ya está montada: al entrar se refrescan OCs, rasgos y referencias.
+  Promise.all([
+    loadCharacters(),
+    loadOcCatalog(),
+    loadOcPreprompts(),
+    loadCharacterRefs(),
+  ]).catch((error) => setOcStatus(error.message, true));
 }
 
 function closeOcModal() {
-  window.dispatchEvent(new CustomEvent("waifu:oc-close"));
+  // OC Maker es una pestaña real: no hay modal que cerrar.
 }
 
 
 function initOcPicker() {
-  const modal = $("oc-modal");
-  const panel = $("panel-oc");
-  if (modal && panel) {
-    modal.classList.remove("modal", "hidden");
-    modal.classList.add("oc-inline");
-    panel.appendChild(modal);
-  }
-  on("btn-oc", "click", openOcModal);
-  on("btn-oc-close", "click", closeOcModal);
   on("btn-oc-add", "click", addOcTagsToPrompt);
+  on("btn-oc-train", "click", () => {
+    const character = characterById(state.activeCharacterId) || state.characters[0];
+    if (!character) {
+      setOcStatus("Crea o selecciona un OC antes de entrenar una LoRA.", true);
+      return;
+    }
+    openTrainModal(character);
+  });
   on("btn-oc-add-ref", "click", () => $("oc-ref-upload").click());
   on("oc-ref-upload", "change", () => {
     const file = $("oc-ref-upload").files[0];

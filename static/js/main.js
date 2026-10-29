@@ -9,7 +9,7 @@ import { initCompare, setImageCompareEnabled, setEditorCompareEnabled, imageComp
 import { initLightbox, closeLightbox } from "./components/lightbox.js";
 import { initPromptZones, renderZoneEditor } from "./components/prompt_zones.js";
 import { initPromptPopover, closeZoneInsert } from "./components/prompt_popover.js";
-import { initOcPicker, openOcModal, closeOcModal, loadCharacters, loadOcCatalog, loadOcPreprompts, loadCharacterRefs } from "./components/oc_picker.js";
+import { initOcPicker, openOcModal, loadCharacters, loadOcCatalog, loadOcPreprompts, closeOcConfirmModal, closeOcSaveModal } from "./components/oc_picker.js";
 import { initOcTrain, closeTrainModal } from "./components/oc_train.js";
 import { initLoras, closeLoraLibrary, closeLoraModal } from "./components/loras.js";
 import { initVision, closeVisionModal } from "./components/vision.js";
@@ -90,7 +90,7 @@ function switchTab(tab) {
     panelOcEl.classList.toggle("active", oc);
     panelOcEl.hidden = !oc;
     if (oc) {
-      loadCharacterRefs().catch(() => {});
+      openOcModal();
     }
   }
   const panelSocialEl = $("panel-social");
@@ -168,8 +168,8 @@ const REQUIRED_IDS = [
   "size", "preprompt", "btn-preprompt-manage", "btn-preprompt-close", "preprompt-form", "preprompt-modal",
   "negative", "zone-editor", "prompt-final", "btn-copy-prompt", "zone-insert-form", "zone-insert-cancel",
   "zone-popover-close", "zone-popover-search", "zone-popover-insert", "zone-popover-clear", "zone-ocs-extras", "zone-ocs-traits",
-  "ref-image", "model", "strength", "strength-value", "btn-oc", "btn-oc-close",
-  "btn-oc-add", "oc-modal", "oc-catalog-group", "oc-catalog-search", "oc-form", "btn-oc-new",
+  "ref-image", "model", "strength", "strength-value", "btn-oc-train",
+  "btn-oc-add", "oc-catalog-group", "oc-catalog-search", "oc-form", "btn-oc-new",
   "btn-oc-cancel-edit", "btn-oc-sheet", "btn-oc-extras-move", "btn-oc-save-close", "btn-oc-save-confirm", "oc-save-modal",
   "btn-oc-train-close", "oc-train-modal", "btn-train-more", "btn-train-start", "train-rank", "train-epochs",
   "train-trigger", "train-auto-tags", "train-tag-threshold", "btn-lora-modal", "lora-modal", "btn-lora-close",
@@ -229,11 +229,11 @@ function bind() {
       if (editorCompareActive || editorCompareSelecting) setEditorCompareEnabled(false);
       if (upscaleCompareActive) setUpscaleCompareActive(false);
       closeVisionModal(); closePrepromptModal(); closeLoraLibrary(); closeLoraModal(); closePoseLibrary();
+      closeOcConfirmModal(false); closeOcSaveModal();
       const trainModal = $("oc-train-modal");
       if (trainModal && !trainModal.classList.contains("hidden")) { closeTrainModal(); return; }
       const panelOc = $("panel-oc");
       if (panelOc && !panelOc.hidden) return;
-      closeOcModal();
       const panelSocial = $("panel-social");
       if (panelSocial && !panelSocial.hidden) {
         switchTab(previousTabBeforeSocial || "image");
@@ -246,8 +246,6 @@ function bind() {
   initHeader(); initI18n(); initTooltipHelp(); initFirstRun(); initTheme();
   initCompare(); initLightbox(); initPromptZones(); initPromptPopover();
   initOcPicker(); initOcTrain(); initLoras(); initVision(); initPreprompts(); initPoseLibrary();
-  window.addEventListener("waifu:oc-open", () => switchTab("oc"));
-  window.addEventListener("waifu:oc-close", () => switchTab("image"));
   window.addEventListener("waifu:switch-tab", (event) => {
     const target = event.detail && event.detail.tab;
     if (target) switchTab(target);
