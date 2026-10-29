@@ -186,7 +186,11 @@ class PrepareWanFlfTests(unittest.TestCase):
         self.snapshot = copy.deepcopy(self.graph)
 
     def test_plantilla_certificada(self):
-        self.assertEqual(len(self.graph), 18)
+        self.assertEqual(len(self.graph), 13)
+        self.assertEqual(
+            self.graph["1"]["inputs"]["unet_name"],
+            "wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf",
+        )
         self.assertEqual(
             self.graph["5"]["inputs"]["text"], "1girl, walking, cinematic motion"
         )
@@ -202,6 +206,7 @@ class PrepareWanFlfTests(unittest.TestCase):
         self.assertEqual(self.graph["15"]["inputs"]["fps"], 16.0)
         self.assertEqual(self.graph["16"]["inputs"]["filename_prefix"], "waifu/video_flf")
         self.assertEqual(self.graph["12"]["inputs"]["noise_seed"], 42)
+        self.assertNotIn("13", self.graph)
 
     def test_parcheo_exacto(self):
         patched = prepare_wan_flf_graph(
@@ -224,7 +229,6 @@ class PrepareWanFlfTests(unittest.TestCase):
         self.assertEqual(patched["9"]["inputs"]["height"], 768)
         self.assertEqual(patched["9"]["inputs"]["length"], 81)
         self.assertEqual(patched["12"]["inputs"]["noise_seed"], 7)
-        self.assertEqual(patched["13"]["inputs"]["noise_seed"], 7)
 
     def test_frames_patch_4n1(self):
         patched = prepare_wan_flf_graph(
@@ -334,7 +338,6 @@ class PrepareWanFlfTests(unittest.TestCase):
     def test_sin_samplers_lanza_engine_error(self):
         broken = copy.deepcopy(self.graph)
         del broken["12"]
-        del broken["13"]
         with self.assertRaises(EngineError):
             prepare_wan_flf_graph(
                 broken,
@@ -472,21 +475,15 @@ class WanFlfOverrideTests(unittest.TestCase):
 
     def test_overrides_en_samplers_y_shift(self):
         patched = self.prepare(sampler_name="er_sde", scheduler="simple", steps=30, shift=5.0)
-        for node_id in ("12", "13"):
-            with self.subTest(node_id=node_id):
-                self.assertEqual(patched[node_id]["inputs"]["sampler_name"], "er_sde")
-                self.assertEqual(patched[node_id]["inputs"]["steps"], 30)
-        self.assertEqual(patched["12"]["inputs"]["end_at_step"], 15)
-        self.assertEqual(patched["13"]["inputs"]["start_at_step"], 15)
+        self.assertEqual(patched["12"]["inputs"]["sampler_name"], "er_sde")
+        self.assertEqual(patched["12"]["inputs"]["steps"], 30)
+        self.assertEqual(patched["12"]["inputs"]["end_at_step"], 10000)
         self.assertEqual(patched["10"]["inputs"]["shift"], 5.0)
-        self.assertEqual(patched["11"]["inputs"]["shift"], 5.0)
 
     def test_steps_4_reproduce_lo_fast(self):
         patched = self.prepare(steps=4)
-        for node_id in ("12", "13"):
-            self.assertEqual(patched[node_id]["inputs"]["steps"], 4)
-        self.assertEqual(patched["12"]["inputs"]["end_at_step"], 2)
-        self.assertEqual(patched["13"]["inputs"]["start_at_step"], 2)
+        self.assertEqual(patched["12"]["inputs"]["steps"], 4)
+        self.assertEqual(patched["12"]["inputs"]["end_at_step"], 10000)
 
     def test_invalidos(self):
         for override in (
@@ -663,7 +660,8 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         )
         self.assertEqual(graph["9"]["inputs"]["width"], 576)
         self.assertEqual(graph["9"]["inputs"]["height"], 1024)
-        self.assertEqual(graph["13"]["inputs"]["start_at_step"], 15)
+        self.assertEqual(graph["12"]["inputs"]["steps"], 30)
+        self.assertEqual(graph["12"]["inputs"]["end_at_step"], 10000)
 
     def test_aio_workflow_mudo_sin_mmaudio(self):
         graph = build_video_graph(
@@ -701,16 +699,30 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         for cv in create_video_nodes:
             self.assertNotIn("audio", cv.get("inputs", {}))
 
-    def test_aio_rechaza_flf2v(self):
-        with self.assertRaises(EngineError):
-            build_video_graph(
-                self.job(
-                    template=str(WAN_AIO_TEMPLATE_PATH),
-                    wan_model="nsfw_aio",
-                    mode="flf2v",
-                    last_image_name="b.png",
+    def test_aio_construye_flf2v_con_start_y_end_image(self):
+        for tmpl in (WAN_FLF_TEMPLATE_PATH, WAN_AIO_TEMPLATE_PATH):
+            with self.subTest(template=tmpl.name):
+                graph = build_video_graph(
+                    self.job(
+                        template=str(tmpl),
+                        wan_model="nsfw_aio",
+                        mode="flf2v",
+                        image_name="first.png",
+                        last_image_name="last.png",
+                        preset="rapido",
+                    )
                 )
-            )
+                self.assertEqual(
+                    graph["1"]["inputs"]["unet_name"],
+                    "wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf",
+                )
+                self.assertEqual(graph["7"]["inputs"]["image"], "first.png")
+                self.assertEqual(graph["8"]["inputs"]["image"], "last.png")
+                self.assertEqual(graph["9"]["class_type"], "WanFirstLastFrameToVideo")
+                self.assertEqual(graph["9"]["inputs"]["start_image"], ["7", 0])
+                self.assertEqual(graph["9"]["inputs"]["end_image"], ["8", 0])
+                self.assertEqual(graph["12"]["inputs"]["steps"], 4)
+                self.assertNotIn("13", graph)
 
     def test_h3_ignora_preset(self):
         graph = build_video_graph(

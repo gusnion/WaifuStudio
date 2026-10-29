@@ -62,6 +62,44 @@ def _is_vdn_installed(comfy_root: Any) -> bool:
 
 
 
+def _resolve_gen_image_bytes(
+    st: Any, cfg: Any, raw_gen_id: Any, label: str
+) -> tuple[int, bytes]:
+    if isinstance(raw_gen_id, bool) or not isinstance(raw_gen_id, (int, str)):
+        raise EngineError(f"{label}: id invalido")
+    try:
+        gid = int(raw_gen_id)
+    except (TypeError, ValueError) as exc:
+        raise EngineError(f"{label}: id invalido") from exc
+    if gid <= 0:
+        raise EngineError(f"{label}: id invalido")
+    row = st.get(gid)
+    if row is None:
+        raise EngineError(f"{label}: generacion desconocida")
+    file_name = ""
+    for output in row.get("outputs") or []:
+        candidate = output.get("name") if isinstance(output, dict) else output
+        if isinstance(candidate, str) and candidate.strip():
+            file_name = candidate.strip()
+            break
+    gallery_root = (cfg.data_dir / "gallery" / str(gid)).resolve()
+    if not file_name and gallery_root.is_dir():
+        for ext in (".png", ".jpg", ".jpeg", ".webp"):
+            matches = sorted(gallery_root.glob(f"*{ext}"))
+            if matches:
+                file_name = matches[0].name
+                break
+    if not file_name:
+        raise EngineError(f"{label}: la generacion no tiene salidas")
+    source = (gallery_root / file_name).resolve()
+    if not source.is_relative_to(gallery_root) or not source.is_file():
+        raise EngineError(f"{label}: archivo no encontrado")
+    raw = source.read_bytes()
+    if not raw:
+        raise EngineError(f"{label}: imagen vacia")
+    return gid, raw
+
+
 router = APIRouter()
 
 
@@ -107,8 +145,8 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         raise EngineError("mode invalido; usar i2v|flf2v|ref2va|v2v")
     if mode in ("ref2va", "v2v") and engine_kind != "h3":
         raise EngineError(f"{mode} solo es compatible con motor h3")
-    if wan_model == WAN_MODEL_NSFW_AIO and mode != "i2v":
-        raise EngineError("wan AIO v10 solo admite i2v en esta integracion")
+    if wan_model == WAN_MODEL_NSFW_AIO and mode not in ("i2v", "flf2v"):
+        raise EngineError("wan AIO v10 solo admite i2v|flf2v en esta integracion")
     aspect = payload.get("aspect") or "vertical"
     if aspect not in ASPECTS:
         raise EngineError("aspect invalido; usar vertical|horizontal")
@@ -194,6 +232,7 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         hint = None
     ref_images_b64 = payload.get("ref_images_b64") or []
     ref_video_b64 = payload.get("ref_video_b64") or payload.get("video_b64")
+    end_gen_id = None
     if mode == "v2v":
         if not ref_video_b64:
             raise EngineError("v2v requiere un video de referencia (ref_video_b64)")
@@ -203,12 +242,35 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         if not ref_images_b64 and not payload.get("image_b64") and not ref_video_b64:
             raise EngineError("ref2va requiere al menos una imagen o video de referencia")
         first_raw = _decode_image_b64(payload.get("image_b64"), "image") if payload.get("image_b64") else None
-        last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image") if payload.get("last_image_b64") else None
+        if payload.get("end_image_b64"):
+            last_raw = _decode_image_b64(payload.get("end_image_b64"), "end_image")
+        elif payload.get("last_image_b64"):
+            last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
+        elif payload.get("end_gen_id") is not None:
+            end_gen_id, last_raw = _resolve_gen_image_bytes(
+                st, cfg, payload.get("end_gen_id"), "end_gen_id"
+            )
+        else:
+            last_raw = None
     else:
-        first_raw = _decode_image_b64(payload.get("image_b64"), "image")
+        if payload.get("image_b64") is not None or payload.get("gen_id") is None:
+            first_raw = _decode_image_b64(payload.get("image_b64"), "image")
+        else:
+            _, first_raw = _resolve_gen_image_bytes(
+                st, cfg, payload.get("gen_id"), "gen_id"
+            )
         last_raw = None
         if mode == "flf2v":
-            last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
+            if "end_image_b64" in payload and payload.get("end_image_b64") is not None:
+                last_raw = _decode_image_b64(payload.get("end_image_b64"), "end_image")
+            elif "last_image_b64" in payload and payload.get("last_image_b64") is not None:
+                last_raw = _decode_image_b64(payload.get("last_image_b64"), "last_image")
+            elif payload.get("end_gen_id") is not None:
+                end_gen_id, last_raw = _resolve_gen_image_bytes(
+                    st, cfg, payload.get("end_gen_id"), "end_gen_id"
+                )
+            else:
+                last_raw = _decode_image_b64(None, "last_image")
     if engine_kind == "wan":
         motion_positive = payload.get("motion_positive")
         if not isinstance(motion_positive, str) or not motion_positive.strip():
@@ -302,6 +364,8 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         "preset": PRESET_MANUAL if profile is None else profile["preset"],
         **profile_fields,
     }
+    if end_gen_id is not None:
+        stored_params["end_gen_id"] = end_gen_id
     if engine_kind == "wan":
         stored_params["width"] = width
         stored_params["height"] = height
@@ -350,6 +414,8 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
         "preset": stored_params["preset"],
         **profile_fields,
     }
+    if end_gen_id is not None:
+        job["end_gen_id"] = end_gen_id
     if engine_kind == "wan":
         job["width"] = width
         job["height"] = height

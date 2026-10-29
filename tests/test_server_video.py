@@ -963,7 +963,7 @@ class VideoGenerateEnqueueTests(ServerVideoTestCase):
                 "motion_positive": "She walks slowly.",
             },
         )
-        self.assertEqual(flf.status_code, 400)
+        self.assertEqual(flf.status_code, 200)
         invalid = self.make_client().post(
             "/api/video/generate",
             json={

@@ -612,6 +612,19 @@ def prepare_wan_flf_graph(
             if not isinstance(inputs, dict):
                 raise EngineError(f"nodo {node_id!r} sin inputs dict")
             load_images.append((node_id, inputs))
+    if len(load_images) == 1 and any(
+        isinstance(node, dict) and node.get("class_type") == "WanImageToVideo"
+        for node in prepared.values()
+    ):
+        first_id, _ = load_images[0]
+        last_id = "8" if "8" not in prepared else f"{first_id}_end"
+        last_inputs = {"image": last_image_name}
+        prepared[last_id] = {"class_type": "LoadImage", "inputs": last_inputs}
+        load_images.append((last_id, last_inputs))
+        i2v_id, i2v_inputs = _find_node(prepared, "WanImageToVideo")
+        prepared[i2v_id]["class_type"] = "WanFirstLastFrameToVideo"
+        i2v_inputs["start_image"] = [first_id, 0]
+        i2v_inputs["end_image"] = [last_id, 0]
     if len(load_images) != 2:
         raise EngineError(
             f"wan-flf: se esperan 2 LoadImage (first/last), hay {len(load_images)}"
@@ -1106,7 +1119,15 @@ def build_video_graph(job: dict) -> dict:
             height=job.get("height"),
         )
         mode = job.get("mode")
-        is_aio = Path(template).name == WAN_AIO_TEMPLATE_PATH.name
+        has_lora = any(
+            isinstance(node, dict) and node.get("class_type") == "LoraLoaderModelOnly"
+            for node in graph.values()
+        )
+        is_aio = (
+            Path(template).name in (WAN_AIO_TEMPLATE_PATH.name, WAN_FLF_TEMPLATE_PATH.name)
+            or job.get("wan_model") == WAN_MODEL_NSFW_AIO
+            or not has_lora
+        )
         if mode is None:
             mode = (
                 WAN_FLF_MODE
@@ -1115,8 +1136,6 @@ def build_video_graph(job: dict) -> dict:
             )
         if mode not in ("i2v", WAN_FLF_MODE):
             raise EngineError(f"video: mode invalido {mode!r}; usar i2v|flf2v")
-        if is_aio and mode != "i2v":
-            raise EngineError("wan AIO v10 solo admite i2v en esta integracion")
         common = {
             "width": profile["width"],
             "height": profile["height"],

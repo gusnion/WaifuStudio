@@ -781,11 +781,19 @@ async function generateWanVideo() {
   }
   if (mode === "flf2v") {
     const last = $("video-last-image")?.files?.[0];
-    if (!last) {
+    const endGenId = Number(
+      $("video-last-image")?.dataset?.genId || $("video-end-gen-id")?.value || 0
+    );
+    if (last) {
+      const endB64 = await readFileBase64(last);
+      payload.end_image_b64 = endB64;
+      payload.last_image_b64 = endB64;
+    } else if (Number.isInteger(endGenId) && endGenId > 0) {
+      payload.end_gen_id = endGenId;
+    } else {
       setVideoStatus("FLF2V requiere la imagen final", true);
       return;
     }
-    payload.last_image_b64 = await readFileBase64(last);
   }
   const btn = $("btn-video-generate");
   if (btn) btn.disabled = true;
@@ -803,7 +811,10 @@ async function generateWanVideo() {
   } catch (error) {
     setVideoStatus(error.message, true);
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : t("generate");
+    }
   }
 }
 
@@ -975,14 +986,13 @@ function updateWanModelState() {
   const mode = $("video-mode");
   if (mode) {
     const flf = mode.querySelector('option[value="flf2v"]');
-    if (flf) flf.disabled = aio;
-    if (aio && mode.value === "flf2v") mode.value = "i2v";
+    if (flf) flf.disabled = false;
   }
   const hint = $("video-wan-model-hint");
   if (hint) {
     hint.textContent = aio
-      ? "AIO v10 usa un solo UNet NSFW; en esta integración solo I2V. Requiere el GGUF descargado."
-      : "El modelo dual usa high/low + LightX2V. AIO usa un solo UNet NSFW y solo I2V.";
+      ? "AIO v10 usa un solo UNet NSFW en I2V y FLF2V (salida muda). Requiere el GGUF descargado."
+      : "El modelo dual usa high/low + LightX2V. AIO usa un solo UNet NSFW en I2V y FLF2V.";
   }
 }
 

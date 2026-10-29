@@ -2,19 +2,13 @@
   "1": {
     "class_type": "UnetLoaderGGUF",
     "inputs": {
-      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf"
-    }
-  },
-  "2": {
-    "class_type": "UnetLoaderGGUF",
-    "inputs": {
-      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf"
+      "unet_name": "wan2.2-i2v-rapid-aio-v10-nsfw-Q4_K_M.gguf"
     }
   },
   "3": {
-    "class_type": "CLIPLoader",
+    "class_type": "CLIPLoaderGGUF",
     "inputs": {
-      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf",
       "type": "wan"
     }
   },
@@ -54,17 +48,7 @@
     "class_type": "ModelSamplingSD3",
     "inputs": {
       "model": [
-        "20",
-        0
-      ],
-      "shift": 8.0
-    }
-  },
-  "11": {
-    "class_type": "ModelSamplingSD3",
-    "inputs": {
-      "model": [
-        "21",
+        "1",
         0
       ],
       "shift": 8.0
@@ -128,39 +112,9 @@
       "noise_seed": 42,
       "steps": 4,
       "cfg": 1.0,
-      "sampler_name": "euler",
-      "scheduler": "simple",
+      "sampler_name": "euler_ancestral",
+      "scheduler": "beta",
       "start_at_step": 0,
-      "end_at_step": 10,
-      "return_with_leftover_noise": "enable"
-    }
-  },
-  "13": {
-    "class_type": "KSamplerAdvanced",
-    "inputs": {
-      "model": [
-        "11",
-        0
-      ],
-      "positive": [
-        "9",
-        0
-      ],
-      "negative": [
-        "9",
-        1
-      ],
-      "latent_image": [
-        "12",
-        0
-      ],
-      "add_noise": "disable",
-      "noise_seed": 0,
-      "steps": 4,
-      "cfg": 1.0,
-      "sampler_name": "euler",
-      "scheduler": "simple",
-      "start_at_step": 10,
       "end_at_step": 10000,
       "return_with_leftover_noise": "disable"
     }
@@ -169,7 +123,7 @@
     "class_type": "VAEDecode",
     "inputs": {
       "samples": [
-        "13",
+        "12",
         0
       ],
       "vae": [
@@ -197,34 +151,6 @@
       ],
       "filename_prefix": "waifu/video_flf",
       "format": "auto"
-    }
-  },
-  "20": {
-    "inputs": {
-      "lora_name": "wan22_lightx2v_high.safetensors",
-      "strength_model": 1.0,
-      "model": [
-        "1",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly High"
-    }
-  },
-  "21": {
-    "inputs": {
-      "lora_name": "wan22_lightx2v_low.safetensors",
-      "strength_model": 1.0,
-      "model": [
-        "2",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly Low"
     }
   }
 }
