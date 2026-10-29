@@ -1,0 +1,16 @@
+{
+  "schema": "waifu.capabilities/v1",
+  "version": "1.0.0",
+  "capabilities": [
+    "engine.video",
+    "engine.video.wan",
+    "engine.video.h3",
+    "slot.addons.v1",
+    "slot.addons.v2",
+    "api.addons.models",
+    "api.editor.refs",
+    "api.gallery.lineage",
+    "api.poses",
+    "api.skill.download"
+  ]
+}

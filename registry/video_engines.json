@@ -1,0 +1,37 @@
+{
+  "schema": "waifu.video-engines/v1",
+  "version": "1.0.0",
+  "engines": {
+    "wan": {
+      "label": "Wan 2.2",
+      "workflow": "workflows/wan22_aio_i2v_nsfw_432x768.api.json",
+      "workflow_flf2v": "workflows/wan22_flf2v_432x768.api.json",
+      "loaders": {
+        "unet": "UnetLoaderGGUF",
+        "clip": "CLIPLoaderGGUF",
+        "vae": "VAELoader"
+      },
+      "profiles": "registry/video_presets-v1.json",
+      "limits": {
+        "max_seconds": 15,
+        "fps": 16,
+        "max_width": 768,
+        "max_height": 1344
+      }
+    },
+    "h3": {
+      "label": "H3 (legacy)",
+      "archived": true,
+      "workflow": "workflows/h3_fl2va_vertical.api.json",
+      "loaders": {
+        "unet": "UNETLoader",
+        "clip": "CLIPLoader",
+        "vae": "VAELoader"
+      },
+      "profiles": "registry/h3_presets-v1.json",
+      "limits": {
+        "max_seconds": 15
+      }
+    }
+  }
+}

@@ -7,7 +7,14 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.addons import addons_root, import_addon, import_catalog, list_addons, set_addon_enabled
+from app.addons import (
+    addons_root,
+    import_addon,
+    import_catalog,
+    list_addons,
+    list_video_engines,
+    set_addon_enabled,
+)
 from app.engine import EngineError
 
 router = APIRouter()
@@ -76,3 +83,9 @@ async def api_addon(request: Request, addon_id: str) -> Any:
     if found is None:
         return JSONResponse(status_code=404, content={"error": "addon no instalado"})
     return found
+
+
+@router.get("/api/video/engines")
+async def api_video_engines(request: Request) -> dict:
+    return {"engines": list_video_engines(request.app.state.config.data_dir)}
+

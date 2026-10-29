@@ -14,6 +14,7 @@ from app.addons import (
     import_addon,
     import_catalog,
     list_addons,
+    list_video_engines,
     set_addon_enabled,
 )
 from app.engine import EngineError
@@ -175,6 +176,73 @@ class AddonManagerTests(unittest.TestCase):
             self.assertTrue(list_by_id["m-archived"]["movable"])
             self.assertEqual(list_by_id["m-uninstalled"]["state"], "no instalado")
             self.assertTrue(list_by_id["m-uninstalled"]["movable"])
+
+    def test_c51_07_requires_capabilities_declarada_y_no_declarada(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir) / "data"
+
+            # 1. Capacidad declarada (presente en registry/capabilities.json, ej: engine.video.wan)
+            manifest_ok = dict(
+                MANIFEST,
+                id="cap-ok-pack",
+                name="Cap OK Pack",
+                requires_capabilities=["engine.video.wan"],
+            )
+            import_addon(data_dir, make_zip(manifest_ok))
+
+            # 2. Capacidad no declarada (no existe en registry/capabilities.json)
+            manifest_missing = dict(
+                MANIFEST,
+                id="cap-missing-pack",
+                name="Cap Missing Pack",
+                requires_capabilities=["capacidad.inexistente.fantasma"],
+            )
+            import_addon(data_dir, make_zip(manifest_missing))
+
+            addons = {a["id"]: a for a in list_addons(data_dir)}
+
+            self.assertTrue(addons["cap-ok-pack"]["valid"])
+            self.assertEqual(addons["cap-ok-pack"]["reason"], "")
+            self.assertEqual(addons["cap-ok-pack"]["requires_capabilities"], ["engine.video.wan"])
+
+            self.assertFalse(addons["cap-missing-pack"]["valid"])
+            self.assertEqual(addons["cap-missing-pack"]["reason"], "capacidad no declarada")
+            self.assertEqual(
+                addons["cap-missing-pack"]["requires_capabilities"],
+                ["capacidad.inexistente.fantasma"],
+            )
+
+    def test_c51_07_list_video_engines_addon_enabled_echo_y_wan_base(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            data_dir = Path(tmp_dir) / "data"
+
+            manifest_echo = dict(
+                MANIFEST,
+                id="video-echo-pack",
+                name="Video Echo Pack",
+                slots=["video"],
+                video_engines={
+                    "echo": {
+                        "label": "Echo Video Engine",
+                        "workflow": "workflows/echo_video.json",
+                    }
+                },
+            )
+            import_addon(data_dir, make_zip(manifest_echo))
+
+            # Antes de habilitar: solo motores base
+            engines_before = list_video_engines(data_dir)
+            self.assertIn("wan", engines_before)
+            self.assertNotIn("echo", engines_before)
+
+            # Tras habilitar el addon: aparece echo y la base wan sigue
+            set_addon_enabled(data_dir, "video-echo-pack", True)
+            engines_after = list_video_engines(data_dir)
+
+            self.assertIn("wan", engines_after)
+            self.assertIn("echo", engines_after)
+            self.assertEqual(engines_after["echo"]["label"], "Echo Video Engine")
+            self.assertEqual(engines_after["echo"]["workflow"], "workflows/echo_video.json")
 
 
 

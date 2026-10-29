@@ -7,6 +7,8 @@ Dependencias: app.video, app.h3_presets, app.motion, app.routes.image y el regis
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import sys
 import uuid
 from typing import Any
@@ -47,6 +49,25 @@ from app.video_presets import PRESET_MANUAL
 
 
 from app import h3_presets as _h3_presets
+
+VIDEO_ENGINES_PATH = APP_ROOT / "registry" / "video_engines.json"
+_VIDEO_ENGINES_CACHE: dict[str, Any] | None = None
+
+
+def get_video_engines() -> dict[str, Any]:
+    global _VIDEO_ENGINES_CACHE
+    if _VIDEO_ENGINES_CACHE is not None:
+        return _VIDEO_ENGINES_CACHE
+    if not VIDEO_ENGINES_PATH.exists():
+        raise EngineError(f"registro no encontrado: {VIDEO_ENGINES_PATH}")
+    try:
+        data = json.loads(VIDEO_ENGINES_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise EngineError(f"registro ilegible: {VIDEO_ENGINES_PATH}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("engines"), dict):
+        raise EngineError(f"registro invalido: {VIDEO_ENGINES_PATH}")
+    _VIDEO_ENGINES_CACHE = data["engines"]
+    return _VIDEO_ENGINES_CACHE
 
 
 def _is_vdn_installed(comfy_root: Any) -> bool:
@@ -133,8 +154,9 @@ async def api_video_generate(request: Request, payload: dict = Body(...)) -> Any
             or payload.get("profile") == "ref2va"
             else "wan"
         )
-    if engine_kind not in ("wan", "h3"):
-        raise EngineError("engine invalido; usar wan|h3")
+    engines = get_video_engines()
+    if not isinstance(engine_kind, str) or engine_kind not in engines:
+        raise EngineError(f"motor desconocido: {engine_kind!r}")
     wan_model = payload.get("wan_model") or WAN_MODEL_DUAL
     if not isinstance(wan_model, str) or wan_model not in WAN_MODELS:
         raise EngineError("wan_model invalido; usar dual|nsfw_aio")

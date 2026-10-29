@@ -17,6 +17,8 @@ from app import __version__
 ADDONS_DIRNAME = "addons"
 MANIFEST_NAME = "addon.json"
 STATE_NAME = "state.json"
+VIDEO_ENGINES_PATH = Path(__file__).resolve().parents[1] / "registry" / "video_engines.json"
+CAPABILITIES_PATH = Path(__file__).resolve().parents[1] / "registry" / "capabilities.json"
 MAX_ZIP_BYTES = 64 * 1024 * 1024
 ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,63}")
 SLOTS = ("image", "editor", "video", "upscaler", "timeline", "gallery")
@@ -76,7 +78,29 @@ def _read_manifest(path: Path) -> dict[str, Any]:
             sha256 = m.get("sha256")
             if sha256 is not None and not isinstance(sha256, str):
                 raise EngineError("sha256 de modelo debe ser texto si esta presente")
+    req_caps = data.get("requires_capabilities")
+    if req_caps is not None:
+        if not isinstance(req_caps, list) or not all(isinstance(c, str) for c in req_caps):
+            raise EngineError("requires_capabilities debe ser una lista de str")
+    video_engines = data.get("video_engines")
+    if video_engines is not None:
+        if not isinstance(video_engines, dict):
+            raise EngineError("video_engines debe ser un dict")
     return data
+
+
+def _load_declared_capabilities() -> set[str]:
+    if not CAPABILITIES_PATH.is_file():
+        return set()
+    try:
+        data = json.loads(CAPABILITIES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    if isinstance(data, dict):
+        caps = data.get("capabilities", [])
+        if isinstance(caps, list):
+            return {c for c in caps if isinstance(c, str)}
+    return set()
 
 
 def _compatible(requires: str, core: str = __version__) -> bool:
@@ -213,16 +237,27 @@ def list_addons(
         addon_id = manifest["id"]
         models_list = addon_model_entries(path, manifest, comfy_models_dir)
 
+        valid = compatible
+        reason = "" if compatible else "requires_core incompatible"
+        declared_caps = _load_declared_capabilities()
+        for cap in manifest.get("requires_capabilities", []):
+            if cap not in declared_caps:
+                valid = False
+                reason = "capacidad no declarada"
+                break
+
         item: dict[str, Any] = {
             "id": addon_id,
             "name": manifest["name"],
             "version": manifest["version"],
             "requires_core": manifest["requires_core"],
+            "requires_capabilities": manifest.get("requires_capabilities", []),
+            "video_engines": manifest.get("video_engines", {}),
             "slots": manifest.get("slots", []),
             "description": str(manifest.get("description", "")),
             "enabled": state["enabled"],
-            "valid": compatible,
-            "reason": "" if compatible else "requires_core incompatible",
+            "valid": valid,
+            "reason": reason,
             "models": models_list,
         }
         result.append(item)
@@ -335,11 +370,36 @@ def set_addon_enabled(data_dir: str | Path, addon_id: str, enabled: bool) -> dic
     return {"id": addon_id, "enabled": bool(enabled)}
 
 
+def list_video_engines(data_dir: str | Path) -> dict[str, Any]:
+    engines: dict[str, Any] = {}
+    if VIDEO_ENGINES_PATH.is_file():
+        try:
+            data = json.loads(VIDEO_ENGINES_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("engines"), dict):
+                engines = dict(data["engines"])
+        except (OSError, ValueError):
+            engines = {}
+
+    for addon in list_addons(data_dir):
+        if not addon.get("enabled"):
+            continue
+        addon_engines = addon.get("video_engines")
+        if isinstance(addon_engines, dict):
+            for k, v in addon_engines.items():
+                if isinstance(v, dict):
+                    engines[k] = dict(v)
+                else:
+                    engines[k] = v
+
+    return engines
+
+
 __all__ = [
     "ADDONS_DIRNAME",
     "addon_model_entries",
     "addons_root",
     "import_addon",
     "list_addons",
+    "list_video_engines",
     "set_addon_enabled",
 ]
