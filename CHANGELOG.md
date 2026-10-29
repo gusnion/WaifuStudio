@@ -1,6 +1,18 @@
 # Changelog
 
-## 2.5.0 — 2026-10-28 (cierre manual autorizado)
+## 2.5.1 — 2026-10-29
+
+Primer y único tag de la línea 2.5. Cubre las funciones congeladas de 2.5 y las correcciones de 2.5.1.
+
+- `[COMPAT]` Registro de capacidades y motores de vídeo; validación por registro y endpoint de lectura.
+- `[REGISTRY]` Contrato de propiedad/estado de pesos por addon y ruta efectiva del directorio de modelos.
+- `[MODEL]` Evaluación de LoRA y text encoder de vídeo; sin adopción sin comparación visual.
+- `[UI]` AUDIO en tres pasos; selector de poses en Referencia; OC Maker como pestaña real; fichas flotantes de modelo, LoRA y prompts.
+- `[FIX]` Correcciones de Estudio, audio a demanda, vídeo local por tramos y textos de referencia.
+- `[DOCS]` `SKILL.md` descargable y ampliado; guía de conexión de agentes; README reescrito.
+- `[SEC]` Guard de pre-push y checklist de limpieza.
+
+## 2.5.0 — 2026-10-28 (funciones congeladas, sin tag)
 
 - Cierre manual de 2.5: 42 ítems `[x]` + C-42 `[!]` autorizado por el usuario.
 - Sin tag `v2.5.0` ni release remoto: el remoto rechazó la clave pública y `gh release view v2.5.0` dio `release not found`.

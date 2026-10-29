@@ -1,4 +1,4 @@
-# AGENTS.md — Guía de Instalación, Diagnóstico y Desarrollo para Agentes IA (WaifuStudio v2.1.0)
+# AGENTS.md — Guía de Instalación, Diagnóstico y Desarrollo para Agentes IA (WaifuStudio v2.5.1)
 
 Este archivo es la autoridad técnica embebida del repositorio **WaifuStudio** (versión compactada del plano de control `.agents`). Tiene dos propósitos:
 1. **Asistir al usuario final** en la instalación, configuración y resolución de problemas en máquinas Windows con GPUs NVIDIA RTX 3000 / 4000 / 5000 (8 GB+ VRAM).
@@ -18,7 +18,7 @@ Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**,
   1. **Imagen**: Anima Aesthetic v1.1, Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok, con `prompt_profile`, badge de subrama y LoRAs filtradas.
   2. **Vídeo**: **Wan 2.2 NSFW AIO v10** como único motor, I2V, un `KSampler`, mudo; aviso de licencia comunitaria.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
-  4. **Audio**: MMAudio ambiente en modo B; Irodori deshabilitado con motivo hasta instalar `tools/irodori` y el servicio `:8291`.
+  4. **Audio**: tres pasos; Modo B MMAudio con job y Modo A Irodori síncrono; stems y envío a Timeline.
   5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, audio y proyectos; sin BETA.
   6. **Upscaler**: **RealESRGAN x2/x4** + **RIFE** con comparador.
   7. **Galería**: SQLite (`data/waifu.db`, WAL) y copias seguras en `data/gallery/<id>/`.
@@ -58,7 +58,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1.731 tests offline en CPU (~60 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1879 tests offline en CPU (~85 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```
