@@ -43,8 +43,7 @@ from app.registry import (
     infer_subfamily,
 )
 from app.params import SAMPLER_NAMES, SCHEDULER_NAMES
-from app.preprompts import default_preprompt
-
+from app.preprompts import default_preprompt_for_profile
 
 from app import loras as _loras_module
 
@@ -323,6 +322,18 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             source = "auto-detectado (ComfyUI/models/diffusion_models)"
             notes = "Modelo Anima auto-detectado en disco"
 
+        prompt_profile = infer_prompt_profile(
+            model_id=model_id,
+            family=model_family,
+            display_name=path.stem,
+            unet_name=rel_name,
+            subfamily=subfamily,
+        )
+        # Preprompt por perfil/modelo (W2): Animagine -> animagine, natural -> ninguno,
+        # tags genericos -> sdxl_default, Anima -> glossy (no forzar sdxl_tags a todos).
+        _pp_family, preprompt_name = default_preprompt_for_profile(
+            prompt_profile, model_family
+        )
         entry = ModelEntry(
             id=model_id,
             family=model_family,
@@ -330,16 +341,10 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             profile=profile,
             source=source,
             license="no verificada (archivo local del usuario)",
-            preprompt=default_preprompt(model_family),
+            preprompt=preprompt_name,
             defaults=defaults,
             notes=notes,
-            prompt_profile=infer_prompt_profile(
-                model_id=model_id,
-                family=model_family,
-                display_name=path.stem,
-                unet_name=rel_name,
-                subfamily=subfamily,
-            ),
+            prompt_profile=prompt_profile,
             subfamily=subfamily,
         )
         registry.add(entry)

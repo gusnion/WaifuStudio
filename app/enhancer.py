@@ -25,7 +25,7 @@ from typing import Any, Callable
 from app import tags as tag_catalog
 from app.config import load_config
 from app.engine import EngineError
-from app.preprompts import get_preprompt
+from app.preprompts import default_preprompt_for_profile, get_preprompt
 from app.prompt_zones import (
     QUALITY_OPTIONS,
     SAFETY_OPTIONS,
@@ -84,11 +84,25 @@ SYS_PROMPT_QWEN_EDIT = (
     "6) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
 )
 
+SYS_PROMPT_ANIMAGINE = (
+    "You are the local prompt planner for Animagine XL (an SDXL anime image generator trained on danbooru-style tags).\n"
+    "Output rules:\n"
+    "1) Output EXACTLY ONE line of danbooru-style tags in English, separated by commas. No section labels (never write \"quality tags:\", \"rating tag:\", \"outfit/pose:\", \"art style:\"), no prose, no sentences, no explanations.\n"
+    "2) Start with the subject count tags: \"1girl\" for one woman; add \"1boy\" and/or \"2girls\" etc. when the request implies other people. A sex act or sex position ALWAYS involves two people: include \"1boy\", \"hetero\" (or \"2girls\" when both are women) and the act tags when the user requests one.\n"
+    "3) Then the character and series tags if any, followed by general tags with danbooru vocabulary: clothing or \"nude\"/\"completely nude\", pose, expression and, when the user requests it, the explicit act and body parts. Keep the user's intent exactly as requested; never censor, soften or replace it with euphemisms. For nsfw content ALWAYS include the tag \"uncensored\" and NEVER include censorship tags: the image must be uncensored.\n"
+    "4) Quality tags for Animagine: \"masterpiece, high score, great score, absurdres\". NEVER use Anima score tags (such as \"score_9\", \"score_8\", \"score_7\"), NEVER use \"@\" artist prefixes (such as \"@artist\") and NEVER use photorealistic tags.\n"
+    "5) Include the rating as a tag: \"nsfw\" for adult content, \"sfw\" for safe content.\n"
+    "6) Art style is anime illustration: use \"anime\", \"2D\", \"cel shading\" when useful; never photorealism.\n"
+    "7) The user message contains internal context lines in Spanish (\"rating tag:\", \"framing:\", \"video:\"). They are reference ONLY: NEVER copy them, their words, or any translation of them into the output. The output must contain only English danbooru tags about the scene.\n"
+    "8) HARD RULE: all characters are adults (21+). NEVER include minors, child/teen/loli terms, school settings, or any content implying minors."
+)
+
 PROMPT_PROFILE_SYS_PROMPTS: dict[str, str] = {
     "anima": SYS_PROMPT_ANIMA,
     "sdxl_tags": SYS_PROMPT_SDXL_TAGS,
     "sdxl_natural": SYS_PROMPT_SDXL_NATURAL,
     "qwen_edit": SYS_PROMPT_QWEN_EDIT,
+    "animagine": SYS_PROMPT_ANIMAGINE,
 }
 
 
@@ -100,6 +114,7 @@ def get_sys_prompt(prompt_profile: str | None = None) -> str:
     - ``sdxl_tags``: tags descriptivos sin score_* ni @.
     - ``sdxl_natural``: frase descriptiva en prosa, sin tags (RealVisXL / Juggernaut).
     - ``qwen_edit``: instrucción natural de edición.
+    - ``animagine``: tags Danbooru de Animagine (calidad propia, sin score_N ni @).
 
     Sin perfil (None o vacío), devuelve ``SYS_PROMPT`` para retrocompatibilidad total.
     Si el perfil es desconocido, lanza ``EngineError``.
@@ -131,6 +146,7 @@ RAG_ENTRIES: list[dict[str, Any]] = [
     },
     {
         "keywords": ["calidad", "score", "score_7", "score_8", "score_9", "meta"],
+        "profiles": ("anima",),
         "text": (
             "Calidad con la familia score_: score_7, score_8, score_9 para calidad alta. "
             "Tags de calidad anime: masterpiece, best quality, very aesthetic, absurdres."
@@ -145,6 +161,7 @@ RAG_ENTRIES: list[dict[str, Any]] = [
     },
     {
         "keywords": ["preprompt", "glossy", "anima_default", "not_glossy", "ninguno"],
+        "profiles": ("anima",),
         "text": (
             "Preprompts Anima: glossy (default), anima_default, not_glossy y ninguno. "
             "El LLM no los decide: se aplican de forma determinista como prefijo del "
@@ -153,6 +170,7 @@ RAG_ENTRIES: list[dict[str, Any]] = [
     },
     {
         "keywords": ["negativo", "anatomy", "anatomia", "hands", "manos", "fingers", "dedos"],
+        "profiles": ("anima",),
         "text": (
             "Negativo de anatomia del preprompt glossy: bad anatomy, bad hands, mutated "
             "hands, fused fingers, extra fingers, watermark, signature, logo."
@@ -167,6 +185,7 @@ RAG_ENTRIES: list[dict[str, Any]] = [
     },
     {
         "keywords": ["artista", "artist", "estilo", "firma"],
+        "profiles": ("anima",),
         "text": (
             "Los tags de artista se escriben con @ (p. ej. @artist_name) y van en la zona "
             "general/estilo; el negativo glossy rechaza artist name."
@@ -188,6 +207,7 @@ RAG_ENTRIES: list[dict[str, Any]] = [
     },
     {
         "keywords": ["espacios", "score", "separador", "comas", "underscore"],
+        "profiles": ("anima",),
         "text": (
             "Los tags se separan con ', '; la unica excepcion es score_X, que usa guion "
             "bajo: score_8, nunca 'score 8'."
@@ -268,18 +288,31 @@ def _tokens(text: Any) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", str(text).lower()))
 
 
-def retrieve(query: str, k: int = 3) -> list[str]:
+NO_RAG_PROFILES = frozenset({"sdxl_natural", "qwen_edit"})
+
+
+def retrieve(query: str, k: int = 3, profile: str | None = None) -> list[str]:
     """Textos RAG ordenados por solape de keywords (score desc, orden estable).
 
     Query vacia o sin tokens, o `k <= 0` -> []. Solo entran entradas con score > 0.
+    `profile` (prompt_profile) filtra el RAG: los perfiles de prosa/instruccion
+    (`NO_RAG_PROFILES`) no reciben notas (todas son de tags Anima) y las entradas
+    con clave `profiles` solo aplican a esos perfiles (sin perfil = ``anima``,
+    retrocompatible), asi Animagine/SDXL no heredan notas de score_N ni de @.
     """
     if k <= 0:
+        return []
+    active = (profile or "anima").strip() or "anima"
+    if active in NO_RAG_PROFILES:
         return []
     query_tokens = _tokens(query)
     if not query_tokens:
         return []
     scored: list[tuple[int, int, str]] = []
     for index, entry in enumerate(RAG_ENTRIES):
+        allowed = entry.get("profiles")
+        if allowed is not None and active not in allowed:
+            continue
         entry_tokens: set[str] = set()
         for keyword in entry["keywords"]:
             entry_tokens |= _tokens(keyword)
@@ -430,11 +463,58 @@ def apply_preprompt(
     return positive, negative
 
 
+DEFAULT_FAMILY_FALLBACK = "anima"
+
+
+def _strip_anima_tags(text: str) -> tuple[str, list[str]]:
+    """Separa ``score_N`` y ``@artista`` (propios de Anima) de una lista de tags.
+
+    Devuelve ``(texto_limpio, descartados)``; tolera pesos ``(score_9:1.1)``.
+    """
+    kept: list[str] = []
+    banned: list[str] = []
+    for part in str(text).split(","):
+        fragment = part.strip()
+        if not fragment:
+            continue
+        match = WEIGHTED_TAG_RE.match(fragment)
+        core = match.group(1).strip() if match is not None else fragment
+        if SCORE_TAG_RE.match(core) or core.startswith("@"):
+            banned.append(fragment)
+        else:
+            kept.append(fragment)
+    return ", ".join(kept), banned
+
+
+def _resolve_preprompt(
+    family: str | None, preprompt: str | None, profile: str
+) -> tuple[str, str]:
+    """Resuelve ``(familia, preprompt)`` efectivos de `enhance`.
+
+    Sin `preprompt` explicito manda el default del perfil (o de la familia si no
+    hay perfil; sin ambos, ``anima``/``glossy``). Con `preprompt` explicito manda
+    el; su familia es `family`, o la del perfil si falta, con fallback a la
+    familia Anima (retrocompatible con clientes que solo envian el nombre).
+    """
+    fam = str(family or "").strip() or None
+    name = str(preprompt or "").strip()
+    if not name:
+        return default_preprompt_for_profile(profile, fam)
+    if fam is not None:
+        return fam, name
+    profile_family = default_preprompt_for_profile(profile, None)[0]
+    try:
+        get_preprompt(profile_family, name)
+    except EngineError:
+        return DEFAULT_FAMILY_FALLBACK, name
+    return profile_family, name
+
+
 def enhance(
     user_text: str,
     *,
-    family: str = "anima",
-    preprompt: str = "glossy",
+    family: str | None = None,
+    preprompt: str | None = None,
     rating: str | None = None,
     llm: LlmFn | None = None,
     k: int | None = None,
@@ -445,8 +525,17 @@ def enhance(
 ) -> dict[str, Any]:
     """Construye mensajes (SYS_PROMPT + texto + notas RAG + rating) y aplica preprompt.
 
+    `family`/`preprompt` (None = automatico): sin `preprompt` explicito se usa el
+    default del `prompt_profile` (``anima``->glossy, ``sdxl_tags``->sdxl_default,
+    ``animagine``->animagine, ``sdxl_natural``/``qwen_edit``->ninguno) y la familia
+    del perfil; sin perfil, ``anima``/``glossy`` (o el default de `family`) por
+    retrocompatibilidad. Un `preprompt` explicito manda; su familia es `family`
+    o, si falta, la del perfil. Animagine descarta ``score_N`` y ``@artista`` del
+    LLM (van a `dropped`) y no recibe RAG/preprompt de Anima; los perfiles de
+    prosa no reciben RAG de tags.
+
     `prompt_profile` selecciona el system prompt especializado (``anima``,
-    ``sdxl_tags``, ``sdxl_natural``, ``qwen_edit``; default/None usa el
+    ``sdxl_tags``, ``sdxl_natural``, ``qwen_edit``, ``animagine``; default/None usa el
     ``SYS_PROMPT`` legacy de Anima por retrocompatibilidad). En perfiles de
     prosa/instrucción (``sdxl_natural`` y ``qwen_edit``) se preserva el texto
     natural sin forzado de vocabulario Danbooru ni reordenación canónica de tags.
@@ -487,7 +576,9 @@ def enhance(
         raise EngineError("LLM no inyectado")
 
     sys_prompt = get_sys_prompt(prompt_profile)
-    is_tag_profile = (prompt_profile or "").strip() not in (
+    profile_key = (prompt_profile or "").strip()
+    family, preprompt = _resolve_preprompt(family, preprompt, profile_key)
+    is_tag_profile = profile_key not in (
         "sdxl_natural",
         "qwen_edit",
     )
@@ -546,7 +637,7 @@ def enhance(
 
     if preset["instruction"]:
         lines.append(f"instruccion: {preset['instruction']}")
-    notes = retrieve(text, k=preset["k"] if k is None else k)
+    notes = retrieve(text, k=preset["k"] if k is None else k, profile=profile_key)
     if notes:
         lines.append("Notas de referencia (no copiar a la salida):")
         lines.extend(f"- {note}" for note in notes)
@@ -559,7 +650,12 @@ def enhance(
         raise EngineError("enhance: el LLM no devolvio texto")
 
     if is_tag_profile:
-        validated, dropped = _validate_tags(_normalize_tags(raw))
+        tag_text = _normalize_tags(raw)
+        banned: list[str] = []
+        if profile_key == "animagine":
+            tag_text, banned = _strip_anima_tags(tag_text)
+        validated, dropped = _validate_tags(tag_text)
+        dropped = banned + dropped
         prepared = _enforce_rating(validated, rating)
         positive, negative = apply_preprompt(prepared, family=family, name=preprompt)
         positive = canonical_order(positive)
@@ -812,11 +908,13 @@ __all__ = [
     "DEFAULT_STRENGTH_PRESET",
     "LLM_TIMEOUT_ENV",
     "LLM_URL_ENV",
+    "NO_RAG_PROFILES",
     "PROMPT_PROFILE_SYS_PROMPTS",
     "RAG_ENTRIES",
     "STRENGTH_PRESETS",
     "SYS_PROMPT",
     "SYS_PROMPT_ANIMA",
+    "SYS_PROMPT_ANIMAGINE",
     "SYS_PROMPT_QWEN_EDIT",
     "SYS_PROMPT_SDXL_NATURAL",
     "SYS_PROMPT_SDXL_TAGS",

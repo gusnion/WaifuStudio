@@ -32,7 +32,7 @@
       "source": "https://huggingface.co/cagliostrolab/animagine-xl-4.0",
       "license": "Fair AI Public License 1.0-SD (comercial con condiciones)",
       "preprompt": "animagine",
-      "prompt_profile": "sdxl_tags",
+      "prompt_profile": "animagine",
       "defaults": {
         "steps": 28,
         "cfg": 5.0,

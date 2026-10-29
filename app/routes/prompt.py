@@ -121,6 +121,38 @@ def _ensure_vision_server(vision_service: Any = None) -> None:
 router = APIRouter()
 
 
+def _family_preprompt(
+    payload: dict, prompt_profile: str | None
+) -> tuple[str | None, str | None, str | None, JSONResponse | None]:
+    """Extrae ``family``/``preprompt`` opcionales del payload (None = automatico).
+
+    Devuelve ``(prompt_profile, family, preprompt, error)``. Sin `prompt_profile`
+    pero con familia SDXL (``sdxl|illustrious|pony``) se usa ``sdxl_tags`` para no
+    heredar el system prompt/RAG de Anima. `error` es un 400 si algun valor no es
+    una cadena.
+    """
+    values: dict[str, str | None] = {}
+    for key in ("family", "preprompt"):
+        raw = payload.get(key)
+        if raw is None or raw == "":
+            values[key] = None
+        elif isinstance(raw, str) and raw.strip():
+            values[key] = raw.strip()
+        else:
+            return (
+                prompt_profile,
+                None,
+                None,
+                JSONResponse(
+                    status_code=400, content={"error": f"{key} invalido: {raw!r}"}
+                ),
+            )
+    family = values["family"]
+    if prompt_profile is None and family in ("sdxl", "illustrious", "pony"):
+        prompt_profile = "sdxl_tags"
+    return prompt_profile, family, values["preprompt"], None
+
+
 @router.get("/api/negative")
 async def api_negative(
     preprompt: str = DEFAULT_PREPROMPT, family: str = DEFAULT_FAMILY
@@ -194,12 +226,17 @@ async def api_enhance(request: Request, payload: dict = Body(...)) -> Any:
             )
     else:
         prompt_profile = None
+    prompt_profile, family, preprompt, ctx_error = _family_preprompt(
+        payload, prompt_profile
+    )
+    if ctx_error is not None:
+        return ctx_error
     if llm is None:
         return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
     result = enhance_prompt(
         str(payload.get("text") or ""),
-        family=str(payload.get("family") or DEFAULT_FAMILY),
-        preprompt=str(payload.get("preprompt") or DEFAULT_PREPROMPT),
+        family=family,
+        preprompt=preprompt,
         rating=rating,
         strength=strength,
         llm=llm,
@@ -262,6 +299,11 @@ async def api_prompt_enhance_zones(request: Request, payload: dict = Body(...)) 
             )
     else:
         prompt_profile = None
+    prompt_profile, family, preprompt, ctx_error = _family_preprompt(
+        payload, prompt_profile
+    )
+    if ctx_error is not None:
+        return ctx_error
     tags = payload.get("tags")
     if tags is None:
         tags = []
@@ -276,6 +318,8 @@ async def api_prompt_enhance_zones(request: Request, payload: dict = Body(...)) 
         return JSONResponse(status_code=503, content={"error": "LLM no disponible"})
     result = enhance_prompt(
         text,
+        family=family,
+        preprompt=preprompt,
         strength=strength,
         rating=rating,
         llm=llm,

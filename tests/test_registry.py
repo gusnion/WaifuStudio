@@ -264,14 +264,14 @@ class PromptProfileInferenceTests(unittest.TestCase):
         self.assertEqual(anima_entry.prompt_profile, "anima")
         self.assertEqual(infer_prompt_profile("anima-model", family="anima"), "anima")
 
-        # 2. Animagine -> sdxl_tags (no confundir con anima por colision de subcadena)
+        # 2. Animagine -> animagine
         animagine_entry = make_entry(
             model_id="animagine-xl-4-opt",
             family="sdxl",
             display_name="Animagine XL 4.0 Opt",
         )
-        self.assertEqual(animagine_entry.prompt_profile, "sdxl_tags")
-        self.assertEqual(infer_prompt_profile("animagine-xl-4-opt"), "sdxl_tags")
+        self.assertEqual(animagine_entry.prompt_profile, "animagine")
+        self.assertEqual(infer_prompt_profile("animagine-xl-4-opt"), "animagine")
 
         # 3. RealVisXL -> sdxl_natural
         realvis_entry = make_entry(
@@ -330,7 +330,7 @@ class PromptProfileInferenceTests(unittest.TestCase):
         rec_path = ROOT / "registry" / "recommended-v1.json"
         data = json.loads(rec_path.read_text(encoding="utf-8"))
         profiles = {m["id"]: m.get("prompt_profile") for m in data["models"]}
-        self.assertEqual(profiles.get("animagine-xl-4-opt"), "sdxl_tags")
+        self.assertEqual(profiles.get("animagine-xl-4-opt"), "animagine")
         self.assertEqual(profiles.get("realvisxl-v50"), "sdxl_natural")
         self.assertEqual(profiles.get("juggernaut-xl-ragnarok"), "sdxl_natural")
 

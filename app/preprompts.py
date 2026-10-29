@@ -220,6 +220,34 @@ def default_preprompt(family: str) -> str:
     return DEFAULT_PREPROMPT_BY_FAMILY.get(resolved, DEFAULT_PREPROMPT)
 
 
+# Defaults por prompt_profile (W2): (familia de preprompts, nombre). `sdxl_default`
+# es de tags: solo lo usa `sdxl_tags`; el lenguaje natural (RealVis/Juggernaut) y
+# la edicion Qwen no heredan calidad de tags (`ninguno`) y Animagine usa el suyo.
+DEFAULT_PREPROMPT_BY_PROFILE: dict[str, tuple[str, str]] = {
+    "anima": ("anima", "glossy"),
+    "sdxl_tags": ("sdxl", "sdxl_default"),
+    "animagine": ("sdxl", "animagine"),
+    "sdxl_natural": ("sdxl", "ninguno"),
+    "qwen_edit": ("sdxl", "ninguno"),
+}
+
+
+def default_preprompt_for_profile(
+    prompt_profile: str | None, family: str | None = None
+) -> tuple[str, str]:
+    """``(familia, preprompt)`` por defecto de un prompt_profile.
+
+    Perfil conocido -> su par de ``DEFAULT_PREPROMPT_BY_PROFILE``. Sin perfil
+    (``None``/vacio/desconocido) -> default de la familia (``default_preprompt``)
+    o, sin familia, ``DEFAULT_FAMILY``/``DEFAULT_PREPROMPT`` (retrocompatible).
+    """
+    profile = str(prompt_profile or "").strip()
+    if profile in DEFAULT_PREPROMPT_BY_PROFILE:
+        return DEFAULT_PREPROMPT_BY_PROFILE[profile]
+    fam = str(family or "").strip() or DEFAULT_FAMILY
+    return fam, default_preprompt(fam)
+
+
 def list_families() -> list[str]:
     """Nombres de familia registrados, ordenados."""
     return sorted(FAMILY_PREPROMPTS)
@@ -269,8 +297,10 @@ __all__ = [
     "DEFAULT_FAMILY",
     "DEFAULT_PREPROMPT",
     "DEFAULT_PREPROMPT_BY_FAMILY",
+    "DEFAULT_PREPROMPT_BY_PROFILE",
     "FAMILY_PREPROMPTS",
     "default_preprompt",
+    "default_preprompt_for_profile",
     "delete_custom",
     "get_preprompt",
     "list_custom",

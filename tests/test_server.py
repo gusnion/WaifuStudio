@@ -242,7 +242,7 @@ class ReadRoutesTests(ServerTestCase):
             self.assertIn("prompt_profile", model)
             self.assertIn(
                 model["prompt_profile"],
-                ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit"),
+                ("anima", "animagine", "sdxl_tags", "sdxl_natural", "qwen_edit"),
             )
 
     def test_preprompts(self):

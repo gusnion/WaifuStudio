@@ -18,7 +18,7 @@ from app.engine import EngineError
 REGISTRY_VERSION = 1
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "registry" / "models.json"
 
-PROMPT_PROFILES = ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit")
+PROMPT_PROFILES = ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit", "animagine")
 DEFAULT_PROMPT_PROFILE = "sdxl_tags"
 
 KNOWN_SUBFAMILIES = (
@@ -198,7 +198,8 @@ def infer_prompt_profile(
     """Infiere el prompt_profile para compatibilidad retroactiva con modelos conocidos.
 
     Reglas:
-    - animagine -> "sdxl_tags" (evaluado antes de anima por colision de prefijo)
+    - animagine -> "animagine" (perfil propio: tags SDXL sin score_N/@ de Anima;
+      evaluado antes de anima por colision de prefijo)
     - realvis / juggernaut -> "sdxl_natural"
     - subfamilia illustrious / pony / noobai -> "sdxl_tags"
     - anima (familia, subfamilia, o nombre/id si la familia no es sdxl) -> "anima"
@@ -228,9 +229,9 @@ def infer_prompt_profile(
     unet_l = unet.lower()
     combined = f"{mid_l} {disp_l} {unet_l}"
 
-    # 1. Animagine (SDXL anime por tags, sin scores/artistas)
+    # 1. Animagine (SDXL anime por tags propios, sin scores/artistas de Anima)
     if "animagine" in combined:
-        return "sdxl_tags"
+        return "animagine"
 
     # 2. RealVisXL / Juggernaut (modelos SDXL de lenguaje natural)
     if "realvis" in combined or "juggernaut" in combined:
