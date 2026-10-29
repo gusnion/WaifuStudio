@@ -7346,6 +7346,31 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertEqual([a["id"] for a in leaf_lineage["ancestors"]], [c1_id, legacy_id])
         self.assertEqual(leaf_lineage["children"], [])
 
+    def test_w9_editor_worktree_lineage_ui_static(self):
+        """W9 (2.5.0_bugfix): panel #editor-lineage-panel en preview de Editor, refreshEditorLineage en editor.js y estilos en editor.css."""
+        base_dir = Path(__file__).resolve().parents[1]
+
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('<aside id="editor-lineage-panel"', html)
+        self.assertIn(">Linaje<", html)
+        self.assertIn('id="editor-lineage-body"', html)
+
+        ed_js = (base_dir / "static" / "js" / "tabs" / "editor.js").read_text(encoding="utf-8")
+        self.assertIn("async function refreshEditorLineage(genId)", ed_js)
+        self.assertIn("/api/gallery/${validId}/lineage", ed_js)
+        self.assertIn("`Trabajando desde #${activeId}`", ed_js)
+        self.assertIn("Volver al padre", ed_js)
+        self.assertIn("setEditorEditSource(url, item)", ed_js)
+        self.assertIn("await refreshEditorLineage(genId)", ed_js)
+        self.assertIn("refreshEditorLineage(genId)", ed_js)
+        self.assertIn("payload.parent_gen_id = editorSourceGenId", ed_js)
+        self.assertIn("refreshEditorLineage,", ed_js)
+
+        ed_css = (base_dir / "static" / "css" / "tabs" / "editor.css").read_text(encoding="utf-8")
+        self.assertIn("#editor-lineage-panel", ed_css)
+        self.assertIn("#editor-lineage-body", ed_css)
+        self.assertIn(".editor-lineage-btn", ed_css)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -105,3 +105,101 @@
 #panel-editor[data-editor-mode="multiview"] .editor-multiview-excluded {
   display: none !important;
 }
+
+#editor-preview {
+  position: relative;
+}
+
+#editor-lineage-panel {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 6;
+  width: min(230px, 42%);
+  max-height: calc(100% - 1.2rem);
+  overflow-y: auto;
+  padding: 0.5rem 0.6rem;
+  background: rgba(20, 22, 28, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.editor-lineage-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+
+#editor-lineage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+}
+
+.editor-lineage-current {
+  margin: 0;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.editor-lineage-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.editor-lineage-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.editor-lineage-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.editor-lineage-btn,
+.editor-lineage-node {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.42rem;
+  font-size: 0.74rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.editor-lineage-btn {
+  cursor: pointer;
+}
+
+.editor-lineage-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.editor-lineage-parent-btn {
+  align-self: flex-start;
+}
+
+.editor-lineage-node.is-active {
+  align-self: flex-start;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.editor-lineage-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}

@@ -55,6 +55,7 @@ import { t } from "../i18n.js";
 let editorResolutionKit = null;
 let pendingEditorLoras = null;
 let editorLorasLoaded = false;
+let editorSourceGenId = null;
 const EDITOR_LORA_FAMILIES = new Set(["qwen", "qwen-image", "qwen_image", "editor"]);
 const MULTIVIEW_PRESET_PROMPTS = {
   l0_editorial: "natural dynamic standing anime pose, balanced full-body composition, clean 2D linework",
@@ -319,9 +320,154 @@ async function addEditorRefFromUrl(url, name) {
   setEditorStatus(`Referencias: ${state.editorRefs.length}/${EDITOR_REF_LIMIT}`);
 }
 
+function parseEditorGenId(raw) {
+  if (raw == null || typeof raw === "boolean") {
+    return null;
+  }
+  const num = Number(raw);
+  return Number.isInteger(num) && num > 0 ? num : null;
+}
+
+function createLineageNodeButton(item, labelPrefix = "") {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "editor-lineage-btn";
+  const id = item && item.id;
+  btn.dataset.genId = String(id ?? "");
+  const prefix = labelPrefix ? `${labelPrefix} ` : "";
+  btn.textContent = `${prefix}#${id}`;
+  if (item && item.prompt) {
+    btn.title = item.prompt;
+  }
+  btn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const url = imageViewUrl(item) || ((item && item.urls && item.urls[0]) || "");
+    if (!url) {
+      setEditorStatus(`La generación #${id} no tiene imagen disponible`, true);
+      return;
+    }
+    if ($("editor-mode") && $("editor-mode").value !== "edit") {
+      $("editor-mode").value = "edit";
+      updateEditorMode({ sync: false });
+    }
+    setEditorEditSource(url, item).catch((error) =>
+      setEditorStatus(error.message, true)
+    );
+  });
+  return btn;
+}
+
+async function refreshEditorLineage(genId) {
+  const panel = $("editor-lineage-panel");
+  const body = $("editor-lineage-body");
+  const validId = parseEditorGenId(genId);
+  if (!validId) {
+    editorSourceGenId = null;
+    state.editorSourceGenId = null;
+    if (body) {
+      body.replaceChildren();
+    }
+    if (panel) {
+      panel.classList.add("hidden");
+    }
+    return null;
+  }
+  editorSourceGenId = validId;
+  state.editorSourceGenId = validId;
+  if (!panel || !body) {
+    return null;
+  }
+  try {
+    const data = await api(`/api/gallery/${validId}/lineage`);
+    const node = (data && data.node) || { id: validId };
+    const activeId = node.id ?? validId;
+    const rawAncestors = Array.isArray(data && data.ancestors) ? data.ancestors : [];
+    const parentItem = rawAncestors.length > 0 ? rawAncestors[0] : null;
+    const ancestorsChain = [...rawAncestors].reverse();
+    const children = Array.isArray(data && data.children) ? data.children : [];
+
+    body.replaceChildren();
+
+    const workingStatus = document.createElement("p");
+    workingStatus.className = "editor-lineage-current";
+    workingStatus.textContent = `Trabajando desde #${activeId}`;
+    body.appendChild(workingStatus);
+
+    if (parentItem) {
+      const backBtn = createLineageNodeButton(parentItem, "Volver al padre");
+      backBtn.classList.add("editor-lineage-parent-btn");
+      body.appendChild(backBtn);
+    }
+
+    const activeRow = document.createElement("div");
+    activeRow.className = "editor-lineage-group";
+    const activeLabel = document.createElement("span");
+    activeLabel.className = "editor-lineage-label";
+    activeLabel.textContent = "Nodo activo";
+    const activeBadge = document.createElement("span");
+    activeBadge.className = "editor-lineage-node is-active";
+    activeBadge.dataset.genId = String(activeId);
+    activeBadge.textContent = `#${activeId}`;
+    activeRow.append(activeLabel, activeBadge);
+    body.appendChild(activeRow);
+
+    const ancestorsGroup = document.createElement("div");
+    ancestorsGroup.className = "editor-lineage-group";
+    const ancestorsLabel = document.createElement("span");
+    ancestorsLabel.className = "editor-lineage-label";
+    ancestorsLabel.textContent = "Ancestros (root->padre)";
+    const ancestorsList = document.createElement("div");
+    ancestorsList.className = "editor-lineage-list";
+    if (ancestorsChain.length) {
+      for (const ancestor of ancestorsChain) {
+        const btn = createLineageNodeButton(ancestor);
+        btn.classList.add("editor-lineage-ancestor");
+        ancestorsList.appendChild(btn);
+      }
+    } else {
+      const emptyAnc = document.createElement("span");
+      emptyAnc.className = "editor-lineage-empty";
+      emptyAnc.textContent = "Raíz";
+      ancestorsList.appendChild(emptyAnc);
+    }
+    ancestorsGroup.append(ancestorsLabel, ancestorsList);
+    body.appendChild(ancestorsGroup);
+
+    const childrenGroup = document.createElement("div");
+    childrenGroup.className = "editor-lineage-group";
+    const childrenLabel = document.createElement("span");
+    childrenLabel.className = "editor-lineage-label";
+    childrenLabel.textContent = "Ramas / Hijos";
+    const childrenList = document.createElement("div");
+    childrenList.className = "editor-lineage-list";
+    if (children.length) {
+      for (const child of children) {
+        const btn = createLineageNodeButton(child);
+        btn.classList.add("editor-lineage-child");
+        childrenList.appendChild(btn);
+      }
+    } else {
+      const emptyChildren = document.createElement("span");
+      emptyChildren.className = "editor-lineage-empty";
+      emptyChildren.textContent = "Sin ramas";
+      childrenList.appendChild(emptyChildren);
+    }
+    childrenGroup.append(childrenLabel, childrenList);
+    body.appendChild(childrenGroup);
+
+    panel.classList.remove("hidden");
+    return data;
+  } catch (_error) {
+    body.replaceChildren();
+    panel.classList.add("hidden");
+    return null;
+  }
+}
+
 async function setEditorEditSource(url, item) {
   const source = String(url || "");
   if (!source) {
+    await refreshEditorLineage(null);
     return;
   }
   for (const ref of state.editorRefs) {
@@ -338,6 +484,8 @@ async function setEditorEditSource(url, item) {
       negative: item.negative,
     });
   }
+  const genId = item && (item.id ?? item.gen_id);
+  await refreshEditorLineage(genId);
   setEditorStatus("Imagen del visor cargada para editar");
 }
 
@@ -739,16 +887,20 @@ async function loadEditorGallery(page = 1) {
 function showEditorResult(job) {
   const output = ((job && job.outputs) || [])[0];
   const box = $("editor-result");
+  const genId = job && (job.gen_id ?? job.id);
   if (!output || !output.url || !box) {
+    refreshEditorLineage(genId);
     return;
   }
   state.editorResultUrl = output.url;
+  state.editorResultGenId = parseEditorGenId(genId);
   state.editorResultMeta =
     job && typeof job === "object"
       ? { ...(job.params || {}), prompt: job.prompt, negative: job.negative }
       : null;
   box.classList.remove("hidden");
   updateEditorPreview();
+  refreshEditorLineage(genId);
 }
 
 async function openEditorResultInGallery() {
@@ -955,6 +1107,9 @@ async function generateEditor() {
   if (state.editorRefs.length) {
     payload.ref_images_b64 = state.editorRefs.map((ref) => ref.b64);
   }
+  if (editorSourceGenId) {
+    payload.parent_gen_id = editorSourceGenId;
+  }
   const btn = $("btn-editor-generate");
   if (btn) btn.disabled = true;
   setEditorStatus("Encolando...");
@@ -1087,7 +1242,10 @@ function initEditorTab() {
   on("editor-gallery-next", "click", () => {
     loadEditorGallery(state.editorGallery.page + 1);
   });
-  on("editor-preview", "click", () => {
+  on("editor-preview", "click", (event) => {
+    if (event && event.target && event.target.closest && event.target.closest("#editor-lineage-panel")) {
+      return;
+    }
     const image = $("editor-preview-img");
     if (!image || image.classList.contains("hidden")) {
       return;
@@ -1108,6 +1266,7 @@ export {
   removeEditorRef,
   addEditorRefs,
   addEditorRefFromUrl,
+  refreshEditorLineage,
   setEditorEditSource,
   syncEditorEditSource,
   updateEditorMode,
