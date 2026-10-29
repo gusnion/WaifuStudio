@@ -7205,6 +7205,43 @@ class TopbarNavigationStaticTests(ServerTestCase):
         html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn('id="btn-model-defaults" type="button" class="secondary"', html)
 
+    def test_w8_editor_multiview_universal_button_and_reduced_panels(self):
+        """W8 (2.5.0_bugfix): multivista usa #btn-editor-generate sin boton legacy ni 'hoja de contacto', y reduce paneles 2/3 con Avanzado plegado."""
+        base_dir = Path(__file__).resolve().parents[1]
+
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn('id="btn-editor-multiview"', html)
+        self.assertNotIn("Generar hoja de contacto", html)
+        self.assertIn('id="btn-editor-generate"', html)
+        self.assertIn('id="editor-multiview-field"', html)
+        self.assertIn('id="editor-multiview-views"', html)
+        self.assertIn('<option value="4" selected>4 vistas</option>', html)
+        self.assertIn('<option value="6">6 vistas</option>', html)
+        self.assertIn('<option value="8">8 vistas</option>', html)
+        self.assertIn('id="editor-pose-preset"', html)
+        self.assertIn('id="editor-section-size"', html)
+        self.assertIn('<details id="editor-prompt-advanced" class="advanced panel-section" open>', html)
+        self.assertIn('<details id="editor-params-advanced" class="advanced panel-section" open>', html)
+        self.assertIn('id="editor-preserve-structure-field"', html)
+        self.assertIn('id="editor-loras-field"', html)
+
+        ed_js = (base_dir / "static" / "js" / "tabs" / "editor.js").read_text(encoding="utf-8")
+        self.assertNotIn("Generar hoja de contacto", ed_js)
+        self.assertNotIn("btn-editor-multiview", ed_js)
+        self.assertIn("function getEditorGenerateLabel()", ed_js)
+        self.assertIn("`Generar ${count} vistas`", ed_js)
+        self.assertIn("runMultiviewGeneration(", ed_js)
+        self.assertIn('renderSheet(entries, "editor-multiview-results")', ed_js)
+        self.assertIn("promptAdvanced.open = !multiview", ed_js)
+        self.assertIn("paramsAdvanced.open = !multiview", ed_js)
+        self.assertIn('preserveField.classList.toggle("hidden", multiview)', ed_js)
+        self.assertIn('lorasField.classList.toggle("hidden", multiview)', ed_js)
+        self.assertIn('on("editor-multiview-views", "change", updateEditorControls)', ed_js)
+
+        ed_css = (base_dir / "static" / "css" / "tabs" / "editor.css").read_text(encoding="utf-8")
+        self.assertIn("#panel-editor .advanced.panel-section", ed_css)
+        self.assertIn('#panel-editor[data-editor-mode="multiview"] .editor-multiview-excluded', ed_css)
+
 
 if __name__ == "__main__":
     unittest.main()

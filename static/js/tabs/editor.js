@@ -48,12 +48,40 @@ import {
   registerPoseCallback,
   poseToDataUrl,
 } from "../components/pose_library.js";
+import { runMultiviewGeneration, renderSheet } from "../components/editor_multiview.js";
 import { t } from "../i18n.js";
 
 let editorResolutionKit = null;
 let pendingEditorLoras = null;
 let editorLorasLoaded = false;
 const EDITOR_LORA_FAMILIES = new Set(["qwen", "qwen-image", "qwen_image", "editor"]);
+const MULTIVIEW_PRESET_PROMPTS = {
+  l0_editorial: "natural dynamic standing anime pose, balanced full-body composition, clean 2D linework",
+  l1_open: "glamour standing pose, expressive posture, full-body composition",
+  l2_bold_nsfw: "bold low-angle camera perspective, confident posture, full-body turnaround",
+  l3_extreme: "close-up framing, detailed character study, consistent lighting",
+};
+
+function buildMultiviewBasePrompt(rawPrompt, posePreset) {
+  const cleanPrompt = String(rawPrompt || "").trim();
+  const presetText = posePreset && MULTIVIEW_PRESET_PROMPTS[posePreset] ? MULTIVIEW_PRESET_PROMPTS[posePreset] : "";
+  if (cleanPrompt && presetText) {
+    return `${cleanPrompt}, ${presetText}`;
+  }
+  return cleanPrompt || presetText;
+}
+
+function getEditorGenerateLabel() {
+  if (state.activeJobsCount > 0) {
+    return `${t("queue_prefix")} (${state.activeJobsCount})`;
+  }
+  const mode = $("editor-mode")?.value;
+  if (mode === "multiview") {
+    const count = Number($("editor-multiview-views")?.value || 4);
+    return `Generar ${count} vistas`;
+  }
+  return t("generate");
+}
 
 function isEditorLora(item) {
   const family = String(item?.family || "").toLowerCase();
@@ -146,14 +174,20 @@ async function acceptEditorLicense() {
 }
 
 function updateEditorControls() {
+  const mode = $("editor-mode")?.value;
+  const multiview = mode === "multiview";
   const hasPrompt = Boolean($("editor-prompt")?.value.trim());
   const hasPreset = Boolean($("editor-pose-preset")?.value);
-  $("btn-editor-generate").disabled =
+  const btn = $("btn-editor-generate");
+  if (!btn) {
+    return;
+  }
+  btn.textContent = getEditorGenerateLabel();
+  btn.disabled =
     state.editorBusy ||
     !state.editorInstalled ||
     !state.editorLicenseAccepted ||
-    $("editor-mode")?.value === "multiview" ||
-    (!hasPrompt && !hasPreset);
+    (!multiview && !hasPrompt && !hasPreset);
 }
 
 function updateEditorRefs() {
@@ -309,6 +343,14 @@ function updateEditorMode(options = {}) {
   const mode = $("editor-mode").value;
   const edit = mode === "edit";
   const multiview = mode === "multiview";
+  const panel = $("panel-editor");
+  if (panel) {
+    panel.dataset.editorMode = mode;
+  }
+  const editHint = $("editor-edit-hint");
+  if (editHint) {
+    editHint.classList.toggle("hidden", !edit);
+  }
   const field = $("editor-refs-field");
   if (field) {
     field.style.display = edit ? "none" : "";
@@ -317,8 +359,30 @@ function updateEditorMode(options = {}) {
   if (multiviewField) multiviewField.classList.toggle("hidden", !multiview);
   const multiviewResults = $("editor-multiview-results");
   if (multiviewResults && !multiview) multiviewResults.classList.add("hidden");
-  const generateButton = $("btn-editor-generate");
-  if (generateButton) generateButton.disabled = multiview;
+  const poseLabel = $("editor-pose-preset-label");
+  if (poseLabel) {
+    poseLabel.textContent = multiview ? "Ángulo / Preset (L0..L3)" : "Ángulo / Preset de Pose (L0..L3)";
+  }
+  const promptAdvanced = $("editor-prompt-advanced");
+  if (promptAdvanced) {
+    promptAdvanced.open = !multiview;
+  }
+  const paramsAdvanced = $("editor-params-advanced");
+  if (paramsAdvanced) {
+    paramsAdvanced.open = !multiview;
+  }
+  const preserveField = $("editor-preserve-structure-field");
+  if (preserveField) {
+    preserveField.classList.toggle("hidden", multiview);
+  }
+  const lorasField = $("editor-loras-field");
+  if (lorasField) {
+    lorasField.classList.toggle("hidden", multiview);
+  }
+  if (multiview) {
+    setSelectValue($("editor-res-orientation"), "original");
+    setSelectValue($("editor-size"), "original");
+  }
   const hint = $("editor-refs-hint");
   if (hint) {
     hint.textContent = multiview
@@ -331,6 +395,7 @@ function updateEditorMode(options = {}) {
     syncEditorEditSource();
   }
   applyEditorSizeSelection();
+  updateEditorControls();
   updateEditorPreview();
 }
 
@@ -719,7 +784,66 @@ async function generateEditor() {
     return;
   }
   if ($("editor-mode").value === "multiview") {
-    setEditorStatus("Usa «Generar hoja de contacto» para la multivista", true);
+    if (!state.editorRefs.length) {
+      setEditorStatus("Añade al menos una referencia para la multivista", true);
+      return;
+    }
+    const steps = Number($("editor-steps").value);
+    if (!Number.isInteger(steps) || steps < 10 || steps > 50) {
+      setEditorStatus("Pasos fuera de [10, 50]", true);
+      return;
+    }
+    const cfg = Number($("editor-cfg").value);
+    if (!Number.isFinite(cfg) || cfg < 1 || cfg > 10) {
+      setEditorStatus("CFG fuera de [1, 10]", true);
+      return;
+    }
+    applyRandomSeed("editor-seed");
+    const seedValue = Number($("editor-seed").value);
+    const seed = Number.isFinite(seedValue) ? Math.trunc(seedValue) : 42;
+    const count = Number($("editor-multiview-views")?.value || 4);
+    const rawPrompt = $("editor-prompt")?.value.trim() || "";
+    const posePreset = $("editor-pose-preset")?.value || "";
+    const basePrompt = buildMultiviewBasePrompt(rawPrompt, posePreset);
+    const refs = state.editorRefs.slice(0, 1).map((ref) => ref.b64);
+    state.editorBusy = true;
+    updateEditorControls();
+    setEditorStatus(`Generando ${count} vistas con seed ${seed}…`);
+    try {
+      const entries = await runMultiviewGeneration({
+        refs,
+        prompt: basePrompt,
+        negative: $("editor-negative")?.value || "",
+        count,
+        seed,
+        steps,
+        cfg,
+        onProgress: (msg) => setEditorStatus(msg),
+        onViewGenerated: async (entry) => {
+          if (entry && entry.url) {
+            state.editorResultUrl = entry.url;
+            updateEditorPreview();
+          }
+        },
+      });
+      renderSheet(entries, "editor-multiview-results");
+      if (entries.length) {
+        const last = entries[entries.length - 1];
+        if (last.url) {
+          state.editorResultUrl = last.url;
+          $("editor-result")?.classList.remove("hidden");
+          updateEditorPreview();
+        }
+      }
+      await reloadImageViewerFirstPage();
+      await loadEditorGallery(1);
+      setEditorStatus(`Multivista lista (${entries.length} vistas)`);
+    } catch (error) {
+      setEditorStatus(error.message, true);
+    } finally {
+      state.editorBusy = false;
+      updateEditorControls();
+    }
     return;
   }
   const prompt = $("editor-prompt").value.trim();
@@ -835,7 +959,7 @@ async function generateEditor() {
   } finally {
     updateEditorControls();
     if (btn) {
-      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : t("generate");
+      btn.textContent = getEditorGenerateLabel();
     }
   }
 }
@@ -843,6 +967,7 @@ async function generateEditor() {
 
 function initEditorTab() {
   on("editor-mode", "change", () => updateEditorMode());
+  on("editor-multiview-views", "change", updateEditorControls);
   on("editor-prompt", "input", updateEditorControls);
   on("editor-pose-preset", "change", updateEditorControls);
   on("editor-cfg", "input", updateEditorCfgNote);
@@ -918,7 +1043,7 @@ function initEditorTab() {
   window.addEventListener("waifu:queue-updated", () => {
     const btn = $("btn-editor-generate");
     if (btn) {
-      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : t("generate");
+      btn.textContent = getEditorGenerateLabel();
     }
   });
   on("btn-editor-compare", "click", () =>
@@ -977,6 +1102,8 @@ export {
   editEditorResult,
   downloadEditorResult,
   generateEditor,
+  getEditorGenerateLabel,
+  buildMultiviewBasePrompt,
   applyPoseToEditorRef,
   initEditorTab,
   loadEditorLoras,

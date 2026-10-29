@@ -91,3 +91,17 @@
   height: auto;
 }
 
+#panel-editor .advanced.panel-section {
+  margin-top: 0.35rem;
+}
+
+#panel-editor .advanced.panel-section > .section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.55rem;
+}
+
+#panel-editor[data-editor-mode="multiview"] .editor-multiview-excluded {
+  display: none !important;
+}

@@ -778,25 +778,22 @@
           <div id="editor-refs-preview" class="editor-refs"></div>
           <p id="editor-refs-hint" class="field-hint">Referencias (hasta 10): en «Generar» guían estilo/composición; clic en la galería de abajo para añadirlas.</p>
           <div id="editor-multiview-field" class="field hidden">
-            <span>Multivista (misma referencia y seed)</span>
-            <div class="inline-row">
-              <select id="editor-multiview-views">
-                <option value="4" selected>4 vistas</option>
-                <option value="6">6 vistas</option>
-                <option value="8">8 vistas</option>
-              </select>
-              <button id="btn-editor-multiview" type="button">Generar hoja de contacto</button>
-            </div>
+            <span>Vistas (misma referencia y seed)</span>
+            <select id="editor-multiview-views">
+              <option value="4" selected>4 vistas</option>
+              <option value="6">6 vistas</option>
+              <option value="8">8 vistas</option>
+            </select>
+            <p id="editor-multiview-hint" class="field-hint">Genera frontales, laterales y espalda con el mismo seed. Se usa la primera referencia y hay pausa entre vistas para no saturar la GPU.</p>
           </div>
-          <p class="field-hint">Genera frontales, laterales y espalda con el mismo seed. Se usa la primera referencia y hay pausa entre vistas para no saturar la GPU.</p>
           <div id="editor-multiview-results" class="editor-multiview-results hidden"></div>
         </fieldset>
 
         <!-- BLOQUE 2: Instrucción de Edición -->
         <fieldset class="control-card" id="editor-block-prompt">
           <legend>2. Instrucción de Edición <button type="button" class="btn-help" data-help="Describe en lenguaje natural qué generar o modificar en la imagen con Qwen-Image 2.1.">?</button></legend>
-          <label class="field">
-            <span>Preset de Pose (L0..L3)</span>
+          <label class="field" id="editor-pose-preset-field">
+            <span id="editor-pose-preset-label">Ángulo / Preset de Pose (L0..L3)</span>
             <select id="editor-pose-preset">
               <option value="" selected>Ninguno (Manual / Libre)</option>
               <option value="l0_editorial">L0 Editorial / SFW</option>
@@ -805,32 +802,24 @@
               <option value="l3_extreme">L3 Extreme Close-Up NSFW</option>
             </select>
           </label>
-          <label class="field">
-            <span>Prompt</span>
-            <textarea id="editor-prompt" rows="4" placeholder="Describe qué generar o editar..."></textarea>
-          </label>
-          <label class="field">
-            <span>Negativo</span>
-            <textarea id="editor-negative" rows="2" placeholder="Lo que no quieres (opcional)"></textarea>
-          </label>
+          <details id="editor-prompt-advanced" class="advanced panel-section" open>
+            <summary>Avanzado (Prompt base y negativo)</summary>
+            <div class="section-body">
+              <label class="field" id="editor-prompt-field">
+                <span>Prompt</span>
+                <textarea id="editor-prompt" rows="4" placeholder="Describe qué generar o editar..."></textarea>
+              </label>
+              <label class="field" id="editor-negative-field">
+                <span>Negativo</span>
+                <textarea id="editor-negative" rows="2" placeholder="Lo que no quieres (opcional)"></textarea>
+              </label>
+            </div>
+          </details>
         </fieldset>
 
         <!-- BLOQUE 3: Configuración y Dimensiones -->
         <fieldset class="control-card" id="editor-block-params">
           <legend>3. Configuración y Dimensiones <button type="button" class="btn-help" data-help="Tamaño Original (1ª ref) y CFG=1 son óptimos para edición precisa certificada con Qwen-Image 2.1.">?</button></legend>
-          <div class="grid-2">
-            <label class="field">
-              <span>Receta / Modo</span>
-              <select id="editor-recipe-mode">
-                <option value="standard_sfw" selected>Estándar SFW (Euler, CFG 1.0)</option>
-                <option value="pose_nsfw">Pose &amp; NSFW Pro (ER-SDE + Beta, CFG 3.0)</option>
-              </select>
-            </label>
-            <label class="field field-inline" style="align-self: center; margin-top: 0.5rem;">
-              <input id="editor-preserve-structure" type="checkbox">
-              <span style="font-size: 0.8rem; cursor: pointer;">Preservar estructura (Latent Ref)</span>
-            </label>
-          </div>
           <div id="editor-section-size" class="section-subblock">
             <div class="grid-2">
               <label class="field">
@@ -866,23 +855,43 @@
             </div>
           </div>
           <p class="field-hint">Presets de la app (512-2048, múltiplos de 16) o Manual.</p>
-          <div class="grid-2">
-            <label class="field">
-              <span>Seed</span>
-              <input id="editor-seed" type="number" value="42">
-            </label>
-            <label class="field">
-              <span>Pasos</span>
-              <input id="editor-steps" type="number" value="25" min="10" max="50">
-            </label>
-          </div>
-          <label class="field">
-            <span>CFG</span>
-            <input id="editor-cfg" type="number" value="1.0" min="1" max="10" step="0.1">
-            <p id="editor-cfg-note" class="field-hint hidden">Aviso: cfg mayor que 1 puede degradar la edición (el par UC está certificado con cfg 1).</p>
-          </label>
-          <label class="field"><span>LoRAs compatibles (opcional, múltiple)</span><select id="editor-loras" multiple size="4"></select></label>
-          <p class="field-hint">Solo se listan LoRAs de la familia del Editor; se aplican con peso 1.0.</p>
+          <details id="editor-params-advanced" class="advanced panel-section" open>
+            <summary>Avanzado (Muestreo, Seed, CFG y LoRAs)</summary>
+            <div class="section-body">
+              <div class="grid-2" id="editor-recipe-row">
+                <label class="field">
+                  <span>Receta / Modo</span>
+                  <select id="editor-recipe-mode">
+                    <option value="standard_sfw" selected>Estándar SFW (Euler, CFG 1.0)</option>
+                    <option value="pose_nsfw">Pose &amp; NSFW Pro (ER-SDE + Beta, CFG 3.0)</option>
+                  </select>
+                </label>
+                <label id="editor-preserve-structure-field" class="field field-inline editor-multiview-excluded" style="align-self: center; margin-top: 0.5rem;">
+                  <input id="editor-preserve-structure" type="checkbox">
+                  <span style="font-size: 0.8rem; cursor: pointer;">Preservar estructura (Latent Ref)</span>
+                </label>
+              </div>
+              <div class="grid-2">
+                <label class="field">
+                  <span>Seed</span>
+                  <input id="editor-seed" type="number" value="42">
+                </label>
+                <label class="field">
+                  <span>Pasos</span>
+                  <input id="editor-steps" type="number" value="25" min="10" max="50">
+                </label>
+              </div>
+              <label class="field">
+                <span>CFG</span>
+                <input id="editor-cfg" type="number" value="1.0" min="1" max="10" step="0.1">
+                <p id="editor-cfg-note" class="field-hint hidden">Aviso: cfg mayor que 1 puede degradar la edición (el par UC está certificado con cfg 1).</p>
+              </label>
+              <div id="editor-loras-field" class="editor-multiview-excluded">
+                <label class="field"><span>LoRAs compatibles (opcional, múltiple)</span><select id="editor-loras" multiple size="4"></select></label>
+                <p class="field-hint">Solo se listan LoRAs de la familia del Editor; se aplican con peso 1.0.</p>
+              </div>
+            </div>
+          </details>
         </fieldset>
       </aside>
 
