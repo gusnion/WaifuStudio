@@ -1,0 +1,8 @@
+{
+  "schema": "waifu.pose-catalog/v1",
+  "version": "1.0.0",
+  "url": "https://huggingface.co/datasets/Gusitir/pose-db-01/resolve/main/poses-index.json",
+  "bytes": 505624,
+  "sha256": "dc35f253d56b9eff973fd399b5a04bfd40257a0e72b2f0696a60de7837ecf3f0",
+  "count": 1439
+}

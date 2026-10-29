@@ -1,0 +1,119 @@
+{
+  "schema": "waifu.pose-tags/v1",
+  "version": "1.0.0",
+  "classes": {
+    "De pie": [
+      "standing"
+    ],
+    "Sentada": [
+      "sitting"
+    ],
+    "De rodillas": [
+      "kneeling"
+    ],
+    "De rodillas / a cuatro patas": [
+      "kneeling",
+      "on all fours"
+    ],
+    "Tumbada boca abajo": [
+      "lying",
+      "on stomach"
+    ],
+    "De lado": [
+      "lying on side"
+    ],
+    "En cuclillas": [
+      "squatting"
+    ],
+    "Inclinada hacia delante": [
+      "leaning forward"
+    ],
+    "Arqueada hacia atrás": [
+      "arched back"
+    ],
+    "Girada / torcida": [
+      "twisted torso"
+    ],
+    "Pecho juntado / escote marcado": [
+      "arms squeezing breasts",
+      "cleavage"
+    ],
+    "Cara cerca": [
+      "close-up",
+      "face focus"
+    ],
+    "Estilo cute": [
+      "cute pose"
+    ],
+    "Sexy / explícita": [
+      "seductive pose"
+    ],
+    "Misionero": [
+      "missionary",
+      "spread legs"
+    ],
+    "Por detrás (doggy)": [
+      "doggystyle",
+      "from behind"
+    ],
+    "Encima (cowgirl)": [
+      "girl on top",
+      "cowgirl position"
+    ],
+    "De pie (coito)": [
+      "standing sex"
+    ],
+    "Sentada (coito)": [
+      "sitting sex"
+    ],
+    "Pegados": [
+      "embrace",
+      "close together"
+    ],
+    "Sentada, pegados": [
+      "sitting",
+      "embrace",
+      "close together"
+    ],
+    "De pie, pegados": [
+      "standing",
+      "embrace",
+      "close together"
+    ],
+    "Sentada de espaldas": [
+      "sitting",
+      "from behind"
+    ],
+    "Sentada de frente": [
+      "sitting",
+      "front view"
+    ],
+    "Sentada de lado": [
+      "sitting",
+      "from side"
+    ],
+    "Especial": []
+  },
+  "angles": {
+    "Frontal": [
+      "from front",
+      "front view"
+    ],
+    "Lateral": [
+      "from side",
+      "side view"
+    ],
+    "Diagonal": [
+      "from side",
+      "three-quarter view"
+    ],
+    "Desde arriba": [
+      "from above",
+      "high angle"
+    ],
+    "Desde abajo": [
+      "from below",
+      "low angle"
+    ]
+  }
+}
