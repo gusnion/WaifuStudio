@@ -41,6 +41,7 @@ import {
   applyLorasSelection,
   loadLoras,
   triggerLoraUpload,
+  uploadLocalLora,
 } from "../components/loras.js";
 import { applyVideoEngine } from "./video.js";
 import { fillEditorSizes } from "./editor.js";
@@ -855,9 +856,22 @@ function clearImagePosePreview() {
   setStatus("Miniatura de pose quitada");
 }
 
+async function uploadImageLora(file) {
+  return uploadLocalLora(file, {
+    scope: "image",
+    family: state.family || "anima",
+    input: $("lora-import-file"),
+    onStatus: setStatus,
+  });
+}
+
 function initImageTab() {
   on("btn-enhance", "click", enhancePrompt);
   on("btn-lora-import", "click", triggerLoraUpload);
+  on("lora-import-file", "change", (event) => {
+    const file = event.target?.files?.[0] || null;
+    uploadImageLora(file).catch((error) => setStatus(error.message, true));
+  });
   on("btn-image-poses", "click", () => openPoseLibrary("image"));
   on("btn-image-pose-clear", "click", clearImagePosePreview);
   registerPoseCallback("image", applyPoseToImageTab);
@@ -964,5 +978,6 @@ export {
   clearImagePosePreview,
   getModelBadgeLabel,
   updateModelBadge,
+  uploadImageLora,
   initImageTab,
 };

@@ -7243,26 +7243,40 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn('#panel-editor[data-editor-mode="multiview"] .editor-multiview-excluded', ed_css)
 
     def test_w10_lora_loader_buttons_and_upload_hook(self):
-        """W10 (2.5.0_bugfix): botones de importacion LoRA en Imagen y Editor reutilizan #lora-upload y refrescan catalogos."""
+        """W10 (2.5.0_bugfix): botones e inputs de carga LoRA en Imagen y Editor usan helper compartido uploadLocalLora, validan compatibilidad de raiz y refrescan catalogos."""
         base_dir = Path(__file__).resolve().parents[1]
 
         html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn('id="btn-lora-import"', html)
+        self.assertIn('id="lora-import-file" type="file" accept=".safetensors"', html)
         self.assertIn('id="btn-editor-lora-import"', html)
+        self.assertIn('id="editor-lora-import-file" type="file" accept=".safetensors"', html)
+        self.assertIn('id="editor-loras-empty"', html)
 
         loras_js = (base_dir / "static" / "js" / "components" / "loras.js").read_text(encoding="utf-8")
+        self.assertIn("function parseSafetensorsHeaderFromBase64(", loras_js)
+        self.assertIn("function checkLoraRootCompatibility(", loras_js)
+        self.assertIn("async function uploadLocalLora(", loras_js)
         self.assertIn("function triggerLoraUpload(", loras_js)
+        self.assertIn("uploadLocalLora,", loras_js)
         self.assertIn("triggerLoraUpload,", loras_js)
+        self.assertIn("incompatible de raíz", loras_js)
+        self.assertIn('postJson("/api/loras/upload", payload)', loras_js)
         self.assertIn('new CustomEvent("waifu:lora-uploaded", { detail: data })', loras_js)
 
         img_js = (base_dir / "static" / "js" / "tabs" / "image.js").read_text(encoding="utf-8")
         self.assertIn("triggerLoraUpload", img_js)
+        self.assertIn("uploadLocalLora", img_js)
+        self.assertIn("async function uploadImageLora(", img_js)
         self.assertIn('on("btn-lora-import", "click", triggerLoraUpload)', img_js)
+        self.assertIn('on("lora-import-file", "change"', img_js)
 
         ed_js = (base_dir / "static" / "js" / "tabs" / "editor.js").read_text(encoding="utf-8")
         self.assertIn("triggerLoraUpload", ed_js)
+        self.assertIn("uploadLocalLora", ed_js)
+        self.assertIn("async function uploadEditorLora(", ed_js)
         self.assertIn('"btn-editor-lora-import"', ed_js)
-        self.assertIn("triggerLoraUpload", ed_js)
+        self.assertIn('on("editor-lora-import-file", "change"', ed_js)
         self.assertIn("waifu:lora-uploaded", ed_js)
         self.assertIn("loadEditorLoras(true)", ed_js)
 

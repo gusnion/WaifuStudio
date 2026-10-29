@@ -589,6 +589,76 @@ class TimelineRouteTests(unittest.TestCase):
         self.assertEqual(row["status"], "done")
         self.assertEqual(row["kind"], "video")
         self.assertEqual(data["output_url"], f"/media/{gen_id}/timeline_{gen_id}.mp4")
+        expected_path = (self.config.data_dir / "gallery" / str(gen_id) / f"timeline_{gen_id}.mp4").resolve()
+        self.assertEqual(data["output_path"], str(expected_path))
+        self.assertTrue(Path(data["output_path"]).is_absolute())
+
+    @patch("app.routes.timeline.subprocess.Popen")
+    def test_reveal_timeline_route(self, mock_popen):
+        gallery_mp4 = self.config.data_dir / "gallery" / "42" / "timeline_42.mp4"
+        gallery_mp4.parent.mkdir(parents=True, exist_ok=True)
+        gallery_mp4.write_bytes(FAKE_MP4)
+
+        exports_mp4 = self.config.data_dir / "exports" / "custom_export.mp4"
+        exports_mp4.parent.mkdir(parents=True, exist_ok=True)
+        exports_mp4.write_bytes(FAKE_MP4)
+
+        with patch("app.routes.timeline.os.name", "nt"):
+            # 1. Ruta dentro de data/gallery abre Explorer con /select
+            res_gal = self.client.post(
+                "/api/timeline/reveal",
+                json={"path": str(gallery_mp4.resolve())},
+            )
+            self.assertEqual(res_gal.status_code, 200)
+            self.assertTrue(res_gal.json()["ok"])
+            self.assertEqual(res_gal.json()["path"], str(gallery_mp4.resolve()))
+            mock_popen.assert_called_with(["explorer.exe", f"/select,{gallery_mp4.resolve()}"])
+
+            # 2. Ruta dentro de data/exports abre Explorer
+            mock_popen.reset_mock()
+            res_exp = self.client.post(
+                "/api/timeline/reveal",
+                json={"path": str(exports_mp4.resolve())},
+            )
+            self.assertEqual(res_exp.status_code, 200)
+            self.assertTrue(res_exp.json()["ok"])
+            mock_popen.assert_called_with(["explorer.exe", f"/select,{exports_mp4.resolve()}"])
+
+            # 3. Rutas fuera de data/gallery o data/exports => 403
+            mock_popen.reset_mock()
+            outside = self.root / "outside.mp4"
+            outside.write_bytes(FAKE_MP4)
+            for forbidden in (
+                str(outside.resolve()),
+                "../outside.mp4",
+                str((self.config.data_dir / "waifu.db").resolve()),
+            ):
+                res_bad = self.client.post("/api/timeline/reveal", json={"path": forbidden})
+                self.assertEqual(res_bad.status_code, 403)
+            mock_popen.assert_not_called()
+
+            # 4. Archivo inexistente dentro de gallery => 404
+            missing = self.config.data_dir / "gallery" / "999" / "missing.mp4"
+            res_404 = self.client.post("/api/timeline/reveal", json={"path": str(missing.resolve())})
+            self.assertEqual(res_404.status_code, 404)
+
+            # 5. Payload sin path => 400
+            res_400 = self.client.post("/api/timeline/reveal", json={})
+            self.assertEqual(res_400.status_code, 400)
+
+    def test_w12_timeline_export_reveal_ui_contract(self):
+        html = (APP_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="timeline-export-actions"', html)
+        self.assertIn('id="btn-timeline-open-folder"', html)
+        self.assertIn("Abrir carpeta", html)
+        self.assertIn('id="btn-timeline-copy-path"', html)
+        self.assertIn("Copiar ruta", html)
+
+        js = (APP_ROOT / "static" / "js" / "tabs" / "timeline.js").read_text(encoding="utf-8")
+        self.assertIn("/api/timeline/reveal", js)
+        self.assertIn("revealTimelineExport", js)
+        self.assertIn("copyTimelineExportPath", js)
+        self.assertIn("res.output_path", js)
 
 
 if __name__ == "__main__":

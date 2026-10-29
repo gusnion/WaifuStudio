@@ -12,6 +12,7 @@ const state = {
   isPlayingAll: false,
   playIndex: 0,
   aiGenerating: false,
+  lastExportPath: "",
 };
 let previewAudioEls = [];
 let audioStartTimers = [];
@@ -20,6 +21,58 @@ let imageSequenceTimer = null;
 function setTimelineStatus(msg, err = false) {
   const el = $("timeline-status");
   if (el) { el.textContent = msg; el.style.color = err ? "#ff5252" : "#aaa"; }
+}
+
+function setExportActions(outputPath = "") {
+  state.lastExportPath = typeof outputPath === "string" ? outputPath.trim() : "";
+  const wrap = $("timeline-export-actions");
+  const openBtn = $("btn-timeline-open-folder");
+  const copyBtn = $("btn-timeline-copy-path");
+  const visible = Boolean(state.lastExportPath);
+  if (wrap) {
+    wrap.classList.toggle("hidden", !visible);
+    wrap.hidden = !visible;
+  }
+  if (openBtn) {
+    openBtn.disabled = !visible;
+    openBtn.title = visible ? `Abrir carpeta: ${state.lastExportPath}` : "Abrir carpeta";
+  }
+  if (copyBtn) {
+    copyBtn.disabled = !visible;
+    copyBtn.title = visible ? state.lastExportPath : "Copiar ruta";
+  }
+}
+
+export async function revealTimelineExport() {
+  if (!state.lastExportPath) return;
+  try {
+    await postJson("/api/timeline/reveal", { path: state.lastExportPath });
+  } catch (err) {
+    setTimelineStatus(`No se pudo abrir carpeta: ${err.message}`, true);
+  }
+}
+
+export async function copyTimelineExportPath() {
+  const path = state.lastExportPath;
+  if (!path) return;
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(path);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = path;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    setTimelineStatus(`Ruta copiada: ${path}`);
+  } catch (err) {
+    setTimelineStatus(`No se pudo copiar la ruta (${path}): ${err.message}`, true);
+  }
 }
 
 function setAiStatus(msg, err = false) {
@@ -598,10 +651,17 @@ async function exportTimeline() {
   if (!state.current.data.clips.length) { setTimelineStatus("La pista está vacía; añade clips antes de exportar.", true); return; }
   const btn = $("btn-timeline-export");
   if (btn) btn.disabled = true;
+  setExportActions("");
   setTimelineStatus("Renderizando secuencia con FFmpeg...");
   try {
     const res = await postJson("/api/timeline/export", { project_data: state.current.data, name: state.current.name || "Exportación Timeline" });
-    setTimelineStatus(`¡Vídeo exportado con éxito! (#${res.generation_id})`);
+    const outputPath = res.output_path || "";
+    setTimelineStatus(
+      outputPath
+        ? `¡Vídeo exportado con éxito! (#${res.generation_id}) — ${outputPath}`
+        : `¡Vídeo exportado con éxito! (#${res.generation_id})`
+    );
+    setExportActions(outputPath);
     const video = $("timeline-preview-video");
     const img = $("timeline-preview-image");
     if (img) img.style.display = "none";
@@ -610,7 +670,10 @@ async function exportTimeline() {
       video.src = res.output_url;
       video.play().catch(() => {});
     }
-  } catch (err) { setTimelineStatus(`Error en exportación: ${err.message}`, true); }
+  } catch (err) {
+    setExportActions("");
+    setTimelineStatus(`Error en exportación: ${err.message}`, true);
+  }
   finally { if (btn) btn.disabled = false; }
 }
 
@@ -845,12 +908,15 @@ export function initTimelineTab() {
     if (nameInput) nameInput.value = "Mi Secuencia";
     const select = $("timeline-project-select");
     if (select) select.value = "";
+    setExportActions("");
     updatePreviewMedia(null);
     renderTracks(); setTimelineStatus("Nuevo proyecto iniciado");
   });
 
   on("btn-timeline-save", "click", saveCurrentProject);
   on("btn-timeline-export", "click", exportTimeline);
+  on("btn-timeline-open-folder", "click", revealTimelineExport);
+  on("btn-timeline-copy-path", "click", copyTimelineExportPath);
   on("btn-timeline-play-all", "click", togglePlayAll);
   on("btn-timeline-refresh-media", "click", refreshTimelineMedia);
   on("timeline-media-filter", "change", refreshTimelineMedia);
@@ -878,6 +944,7 @@ export function initTimelineTab() {
       state.current = proj;
       const nameInput = $("timeline-project-name");
       if (nameInput) nameInput.value = proj.name;
+      setExportActions("");
       renderTracks(); selectClip(0);
       setTimelineStatus(hydrated ? "Proyecto cargado (configuración de clips recuperada)" : `Proyecto '${proj.name}' cargado`);
     } catch (err) { setTimelineStatus(err.message, true); }
@@ -913,6 +980,7 @@ export function initTimelineTab() {
     previewVideo.addEventListener("ended", () => { if (state.isPlayingAll) { state.playIndex++; playNextInSequence(); } });
   }
 
+  setExportActions("");
   loadTimelineProjects();
   refreshTimelineMedia();
   renderTracks();

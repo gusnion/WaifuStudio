@@ -49,7 +49,7 @@ import {
   poseToDataUrl,
 } from "../components/pose_library.js";
 import { runMultiviewGeneration, renderSheet } from "../components/editor_multiview.js";
-import { triggerLoraUpload } from "../components/loras.js";
+import { triggerLoraUpload, uploadLocalLora } from "../components/loras.js";
 import { t } from "../i18n.js";
 
 let editorResolutionKit = null;
@@ -119,9 +119,25 @@ async function loadEditorLoras(scan = false) {
   } catch (_error) {
     select.replaceChildren();
   } finally {
+    const emptyHint = $("editor-loras-empty");
+    if (emptyHint) {
+      emptyHint.classList.toggle("hidden", select.options.length > 0);
+    }
     editorLorasLoaded = true;
     pendingEditorLoras = null;
   }
+}
+
+async function uploadEditorLora(file) {
+  return uploadLocalLora(file, {
+    scope: "editor",
+    family: "qwen",
+    input: $("editor-lora-import-file"),
+    onStatus: setEditorStatus,
+    onUploaded: async () => {
+      await loadEditorLoras(true);
+    },
+  });
 }
 
 
@@ -998,6 +1014,10 @@ function initEditorTab() {
   on("btn-editor-license", "click", acceptEditorLicense);
   on("editor-size", "change", applyEditorSizeSelection);
   on("btn-editor-lora-import", "click", () => triggerLoraUpload("qwen"));
+  on("editor-lora-import-file", "change", (event) => {
+    const file = event.target?.files?.[0] || null;
+    uploadEditorLora(file).catch((error) => setEditorStatus(error.message, true));
+  });
   window.addEventListener("waifu:lora-uploaded", () => {
     loadEditorLoras(true).catch((error) => setEditorStatus(error.message, true));
   });
@@ -1110,6 +1130,7 @@ export {
   getEditorGenerateLabel,
   buildMultiviewBasePrompt,
   applyPoseToEditorRef,
+  uploadEditorLora,
   initEditorTab,
   loadEditorLoras,
 };

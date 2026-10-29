@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Any
@@ -321,15 +323,98 @@ async def api_timeline_export(request: Request) -> Any:
             work_dir=work_dir,
             gallery_dir=gallery_dir,
         )
+        resolved_mp4 = out_mp4.resolve()
         st.update(gen_id, status="done", outputs=[out_name], kind="video")
         return {
             "ok": True,
             "generation_id": gen_id,
             "output_name": out_name,
             "output_url": f"/media/{gen_id}/{out_name}",
+            "output_path": str(resolved_mp4),
         }
     except Exception as exc:
         st.update(gen_id, status="error", error=str(exc))
         raise
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+@router.post("/api/timeline/reveal")
+async def api_timeline_reveal(request: Request) -> Any:
+    """Abre en Windows Explorer la carpeta del archivo exportado dentro de data/gallery o data/exports."""
+    cfg = request.app.state.config
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    raw_path = str(payload.get("path") or payload.get("output_path") or "").strip()
+    if not raw_path:
+        return JSONResponse(status_code=400, content={"error": "path requerido"})
+    if "\x00" in raw_path:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "ruta fuera de data/gallery o data/exports"},
+        )
+
+    raw_p = Path(raw_path)
+    if ".." in raw_p.parts:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "ruta fuera de data/gallery o data/exports"},
+        )
+
+    gallery_root = (cfg.data_dir / "gallery").resolve()
+    exports_root = (cfg.data_dir / "exports").resolve()
+
+    try:
+        if raw_p.is_absolute():
+            target = raw_p.resolve()
+        else:
+            cand_data = (cfg.data_dir / raw_p).resolve()
+            cand_root = (cfg.data_dir.parent / raw_p).resolve()
+            if cand_data.is_relative_to(gallery_root) or cand_data.is_relative_to(exports_root):
+                target = cand_data
+            else:
+                target = cand_root
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "ruta invalida"})
+
+    if not (target.is_relative_to(gallery_root) or target.is_relative_to(exports_root)):
+        return JSONResponse(
+            status_code=403,
+            content={"error": "ruta fuera de data/gallery o data/exports"},
+        )
+
+    if not target.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": "archivo o carpeta exportado no encontrado"},
+        )
+
+    if os.name != "nt":
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Abrir carpeta en Explorer solo esta disponible en Windows"},
+        )
+
+    try:
+        if target.is_dir():
+            subprocess.Popen(["explorer.exe", str(target)])
+            folder_path = str(target)
+        else:
+            subprocess.Popen(["explorer.exe", f"/select,{target}"])
+            folder_path = str(target.parent)
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"No se pudo abrir Explorer: {exc}"},
+        )
+
+    return {
+        "ok": True,
+        "path": str(target),
+        "folder": folder_path,
+    }
