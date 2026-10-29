@@ -7173,7 +7173,8 @@ class TopbarNavigationStaticTests(ServerTestCase):
         """C-37: panel de poses accesible desde Imagen, Editor y OCMaker con el mismo modal."""
         base_dir = Path(__file__).resolve().parents[1]
         html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('id="btn-image-poses"', html)
+        self.assertIn('id="btn-pose-open-image"', html)
+        self.assertNotIn('id="btn-image-poses"', html)
         self.assertIn('id="btn-editor-poses"', html)
         self.assertIn('id="btn-oc-poses"', html)
         self.assertIn('id="pose-modal"', html)
