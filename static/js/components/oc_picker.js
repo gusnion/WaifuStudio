@@ -1283,7 +1283,6 @@ export {
   confirmDelete,
   confirmDeleteCharacter,
   saveCharacter,
-  loadCharacterRefs,
   removeCharacterRef,
   createCharacterSheet,
   buildPosePrompt,
