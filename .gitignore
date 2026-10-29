@@ -26,6 +26,11 @@ tools/llama.cpp/
 # FFmpeg/FFprobe portables (los descarga install.bat; no se versionan)
 tools/ffmpeg/
 
+# Módulos opcionales: checkout de terceros y binarios/pesos locales
+# (irodori: repo clonado para el modulo de voz; pose: landmarker .task ~30 MB)
+tools/irodori/
+tools/pose/
+
 # Accesos directos de Windows
 *.lnk
 
