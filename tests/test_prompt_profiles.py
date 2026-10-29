@@ -6,6 +6,7 @@ Sin red ni GPU: LLM falso, TestClient y registro/disco en directorios temporales
 from __future__ import annotations
 
 import json
+import re
 import struct
 import tempfile
 import unittest
@@ -33,10 +34,13 @@ from app.preprompts import (
 )
 from app.registry import (
     PROMPT_PROFILES,
+    PROMPT_PROFILE_INFO,
+    DEFAULT_PROMPT_PROFILE,
     ModelEntry,
     ModelProfile,
     ModelRegistry,
     infer_prompt_profile,
+    prompt_profile_info,
 )
 from app.server import create_app
 from app.store import Store
@@ -395,6 +399,157 @@ class EnhanceZonesRouteTests(unittest.TestCase):
         response = self.post(llm, prompt_profile="perfil_falso")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(llm.calls, [])
+
+
+def _raw_checkpoint(model_id: str, display: str, unet: str, profile: str = "") -> dict:
+    raw = {
+        "id": model_id,
+        "family": "sdxl",
+        "display_name": display,
+        "profile": {
+            "unet_name": unet,
+            "clip_name": "__checkpoint__",
+            "clip_type": "checkpoint",
+            "vae_name": "__checkpoint__",
+        },
+        "source": "x",
+        "license": "x",
+    }
+    if profile:
+        raw["prompt_profile"] = profile
+    return raw
+
+
+def _info_text(info: dict) -> str:
+    parts = [str(info.get(key) or "") for key in ("label", "placeholder", "help", "legend_help", "zones_help", "prose_guide")]
+    return " ".join(parts).lower()
+
+
+class PromptProfileInfoTests(unittest.TestCase):
+    def test_todos_los_perfiles_tienen_info_completa(self):
+        for profile in PROMPT_PROFILES:
+            with self.subTest(profile=profile):
+                self.assertIn(profile, PROMPT_PROFILE_INFO)
+                info = prompt_profile_info(profile)
+                for key in (
+                    "label", "placeholder", "help", "quality_tags",
+                    "artist_prefix", "order", "zones_visible", "prompt_kind",
+                ):
+                    self.assertIn(key, info)
+                self.assertTrue(info["placeholder"])
+                self.assertTrue(info["help"])
+                self.assertIn(info["prompt_kind"], ("tags", "natural"))
+                self.assertEqual(info["zones_visible"], info["prompt_kind"] == "tags")
+
+    def test_animagine_no_muestra_instrucciones_de_anima(self):
+        info = prompt_profile_info("animagine")
+        text = _info_text(info)
+        self.assertNotIn("@", text)
+        self.assertNotIn("score_", text)
+        self.assertNotRegex(text, r"(?<![a-z])anima(?![a-z])")
+        self.assertEqual(info["artist_prefix"], "")
+        self.assertTrue(info["zones_visible"])
+        self.assertTrue(all("score_" not in tag for tag in info["quality_tags"]))
+
+    def test_anima_conserva_su_guia_propia(self):
+        info = prompt_profile_info("anima")
+        self.assertEqual(info["artist_prefix"], "@")
+        self.assertIn("danbooru", _info_text(info))
+
+    def test_natural_y_qwen_no_muestran_danbooru_ni_tags(self):
+        for profile in ("sdxl_natural", "qwen_edit"):
+            with self.subTest(profile=profile):
+                info = prompt_profile_info(profile)
+                text = _info_text(info)
+                self.assertNotIn("danbooru", text)
+                self.assertNotIn("tags", text)
+                self.assertNotIn("score_", text)
+                self.assertNotIn("@", text)
+                self.assertFalse(info["zones_visible"])
+                self.assertEqual(info["quality_tags"], [])
+                self.assertEqual(info["zones_help"], "")
+                self.assertTrue(info["prose_guide"])
+
+    def test_perfil_desconocido_cae_a_default(self):
+        self.assertEqual(prompt_profile_info("nope")["profile"], DEFAULT_PROMPT_PROFILE)
+
+    def test_copia_no_muta_fuente(self):
+        info = prompt_profile_info("anima")
+        info["quality_tags"].append("x")
+        self.assertNotIn("x", PROMPT_PROFILE_INFO["anima"]["quality_tags"])
+
+
+class PromptProfileApiTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        from tests.test_server import make_config
+
+        cfg = make_config(Path(self._tmp.name))
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        store = Store(cfg.data_dir / "waifu.db")
+        store.init()
+        registry = ModelRegistry.from_dict(
+            {
+                "version": 1,
+                "models": [
+                    _raw_checkpoint("animagine-xl-4-opt", "Animagine XL 4.0 Opt", "animagine-xl-4.0-opt.safetensors"),
+                    _raw_checkpoint("realvisxl-v5", "RealVisXL V5", "realvisxl_v5.safetensors"),
+                    _raw_checkpoint("juggernaut-xl", "Juggernaut XL", "juggernautxl.safetensors"),
+                ],
+            }
+        )
+        app = create_app(config=cfg, store=store, registry=registry, llm=CapturingLLM(), start_worker=False)
+        self.client = TestClient(app)
+        self.addCleanup(self.client.close)
+
+    def test_api_models_incluye_prompt_profile_info(self):
+        response = self.client.get("/api/models")
+        self.assertEqual(response.status_code, 200)
+        models = {item["id"]: item for item in response.json()}
+        for item in models.values():
+            self.assertEqual(item["prompt_profile_info"]["profile"], item["prompt_profile"])
+        animagine = models["animagine-xl-4-opt"]["prompt_profile_info"]
+        self.assertNotRegex(_info_text(animagine), r"(?<![a-z])anima(?![a-z])")
+        self.assertNotIn("@", _info_text(animagine))
+        for model_id in ("realvisxl-v5", "juggernaut-xl"):
+            natural = models[model_id]["prompt_profile_info"]
+            self.assertEqual(natural["prompt_kind"], "natural")
+            self.assertNotIn("danbooru", _info_text(natural))
+            self.assertFalse(natural["zones_visible"])
+
+    def test_api_prompt_profiles_ordenado_y_completo(self):
+        response = self.client.get("/api/prompt/profiles")
+        self.assertEqual(response.status_code, 200)
+        profiles = response.json()["profiles"]
+        self.assertEqual({p["profile"] for p in profiles}, set(PROMPT_PROFILES))
+        orders = [p["order"] for p in profiles]
+        self.assertEqual(orders, sorted(orders))
+
+
+class PromptGuideFrontendTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def test_index_usa_ids_actualizables_sin_danbooru_fijo(self):
+        html = (self.ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+        for element_id in ("enhance-hint", "prompt-prose-guide", "prompt-legend-help", "zones-legend-help"):
+            self.assertIn(f'id="{element_id}"', html)
+        for element_id in ("enhance-hint", "prompt-legend-help", "zones-legend-help"):
+            match = re.search(rf'<[^>]*id="{element_id}"[^>]*>([^<]*)', html)
+            self.assertIsNotNone(match)
+            self.assertNotIn("danbooru", match.group(0).lower())
+            self.assertNotIn("danbooru", match.group(1).lower())
+
+    def test_image_js_sin_fallback_generico_de_tags(self):
+        js = (self.ROOT / "static" / "js" / "tabs" / "image.js").read_text(encoding="utf-8")
+        self.assertNotIn("PROMPT_PROFILE_PLACEHOLDERS", js)
+        self.assertIn("prompt_profile_info", js)
+        self.assertIn("applyPromptGuide", js)
+        self.assertIn("enhance-hint", js)
+        neutral = re.search(r"const NEUTRAL_PROMPT_INFO = \{.*?\n\};", js, re.S)
+        self.assertIsNotNone(neutral)
+        self.assertNotIn("danbooru", neutral.group(0).lower())
+        self.assertNotIn("tags", neutral.group(0).lower())
 
 
 if __name__ == "__main__":

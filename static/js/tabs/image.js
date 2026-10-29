@@ -63,15 +63,64 @@ let enhanceResetTimer = null;
 let refObjectUrl = null;
 let imageResolutionKit = null;
 
-const PROMPT_PROFILE_PLACEHOLDERS = {
-  anima: "Tags Danbooru, artista @ (ej.: 1girl, solo, looking at viewer, @artist)",
-  sdxl_tags: "Tags descriptivos sin score/@ (ej.: 1girl, solo, portrait, soft lighting, 8k)",
-  sdxl_natural: "Frase en lenguaje natural (ej.: A serene portrait of a young woman in a sunlit garden)",
-  qwen_edit: "Instrucción de edición o generación (ej.: Change expression to a gentle smile, sunset background)",
+// Guia de prompt: la fuente de verdad es app/registry.py::PROMPT_PROFILE_INFO,
+// expuesta como `prompt_profile_info` en cada modelo de /api/models.
+// Este fallback es neutro a proposito (sin tags ni Danbooru) para modelos sin info.
+const NEUTRAL_PROMPT_INFO = {
+  placeholder: "Describe la escena: sujeto, acción, entorno, estilo…",
+  help: "Escribe la escena: el asistente la adapta al formato del modelo seleccionado.",
+  legend_help:
+    "Describe la escena: sujeto, estilo, entorno o acción. El asistente la adapta al formato del modelo seleccionado.",
+  zones_help: "",
+  prose_guide: "",
+  zones_visible: null,
 };
 
 function isTagPromptProfile(profile) {
-  return profile === "anima" || profile === "sdxl_tags";
+  const info = state.prompt_profile_info;
+  if (info && info.profile === profile && typeof info.zones_visible === "boolean") {
+    return info.zones_visible;
+  }
+  return profile === "anima" || profile === "animagine" || profile === "sdxl_tags";
+}
+
+function setPromptHelpText(id, text, fallbackText) {
+  const el = $(id);
+  if (!el) {
+    return;
+  }
+  const value = text || fallbackText || "";
+  if (el.classList.contains("btn-help")) {
+    el.dataset.help = value;
+    el.setAttribute("data-help", value);
+  } else {
+    el.textContent = value;
+  }
+}
+
+function applyPromptGuide(info) {
+  const guide = { ...NEUTRAL_PROMPT_INFO, ...(info || {}) };
+  const showZones = isTagPromptProfile(state.prompt_profile);
+  const promptGeneral = $("prompt-general");
+  if (promptGeneral) {
+    promptGeneral.placeholder = guide.placeholder || NEUTRAL_PROMPT_INFO.placeholder;
+  }
+  setPromptHelpText("enhance-hint", guide.help, NEUTRAL_PROMPT_INFO.help);
+  setPromptHelpText("prompt-legend-help", guide.legend_help, NEUTRAL_PROMPT_INFO.legend_help);
+  // Ayuda de zonas (solo tags) vs guia de prosa (solo natural).
+  const zonesHelp = $("zones-legend-help");
+  if (zonesHelp) {
+    zonesHelp.classList.toggle("hidden", !showZones);
+    if (showZones && guide.zones_help) {
+      setPromptHelpText("zones-legend-help", guide.zones_help);
+    }
+  }
+  const prose = $("prompt-prose-guide");
+  if (prose) {
+    const text = showZones ? "" : guide.prose_guide || "";
+    prose.textContent = text;
+    prose.classList.toggle("hidden", !text);
+  }
 }
 
 async function loadParams() {
@@ -259,16 +308,13 @@ async function applyModel(modelId) {
   state.subfamily = model.subfamily || "";
   state.prompt_profile =
     model.prompt_profile || (state.family === "anima" ? "anima" : "sdxl_tags");
+  state.prompt_profile_info = model.prompt_profile_info || null;
 
-  // 1. Placeholder del prompt general según el perfil
-  const promptGeneral = $("prompt-general");
-  if (promptGeneral) {
-    promptGeneral.placeholder =
-      PROMPT_PROFILE_PLACEHOLDERS[state.prompt_profile] || PROMPT_PROFILE_PLACEHOLDERS.sdxl_tags;
-  }
+  // 1. Placeholder, hint (#enhance-hint) y ayudas según el perfil del modelo
+  const showZones = isTagPromptProfile(state.prompt_profile);
+  applyPromptGuide(model.prompt_profile_info);
 
   // 2. Visibilidad de zonas de tags según el perfil
-  const showZones = isTagPromptProfile(state.prompt_profile);
   const zonesCard = $("image-block-zones");
   if (zonesCard) {
     zonesCard.classList.toggle("hidden", !showZones);

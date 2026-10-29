@@ -21,6 +21,116 @@ DEFAULT_PATH = Path(__file__).resolve().parents[1] / "registry" / "models.json"
 PROMPT_PROFILES = ("anima", "sdxl_tags", "sdxl_natural", "qwen_edit", "animagine")
 DEFAULT_PROMPT_PROFILE = "sdxl_tags"
 
+# Fuente unica de verdad de la guia de prompt por perfil (UI + API).
+# Campos: label, placeholder, help (hint bajo "Generar prompt"), legend_help
+# (tooltip del bloque 1), zones_help (tooltip del bloque de zonas, solo tags),
+# prose_guide (guia de prosa, solo natural/edicion), quality_tags,
+# artist_prefix, order, zones_visible, prompt_kind ("tags" | "natural").
+PROMPT_PROFILE_INFO: dict[str, dict] = {
+    "anima": {
+        "label": "Anima (tags Danbooru)",
+        "placeholder": "Tags Danbooru con @artista (ej.: 1girl, solo, looking at viewer, @artist)",
+        "help": (
+            "Escribe la escena en lenguaje natural: se convierte en tags Danbooru por zona, "
+            "con score_N y @artista. Tus tags ya insertadas se respetan (no se repiten)."
+        ),
+        "legend_help": (
+            "Describe la escena: sujeto, estilo, entorno o acción. "
+            "Se descompone en tags Danbooru por zonas."
+        ),
+        "zones_help": "Organiza los tags Danbooru por cuadrantes y capas de personajes u OCs.",
+        "prose_guide": "",
+        "quality_tags": ["masterpiece", "best quality", "score_8"],
+        "artist_prefix": "@",
+        "order": 10,
+        "zones_visible": True,
+        "prompt_kind": "tags",
+    },
+    "animagine": {
+        "label": "Animagine (tags SDXL anime)",
+        "placeholder": "Tags anime separados por comas, sin scores numéricos ni prefijo de artista (ej.: 1girl, solo, smile, masterpiece, high score)",
+        "help": (
+            "Escribe la escena en lenguaje natural: se convierte en tags por zona al estilo "
+            "Animagine (masterpiece, high score, great score). Sin scores numéricos ni prefijo de artista."
+        ),
+        "legend_help": (
+            "Describe la escena: sujeto, estilo, entorno o acción. "
+            "Se descompone en tags anime por zonas."
+        ),
+        "zones_help": "Organiza los tags anime por cuadrantes y capas de personajes u OCs.",
+        "prose_guide": "",
+        "quality_tags": ["masterpiece", "high score", "great score", "absurdres"],
+        "artist_prefix": "",
+        "order": 20,
+        "zones_visible": True,
+        "prompt_kind": "tags",
+    },
+    "sdxl_tags": {
+        "label": "SDXL / Illustrious (tags)",
+        "placeholder": "Tags descriptivos sin score_N ni @ (ej.: 1girl, solo, portrait, soft lighting, highres)",
+        "help": (
+            "Escribe la escena en lenguaje natural: se convierte en tags descriptivos por zona. "
+            "Tus tags ya insertadas se respetan (no se repiten)."
+        ),
+        "legend_help": (
+            "Describe la escena: sujeto, estilo, entorno o acción. "
+            "Se descompone en tags por zonas."
+        ),
+        "zones_help": "Organiza los tags por cuadrantes y capas de personajes u OCs.",
+        "prose_guide": "",
+        "quality_tags": ["masterpiece", "best quality", "highres"],
+        "artist_prefix": "",
+        "order": 30,
+        "zones_visible": True,
+        "prompt_kind": "tags",
+    },
+    "sdxl_natural": {
+        "label": "SDXL realista (lenguaje natural)",
+        "placeholder": "Frase en lenguaje natural (ej.: A serene portrait of a young woman in a sunlit garden)",
+        "help": (
+            "Escribe la escena como prosa: sujeto, luz, cámara y ambiente en frases completas. "
+            "El asistente la reescribe como una descripción fluida."
+        ),
+        "legend_help": "Describe la escena en frases completas: sujeto, entorno, luz, cámara y ambiente.",
+        "zones_help": "",
+        "prose_guide": (
+            "Guía de prosa: 1-3 frases en inglés con sujeto + acción + entorno + luz + cámara "
+            "(ej.: A candid photo of a woman reading in a café, soft window light, 85mm, shallow depth of field)."
+        ),
+        "quality_tags": [],
+        "artist_prefix": "",
+        "order": 40,
+        "zones_visible": False,
+        "prompt_kind": "natural",
+    },
+    "qwen_edit": {
+        "label": "Qwen Edit (instrucción)",
+        "placeholder": "Instrucción de edición o generación (ej.: Change expression to a gentle smile, sunset background)",
+        "help": (
+            "Escribe una instrucción clara y directa sobre qué cambiar o generar. "
+            "El asistente la mantiene como una orden en prosa."
+        ),
+        "legend_help": "Describe en una frase qué quieres generar o cambiar en la imagen.",
+        "zones_help": "",
+        "prose_guide": (
+            "Guía de prosa: una instrucción por frase, verbo + objeto + detalle "
+            "(ej.: Replace the background with a snowy forest at dusk)."
+        ),
+        "quality_tags": [],
+        "artist_prefix": "",
+        "order": 50,
+        "zones_visible": False,
+        "prompt_kind": "natural",
+    },
+}
+
+
+def prompt_profile_info(profile: str = "") -> dict:
+    """Devuelve una copia de la guia de prompt del perfil (default: sdxl_tags)."""
+    key = profile if profile in PROMPT_PROFILE_INFO else DEFAULT_PROMPT_PROFILE
+    info = PROMPT_PROFILE_INFO[key]
+    return {"profile": key, **info, "quality_tags": list(info["quality_tags"])}
+
 KNOWN_SUBFAMILIES = (
     "anima",
     "illustrious",
@@ -556,6 +666,7 @@ __all__ = [
     "DEFAULT_SUBFAMILY",
     "KNOWN_SUBFAMILIES",
     "PROMPT_PROFILES",
+    "PROMPT_PROFILE_INFO",
     "REGISTRY_VERSION",
     "ModelEntry",
     "ModelProfile",
@@ -564,5 +675,6 @@ __all__ = [
     "infer_subfamily",
     "load_or_empty",
     "main",
+    "prompt_profile_info",
     "user_registry_path",
 ]

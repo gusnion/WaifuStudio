@@ -36,11 +36,13 @@ from app.registry import (
     DEFAULT_SUBFAMILY,
     KNOWN_SUBFAMILIES,
     PROMPT_PROFILES,
+    PROMPT_PROFILE_INFO,
     ModelEntry,
     ModelProfile,
     ModelRegistry,
     infer_prompt_profile,
     infer_subfamily,
+    prompt_profile_info,
 )
 from app.params import SAMPLER_NAMES, SCHEDULER_NAMES
 from app.preprompts import default_preprompt_for_profile
@@ -737,9 +739,20 @@ async def api_model_update(
         "subfamily": entry.subfamily,
         "preprompt": entry.preprompt,
         "prompt_profile": entry.prompt_profile,
+        "prompt_profile_info": prompt_profile_info(entry.prompt_profile),
         "unet_name": entry.profile.unet_name,
         "defaults": dict(entry.defaults),
     }
+
+
+@router.get("/api/prompt/profiles")
+async def api_prompt_profiles() -> dict:
+    """Guia de prompt por perfil (fuente unica: registry.PROMPT_PROFILE_INFO)."""
+    profiles = sorted(
+        (prompt_profile_info(name) for name in PROMPT_PROFILE_INFO),
+        key=lambda info: info["order"],
+    )
+    return {"profiles": profiles}
 
 
 @router.get("/api/models")
@@ -756,6 +769,7 @@ async def api_models(request: Request, scan: bool = False) -> list[dict]:
             "subfamily": getattr(entry, "subfamily", DEFAULT_SUBFAMILY),
             "preprompt": entry.preprompt,
             "prompt_profile": entry.prompt_profile,
+            "prompt_profile_info": prompt_profile_info(entry.prompt_profile),
             "unet_name": entry.profile.unet_name,
             "defaults": dict(entry.defaults),
         }

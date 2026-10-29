@@ -102,7 +102,7 @@
           <div class="image-category-body controls-column-zones">
             <!-- BLOQUE 1: Prompt y Asistente IA -->
             <fieldset class="control-card" id="image-block-prompt">
-              <legend>1. Prompt y Asistente <button type="button" class="btn-help" data-help="Describe la escena en lenguaje natural: sujeto, estilo, entorno o acción. Se descompone automáticamente en tags danbooru por zonas.">?</button></legend>
+              <legend>1. Prompt y Asistente <button type="button" id="prompt-legend-help" class="btn-help" data-help="Describe la escena: sujeto, estilo, entorno o acción. El asistente la adapta al formato del modelo seleccionado.">?</button></legend>
               <label class="field prompt-general-field">
                 <span>Prompt general</span>
                 <textarea id="prompt-general" rows="3" placeholder="Describe en lenguaje natural: escena, personaje, acción, estilo…"></textarea>
@@ -122,7 +122,8 @@
                     </select>
                   </label>
                 </div>
-                <p id="enhance-hint" class="field-hint">Escribe la escena en lenguaje natural: se convierte en tags danbooru por zona. Tus tags ya insertadas se respetan (no se repiten).</p>
+                <p id="enhance-hint" class="field-hint">Escribe la escena: el asistente la adapta al formato del modelo seleccionado.</p>
+                <p id="prompt-prose-guide" class="field-hint hidden"></p>
                 <div id="image-pose-badge" class="image-pose-badge hidden" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.35rem 0.6rem; background: var(--bg-surface, #181a20); border: 1px solid var(--border-color, #2b2e38); border-radius: 6px;">
                   <canvas id="image-pose-thumb" class="pose-canvas" style="width: 48px; height: 64px; border-radius: 4px; background: #0e0f13; flex-shrink: 0;"></canvas>
                   <div style="flex: 1; min-width: 0;">
@@ -136,7 +137,7 @@
 
             <!-- BLOQUE 2: Composición por Zonas -->
             <fieldset class="control-card" id="image-block-zones">
-              <legend>2. Composición por Zonas <button type="button" class="btn-help" data-help="Organiza los tags danbooru por cuadrantes y capas de personajes u OCs.">?</button></legend>
+              <legend>2. Composición por Zonas <button type="button" id="zones-legend-help" class="btn-help" data-help="Organiza los tags por cuadrantes y capas de personajes u OCs.">?</button></legend>
               <details id="section-zones" class="advanced panel-section zones-panel" data-section="zones" open>
                 <summary>Prompt por zonas</summary>
                 <div class="section-body">
