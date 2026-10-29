@@ -757,6 +757,10 @@ function updateUpscaleSourceView() {
   updateUpscaleActions();
 }
 
+function upscaleActionLabel() {
+  return upscaleKind() === "fps" ? "Interpolar" : "Escalar";
+}
+
 function applyUpscaleKind() {
   const kind = upscaleKind();
   const isFps = kind === "fps";
@@ -775,8 +779,7 @@ function applyUpscaleKind() {
   $("upscale-sharpen-field").classList.toggle("hidden", isFps);
   $("upscale-sharpen-method-field").classList.toggle("hidden", isFps);
   $("upscale-rife-model-field").classList.toggle("hidden", kind !== "video");
-  $("btn-upscale").textContent = isFps ? "Interpolar" : "Escalar";
-  updateUpscaleSourceView();
+  $("btn-upscale").textContent = upscaleActionLabel();  updateUpscaleSourceView();
   updateUpscaleActions();
 }
 
@@ -946,7 +949,7 @@ async function generateUpscale() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : t("upscale_run");
+      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : upscaleActionLabel();
     }
   }
 }
@@ -961,7 +964,7 @@ function initUpscalerTab() {
   window.addEventListener("waifu:queue-updated", () => {
     const btn = $("btn-upscale");
     if (btn) {
-      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : t("upscale_run");
+      btn.textContent = state.activeJobsCount > 0 ? `${t("queue_prefix")} (${state.activeJobsCount})` : upscaleActionLabel();
     }
   });
   on("upscale-file", "change", (event) => {

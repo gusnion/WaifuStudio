@@ -999,14 +999,14 @@
             <span>Modo de Escalado</span>
             <select id="upscale-mode">
               <option value="fast">Rápido (GAN)</option>
-              <option value="hires">Hires Fix (Difusión)</option>
-              <option value="qwen_remaster">Qwen Remaster (2K)</option>
+              <option value="hires" disabled>Hires Fix (no disponible: falta Anima-2.9B-preview-v1)</option>
+              <option value="qwen_remaster">Qwen refine (no 2K)</option>
             </select>
           </label>
 
           <label class="field hidden" id="upscale-denoise-field">
             <span>Fuerza Difusión (Denoise)</span>
-            <input id="upscale-denoise" type="number" min="0.10" max="0.50" step="0.05" value="0.30">
+            <input id="upscale-denoise" type="number" min="0.10" max="0.50" step="0.05" value="0.25">
             <p class="field-hint">Nivel de reinterpretación creativa (0.10 sutil a 0.50 fuerte).</p>
           </label>
 
@@ -1037,7 +1037,7 @@
               <option value="adaptive_usm">Adaptive USM</option>
             </select>
           </label>
-          <p class="field-hint">Nitidez extra tras la ampliación (solo imagen).</p>
+          <p class="field-hint">Nitidez extra tras la ampliación (imagen y vídeo).</p>
 
           <label class="field hidden" id="upscale-rife-model-field">
             <span>Interpolación RIFE (Opcional)</span>
@@ -1375,13 +1375,13 @@
       <!-- SECCIÓN 5: Upscaler Pro 2.0 -->
       <article class="guide-section" data-category="upscale">
         <h3>5. 🔍 Upscaler Pro 2.0 &amp; Galería</h3>
-        <p>El motor de escalado eleva tus creaciones a resolución 2K y 60 FPS:</p>
+        <p>El motor de escalado amplía imágenes y vídeos. Las opciones no disponibles se muestran deshabilitadas:</p>
         <ul>
-          <li><strong>Modo Rápido (GAN)</strong>: Modelos <code>4x-AnimeSharp</code> y <code>4x-UltraSharp</code> para ampliar ×2 o ×4 en 2 segundos con bordes definidos.</li>
-          <li><strong>Hires Fix (Difusión Anima)</strong>: Redibuja micro-detalles reales (pestañas individuales, brillo en el iris, hebras de cabello) con un denoise recomendado de <code>0.25</code> a <code>0.30</code>.</li>
-          <li><strong>Qwen Remaster</strong>: Reconstrucción ultra-detallada a 2048px preservando el estilo original.</li>
-          <li><strong>Enfoque AMD FidelityFX CAS (RCAS)</strong>: Aplica nitidez contrastada adaptativa sin generar halos blancos desagradables.</li>
-          <li><strong>Interpolación RIFE (Vídeo 60 FPS)</strong>: Multiplica los fotogramas de tus vídeos a ×2 o ×4 fps conservando el audio intacto para máxima fluidez anime.</li>
+          <li><strong>Modo Rápido (GAN)</strong>: amplía con el modelo disponible en <code>ComfyUI/models/upscale_models</code>; el factor real depende del modelo y de las pasadas.</li>
+          <li><strong>Hires Fix</strong>: temporalmente deshabilitado porque falta el UNET de difusión <code>Anima-2.9B-preview-v1</code>.</li>
+          <li><strong>Qwen refine</strong>: refinado con Qwen; no promete 2048 px.</li>
+          <li><strong>Nitidez RCAS/USM</strong>: aplica nitidez adaptativa en imagen y vídeo.</li>
+          <li><strong>RIFE</strong>: interpolación ×2 disponible; el vídeo conserva el audio.</li>
         </ul>
       </article>
 
