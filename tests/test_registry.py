@@ -232,6 +232,11 @@ class RoundtripTests(unittest.TestCase):
         expected = asdict(make_entry())
         if expected.get("owner_addon") is None:
             expected.pop("owner_addon", None)
+        for key in ("image", "url", "enriched_by", "updated_at"):
+            if not expected.get(key):
+                expected.pop(key, None)
+        if not expected.get("triggers"):
+            expected.pop("triggers", None)
         self.assertEqual(
             json.loads(json.dumps(reloaded.to_dict()["models"][0])),
             json.loads(json.dumps(expected)),

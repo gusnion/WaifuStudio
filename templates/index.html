@@ -205,6 +205,7 @@
                   <span id="model-family-badge" class="model-badge">Sin clasificar</span>
                 </div>
                 <select id="model"></select>
+                <button id="btn-model-card" type="button" class="secondary" style="margin-top:0.35rem;">Ficha del modelo</button>
               </label>
               <div class="field">
                 <button id="btn-model-defaults" type="button" class="secondary">Editar defaults del modelo</button>
@@ -809,6 +810,7 @@
               <label class="field" id="editor-prompt-field">
                 <span>Prompt</span>
                 <textarea id="editor-prompt" rows="4" placeholder="Describe qué generar o editar..."></textarea>
+                <button id="btn-editor-prompt-card" type="button" class="secondary" style="margin-top:0.35rem;">Abrir panel de prompts</button>
               </label>
               <label class="field" id="editor-negative-field">
                 <span>Negativo</span>
@@ -1948,6 +1950,16 @@
       </div>
     </section>
   </main>
+
+  <div id="enrich-modal" class="modal hidden">
+    <div class="modal-box enrich-box">
+      <div class="modal-header">
+        <h2 id="enrich-title">Ficha</h2>
+        <button id="btn-enrich-close" type="button">Cerrar</button>
+      </div>
+      <div id="enrich-body" class="enrich-body"></div>
+    </div>
+  </div>
 
   <div id="pose-modal" class="modal hidden">
     <div class="modal-box pose-box">

@@ -42,6 +42,7 @@ import {
   loadLoras,
   triggerLoraUpload,
   uploadLocalLora,
+  openModelCard,
 } from "../components/loras.js";
 import { applyVideoEngine } from "./video.js";
 import { fillEditorSizes } from "./editor.js";
@@ -874,6 +875,10 @@ function initImageTab() {
   on("lora-import-file", "change", (event) => {
     const file = event.target?.files?.[0] || null;
     uploadImageLora(file).catch((error) => setStatus(error.message, true));
+  });
+  on("btn-model-card", "click", () => {
+    const modelId = $("model")?.value;
+    if (modelId) openModelCard(modelId).catch((error) => setStatus(error.message, true));
   });
   on("btn-pose-open-image", "click", () => openPoseLibrary("image"));
   on("btn-image-pose-clear", "click", clearImagePosePreview);

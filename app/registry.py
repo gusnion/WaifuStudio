@@ -405,6 +405,11 @@ class ModelEntry:
     prompt_profile: str = ""
     subfamily: str = DEFAULT_SUBFAMILY
     owner_addon: str | None = None
+    image: str = ""
+    url: str = ""
+    triggers: list[str] = field(default_factory=list)
+    enriched_by: str = ""
+    updated_at: str = ""
 
     def __post_init__(self) -> None:
         if not self.prompt_profile:
@@ -475,6 +480,12 @@ def _validate_entry(entry: object) -> ModelEntry:
         raise EngineError(
             f"owner_addon debe ser str o None: {entry.owner_addon!r}"
         )
+    for label in ("image", "url", "enriched_by", "updated_at"):
+        value = getattr(entry, label)
+        if not isinstance(value, str):
+            raise EngineError(f"{label} debe ser str: {value!r}")
+    if not isinstance(entry.triggers, list) or not all(isinstance(t, str) for t in entry.triggers):
+        raise EngineError(f"triggers debe ser lista de str: {entry.triggers!r}")
     return replace(entry, profile=_validate_profile(entry.profile))
 
 
@@ -525,6 +536,11 @@ def _entry_from_dict(data: object) -> ModelEntry:
         prompt_profile=prompt_profile,
         subfamily=subfamily,
         owner_addon=owner_addon,
+        image=str(data.get("image") or ""),
+        url=str(data.get("url") or ""),
+        triggers=[str(t) for t in data.get("triggers", [])] if isinstance(data.get("triggers"), list) else [],
+        enriched_by=str(data.get("enriched_by") or ""),
+        updated_at=str(data.get("updated_at") or ""),
     )
     return _validate_entry(entry)
 
@@ -583,6 +599,11 @@ class ModelRegistry:
             d = asdict(entry)
             if entry.owner_addon is None:
                 d.pop("owner_addon", None)
+            for key in ("image", "url", "enriched_by", "updated_at"):
+                if not d.get(key):
+                    d.pop(key, None)
+            if not d.get("triggers"):
+                d.pop("triggers", None)
             models.append(d)
         return {
             "version": REGISTRY_VERSION,

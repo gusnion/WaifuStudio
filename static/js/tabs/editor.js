@@ -49,7 +49,7 @@ import {
   poseToDataUrl,
 } from "../components/pose_library.js";
 import { runMultiviewGeneration, renderSheet } from "../components/editor_multiview.js";
-import { triggerLoraUpload, uploadLocalLora } from "../components/loras.js";
+import { triggerLoraUpload, uploadLocalLora, openEditorPromptPanel } from "../components/loras.js";
 import { t } from "../i18n.js";
 
 let editorResolutionKit = null;
@@ -1159,6 +1159,7 @@ function initEditorTab() {
     );
   });
   on("btn-editor-poses", "click", () => openPoseLibrary("editor"));
+  on("btn-editor-prompt-card", "click", openEditorPromptPanel);
   registerPoseCallback("editor", applyPoseToEditorRef);
   on("btn-editor-generate", "click", generateEditor);
   on("editor-license-check", "change", () => {

@@ -70,6 +70,21 @@ def _entry_from_dict(data: object) -> dict:
     notes = data.get("notes", "")
     if not isinstance(notes, str):
         raise EngineError(f"notes debe ser str: {notes!r}")
+    description = data.get("description", "")
+    if not isinstance(description, str):
+        raise EngineError(f"description debe ser str: {description!r}")
+    triggers_raw = data.get("triggers", [])
+    if not isinstance(triggers_raw, list) or not all(isinstance(t, str) for t in triggers_raw):
+        raise EngineError(f"triggers debe ser lista de str: {triggers_raw!r}")
+    triggers = [t.strip() for t in triggers_raw if t.strip()]
+    recommended_weight = data.get("recommended_weight", data.get("default_weight", 1.0))
+    image = data.get("image", "")
+    url = data.get("url", "")
+    enriched_by = data.get("enriched_by", "")
+    updated_at = data.get("updated_at", "")
+    for label, value in (("image", image), ("url", url), ("enriched_by", enriched_by), ("updated_at", updated_at)):
+        if not isinstance(value, str):
+            raise EngineError(f"{label} debe ser str: {value!r}")
     default_weight = data.get("default_weight", 1.0)
     subfamily = data.get("subfamily")
     if subfamily is not None and not isinstance(subfamily, str):
@@ -87,6 +102,17 @@ def _entry_from_dict(data: object) -> dict:
         "license": data["license"],
         "notes": notes,
     }
+    if "triggers" in data:
+        entry["triggers"] = triggers
+    if "description" in data:
+        entry["description"] = description
+    if "recommended_weight" in data:
+        entry["recommended_weight"] = _weight(
+            recommended_weight, f"recommended_weight de {data['id']!r}"
+        )
+    for label, value in (("image", image), ("url", url), ("enriched_by", enriched_by), ("updated_at", updated_at)):
+        if label in data:
+            entry[label] = value
     if "subfamily" in data and data["subfamily"] is not None:
         entry["subfamily"] = data["subfamily"].strip()
     return entry

@@ -423,7 +423,15 @@ function renderLoraModalList() {
       }
     });
     weightBox.append(weight, value);
-    row.append(label, weightBox);
+    const info = document.createElement("button");
+    info.type = "button";
+    info.className = "secondary lora-info-btn";
+    info.textContent = "Ficha";
+    info.title = "Ver imagen, descripción y triggers";
+    info.addEventListener("click", () => {
+      openLoraCard(lora.id).catch((error) => setStatus(error.message, true));
+    });
+    row.append(label, weightBox, info);
     container.appendChild(row);
     state.loraControls[lora.id] = { check, weight, value };
   }
@@ -1136,8 +1144,181 @@ function closeLoraLibrary() {
 }
 
 
+function enrichModal(title) {
+  const modal = $("enrich-modal");
+  const titleEl = $("enrich-title");
+  const body = $("enrich-body");
+  if (!modal || !body) return null;
+  if (titleEl) titleEl.textContent = title;
+  body.replaceChildren();
+  modal.classList.remove("hidden");
+  return body;
+}
+
+function closeEnrichModal() {
+  const modal = $("enrich-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function enrichRow(label, value) {
+  const row = document.createElement("p");
+  row.className = "enrich-row";
+  const strong = document.createElement("strong");
+  strong.textContent = `${label}: `;
+  row.append(strong, document.createTextNode(value || "—"));
+  return row;
+}
+
+function openEnrichImage(body, url) {
+  if (!url) return;
+  const img = document.createElement("img");
+  img.className = "enrich-image";
+  img.src = url;
+  img.alt = "Imagen de la ficha";
+  img.loading = "lazy";
+  img.addEventListener("error", () => img.remove());
+  body.appendChild(img);
+}
+
+function insertTrigger(trigger) {
+  const value = String(trigger || "").trim();
+  if (!value) return;
+  const prompt = $("prompt-general");
+  const editorPrompt = $("editor-prompt");
+  const target = prompt || editorPrompt;
+  if (!target) return;
+  if (String(target.value || "").includes(value)) {
+    setStatus(`El trigger «${value}» ya está en el prompt`);
+    return;
+  }
+  const prev = String(target.value || "").trim();
+  target.value = prev ? `${prev}, ${value}` : value;
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+  setStatus(`Trigger añadido: ${value}`);
+}
+
+async function openLoraCard(loraId) {
+  const lora = state.loras.find((item) => item.id === loraId);
+  if (!lora) return;
+  const body = enrichModal(lora.display_name || lora.id);
+  if (!body) return;
+  openEnrichImage(body, lora.image);
+  body.appendChild(enrichRow("ID", lora.id));
+  body.appendChild(enrichRow("Familia", lora.family));
+  body.appendChild(enrichRow("Subfamilia", lora.subfamily || "sin clasificar"));
+  body.appendChild(enrichRow("Descripción", lora.description || "Sin descripción enriquecida"));
+  const triggers = Array.isArray(lora.triggers) ? lora.triggers : (lora.trigger ? [lora.trigger] : []);
+  body.appendChild(enrichRow("Triggers", triggers.length ? triggers.join(", ") : "El autor no publica triggers"));
+  body.appendChild(enrichRow("Peso recomendado", String(lora.recommended_weight ?? lora.default_weight ?? "—")));
+  body.appendChild(enrichRow("Compatibilidad", getLoraCompatibility(lora).warning || "Compatible / no verificada"));
+  if (lora.url) {
+    const link = document.createElement("a");
+    link.href = lora.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Fuente del autor";
+    body.appendChild(link);
+  }
+  if (triggers.length) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "primary";
+    button.textContent = "Insertar trigger";
+    button.addEventListener("click", () => {
+      insertTrigger(triggers[0]);
+      closeEnrichModal();
+    });
+    body.appendChild(button);
+  }
+}
+
+async function openModelCard(modelId) {
+  let models = state.models || [];
+  if (!models.length) {
+    const data = await api("/api/models");
+    models = data.items || data.models || [];
+  }
+  const model = models.find((item) => item.id === modelId);
+  if (!model) return;
+  const body = enrichModal(model.display_name || model.id);
+  if (!body) return;
+  openEnrichImage(body, model.image);
+  body.appendChild(enrichRow("ID", model.id));
+  body.appendChild(enrichRow("Familia / subfamilia", `${model.family || "—"} / ${model.subfamily || "sin clasificar"}`));
+  body.appendChild(enrichRow("Base", model.prompt_profile || "—"));
+  body.appendChild(enrichRow("Preprompt", model.preprompt || "—"));
+  body.appendChild(enrichRow("Licencia", model.license || "—"));
+  const defaults = model.defaults || {};
+  body.appendChild(enrichRow("Resolución", defaults.width && defaults.height ? `${defaults.width}x${defaults.height}` : "—"));
+  body.appendChild(enrichRow("Sampler / CFG / pasos", `${defaults.sampler_name || "—"} / ${defaults.cfg ?? "—"} / ${defaults.steps ?? "—"}`));
+  body.appendChild(enrichRow("Triggers", (model.triggers || []).join(", ") || "—"));
+  if (model.url) {
+    const link = document.createElement("a");
+    link.href = model.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Fuente del autor";
+    body.appendChild(link);
+  }
+  if (!model.image && !model.url && !(model.triggers || []).length) {
+    const note = document.createElement("p");
+    note.className = "field-hint";
+    note.textContent = "Ficha sin enriquecer. Pide a tu agente que lea la ficha del autor y complete imagen, URL y triggers.";
+    body.appendChild(note);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    button.textContent = "Copiar id para el agente";
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(model.id);
+        setStatus(`ID copiado: ${model.id}`);
+      } catch (_error) {
+        setStatus(`ID: ${model.id}`);
+      }
+    });
+    body.appendChild(button);
+  }
+}
+
+function openEditorPromptPanel() {
+  const body = enrichModal("Prompts del Editor");
+  if (!body) return;
+  const prompt = document.createElement("textarea");
+  prompt.rows = 5;
+  prompt.className = "textarea";
+  prompt.value = $("editor-prompt")?.value || "";
+  const negative = document.createElement("textarea");
+  negative.rows = 2;
+  negative.className = "textarea";
+  negative.value = $("editor-negative")?.value || "";
+  const labelPrompt = document.createElement("label");
+  labelPrompt.className = "field";
+  labelPrompt.innerHTML = "<span>Prompt</span>";
+  labelPrompt.appendChild(prompt);
+  const labelNeg = document.createElement("label");
+  labelNeg.className = "field";
+  labelNeg.innerHTML = "<span>Negativo</span>";
+  labelNeg.appendChild(negative);
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "primary";
+  save.textContent = "Aplicar al Editor";
+  save.addEventListener("click", () => {
+    if ($("editor-prompt")) $("editor-prompt").value = prompt.value;
+    if ($("editor-negative")) $("editor-negative").value = negative.value;
+    setEditorStatus("Prompts del Editor actualizados");
+    closeEnrichModal();
+  });
+  body.append(labelPrompt, labelNeg, save);
+}
+
 function initLoras() {
   ensureToggleElements();
+  on("btn-enrich-close", "click", closeEnrichModal);
+  on("enrich-modal", "click", (event) => {
+    if (event.target === $("enrich-modal")) closeEnrichModal();
+  });
   on("btn-lora-modal", "click", openLoraModal);
   on("btn-lora-close", "click", closeLoraModal);
   on("btn-lora-done", "click", closeLoraModal);
@@ -1200,5 +1381,8 @@ export {
   uploadLoraFile,
   openLoraLibrary,
   closeLoraLibrary,
+  openLoraCard,
+  openModelCard,
+  openEditorPromptPanel,
   initLoras,
 };
