@@ -10,10 +10,38 @@ import { addTagsToZone, renderZoneEditor } from "./prompt_zones.js";
 import { selectedImageView } from "../tabs/image_viewer.js";
 import { refreshLlmStatus } from "../tabs/image.js";
 
+const VISION_TIMEOUT_TAGS_MS = 30000;
+const VISION_TIMEOUT_UNIFIED_MS = 180000;
+
 let visionRequestSeq = 0;
 let visionInsertTimer = null;
+let visionAbortController = null;
+let visionTimeoutTimer = null;
 let visionResult = { tags: [], caption: "" };
 let visionLastPayload = null;
+
+function abortVisionRequest() {
+  if (visionTimeoutTimer) {
+    clearTimeout(visionTimeoutTimer);
+    visionTimeoutTimer = null;
+  }
+  if (visionAbortController) {
+    visionAbortController.abort();
+    visionAbortController = null;
+  }
+}
+
+// Badge #vision-mode: WD14 rapido ("WD14 rápido") o "LLM caption+tags"
+function setVisionMode(mode = "tags") {
+  const el = $("vision-mode");
+  if (!el) {
+    return;
+  }
+  const isUnified = mode === "unified";
+  el.textContent = isUnified ? "LLM caption+tags" : "WD14 rápido";
+  el.dataset.mode = isUnified ? "unified" : "tags";
+  el.classList.toggle("is-llm", isUnified);
+}
 
 function visionGenId(item) {
   if (!item) {
@@ -34,6 +62,7 @@ function setVisionStatus(text, isError = false) {
 
 function resetVisionModal() {
   visionResult = { tags: [], caption: "" };
+  setVisionMode("tags");
   const empty = $("vision-empty");
   if (empty) {
     empty.textContent = "Analizando…";
@@ -89,6 +118,9 @@ function renderVisionResult(data, elapsedMs) {
     : [];
   const caption = typeof raw.caption === "string" ? raw.caption.trim() : "";
   visionResult = { tags, caption };
+  if (raw.mode === "unified" || raw.mode === "tags") {
+    setVisionMode(raw.mode);
+  }
   const model = raw.model && typeof raw.model === "object" ? raw.model : {};
   const names = [model.wd14, model.vl].filter(
     (name) => typeof name === "string" && name
@@ -153,7 +185,7 @@ function renderVisionResult(data, elapsedMs) {
   setVisionStatus(`Listo${modelNote}${modeNote}${droppedNote}${timeNote}`);
 }
 
-async function openVisionModal(source, mode = "unified") {
+async function openVisionModal(source, mode = "tags") {
   let payload = source && typeof source === "object" ? source : null;
   if (!payload) {
     const item = selectedImageView();
@@ -168,30 +200,83 @@ async function openVisionModal(source, mode = "unified") {
   if (!modal) {
     return;
   }
+  const effectiveMode = mode === "unified" ? "unified" : "tags";
+  const previousResult =
+    effectiveMode === "unified" &&
+    (visionResult.tags.length > 0 || Boolean(visionResult.caption))
+      ? { tags: [...visionResult.tags], caption: visionResult.caption }
+      : null;
+
+  abortVisionRequest();
   visionLastPayload = payload;
-  resetVisionModal();
+  if (!previousResult) {
+    resetVisionModal();
+  } else {
+    const empty = $("vision-empty");
+    if (empty) {
+      empty.textContent = "Analizando…";
+      empty.classList.remove("hidden", "error");
+    }
+  }
+  setVisionMode(effectiveMode);
   modal.classList.remove("hidden");
   setVisionStatus("Analizando…");
+
   const seq = ++visionRequestSeq;
+  const timeoutMs =
+    effectiveMode === "unified" ? VISION_TIMEOUT_UNIFIED_MS : VISION_TIMEOUT_TAGS_MS;
+  const controller = new AbortController();
+  visionAbortController = controller;
+  visionTimeoutTimer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
   const startedAt = performance.now();
+
   try {
-    const data = await postJson("/api/vision/image_to_prompt", {
-      ...payload,
-      mode,
+    const data = await api("/api/vision/image_to_prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        mode: effectiveMode,
+      }),
+      signal: controller.signal,
+      timeoutMs,
     });
     const elapsedMs = performance.now() - startedAt;
     if (seq !== visionRequestSeq) {
       return;
     }
+    setVisionMode(effectiveMode);
     renderVisionResult(data, elapsedMs);
   } catch (error) {
     if (seq !== visionRequestSeq) {
       return;
     }
+    if (previousResult) {
+      renderVisionResult({
+        tags: previousResult.tags,
+        caption: previousResult.caption,
+        mode: "tags",
+      });
+      setVisionMode("tags");
+    }
     showVisionError(error.message);
   } finally {
+    if (visionTimeoutTimer) {
+      clearTimeout(visionTimeoutTimer);
+      visionTimeoutTimer = null;
+    }
+    if (visionAbortController === controller) {
+      visionAbortController = null;
+    }
     refreshLlmStatus();
   }
+}
+
+async function runVisionLlm() {
+  const mode = "unified";
+  return openVisionModal(visionLastPayload, mode);
 }
 
 function describeRefFromDisk() {
@@ -211,7 +296,7 @@ async function describeSelectedRefFile() {
   }
   try {
     const b64 = await readFileBase64(file);
-    await openVisionModal({ image_b64: b64 });
+    await openVisionModal({ image_b64: b64 }, "tags");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -219,6 +304,7 @@ async function describeSelectedRefFile() {
 
 function closeVisionModal() {
   visionRequestSeq += 1;
+  abortVisionRequest();
   if (visionInsertTimer) {
     clearTimeout(visionInsertTimer);
     visionInsertTimer = null;
@@ -302,7 +388,6 @@ async function copyVisionText(kind) {
   }
 }
 
-
 function initVision() {
   on("btn-vision-close", "click", closeVisionModal);
   on("vision-modal", "click", (event) => {
@@ -326,22 +411,27 @@ function initVision() {
       setVisionStatus(error.message, true)
     );
   });
+  on("btn-vision-llm", "click", () => {
+    runVisionLlm().catch((error) => setVisionStatus(error.message, true));
+  });
   on("btn-describe-ref", "click", describeRefFromDisk);
   on("describe-file", "change", () => {
     describeSelectedRefFile().catch((error) => setStatus(error.message, true));
   });
   on("btn-describe-image", "click", () => {
-    openVisionModal().catch((error) => setStatus(error.message, true));
+    openVisionModal(null, "tags").catch((error) => setStatus(error.message, true));
   });
 }
 
 export {
   visionGenId,
   setVisionStatus,
+  setVisionMode,
   resetVisionModal,
   showVisionError,
   renderVisionResult,
   openVisionModal,
+  runVisionLlm,
   describeRefFromDisk,
   describeSelectedRefFile,
   closeVisionModal,

@@ -354,6 +354,24 @@ input[type="checkbox"] {
   gap: 0.5rem;
 }
 
+.vision-mode {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vision-mode.is-llm {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .oc-body {
   display: grid;
   grid-template-columns: 1.1fr 1fr 0.9fr;

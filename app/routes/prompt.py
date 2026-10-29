@@ -398,7 +398,7 @@ async def api_llm_status() -> dict:
 
 
 @router.post("/api/vision/image_to_prompt")
-async def api_vision_image_to_prompt(request: Request, payload: dict = Body(...)) -> Any:
+def api_vision_image_to_prompt(request: Request, payload: dict = Body(...)) -> Any:
     """Tags WD14 y/o caption VL de una imagen (galeria por `gen_id` o base64).
 
     Con `mode` (`unified|tags|caption`) se ignora `use_tags/use_caption`:
