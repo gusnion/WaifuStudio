@@ -833,6 +833,22 @@ async function saveCharacter(event) {
   }
 }
 
+async function uploadOcRef(file) {
+  const charId = state.activeCharacterId;
+  if (charId == null) {
+    setOcStatus("Selecciona un OC antes de añadir referencias", true);
+    return;
+  }
+  if (!file) return;
+  const b64 = await readFileBase64(file);
+  await postJson(`/api/characters/${charId}/refs/upload`, {
+    filename: file.name,
+    file_b64: b64,
+  });
+  await loadCharacterRefs();
+  setOcStatus(`Referencia añadida a #${charId}`);
+}
+
 async function loadCharacterRefs() {
   const container = $("oc-refs");
   const title = $("oc-refs-title");
@@ -1191,6 +1207,15 @@ function initOcPicker() {
   on("btn-oc", "click", openOcModal);
   on("btn-oc-close", "click", closeOcModal);
   on("btn-oc-add", "click", addOcTagsToPrompt);
+  on("btn-oc-add-ref", "click", () => $("oc-ref-upload").click());
+  on("oc-ref-upload", "change", () => {
+    const file = $("oc-ref-upload").files[0];
+    uploadOcRef(file)
+      .catch((error) => setOcStatus(error.message, true))
+      .finally(() => {
+        $("oc-ref-upload").value = "";
+      });
+  });
   on("btn-oc-poses", "click", openPoseLibrary);
   initPoseLibrary();
   on("btn-oc-pose-generate", "click", () => {

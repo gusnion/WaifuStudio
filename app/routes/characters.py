@@ -7,6 +7,8 @@ Dependencias: app.characters.CharacterStore, app.sheet y app.trainer.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from pathlib import Path
 from typing import Any
@@ -171,6 +173,43 @@ async def api_character_ref_add(
             status_code=404, content={"error": "archivo de la generacion no encontrado"}
         )
     return {"relpath": chars.add_ref(char_id, src)}
+
+
+@router.post("/api/characters/{char_id}/refs/upload")
+async def api_character_ref_upload(
+    char_id: int, request: Request, payload: dict = Body(...)
+) -> Any:
+    """Alta de referencia subida desde el disco del usuario (JSON base64)."""
+    chars = request.app.state.characters
+    cfg = request.app.state.config
+    if chars.get(char_id) is None:
+        return JSONResponse(status_code=404, content={"error": "OC desconocido"})
+    raw_b64 = payload.get("file_b64")
+    filename = payload.get("filename")
+    if not isinstance(raw_b64, str) or not raw_b64.strip():
+        raise EngineError("file_b64 requerido")
+    if raw_b64.startswith("data:") and "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+    suffix = Path(str(filename or "ref.png")).suffix.lower()
+    if suffix not in (".png", ".jpg", ".jpeg", ".webp"):
+        raise EngineError("formato de referencia no soportado; usar png/jpg/webp")
+    try:
+        data = base64.b64decode(raw_b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise EngineError("file_b64 invalido") from exc
+    if not data:
+        raise EngineError("archivo vacio")
+    if len(data) > 25 * 1024 * 1024:
+        raise EngineError("referencia demasiado grande (max 25 MB)")
+    tmp_dir = cfg.data_dir / "tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp = tmp_dir / f"oc_ref_{uuid.uuid4().hex}{suffix}"
+    try:
+        tmp.write_bytes(data)
+        relpath = chars.add_ref(char_id, tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {"relpath": relpath}
 
 
 @router.get("/api/characters/{char_id}/refs")
