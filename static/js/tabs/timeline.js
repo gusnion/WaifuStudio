@@ -872,6 +872,52 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
   }
 }
 
+async function generateTimelineAudio() {
+  const clips = state.current.data.clips || [];
+  const clip = clips.find((c) => c.generation_id != null && c.kind === "video")
+    || clips.find((c) => c.generation_id != null);
+  if (!clip) {
+    setTimelineStatus("Añade un vídeo al proyecto antes de generar audio", true);
+    return;
+  }
+  setTimelineStatus("Generando audio con MMAudio…");
+  const res = await postJson("/api/audio/generate", {
+    source_gen_id: clip.generation_id,
+    action: "replace",
+    voice_enabled: false,
+  });
+  let job = null;
+  for (let i = 0; i < 150; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    job = await api(`/api/jobs/${encodeURIComponent(res.job_id)}`);
+    if (job && ["done", "error", "cancelled"].includes(job.status)) break;
+  }
+  if (!job || job.status !== "done") {
+    throw new Error((job && job.error) || "El job de audio no terminó");
+  }
+  const outputs = Array.isArray(job.outputs) ? job.outputs : [];
+  const wav = outputs.find((item) => String(item.name || item).toLowerCase().endsWith(".wav"));
+  if (!wav) throw new Error("El job de audio no devolvió WAV");
+  const name = typeof wav === "string" ? wav : wav.name;
+  const url = (wav && wav.url)
+    ? wav.url
+    : `/api/audio/media/${job.gen_id}/${encodeURIComponent(name)}`;
+  const blob = await (await fetch(url)).blob();
+  const audioB64 = await readFileBase64(new File([blob], name, { type: blob.type || "audio/wav" }));
+  const uploaded = await postJson("/api/timeline/upload_audio", {
+    filename: name,
+    audio_b64: audioB64,
+  });
+  state.current.data.audio_tracks.push({
+    source_path: uploaded.audio_path,
+    url: uploaded.audio_url,
+    start_time: 0,
+    volume: 1.0,
+  });
+  renderAudioTrack();
+  setTimelineStatus(`Audio IA añadido: ${name}`);
+}
+
 export function initTimelineTab() {
   window.addEventListener("waifu:timeline-add", (event) => {
     const item = event.detail && event.detail.item;
@@ -958,6 +1004,10 @@ export function initTimelineTab() {
   on("btn-timeline-add-audio", "click", () => {
     const input = $("timeline-audio-input");
     if (input) input.click();
+  });
+
+  on("btn-timeline-gen-audio", "click", () => {
+    generateTimelineAudio().catch((err) => setTimelineStatus(err.message, true));
   });
 
   on("timeline-audio-input", "change", async (e) => {
