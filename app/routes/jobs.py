@@ -78,7 +78,10 @@ async def api_job(job_id: str, request: Request) -> Any:
     if record is not None and record.get("status") == "cancelled":
         status = "cancelled"
     tracker = record.get("tracker") if record else None
-    if tracker is not None:
+    if job.get("chunks_total") and isinstance(job.get("progress"), dict):
+        snapshot = job["progress"]
+        progress = {key: snapshot.get(key) for key in PROGRESS_KEYS}
+    elif tracker is not None:
         snapshot = tracker.snapshot()
         progress = {
             "step": snapshot.get("step"),

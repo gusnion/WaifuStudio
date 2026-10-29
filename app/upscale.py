@@ -35,14 +35,16 @@ import math
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
 from PIL import Image, UnidentifiedImageError
 
 from app.config import APP_ROOT
-from app.engine import ComfyEngine, EngineError
+from app.engine import ComfyEngine, EngineError, JobCancelledError
 from app.progress import ProgressTracker
+from app.video import concat_videos, find_ffmpeg
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,12 @@ MAX_UPSCALE_INPUT_SIDE = 2560
 MAX_UPSCALE_OUTPUT_SIDE = 4096
 MAX_VIDEO_UPSCALE_INPUT_SIDE = 1920
 MAX_VIDEO_UPSCALE_OUTPUT_SIDE = 3840  # 2160p (4K UHD)
-MAX_VIDEO_UPSCALE_FRAMES = 300  # Presupuesto maximo de fotogramas batch (12 GB VRAM)
+MAX_VIDEO_UPSCALE_FRAMES = 300  # Presupuesto maximo de fotogramas por tramo (12 GB VRAM)
+MAX_VIDEO_UPSCALE_FPS = 120.0
+MAX_VIDEO_UPSCALE_DURATION_S = 600.0
+MAX_VIDEO_UPSCALE_TOTAL_OUTPUT_BYTES = 45 * 1024**3
+VIDEO_UPSCALE_CHUNK_FRAMES_1080 = 150
+VIDEO_UPSCALE_CHUNK_FRAMES_DEFAULT = 300
 MAX_VIDEO_UPSCALE_INPUT_BYTES = 4 * 1024**3
 MAX_VIDEO_UPSCALE_OUTPUT_BYTES = 16 * 1024**3
 IMAGE_EXT = ("png",)
@@ -605,22 +612,130 @@ def probe_video_metadata(
     return {"width": 0, "height": 0, "frames": 0, "duration": 0.0, "fps": 0.0}
 
 
+def _effective_video_scale(scale: int, model_file: str | None) -> int:
+    """Escala real: x2 fija para RealESRGAN_x2, si no la solicitada valida."""
+    if model_file == "RealESRGAN_x2.pth":
+        return 2
+    return scale if isinstance(scale, int) and scale > 0 else 2
+
+
+def plan_video_chunks(
+    meta: dict[str, Any],
+    *,
+    scale: int = 2,
+    model_file: str | None = None,
+    rife_multiplier: int = 1,
+) -> dict[str, Any]:
+    """Planifica un video por tramos sin el limite fijo de 300 frames totales.
+
+    Mantiene el presupuesto por tramo (entrada <= 4 GiB, salida <= 16 GiB y
+    150/300 frames segun resolucion) y anade topes globales de duracion y
+    espacio. ``rife_multiplier`` multiplica los frames de salida por tramo.
+    """
+    width = int(meta.get("width") or 0)
+    height = int(meta.get("height") or 0)
+    if width <= 0 or height <= 0:
+        raise EngineError("No se pudieron leer las dimensiones del video")
+
+    frames = int(meta.get("frames") or 0)
+    fps = float(meta.get("fps") or 0.0)
+    duration = float(meta.get("duration") or 0.0)
+    if frames <= 0:
+        if duration > 0 and fps > 0:
+            frames = round(duration * fps)
+        if frames <= 0:
+            raise EngineError("No se pudo determinar el numero de fotogramas del video")
+    if not math.isfinite(fps) or fps <= 0:
+        raise EngineError("No se pudo determinar el fps del video")
+    if fps > MAX_VIDEO_UPSCALE_FPS:
+        raise EngineError(
+            f"El video tiene {fps:g} fps; el maximo permitido es {MAX_VIDEO_UPSCALE_FPS:g} fps."
+        )
+    if duration <= 0:
+        duration = frames / fps
+    if duration > MAX_VIDEO_UPSCALE_DURATION_S:
+        raise EngineError(
+            f"El video dura {duration:.1f} s; el maximo por job es "
+            f"{MAX_VIDEO_UPSCALE_DURATION_S:.0f} s. Divida el clip antes de escalar."
+        )
+
+    if isinstance(rife_multiplier, bool) or not isinstance(rife_multiplier, int):
+        raise EngineError("rife_multiplier invalido")
+    if rife_multiplier < 1 or rife_multiplier > 4:
+        raise EngineError("rife_multiplier fuera de rango (1-4)")
+
+    effective_scale = _effective_video_scale(scale, model_file)
+    out_w = round(width * effective_scale)
+    out_h = round(height * effective_scale)
+    if max(width, height) > MAX_VIDEO_UPSCALE_INPUT_SIDE:
+        raise EngineError(
+            f"El video de entrada es demasiado grande para escalar ({width}x{height} px; "
+            f"maximo permitido de entrada: {MAX_VIDEO_UPSCALE_INPUT_SIDE} px en el lado mayor). "
+            f"Para 12 GB de VRAM reduzca la resolucion a 1080p o inferior antes de escalar."
+        )
+    if max(out_w, out_h) > MAX_VIDEO_UPSCALE_OUTPUT_SIDE:
+        raise EngineError(
+            f"El escalado solicitado ({width}x{height} px x {effective_scale} = {out_w}x{out_h} px) "
+            f"supera el limite de salida permitido para 12 GB VRAM "
+            f"({MAX_VIDEO_UPSCALE_OUTPUT_SIDE} px / 2160p)."
+        )
+
+    chunk_frames = (
+        VIDEO_UPSCALE_CHUNK_FRAMES_1080
+        if height >= 1080
+        else VIDEO_UPSCALE_CHUNK_FRAMES_DEFAULT
+    )
+    input_per_frame = width * height * 3 * 4
+    output_per_frame = out_w * out_h * 3 * 4 * rife_multiplier
+    max_by_input = MAX_VIDEO_UPSCALE_INPUT_BYTES // max(1, input_per_frame)
+    max_by_output = MAX_VIDEO_UPSCALE_OUTPUT_BYTES // max(1, output_per_frame)
+    chunk_frames = min(chunk_frames, max_by_input, max_by_output)
+    if chunk_frames < 1:
+        raise EngineError(
+            "Un solo fotograma supera el presupuesto de VRAM para este video; "
+            "reduzca la resolucion o la escala."
+        )
+
+    total_output_bytes = frames * output_per_frame
+    if total_output_bytes > MAX_VIDEO_UPSCALE_TOTAL_OUTPUT_BYTES:
+        raise EngineError(
+            f"La salida estimada ({total_output_bytes / (1024**3):.2f} GB) supera el tope "
+            f"de espacio por job ({MAX_VIDEO_UPSCALE_TOTAL_OUTPUT_BYTES / (1024**3):.0f} GB). "
+            f"Divida el clip o reduzca la escala."
+        )
+
+    chunks = max(1, math.ceil(frames / chunk_frames))
+    return {
+        "width": width,
+        "height": height,
+        "frames": frames,
+        "duration": duration,
+        "fps": fps,
+        "scale": effective_scale,
+        "output_width": out_w,
+        "output_height": out_h,
+        "chunk_frames": chunk_frames,
+        "chunks": chunks,
+        "needs_chunks": chunks > 1,
+        "estimated_output_bytes": total_output_bytes,
+        "estimated_output_gb": round(total_output_bytes / (1024**3), 2),
+    }
+
+
 def validate_video_upscale_dimensions(
     video_path: Path | str,
     *,
     scale: int = 2,
     model_file: str | None = None,
+    rife_multiplier: int = 1,
     ffprobe_bin: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Valida que la resolucion, fotogramas y memoria del video no excedan la VRAM (12 GB).
+    """Valida el video y devuelve el plan de tramos (sin limite fijo de 300).
 
-    Lanza EngineError (HTTP 400) si:
-    - No se pueden leer las dimensiones o los fotogramas del video
-    - El lado mayor supera MAX_VIDEO_UPSCALE_INPUT_SIDE (1920 px)
-    - La resolucion esperada de salida supera MAX_VIDEO_UPSCALE_OUTPUT_SIDE (3840 px / 2160p)
-    - El numero de fotogramas supera MAX_VIDEO_UPSCALE_FRAMES (300 fotogramas)
-    - El presupuesto de memoria de entrada supera MAX_VIDEO_UPSCALE_INPUT_BYTES (4 GiB)
-    - El presupuesto de memoria de salida supera MAX_VIDEO_UPSCALE_OUTPUT_BYTES (16 GiB)
+    Lanza EngineError (HTTP 400) si no puede leer dimensiones/frames/fps, si
+    el lado de entrada/salida excede el limite, si fps > 120, si la duracion
+    supera 600 s o si la salida total estimada supera 48 GiB. Cada tramo
+    respeta el presupuesto de VRAM (4 GiB entrada / 16 GiB salida).
     """
     path = Path(video_path)
     if not path.is_file():
@@ -629,74 +744,17 @@ def validate_video_upscale_dimensions(
     meta = probe_video_metadata(path, ffprobe_bin=ffprobe_bin)
     width = int(meta.get("width") or 0)
     height = int(meta.get("height") or 0)
-
-    # 1. meta = probe; si width<=0 o height<=0 => EngineError claro
     if width <= 0 or height <= 0:
         raise EngineError(f"No se pudieron leer las dimensiones del video: {path.name}")
 
-    # 2. frames: si meta["frames"]<=0, calcular round(duration*fps); si sigue <=0 => EngineError
-    frames = int(meta.get("frames") or 0)
-    if frames <= 0:
-        duration = float(meta.get("duration") or 0.0)
-        fps = float(meta.get("fps") or 0.0)
-        if duration > 0 and fps > 0:
-            frames = round(duration * fps)
-        if frames <= 0:
-            raise EngineError(f"No se pudo determinar el numero de fotogramas del video: {path.name}")
-        meta["frames"] = frames
-
-    # 3. comprobar max side input/output (como ahora)
-    if max(width, height) > MAX_VIDEO_UPSCALE_INPUT_SIDE:
-        raise EngineError(
-            f"El video de entrada es demasiado grande para escalar ({width}x{height} px; "
-            f"maximo permitido de entrada: {MAX_VIDEO_UPSCALE_INPUT_SIDE} px en el lado mayor). "
-            f"Para 12 GB de VRAM reduzca la resolucion a 1080p o inferior antes de escalar."
-        )
-
-    effective_scale = (
-        2
-        if model_file == "RealESRGAN_x2.pth"
-        else (scale if isinstance(scale, int) and scale > 0 else 2)
+    plan = plan_video_chunks(
+        meta,
+        scale=scale,
+        model_file=model_file,
+        rife_multiplier=rife_multiplier,
     )
+    return {**meta, **plan}
 
-    out_side = max(width, height) * effective_scale
-    if out_side > MAX_VIDEO_UPSCALE_OUTPUT_SIDE:
-        raise EngineError(
-            f"El escalado solicitado ({width}x{height} px x {effective_scale} = {width*effective_scale}x{height*effective_scale} px) "
-            f"supera el limite de salida permitido para 12 GB VRAM ({MAX_VIDEO_UPSCALE_OUTPUT_SIDE} px / 2160p)."
-        )
-
-    # 4. comprobar frames > MAX_VIDEO_UPSCALE_FRAMES => EngineError
-    if frames > MAX_VIDEO_UPSCALE_FRAMES:
-        raise EngineError(
-            f"El video tiene demasiados fotogramas ({frames} frames; "
-            f"maximo permitido para escalado en batch: {MAX_VIDEO_UPSCALE_FRAMES} frames). "
-            f"Reduzca la duracion del clip antes de escalar."
-        )
-
-    # 5. input_bytes y output_bytes
-    input_bytes = frames * width * height * 3 * 4
-    output_w = round(width * effective_scale)
-    output_h = round(height * effective_scale)
-    output_bytes = frames * output_w * output_h * 3 * 4
-
-    # 6. si input_bytes > MAX_VIDEO_UPSCALE_INPUT_BYTES => EngineError con GB y límite
-    if input_bytes > MAX_VIDEO_UPSCALE_INPUT_BYTES:
-        raise EngineError(
-            f"El presupuesto de memoria de entrada ({input_bytes / (1024**3):.2f} GB) supera "
-            f"el maximo permitido ({MAX_VIDEO_UPSCALE_INPUT_BYTES / (1024**3):.1f} GB). "
-            f"Reduzca la resolucion o los fotogramas."
-        )
-
-    # 7. si output_bytes > MAX_VIDEO_UPSCALE_OUTPUT_BYTES => EngineError con GB y límite
-    if output_bytes > MAX_VIDEO_UPSCALE_OUTPUT_BYTES:
-        raise EngineError(
-            f"El presupuesto de memoria de salida ({output_bytes / (1024**3):.2f} GB) supera "
-            f"el maximo permitido ({MAX_VIDEO_UPSCALE_OUTPUT_BYTES / (1024**3):.1f} GB). "
-            f"Reduzca la escala, resolucion o fotogramas."
-        )
-
-    return meta
 
 
 def _require_plain_name(value: Any, label: str) -> str:
@@ -1321,7 +1379,153 @@ def _video_upscale_params(job: dict) -> dict:
         params["sharpen_method"] = job.get("sharpen_method")
     if job.get("rife_model"):
         params["rife_model"] = job.get("rife_model")
+    if job.get("chunks") is not None:
+        params["chunks"] = job.get("chunks")
+        params["chunk_frames"] = job.get("chunk_frames")
     return params
+
+
+def _run_ffmpeg(cmd: list[str], *, timeout: int = 600, label: str = "ffmpeg") -> None:
+    """Ejecuta ffmpeg y convierte cualquier fallo en EngineError con stderr."""
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001 - se reporta como EngineError
+        raise EngineError(f"error de {label}: {exc}") from exc
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        raise EngineError(f"error de {label}: {stderr[-800:]}")
+
+
+def _video_has_audio(path: Path, ffmpeg_bin: str) -> bool:
+    """Comprueba si el video tiene pista de audio sin fallar si ffmpeg devuelve 1."""
+    try:
+        proc = subprocess.run(
+            [ffmpeg_bin, "-hide_banner", "-i", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return False
+    return "Audio:" in (proc.stderr or "")
+
+
+def _split_video_chunks(
+    source: Path,
+    out_dir: Path,
+    *,
+    frames: int,
+    fps: float,
+    chunk_frames: int,
+    ffmpeg_bin: str,
+) -> list[Path]:
+    """Corta el video en tramos silenciosos de ``chunk_frames`` fotogramas."""
+    if frames <= 0 or chunk_frames <= 0:
+        raise EngineError("tramos invalidos: frames/chunk_frames vacios")
+    if not math.isfinite(fps) or fps <= 0:
+        raise EngineError("No se pudo determinar el fps para dividir el video")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    chunks: list[Path] = []
+    for index, start in enumerate(range(0, frames, chunk_frames)):
+        count = min(chunk_frames, frames - start)
+        target = out_dir / f"chunk_{index:03d}.mp4"
+        _run_ffmpeg(
+            [
+                ffmpeg_bin,
+                "-y",
+                "-i",
+                str(source),
+                "-ss",
+                f"{start / fps:.6f}",
+                "-frames:v",
+                str(count),
+                "-an",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                "-avoid_negative_ts",
+                "make_zero",
+                str(target),
+            ],
+            label="ffmpeg al dividir el video en tramos",
+        )
+        if not target.is_file() or target.stat().st_size == 0:
+            raise EngineError(f"ffmpeg no genero el tramo {target.name}")
+        chunks.append(target)
+    return chunks
+
+
+def _mux_original_audio(
+    video_path: Path,
+    original_path: Path,
+    output_path: Path,
+    *,
+    ffmpeg_bin: str,
+) -> None:
+    """Remuxea el audio original sobre el video concatenado, sin reencodear video."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not _video_has_audio(original_path, ffmpeg_bin):
+        shutil.copy2(video_path, output_path)
+        return
+    _run_ffmpeg(
+        [
+            ffmpeg_bin,
+            "-y",
+            "-i",
+            str(video_path),
+            "-i",
+            str(original_path),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0?",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            str(output_path),
+        ],
+        label="ffmpeg al remuxear el audio original",
+    )
+
+
+def _submit_video_graph(
+    *,
+    engine: Any,
+    tracker: Any,
+    record: dict | None,
+    job: dict,
+    video_name: str,
+    model_file: str,
+    sharpen: int,
+    sharpen_method: str,
+    rife_model: str | None,
+) -> list[Path]:
+    graph = build_video_upscale_graph(
+        video_name,
+        model_file,
+        prefix=job.get("prefix") or DEFAULT_PREFIX,
+        filename_prefix=job.get("filename_prefix") or DEFAULT_FILENAME_PREFIX,
+        sharpen=sharpen,
+        sharpen_method=sharpen_method,
+        rife_model=rife_model,
+    )
+    prompt_id = engine.submit(graph)
+    if record is not None:
+        record["prompt_id"] = prompt_id
+    tracker.prompt_id = prompt_id
+    history = engine.wait(prompt_id)
+    paths = engine.outputs(history, expected_ext=VIDEO_EXT)
+    if not paths:
+        raise EngineError(f"el engine no devolvio ningun video para {prompt_id}")
+    return paths
 
 
 def run_video_upscale(
@@ -1333,15 +1537,13 @@ def run_video_upscale(
     record: dict | None = None,
     ws_factory: Any = None,
 ) -> None:
-    """Ejecuta un job de escalado de video: grafo -> engine -> galeria -> store.
+    """Ejecuta un job de escalado de video, por tramos si hace falta.
 
-    Mismo contrato que `run_upscale` (estado queued -> running -> done/error/
-    cancelled en `record`, tracker parado en el `finally`, sin propagar
-    errores), pero el resultado va a la galeria como ``kind="video"`` y
-    ``job["params"]`` queda como ``{task: "upscale_video", source_gen,
-    source_file, model, scale, fps}``. ``job["fps"]`` es metadata opcional
-    (``None`` o numero > 0): el grafo toma fps y audio reales del origen via
-    `GetVideoComponents`.
+    Mantiene el contrato de estado queued -> running -> done/error/cancelled.
+    Si el video supera el presupuesto de un tramo, lo divide con ffmpeg,
+    escala cada tramo en el mismo job (``job["progress"]["state"]`` indica
+    "tramo i/N"), concatena y remuxea el audio original. Los temporales se
+    eliminan siempre en el ``finally``.
     """
     gen_id = job["gen_id"]
     if record is not None and record.get("status") == "cancelled":
@@ -1350,6 +1552,7 @@ def run_video_upscale(
         job["error"] = None
         return
     tracker = None
+    temp_dir: Path | None = None
     try:
         job["fps"] = parse_fps(job.get("fps"))
         sharpen = parse_sharpen(job.get("sharpen"))
@@ -1360,25 +1563,22 @@ def run_video_upscale(
         if rife_model:
             rife_model = fps_ckpt(rife_model)
         job["rife_model"] = rife_model
-        job["params"] = _video_upscale_params(job)
         model_file = resolve_upscale_model_file(job.get("model_file"), config)
+        plan: dict[str, Any] | None = None
+        input_video_path: Path | None = None
         if config and hasattr(config, "comfy_input_dir") and job.get("video_name"):
             input_video_path = Path(config.comfy_input_dir) / job.get("video_name")
             if input_video_path.is_file():
-                validate_video_upscale_dimensions(
+                plan = validate_video_upscale_dimensions(
                     input_video_path,
                     scale=job.get("scale", 2),
                     model_file=model_file,
+                    rife_multiplier=2 if rife_model else 1,
                 )
-        graph = build_video_upscale_graph(
-            job.get("video_name"),
-            model_file,
-            prefix=job.get("prefix") or DEFAULT_PREFIX,
-            filename_prefix=job.get("filename_prefix") or DEFAULT_FILENAME_PREFIX,
-            sharpen=sharpen,
-            sharpen_method=sharpen_method,
-            rife_model=rife_model,
-        )
+                job["chunks"] = plan["chunks"]
+                job["chunk_frames"] = plan["chunk_frames"]
+                job["chunks_total"] = plan["chunks"]
+        job["params"] = _video_upscale_params(job)
         engine = (
             engine_factory()
             if engine_factory is not None
@@ -1396,21 +1596,104 @@ def run_video_upscale(
             record["tracker"] = tracker
             record["status"] = "running"
         tracker.start()
-        prompt_id = engine.submit(graph)
-        if record is not None:
-            record["prompt_id"] = prompt_id
-        tracker.prompt_id = prompt_id
-        history = engine.wait(prompt_id)
-        paths = engine.outputs(history, expected_ext=VIDEO_EXT)
-        if not paths:
-            raise EngineError(f"el engine no devolvio ningun video para {prompt_id}")
+
         gallery_dir = config.data_dir / "gallery" / str(gen_id)
         gallery_dir.mkdir(parents=True, exist_ok=True)
         names: list[str] = []
-        for path in paths:
-            target = gallery_dir / path.name
-            shutil.copy2(path, target)
-            names.append(target.name)
+
+        chunks = int((plan or {}).get("chunks") or 1)
+        if chunks > 1 and input_video_path is not None and plan is not None:
+            ffmpeg_bin = find_ffmpeg()
+            if not ffmpeg_bin:
+                raise EngineError(
+                    "ffmpeg no encontrado: el escalado por tramos necesita ffmpeg en "
+                    "tools/ffmpeg/ffmpeg.exe o en el PATH"
+                )
+            temp_dir = Path(config.data_dir) / "tmp" / f"upscale_{gen_id}"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            chunk_paths = _split_video_chunks(
+                input_video_path,
+                temp_dir,
+                frames=int(plan["frames"]),
+                fps=float(plan["fps"]),
+                chunk_frames=int(plan["chunk_frames"]),
+                ffmpeg_bin=ffmpeg_bin,
+            )
+            chunk_outputs: list[Path] = []
+            for index, chunk_path in enumerate(chunk_paths):
+                if (record is not None and record.get("status") == "cancelled") or getattr(
+                    tracker, "is_cancelled", False
+                ):
+                    if record is not None:
+                        record["status"] = "cancelled"
+                    raise JobCancelledError("cancelado entre tramos")
+                total = len(chunk_paths)
+                job["chunk_index"] = index + 1
+                job["chunks_total"] = total
+                job["progress"] = {
+                    "step": index + 1,
+                    "total": total,
+                    "percent": round((index / total) * 100, 1),
+                    "state": f"tramo {index + 1}/{total}",
+                    "node": "upscale_video",
+                }
+                input_name = f"{uuid.uuid4().hex}.mp4"
+                input_chunk = Path(config.comfy_input_dir) / input_name
+                shutil.copy2(chunk_path, input_chunk)
+                try:
+                    paths = _submit_video_graph(
+                        engine=engine,
+                        tracker=tracker,
+                        record=record,
+                        job=job,
+                        video_name=input_name,
+                        model_file=model_file,
+                        sharpen=sharpen,
+                        sharpen_method=sharpen_method,
+                        rife_model=rife_model,
+                    )
+                finally:
+                    input_chunk.unlink(missing_ok=True)
+                chunk_out = temp_dir / f"out_{index:03d}.mp4"
+                shutil.copy2(paths[0], chunk_out)
+                chunk_outputs.append(chunk_out)
+
+            concat_path = temp_dir / "concat.mp4"
+            concat_videos(chunk_outputs, concat_path, ffmpeg_exe=ffmpeg_bin)
+            final_path = temp_dir / "final.mp4"
+            _mux_original_audio(
+                concat_path,
+                input_video_path,
+                final_path,
+                ffmpeg_bin=ffmpeg_bin,
+            )
+            target = gallery_dir / f"upscaled_{gen_id}.mp4"
+            shutil.copy2(final_path, target)
+            names = [target.name]
+            job["progress"] = {
+                "step": int((plan or {}).get("chunks") or 1),
+                "total": int((plan or {}).get("chunks") or 1),
+                "percent": 100.0,
+                "state": "completado",
+                "node": "upscale_video",
+            }
+        else:
+            paths = _submit_video_graph(
+                engine=engine,
+                tracker=tracker,
+                record=record,
+                job=job,
+                video_name=job.get("video_name"),
+                model_file=model_file,
+                sharpen=sharpen,
+                sharpen_method=sharpen_method,
+                rife_model=rife_model,
+            )
+            for path in paths:
+                target = gallery_dir / path.name
+                shutil.copy2(path, target)
+                names.append(target.name)
+
         store.update(gen_id, status="done", outputs=names, kind="video")
         job["outputs"] = names
         job["error"] = None
@@ -1419,8 +1702,15 @@ def run_video_upscale(
     except Exception as exc:
         job["outputs"] = []
         job["error"] = str(exc)
-        if record is not None and record.get("status") == "cancelled":
+        cancelled = (
+            (record is not None and record.get("status") == "cancelled")
+            or isinstance(exc, JobCancelledError)
+            or (tracker is not None and getattr(tracker, "is_cancelled", False))
+        )
+        if cancelled:
             job["error"] = None
+            if record is not None:
+                record["status"] = "cancelled"
             try:
                 store.update(gen_id, status="cancelled")
             except EngineError:
@@ -1435,6 +1725,9 @@ def run_video_upscale(
     finally:
         if tracker is not None:
             tracker.stop()
+        if temp_dir is not None:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 
 def _fps_params(job: dict) -> dict:
@@ -1489,6 +1782,7 @@ def run_fps(
                     input_video_path,
                     scale=2,
                     model_file=None,
+                    rife_multiplier=multiplier,
                 )
         graph = build_fps_graph(
             job.get("video_name"),

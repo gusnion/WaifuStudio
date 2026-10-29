@@ -17,6 +17,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -1686,6 +1687,122 @@ class UpscaleDimensionSafetyTests(RunUpscaleTests):
         self.assertEqual(job["params"]["passes"], 1)
         graph = transport.submits[0]["prompt"]
         self.assertNotIn(UPSCALE2_ID, graph)
+
+
+class RunVideoUpscaleChunkTests(UpscaleTestCase):
+    """W15: runner por tramos con división, concatenación y audio original."""
+
+    def make_job(self, **overrides) -> dict:
+        gen_id = self.store.add(
+            "upscale",
+            "upscale #1/ok.mp4",
+            "",
+            {"task": "upscale_video"},
+            kind="video",
+        )
+        job = {
+            "kind": "upscale",
+            "task": "upscale_video",
+            "gen_id": gen_id,
+            "source_gen": 1,
+            "source_file": "ok.mp4",
+            "video_name": "src.mp4",
+            "model": "real-esrgan-x2",
+            "model_file": "RealESRGAN_x2.pth",
+            "scale": 2,
+            "fps": None,
+        }
+        job.update(overrides)
+        return job
+
+    def factory(self, transport):
+        return lambda: ComfyEngine(
+            self.config, transport=transport, poll_s=0.01, history_timeout_s=5.0
+        )
+
+    def test_chunked_video_splits_and_muxes_audio(self):
+        source = self.config.comfy_input_dir / "chunked_src.mp4"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(MP4_BYTES)
+        transport = FakeVideoUpscaleTransport(self.config)
+        job = self.make_job(video_name="chunked_src.mp4")
+        record = {"status": "queued"}
+        chunk_a = self.config.data_dir / "tmp" / "chunk_a.mp4"
+        chunk_b = self.config.data_dir / "tmp" / "chunk_b.mp4"
+        chunk_a.parent.mkdir(parents=True, exist_ok=True)
+        chunk_a.write_bytes(MP4_BYTES)
+        chunk_b.write_bytes(MP4_BYTES)
+
+        def fake_split(*args, **kwargs):
+            return [chunk_a, chunk_b]
+
+        def fake_concat(paths, output, **kwargs):
+            output.write_bytes(MP4_BYTES)
+            return output
+
+        def fake_mux(video, original, output, **kwargs):
+            output.write_bytes(MP4_BYTES)
+
+        plan = {
+            "width": 640,
+            "height": 360,
+            "frames": 4,
+            "duration": 1.0,
+            "fps": 4.0,
+            "chunk_frames": 2,
+            "chunks": 2,
+            "needs_chunks": True,
+        }
+        with patch(
+            "app.upscale.validate_video_upscale_dimensions", return_value=plan
+        ), patch("app.upscale.find_ffmpeg", return_value="ffmpeg"), patch(
+            "app.upscale._split_video_chunks", side_effect=fake_split
+        ) as mock_split, patch(
+            "app.upscale.concat_videos", side_effect=fake_concat
+        ) as mock_concat, patch(
+            "app.upscale._mux_original_audio", side_effect=fake_mux
+        ) as mock_mux:
+            run_video_upscale(
+                job,
+                config=self.config,
+                store=self.store,
+                engine_factory=self.factory(transport),
+                record=record,
+            )
+
+        self.assertEqual(record["status"], "done")
+        self.assertEqual(len(transport.submits), 2)
+        self.assertEqual(job["chunks_total"], 2)
+        self.assertEqual(job["chunk_index"], 2)
+        self.assertEqual(job["params"]["chunks"], 2)
+        mock_split.assert_called_once()
+        mock_concat.assert_called_once()
+        mock_mux.assert_called_once()
+        row = self.store.get(job["gen_id"])
+        self.assertEqual(row["status"], "done")
+        self.assertEqual(len(row["outputs"]), 1)
+        self.assertFalse(
+            (self.config.data_dir / "tmp" / f"upscale_{job['gen_id']}").exists()
+        )
+
+
+class UpscaleLocalVideoStaticTests(unittest.TestCase):
+    """W15: entrada de vídeo local y aviso de tramos en la pestaña."""
+
+    def test_html_has_local_video_input_and_chunk_hint(self):
+        html = (APP_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="upscale-video-file"', html)
+        self.assertIn('id="upscale-video-file-field"', html)
+        self.assertIn('id="upscale-chunk-hint"', html)
+
+    def test_js_wires_local_video_and_chunk_progress(self):
+        js = (APP_ROOT / "static" / "js" / "tabs" / "upscaler.js").read_text(encoding="utf-8")
+        self.assertIn("useUpscaleLocalVideoFile", js)
+        self.assertIn("upscale-video-file", js)
+        self.assertIn("video_b64", js)
+        self.assertIn("updateUpscaleChunkHint", js)
+        self.assertIn("tramo", js)
+        self.assertIn("setUpscaleProgress", js)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,10 @@ Dependencias: app.upscale, app.routes.image y el registro de jobs.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, Request
@@ -35,6 +38,33 @@ from app.upscale import (
 )
 
 router = APIRouter()
+MAX_LOCAL_VIDEO_BYTES = 1024 * 1024 * 1024
+LOCAL_VIDEO_EXTENSIONS = (".mp4", ".webm")
+
+
+def _decode_video_b64(raw: Any, filename: Any) -> tuple[bytes, str, str]:
+    """Decodifica un video local base64 y valida nombre/extension/tamano."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise EngineError("video_b64 invalido o vacio")
+    text = raw.strip()
+    if text.startswith("data:") and "," in text:
+        text = text.split(",", 1)[1]
+    try:
+        data = base64.b64decode(text, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise EngineError(f"video_b64 invalido: {exc}") from exc
+    if not data:
+        raise EngineError("video_b64 vacio")
+    if len(data) > MAX_LOCAL_VIDEO_BYTES:
+        raise EngineError(
+            f"El video local supera {MAX_LOCAL_VIDEO_BYTES // (1024**3)} GB; "
+            "recorta el clip antes de subirlo."
+        )
+    name = Path(str(filename or "local.mp4")).name
+    ext = Path(name).suffix.lower()
+    if ext not in LOCAL_VIDEO_EXTENSIONS:
+        raise EngineError("extension de video local no permitida; usar .mp4 o .webm")
+    return data, name, ext
 
 
 @router.get("/api/upscale/models")
@@ -49,6 +79,54 @@ async def api_upscale_models(request: Request) -> dict:
         "kinds": ["image", "video", "fps"],
         "frame_interpolation": frame_interpolation(),
     }
+
+
+@router.post("/api/upscale/plan")
+async def api_upscale_plan(request: Request, payload: dict = Body(...)) -> Any:
+    """Devuelve el plan de tramos de un video sin encolar el job."""
+    cfg = request.app.state.config
+    st = request.app.state.store
+    source_kind = payload.get("kind") or "video"
+    if source_kind not in ("video", "fps"):
+        raise EngineError("plan solo aplica a kind=video|fps")
+    source_gen = payload.get("source_gen")
+    if isinstance(source_gen, bool) or not isinstance(source_gen, int):
+        raise EngineError("source_gen requerido (entero)")
+    row = st.get(source_gen)
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": "generacion origen desconocida"})
+    if row.get("kind") != "video":
+        raise EngineError("origen invalido; se requiere una generacion de video")
+    file_name = str(payload.get("file") or "").strip()
+    if not file_name:
+        for output in row.get("outputs") or []:
+            candidate = output.get("name") if isinstance(output, dict) else output
+            if isinstance(candidate, str) and candidate.strip():
+                file_name = candidate.strip()
+                break
+    gallery_root = (cfg.data_dir / "gallery" / str(source_gen)).resolve()
+    source = (gallery_root / file_name).resolve()
+    if not source.is_relative_to(gallery_root):
+        return JSONResponse(status_code=403, content={"error": "ruta fuera de la galeria"})
+    if source.suffix.lower() not in LOCAL_VIDEO_EXTENSIONS or not source.is_file():
+        return JSONResponse(status_code=404, content={"error": "archivo de origen no encontrado"})
+
+    if source_kind == "fps":
+        scale = 2
+        model_file = None
+        rife_multiplier = fps_multiplier(payload.get("multiplier") or 2)
+    else:
+        entry = get_upscaler(payload.get("model"))
+        scale = entry["scale"]
+        model_file = resolve_upscale_model_file(entry["file"], cfg)
+        rife_multiplier = 2 if payload.get("rife_model") else 1
+    plan = validate_video_upscale_dimensions(
+        source,
+        scale=scale,
+        model_file=model_file,
+        rife_multiplier=rife_multiplier,
+    )
+    return {"ok": True, **plan}
 
 
 @router.post("/api/upscale")
@@ -176,6 +254,24 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
         job_id = queue.submit(job)
         request.app.state.jobs[job_id] = job
         return {"job_id": job_id}
+
+    video_b64 = payload.get("video_b64")
+    if video_b64 is not None:
+        if source_kind == "image":
+            raise EngineError("video_b64 solo aplica a kind=video|fps")
+        if payload.get("source_gen") is not None:
+            raise EngineError("source_gen y video_b64 son mutuamente excluyentes")
+        raw_bytes, original_name, ext = _decode_video_b64(video_b64, payload.get("filename"))
+        gen_id = st.add(
+            "upload", f"video local {original_name}", "", {"task": "local_video"}, kind="video"
+        )
+        gallery_dir = (cfg.data_dir / "gallery" / str(gen_id)).resolve()
+        gallery_dir.mkdir(parents=True, exist_ok=True)
+        stored_name = f"local_{gen_id}{ext}"
+        (gallery_dir / stored_name).write_bytes(raw_bytes)
+        st.update(gen_id, status="done", outputs=[stored_name], kind="video")
+        payload = {**payload, "source_gen": gen_id, "file": stored_name}
+
     source_gen = payload.get("source_gen")
     if isinstance(source_gen, bool) or not isinstance(source_gen, int):
         if source_kind == "image":
@@ -247,12 +343,14 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             source,
             scale=entry["scale"],
             model_file=resolved_model,
+            rife_multiplier=2 if rife_model else 1,
         )
     elif source_kind == "fps":
         validate_video_upscale_dimensions(
             source,
             scale=2,
             model_file=None,
+            rife_multiplier=multiplier or 2,
         )
     input_dir = cfg.comfy_input_dir
     input_dir.mkdir(parents=True, exist_ok=True)

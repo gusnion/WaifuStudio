@@ -28,6 +28,12 @@ import { switchTab } from "../main.js";
 
 function setUpscaleProgress(progress) {
   setProgress(progress, "upscale");
+  const stateText = progress && progress.state;
+  if (stateText) {
+    const txt = $("upscale-progress-text");
+    if (txt) txt.textContent = stateText;
+    setUpscaleStatus(`Escalando (${stateText})...`);
+  }
 }
 
 function upscaleKind() {
@@ -190,7 +196,91 @@ function clearUpscaleLocalFile(revoke = true) {
   if (input) {
     input.value = "";
   }
+  clearUpscaleLocalVideo(revoke);
 }
+
+function clearUpscaleLocalVideo(revoke = true) {
+  if (state.upscaleLocalVideo) {
+    if (revoke && state.upscaleLocalVideo.url !== state.upscaleLastSourceUrl) {
+      try {
+        URL.revokeObjectURL(state.upscaleLocalVideo.url);
+      } catch (_err) {}
+    }
+    state.upscaleLocalVideo = null;
+  }
+  const input = $("upscale-video-file");
+  if (input) input.value = "";
+  const note = $("upscale-video-file-note");
+  if (note) note.textContent = "";
+  const hint = $("upscale-chunk-hint");
+  if (hint) hint.hidden = true;
+}
+
+async function useUpscaleLocalVideoFile(file) {
+  if (!file) return;
+  const isVideoMime = String(file.type || "").startsWith("video/");
+  if (!isVideoMime && !/\.(mp4|webm)$/i.test(file.name)) {
+    throw new Error("El archivo local debe ser un vídeo MP4 o WebM");
+  }
+  if (file.size > 512 * 1024 * 1024) {
+    throw new Error("El vídeo local supera 512 MB; recórtalo antes de subirlo");
+  }
+  const b64 = await readFileBase64(file);
+  clearUpscaleLocalFile(true);
+  const url = URL.createObjectURL(file);
+  state.upscaleLocalVideo = {
+    name: file.name,
+    b64,
+    url,
+    duration: 0,
+    width: 0,
+    height: 0,
+  };
+  state.upscaleSourceId = null;
+  state.upscaleCompareSlot2 = null;
+  if (upscaleCompareActive) setUpscaleCompareActive(false);
+  const probe = document.createElement("video");
+  probe.preload = "metadata";
+  probe.src = url;
+  probe.addEventListener("loadedmetadata", () => {
+    if (!state.upscaleLocalVideo || state.upscaleLocalVideo.url !== url) return;
+    state.upscaleLocalVideo.duration = Number(probe.duration) || 0;
+    state.upscaleLocalVideo.width = Number(probe.videoWidth) || 0;
+    state.upscaleLocalVideo.height = Number(probe.videoHeight) || 0;
+    updateUpscaleChunkHint();
+  });
+  updateUpscaleSourceView();
+  updateUpscaleChunkHint();
+  setUpscaleStatus(`Vídeo local: ${file.name}`);
+}
+
+function updateUpscaleChunkHint() {
+  const hint = $("upscale-chunk-hint");
+  if (!hint) return;
+  const kind = upscaleKind();
+  const local = kind === "image" ? null : state.upscaleLocalVideo;
+  if (!local || !local.duration) {
+    hint.hidden = true;
+    hint.textContent = "";
+    return;
+  }
+  const fps = 24;
+  const frames = Math.max(1, Math.round(local.duration * fps));
+  const height = local.height || 0;
+  const chunk = height >= 1080 ? 150 : 300;
+  const rife = kind === "video" && $("upscale-rife-model")?.value;
+  const perChunk = Math.max(1, Math.floor(chunk / (rife ? 2 : 1)));
+  const chunks = Math.max(1, Math.ceil(frames / perChunk));
+  const scale = 2;
+  const outW = (local.width || 0) * scale;
+  const outH = (local.height || 0) * scale;
+  const estGb = outW && outH
+    ? (frames * outW * outH * 3 * 4 * (rife ? 2 : 1)) / (1024 ** 3)
+    : 0;
+  hint.hidden = false;
+  hint.textContent = `Duración ${local.duration.toFixed(1)} s · ${frames} frames aprox. · ${chunks} tramo${chunks > 1 ? "s" : ""}${estGb ? ` · salida estimada ~${estGb.toFixed(1)} GB` : ""}. El servidor calcula el corte exacto antes de encolar.`;
+}
+
 
 function resolveItemImageUrl(item) {
   if (!item) return null;
@@ -667,7 +757,7 @@ async function useUpscaleLocalFile(file) {
 
 function updateUpscaleSourceView() {
   const isVideo = upscaleSourceKind() === "video";
-  const local = !isVideo ? state.upscaleLocalFile : null;
+  const local = isVideo ? state.upscaleLocalVideo : state.upscaleLocalFile;
   const item = local ? null : selectedUpscaleSource();
   const url = local ? local.url : isVideo ? videoViewUrl(item) : resolveItemImageUrl(item);
   const img = $("upscale-preview-img");
@@ -772,6 +862,13 @@ function applyUpscaleKind() {
   $("upscale-ckpt-field").classList.toggle("hidden", !isFps);
   $("upscale-multiplier-field").classList.toggle("hidden", !isFps);
   $("upscale-file-field").classList.toggle("hidden", isVideo);
+  $("upscale-video-file-field").classList.toggle("hidden", !isVideo);
+  $("upscale-chunks-field")?.classList.toggle("hidden", !isVideo);
+  if (isVideo) updateUpscaleChunkHint();
+  else {
+    const hint = $("upscale-chunk-hint");
+    if (hint) hint.hidden = true;
+  }
   $("upscale-passes-field").classList.toggle("hidden", isVideo);
   $("upscale-mode-field").classList.toggle("hidden", isVideo);
   const isDiffMode = !isVideo && $("upscale-mode") && $("upscale-mode").value !== "fast";
@@ -831,6 +928,7 @@ async function finishUpscale(job) {
 }
 
 async function finishVideoUpscale() {
+  clearUpscaleLocalVideo(true);
   await reloadVideoViewerFirstPage();
   state.upscaleSourceId = state.videoViewer.selectedId;
   await loadUpscaleGallery(1);
@@ -839,12 +937,13 @@ async function finishVideoUpscale() {
 
 async function generateUpscale() {
   const kind = upscaleKind();
-  const local = kind === "image" ? state.upscaleLocalFile : null;
-  const source = local ? null : selectedUpscaleSource();
-  if (!local && !source) {
+  const localImage = kind === "image" ? state.upscaleLocalFile : null;
+  const localVideo = kind === "image" ? null : state.upscaleLocalVideo;
+  const source = (localImage || localVideo) ? null : selectedUpscaleSource();
+  if (!localImage && !localVideo && !source) {
     setUpscaleStatus(
       kind !== "image"
-        ? "No hay vídeo de origen; genera uno en Vídeo"
+        ? "No hay vídeo de origen; elige uno de la galería o carga un vídeo local"
         : "No hay imagen de origen; elige una miniatura o un archivo local",
       true
     );
@@ -862,20 +961,30 @@ async function generateUpscale() {
       setUpscaleStatus("Multiplicador inválido; usa ×2 o ×4", true);
       return;
     }
-    payload.source_gen = source.id;
+    if (localVideo) {
+      payload.video_b64 = localVideo.b64;
+      payload.filename = localVideo.name;
+    } else {
+      payload.source_gen = source.id;
+      const fpsIn = Number(source.params && source.params.fps);
+      if (Number.isFinite(fpsIn) && fpsIn > 0) {
+        payload.fps_in = fpsIn;
+      }
+    }
     payload.ckpt = ckpt;
     payload.multiplier = multiplier;
-    const fpsIn = Number(source.params && source.params.fps);
-    if (Number.isFinite(fpsIn) && fpsIn > 0) {
-      payload.fps_in = fpsIn;
-    }
   } else if (kind === "video") {
     const model = $("upscale-model").value;
     if (!model) {
       setUpscaleStatus("Elige un modelo de escalado", true);
       return;
     }
-    payload.source_gen = source.id;
+    if (localVideo) {
+      payload.video_b64 = localVideo.b64;
+      payload.filename = localVideo.name;
+    } else {
+      payload.source_gen = source.id;
+    }
     payload.model = model;
     const sharpen = Number($("upscale-sharpen").value);
     if ([0, 1, 2].includes(sharpen) && sharpen > 0) {
@@ -920,12 +1029,12 @@ async function generateUpscale() {
         payload.denoise = denoiseVal;
       }
     }
-    if (local) {
-      payload.image_b64 = local.b64;
+    if (localImage) {
+      payload.image_b64 = localImage.b64;
     } else {
       payload.source_gen = source.id;
     }
-    const sourceBeforeUrl = local ? local.url : resolveItemImageUrl(source);
+    const sourceBeforeUrl = localImage ? localImage.url : resolveItemImageUrl(source);
     state.upscaleLastSourceUrl = sourceBeforeUrl;
     state.upscaleLastSourceId = source ? source.id : null;
     state.upscaleLastResultUrl = null;
@@ -971,6 +1080,11 @@ function initUpscalerTab() {
     const file = (event.target.files || [])[0];
     useUpscaleLocalFile(file).catch((error) => setUpscaleStatus(error.message, true));
   });
+  on("upscale-video-file", "change", (event) => {
+    const file = (event.target.files || [])[0];
+    useUpscaleLocalVideoFile(file).catch((error) => setUpscaleStatus(error.message, true));
+  });
+  on("upscale-rife-model", "change", updateUpscaleChunkHint);
   on("upscale-gallery-prev", "click", () => {
     loadUpscaleGallery(state.upscaleGallery.page - 1).catch((error) =>
       setUpscaleStatus(error.message, true)

@@ -8,6 +8,7 @@ proteger la VRAM de 12 GB, tanto en el helper como en la ruta HTTP y runners.
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 import tempfile
@@ -26,11 +27,55 @@ from app.upscale import (
     MAX_VIDEO_UPSCALE_INPUT_SIDE,
     MAX_VIDEO_UPSCALE_OUTPUT_BYTES,
     MAX_VIDEO_UPSCALE_OUTPUT_SIDE,
+    plan_video_chunks,
     probe_video_metadata,
     run_fps,
     run_video_upscale,
     validate_video_upscale_dimensions,
 )
+
+
+class TestPlanVideoChunks(unittest.TestCase):
+    def test_1080p_240_frames_plan(self):
+        plan = plan_video_chunks(
+            {"width": 1920, "height": 1080, "frames": 240, "duration": 10.0, "fps": 24.0},
+            scale=2,
+        )
+        self.assertEqual(plan["chunk_frames"], 150)
+        self.assertEqual(plan["chunks"], 2)
+        self.assertTrue(plan["needs_chunks"])
+
+    def test_720p_350_frames_plan(self):
+        plan = plan_video_chunks(
+            {"width": 1280, "height": 720, "frames": 350, "duration": 12.0, "fps": 30.0},
+            scale=2,
+        )
+        self.assertEqual(plan["chunk_frames"], 300)
+        self.assertEqual(plan["chunks"], 2)
+
+    def test_rife_reduces_chunk_frames(self):
+        plan = plan_video_chunks(
+            {"width": 1920, "height": 1080, "frames": 240, "duration": 10.0, "fps": 24.0},
+            scale=2,
+            rife_multiplier=2,
+        )
+        self.assertLess(plan["chunk_frames"], 150)
+        self.assertGreaterEqual(plan["chunks"], 3)
+
+    def test_fps_over_120_rejected(self):
+        with self.assertRaises(EngineError):
+            plan_video_chunks(
+                {"width": 1280, "height": 720, "frames": 60, "duration": 0.5, "fps": 121.0},
+                scale=2,
+            )
+
+    def test_total_space_rejected(self):
+        with self.assertRaises(EngineError) as ctx:
+            plan_video_chunks(
+                {"width": 1920, "height": 1080, "frames": 500, "duration": 20.0, "fps": 25.0},
+                scale=2,
+            )
+        self.assertIn("tope", str(ctx.exception).lower())
 
 
 class TestVideoUpscaleGuard(unittest.TestCase):
@@ -72,8 +117,8 @@ class TestVideoUpscaleGuard(unittest.TestCase):
         self.assertEqual(meta["frames"], 120)
 
     @patch("app.upscale.probe_video_metadata")
-    def test_1080p_video_scale_2_rejected_by_input_bytes(self, mock_probe):
-        """Video 1080p x2 con 240 frames debe ser rechazado por presupuesto de memoria de entrada (>4 GiB)."""
+    def test_1080p_video_scale_2_splits_240_frames(self, mock_probe):
+        """1080p x2 con 240 frames ya no se rechaza: se planifica en tramos de 150."""
         mock_probe.return_value = {
             "width": 1920,
             "height": 1080,
@@ -81,10 +126,10 @@ class TestVideoUpscaleGuard(unittest.TestCase):
             "duration": 10.0,
             "fps": 24.0,
         }
-        with self.assertRaises(EngineError) as ctx:
-            validate_video_upscale_dimensions(self.dummy_video, scale=2)
-        self.assertIn("presupuesto de memoria de entrada", str(ctx.exception).lower())
-        self.assertIn("4.0 gb", str(ctx.exception).lower())
+        meta = validate_video_upscale_dimensions(self.dummy_video, scale=2)
+        self.assertEqual(meta["chunks"], 2)
+        self.assertEqual(meta["chunk_frames"], 150)
+        self.assertTrue(meta["needs_chunks"])
 
     @patch("app.upscale.probe_video_metadata")
     def test_1080p_video_scale_4_rejected(self, mock_probe):
@@ -117,8 +162,8 @@ class TestVideoUpscaleGuard(unittest.TestCase):
         self.assertIn(str(MAX_VIDEO_UPSCALE_INPUT_SIDE), str(ctx.exception))
 
     @patch("app.upscale.probe_video_metadata")
-    def test_excessive_frames_rejected(self, mock_probe):
-        """Video con mas de 300 fotogramas debe ser rechazado para evitar OOM de batch."""
+    def test_excessive_frames_splits_into_chunks(self, mock_probe):
+        """350 frames en 640x360 se planifican en 2 tramos, no se rechazan."""
         mock_probe.return_value = {
             "width": 640,
             "height": 360,
@@ -126,14 +171,13 @@ class TestVideoUpscaleGuard(unittest.TestCase):
             "duration": 14.5,
             "fps": 24.0,
         }
-        with self.assertRaises(EngineError) as ctx:
-            validate_video_upscale_dimensions(self.dummy_video, scale=2)
-        self.assertIn("demasiados fotogramas", str(ctx.exception))
-        self.assertIn(str(MAX_VIDEO_UPSCALE_FRAMES), str(ctx.exception))
+        meta = validate_video_upscale_dimensions(self.dummy_video, scale=2)
+        self.assertEqual(meta["chunks"], 2)
+        self.assertEqual(meta["chunk_frames"], 300)
 
     @patch("app.upscale.probe_video_metadata")
-    def test_500_frames_1080p_rejected(self, mock_probe):
-        """500 frames a 1080p debe ser rechazado (supera tope de fotogramas y memoria)."""
+    def test_500_frames_1080p_rejected_by_total_space(self, mock_probe):
+        """500 frames a 1080p superan el tope global de espacio (45 GiB)."""
         mock_probe.return_value = {
             "width": 1920,
             "height": 1080,
@@ -143,12 +187,11 @@ class TestVideoUpscaleGuard(unittest.TestCase):
         }
         with self.assertRaises(EngineError) as ctx:
             validate_video_upscale_dimensions(self.dummy_video, scale=2)
-        # Falla por frames > 300
-        self.assertIn("demasiados fotogramas", str(ctx.exception))
+        self.assertIn("tope", str(ctx.exception).lower())
 
     @patch("app.upscale.probe_video_metadata")
-    def test_240_frames_1920x1920_rejected(self, mock_probe):
-        """Video cuadrado 1920x1920 con 240 frames debe ser rechazado por presupuesto de entrada (~9.88 GB > 4 GB)."""
+    def test_240_frames_1920x1920_splits(self, mock_probe):
+        """1920x1920 x2 se limita por bytes de salida y se parte en tramos."""
         mock_probe.return_value = {
             "width": 1920,
             "height": 1920,
@@ -156,9 +199,35 @@ class TestVideoUpscaleGuard(unittest.TestCase):
             "duration": 10.0,
             "fps": 24.0,
         }
+        meta = validate_video_upscale_dimensions(self.dummy_video, scale=2)
+        self.assertLess(meta["chunk_frames"], 300)
+        self.assertGreaterEqual(meta["chunks"], 2)
+
+    @patch("app.upscale.probe_video_metadata")
+    def test_fps_over_120_rejected(self, mock_probe):
+        mock_probe.return_value = {
+            "width": 1280,
+            "height": 720,
+            "frames": 60,
+            "duration": 0.4,
+            "fps": 150.0,
+        }
         with self.assertRaises(EngineError) as ctx:
             validate_video_upscale_dimensions(self.dummy_video, scale=2)
-        self.assertIn("presupuesto de memoria de entrada", str(ctx.exception).lower())
+        self.assertIn("120", str(ctx.exception))
+
+    @patch("app.upscale.probe_video_metadata")
+    def test_duration_over_600_rejected(self, mock_probe):
+        mock_probe.return_value = {
+            "width": 640,
+            "height": 360,
+            "frames": 15000,
+            "duration": 601.0,
+            "fps": 25.0,
+        }
+        with self.assertRaises(EngineError) as ctx:
+            validate_video_upscale_dimensions(self.dummy_video, scale=2)
+        self.assertIn("600", str(ctx.exception))
 
     @patch("app.upscale.probe_video_metadata")
     def test_unknown_frames_with_duration_fps_calculated(self, mock_probe):
@@ -294,7 +363,93 @@ class TestVideoUpscaleGuard(unittest.TestCase):
         run_fps(job, config=mock_config, store=MagicMock(), record=record)
         self.assertIn("guardia fps activada", job.get("error", ""))
         self.assertEqual(record.get("status"), "error")
-        mock_guard.assert_called_once_with(video_file, scale=2, model_file=None)
+        mock_guard.assert_called_once_with(video_file, scale=2, model_file=None, rife_multiplier=2)
+
+    def test_route_accepts_local_video_b64(self):
+        """W15: /api/upscale acepta un video local y crea una generacion kind=video."""
+        config = EngineConfig(
+            comfy_root=self.test_dir / "comfy",
+            comfy_url="http://127.0.0.1:1",
+            data_dir=self.test_dir / "data",
+        )
+        config.data_dir.mkdir(parents=True, exist_ok=True)
+        store = Store(config.data_dir / "waifu.db")
+        store.init()
+        app = create_app(config=config, store=store, start_worker=False)
+        video_b64 = base64.b64encode(b"dummy-local-video").decode("ascii")
+        with patch(
+            "app.routes.upscale.resolve_upscale_model_file",
+            return_value="RealESRGAN_x2.pth",
+        ), patch("app.routes.upscale.validate_video_upscale_dimensions") as mock_val:
+            mock_val.return_value = {
+                "chunks": 1,
+                "chunk_frames": 300,
+                "needs_chunks": False,
+                "frames": 24,
+                "fps": 24.0,
+                "duration": 1.0,
+            }
+            with TestClient(app) as client:
+                res = client.post(
+                    "/api/upscale",
+                    json={
+                        "kind": "video",
+                        "video_b64": video_b64,
+                        "filename": "clip.mp4",
+                        "model": "real-esrgan-x2",
+                    },
+                )
+        self.assertEqual(res.status_code, 200, res.text)
+        job_id = res.json().get("job_id")
+        job = app.state.jobs.get(job_id)
+        self.assertIsNotNone(job)
+        gen_id = job["source_gen"]
+        local_file = config.data_dir / "gallery" / str(gen_id) / f"local_{gen_id}.mp4"
+        self.assertTrue(local_file.is_file())
+
+    def test_plan_route_returns_chunks(self):
+        """W15: /api/upscale/plan devuelve el plan sin encolar."""
+        config = EngineConfig(
+            comfy_root=self.test_dir / "comfy",
+            comfy_url="http://127.0.0.1:1",
+            data_dir=self.test_dir / "data",
+        )
+        config.data_dir.mkdir(parents=True, exist_ok=True)
+        store = Store(config.data_dir / "waifu.db")
+        store.init()
+        gen_id = store.add("wan", "clip", "neg", {}, kind="video")
+        gal_dir = config.data_dir / "gallery" / str(gen_id)
+        gal_dir.mkdir(parents=True, exist_ok=True)
+        (gal_dir / "clip.mp4").write_bytes(b"dummy")
+        store.update(gen_id, status="done", outputs=["clip.mp4"], kind="video")
+        app = create_app(config=config, store=store, start_worker=False)
+        plan = {
+            "width": 1920,
+            "height": 1080,
+            "frames": 240,
+            "duration": 10.0,
+            "fps": 24.0,
+            "chunk_frames": 150,
+            "chunks": 2,
+            "needs_chunks": True,
+            "estimated_output_gb": 23.9,
+        }
+        with patch(
+            "app.routes.upscale.resolve_upscale_model_file",
+            return_value="RealESRGAN_x2.pth",
+        ), patch(
+            "app.routes.upscale.validate_video_upscale_dimensions",
+            return_value=plan,
+        ):
+            with TestClient(app) as client:
+                res = client.post(
+                    "/api/upscale/plan",
+                    json={"kind": "video", "source_gen": gen_id, "model": "real-esrgan-x2"},
+                )
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertTrue(data.get("ok"))
+        self.assertEqual(data.get("chunks"), 2)
 
     def test_fps_route_rejects_oversized_video(self):
         """La ruta /api/upscale con kind=fps debe validar dimensiones y rechazar video sobredimensionado con HTTP 400."""

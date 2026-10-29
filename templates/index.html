@@ -982,7 +982,13 @@
             <span>Archivo local (solo imagen)</span>
             <input id="upscale-file" type="file" accept="image/*">
           </label>
-          <p class="field-hint">Elige una miniatura de la galería o, en imagen, un archivo local (el archivo sustituye a la selección).</p>
+          <label class="field hidden" id="upscale-video-file-field">
+            <span>Vídeo local (MP4/WebM)</span>
+            <input id="upscale-video-file" type="file" accept="video/mp4,video/webm,video/*">
+            <p id="upscale-video-file-note" class="field-hint"></p>
+          </label>
+          <p id="upscale-chunk-hint" class="field-hint" hidden></p>
+          <p class="field-hint">Elige una miniatura de la galería o un archivo local. En vídeo, el archivo local sustituye a la selección y se procesa por tramos si hace falta.</p>
         </fieldset>
 
         <!-- BLOQUE 2: Modelo y Parámetros -->
