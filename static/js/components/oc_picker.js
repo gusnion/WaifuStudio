@@ -1267,6 +1267,7 @@ export {
   renderCharacters,
   characterRow,
   loadCharacters,
+  loadCharacterRefs,
   isOcEditing,
   updateOcFormMode,
   resetOcForm,

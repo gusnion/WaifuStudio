@@ -9,7 +9,7 @@ import { initCompare, setImageCompareEnabled, setEditorCompareEnabled, imageComp
 import { initLightbox, closeLightbox } from "./components/lightbox.js";
 import { initPromptZones, renderZoneEditor } from "./components/prompt_zones.js";
 import { initPromptPopover, closeZoneInsert } from "./components/prompt_popover.js";
-import { initOcPicker, openOcModal, closeOcModal, loadCharacters, loadOcCatalog, loadOcPreprompts } from "./components/oc_picker.js";
+import { initOcPicker, openOcModal, closeOcModal, loadCharacters, loadOcCatalog, loadOcPreprompts, loadCharacterRefs } from "./components/oc_picker.js";
 import { initOcTrain, closeTrainModal } from "./components/oc_train.js";
 import { initLoras, closeLoraLibrary, closeLoraModal } from "./components/loras.js";
 import { initVision, closeVisionModal } from "./components/vision.js";
@@ -89,6 +89,9 @@ function switchTab(tab) {
   if (panelOcEl) {
     panelOcEl.classList.toggle("active", oc);
     panelOcEl.hidden = !oc;
+    if (oc) {
+      loadCharacterRefs().catch(() => {});
+    }
   }
   const panelSocialEl = $("panel-social");
   if (panelSocialEl) {

@@ -435,7 +435,7 @@ input[type="checkbox"] {
 }
 
 .oc-category-card:hover {
-  border-color: var(--accent-subtle, #444);
+  border-color: var(--border);
 }
 
 .oc-category-header {
@@ -461,7 +461,7 @@ input[type="checkbox"] {
   margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-bright, #fff);
+  color: var(--text);
   letter-spacing: 0.02em;
 }
 
@@ -502,8 +502,8 @@ input[type="checkbox"] {
 }
 
 .oc-trait-card:hover {
-  background: var(--panel-hover, #20202e);
-  border-color: var(--border-hover, #4a4a5e);
+  background: var(--panel);
+  border-color: var(--border);
 }
 
 .oc-trait-card.selected {
@@ -563,7 +563,7 @@ input[type="checkbox"] {
 }
 
 .oc-trait-card.selected .oc-trait-subtag {
-  color: var(--accent-light, #e0b0ff);
+  color: var(--accent-2);
 }
 
 .oc-selected-panel {
@@ -611,7 +611,7 @@ input[type="checkbox"] {
   border: 1px solid var(--accent, #b450ff);
   border-radius: 6px;
   font-size: 0.76rem;
-  color: var(--text-bright, #fff);
+  color: var(--text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
@@ -1014,6 +1014,11 @@ input[type="checkbox"] {
     grid-template-columns: 1fr !important;
     grid-template-rows: auto auto !important;
     overflow-y: auto !important;
+  }
+  .oc-controls.tab-sidebar,
+  .oc-viewport.tab-viewport {
+    height: auto !important;
+    min-height: 0 !important;
   }
 }
 
