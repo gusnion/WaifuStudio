@@ -661,5 +661,35 @@ class TimelineRouteTests(unittest.TestCase):
         self.assertIn("res.output_path", js)
 
 
+    def test_w13_timeline_audio_on_demand_ui_contract(self):
+        html = (APP_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-timeline-gen-audio"', html)
+        self.assertIn("Generar audio", html)
+        self.assertIn('id="btn-timeline-audio-cancel"', html)
+        self.assertIn('id="btn-timeline-add-audio"', html)
+        self.assertIn("Añadir audio", html)
+        self.assertIn('id="timeline-ai-seconds-field"', html)
+
+        start = html.index('id="timeline-ai-seconds-field"')
+        seconds_field = html[start:html.index("</label>", start)]
+        self.assertIn('value="15"', seconds_field)
+        self.assertNotIn('value="20"', seconds_field)
+        self.assertNotIn('value="25"', seconds_field)
+        self.assertNotIn('value="30"', seconds_field)
+
+        js = (APP_ROOT / "static" / "js" / "tabs" / "timeline.js").read_text(encoding="utf-8")
+        self.assertIn("/api/audio/generate", js)
+        self.assertIn("source_gen_id", js)
+        self.assertIn("findAudioSourceClip", js)
+        self.assertIn("extractWavOutput", js)
+        self.assertIn("/api/timeline/upload_audio", js)
+        self.assertIn("buildAudioTrackEntry", js)
+        self.assertIn("saveCurrentProject({ silent: true })", js)
+        self.assertIn("btn-timeline-audio-cancel", js)
+        self.assertIn("TIMELINE_AI_ACTIONS", js)
+        self.assertIn("insert_image", js)
+        self.assertIn("anima_aestheticv11", js)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getPlayableAudioUrl, audioSchedule, stopAudioPlayback } from "../static/js/tabs/timeline.js";
+import { getPlayableAudioUrl, audioSchedule, stopAudioPlayback, findAudioSourceClip, extractWavOutput, buildAudioTrackEntry } from "../static/js/tabs/timeline.js";
 
 console.log("--- Iniciando tests de lógica de Audio Multi-Pista de Timeline (Node) ---");
 
@@ -84,6 +84,51 @@ console.log("--- Iniciando tests de lógica de Audio Multi-Pista de Timeline (No
     stopAudioPlayback();
   }, "stopAudioPlayback debe ser seguro de invocar en cualquier estado");
   console.log("✔ Test 6: stopAudioPlayback es idempotente y seguro");
+}
+
+// Test 7: findAudioSourceClip elige el primer clip de vídeo con generation_id
+{
+  const clips = [
+    { kind: "image", generation_id: 10 },
+    { kind: "video", generation_id: null },
+    { kind: "video", generation_id: 22 },
+    { kind: "video", generation_id: 33 },
+  ];
+  assert.equal(findAudioSourceClip(clips).generation_id, 22);
+  assert.equal(findAudioSourceClip([{ kind: "image", generation_id: 1 }]), null);
+  assert.equal(findAudioSourceClip(null), null);
+  assert.equal(findAudioSourceClip([]), null);
+  console.log("✔ Test 7: findAudioSourceClip elige el primer vídeo con generation_id");
+}
+
+// Test 8: extractWavOutput localiza el WAV entre las salidas del job
+{
+  assert.deepEqual(
+    extractWavOutput({
+      outputs: [
+        { name: "video_audio_7.mp4", url: "/media/7/video_audio_7.mp4" },
+        { name: "audio_7.wav", url: "/media/7/audio_7.wav" },
+      ],
+    }),
+    { name: "audio_7.wav", url: "/media/7/audio_7.wav" }
+  );
+  assert.deepEqual(extractWavOutput({ outputs: ["audio_8.WAV"] }), { name: "audio_8.WAV", url: "" });
+  assert.equal(extractWavOutput({ outputs: [{ name: "solo.mp4" }] }), null);
+  assert.equal(extractWavOutput(null), null);
+  console.log("✔ Test 8: extractWavOutput devuelve el WAV y su URL");
+}
+
+// Test 9: buildAudioTrackEntry crea una pista válida para Timeline
+{
+  assert.deepEqual(
+    buildAudioTrackEntry({ audio_path: "E:\\data\\audio\\a.wav", audio_url: "/media/audio/a.wav" }),
+    { source_path: "E:\\data\\audio\\a.wav", url: "/media/audio/a.wav", start_time: 0, volume: 1.0 }
+  );
+  assert.deepEqual(
+    buildAudioTrackEntry({ audio_url: "/media/audio/b.wav" }),
+    { source_path: "/media/audio/b.wav", url: "/media/audio/b.wav", start_time: 0, volume: 1.0 }
+  );
+  console.log("✔ Test 9: buildAudioTrackEntry prepara la pista del Timeline");
 }
 
 console.log("=== TODOS LOS TESTS DE TIMELINE AUDIO PASARON EXITOSAMENTE ===");

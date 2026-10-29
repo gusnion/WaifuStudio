@@ -12,11 +12,55 @@ const state = {
   isPlayingAll: false,
   playIndex: 0,
   aiGenerating: false,
+  audioGenerating: false,
   lastExportPath: "",
 };
 let previewAudioEls = [];
 let audioStartTimers = [];
 let imageSequenceTimer = null;
+
+const TIMELINE_AI_ACTIONS = {
+  continue_i2v: {
+    cta: "✨ Generar clip I2V",
+    seconds: true,
+    hint: "Usa el último fotograma del clip seleccionado (o del último clip).",
+  },
+  bridge_flf2v: {
+    cta: "✨ Generar puente FLF2V",
+    seconds: true,
+    hint: "Requiere al menos 2 clips: une el final de uno con el inicio del siguiente.",
+  },
+  insert_image: {
+    cta: "✨ Generar imagen",
+    seconds: false,
+    hint: "Usa el modelo elegido en Imagen y el tamaño del proyecto; se inserta al final.",
+  },
+};
+
+export function findAudioSourceClip(clips) {
+  if (!Array.isArray(clips)) return null;
+  return clips.find((clip) => clip && clip.kind === "video" && clip.generation_id != null) || null;
+}
+
+export function extractWavOutput(job) {
+  const outputs = Array.isArray(job && job.outputs) ? job.outputs : [];
+  for (const output of outputs) {
+    if (output == null) continue;
+    const name = typeof output === "string" ? output : output.name;
+    if (!name || !String(name).toLowerCase().endsWith(".wav")) continue;
+    return {
+      name: String(name),
+      url: typeof output === "object" && output.url ? String(output.url) : "",
+    };
+  }
+  return null;
+}
+
+export function buildAudioTrackEntry(uploaded) {
+  const path = uploaded && uploaded.audio_path ? String(uploaded.audio_path) : "";
+  const url = uploaded && uploaded.audio_url ? String(uploaded.audio_url) : "";
+  return { source_path: path || url, url, start_time: 0, volume: 1.0 };
+}
 
 function setTimelineStatus(msg, err = false) {
   const el = $("timeline-status");
@@ -78,6 +122,34 @@ export async function copyTimelineExportPath() {
 function setAiStatus(msg, err = false) {
   const el = $("timeline-ai-status");
   if (el) { el.textContent = msg; el.style.color = err ? "#ff5252" : "var(--accent, #ff4081)"; }
+}
+
+function setAudioBusy(busy) {
+  state.audioGenerating = Boolean(busy);
+  const btn = $("btn-timeline-gen-audio");
+  if (btn) {
+    btn.disabled = Boolean(busy);
+    btn.textContent = busy ? "Generando audio…" : "Generar audio";
+  }
+  const cancel = $("btn-timeline-audio-cancel");
+  if (cancel && !busy) cancel.classList.add("hidden");
+}
+
+function syncTimelineAiAction() {
+  const select = $("timeline-ai-action");
+  const meta = TIMELINE_AI_ACTIONS[(select && select.value) || "continue_i2v"]
+    || TIMELINE_AI_ACTIONS.continue_i2v;
+  const btn = $("btn-timeline-ai-generate");
+  if (btn) btn.textContent = meta.cta;
+  const field = $("timeline-ai-seconds-field");
+  if (field) {
+    field.hidden = !meta.seconds;
+    field.style.display = meta.seconds ? "" : "none";
+  }
+  const seconds = $("timeline-ai-seconds");
+  if (seconds) seconds.disabled = !meta.seconds || Boolean(state.aiGenerating);
+  const hint = $("timeline-ai-hint");
+  if (hint) hint.textContent = meta.hint;
 }
 
 function calcTotalDuration() {  const clips = state.current.data.clips || [];
@@ -634,17 +706,22 @@ async function loadTimelineProjects() {
   } catch (err) { setTimelineStatus(err.message, true); }
 }
 
-async function saveCurrentProject() {
+async function saveCurrentProject(options = {}) {
+  const silent = Boolean(options && options.silent);
   const name = ($("timeline-project-name") && $("timeline-project-name").value.trim()) || "Mi Secuencia";
-  setTimelineStatus("Guardando proyecto...");
+  if (!silent) setTimelineStatus("Guardando proyecto...");
   try {
     const saved = await postJson("/api/timeline/projects", { id: state.current.id, name, data: state.current.data });
     state.current.id = saved.id; state.current.name = saved.name;
-    setTimelineStatus("¡Proyecto guardado!");
+    if (!silent) setTimelineStatus("¡Proyecto guardado!");
     await loadTimelineProjects();
     const select = $("timeline-project-select");
     if (select) select.value = saved.id;
-  } catch (err) { setTimelineStatus(err.message, true); }
+    return true;
+  } catch (err) {
+    if (!silent) setTimelineStatus(err.message, true);
+    return false;
+  }
 }
 
 async function exportTimeline() {
@@ -737,6 +814,9 @@ async function hydrateClipParams(clips) {
 function setTimelineAiBusy(busy) {
   const btn = $("btn-timeline-ai-generate");
   if (btn) btn.disabled = Boolean(busy);
+  const action = $("timeline-ai-action");
+  if (action) action.disabled = Boolean(busy);
+  syncTimelineAiAction();
 }
 
 async function enqueueClipJob(jobId, kind, dur, insertIdx, msg) {
@@ -781,6 +861,12 @@ async function enqueueClipJob(jobId, kind, dur, insertIdx, msg) {
 }
 
 async function triggerAiAction(actionType, targetClipIndex = null) {
+  if (state.aiGenerating) return;
+  const meta = TIMELINE_AI_ACTIONS[actionType];
+  if (!meta) {
+    setAiStatus("Acción IA desconocida", true);
+    return;
+  }
   const clips = state.current.data.clips;
   const promptInput = $("timeline-ai-prompt");
   const prompt = promptInput ? promptInput.value.trim() : "";
@@ -859,9 +945,18 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
     } else if (actionType === "insert_image") {
       state.aiGenerating = true;
       renderTracks();
-      setAiStatus("Generando imagen Anima...");
-      const modelId = document.getElementById("model")?.value || "anima-official-aesthetic-v11";
-      const res = await postJson("/api/generate", { model_id: modelId, prompt, negative: "", size: "paisaje_plan" });
+      setAiStatus("Generando imagen con el modelo de Imagen...");
+      const modelId = document.getElementById("model")?.value || "anima_aestheticv11";
+      const project = state.current.data || {};
+      const width = Number(project.width) || 1280;
+      const height = Number(project.height) || 720;
+      const res = await postJson("/api/generate", {
+        model_id: modelId,
+        prompt,
+        negative: "",
+        width,
+        height,
+      });
       await enqueueClipJob(res.job_id, "image", 3.0, clips.length, "¡Imagen insertada!");
     }
   } catch (err) {
@@ -873,49 +968,75 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
 }
 
 async function generateTimelineAudio() {
-  const clips = state.current.data.clips || [];
-  const clip = clips.find((c) => c.generation_id != null && c.kind === "video")
-    || clips.find((c) => c.generation_id != null);
+  if (state.audioGenerating) return;
+  const clip = findAudioSourceClip(state.current.data.clips || []);
   if (!clip) {
     setTimelineStatus("Añade un vídeo al proyecto antes de generar audio", true);
     return;
   }
-  setTimelineStatus("Generando audio con MMAudio…");
-  const res = await postJson("/api/audio/generate", {
-    source_gen_id: clip.generation_id,
-    action: "replace",
-    voice_enabled: false,
-  });
-  let job = null;
-  for (let i = 0; i < 150; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    job = await api(`/api/jobs/${encodeURIComponent(res.job_id)}`);
-    if (job && ["done", "error", "cancelled"].includes(job.status)) break;
+  setAudioBusy(true);
+  setTimelineStatus("Encolando generación de audio (MMAudio)…");
+  try {
+    const res = await postJson("/api/audio/generate", {
+      source_gen_id: clip.generation_id,
+      action: "replace",
+      voice_enabled: false,
+    });
+    if (!res || res.job_id == null) throw new Error("El servidor no devolvió job_id de audio");
+    await enqueueJobs(res.job_id, {
+      statusFn: (msg, err) => setTimelineStatus(msg, err),
+      cancelButtonId: "btn-timeline-audio-cancel",
+      progressFn: (progress) => {
+        const percent = progress && progress.percent;
+        if (percent != null && Number.isFinite(Number(percent))) {
+          setTimelineStatus(`Generando audio… ${Math.round(Number(percent))}%`);
+        }
+      },
+      onDone: async (job) => {
+        try {
+          if (!job || job.status !== "done") {
+            if (job && job.status === "cancelled") {
+              setTimelineStatus("Generación de audio cancelada");
+            } else {
+              setTimelineStatus(`Error al generar audio: ${(job && job.error) || "sin salida"}`, true);
+            }
+            return;
+          }
+          const wav = extractWavOutput(job);
+          if (!wav) throw new Error("El job de audio no devolvió WAV");
+          const url = wav.url || `/api/audio/media/${job.gen_id}/${encodeURIComponent(wav.name)}`;
+          setTimelineStatus("Añadiendo audio al Timeline…");
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`No se pudo descargar el WAV (${response.status})`);
+          const blob = await response.blob();
+          const audioB64 = await readFileBase64(new File([blob], wav.name, { type: blob.type || "audio/wav" }));
+          const uploaded = await postJson("/api/timeline/upload_audio", {
+            filename: wav.name,
+            audio_b64: audioB64,
+          });
+          if (!uploaded || !uploaded.audio_url) throw new Error("La subida del audio no devolvió URL");
+          const data = state.current.data;
+          if (!Array.isArray(data.audio_tracks)) data.audio_tracks = [];
+          data.audio_tracks.push(buildAudioTrackEntry(uploaded));
+          renderAudioTrack();
+          const saved = await saveCurrentProject({ silent: true });
+          setTimelineStatus(
+            saved
+              ? `Audio añadido al Timeline: ${wav.name}`
+              : `Audio añadido al Timeline, pero no se pudo guardar el proyecto: ${wav.name}`,
+            !saved
+          );
+        } catch (err) {
+          setTimelineStatus(err.message, true);
+        } finally {
+          setAudioBusy(false);
+        }
+      },
+    });
+  } catch (err) {
+    setAudioBusy(false);
+    setTimelineStatus(err.message, true);
   }
-  if (!job || job.status !== "done") {
-    throw new Error((job && job.error) || "El job de audio no terminó");
-  }
-  const outputs = Array.isArray(job.outputs) ? job.outputs : [];
-  const wav = outputs.find((item) => String(item.name || item).toLowerCase().endsWith(".wav"));
-  if (!wav) throw new Error("El job de audio no devolvió WAV");
-  const name = typeof wav === "string" ? wav : wav.name;
-  const url = (wav && wav.url)
-    ? wav.url
-    : `/api/audio/media/${job.gen_id}/${encodeURIComponent(name)}`;
-  const blob = await (await fetch(url)).blob();
-  const audioB64 = await readFileBase64(new File([blob], name, { type: blob.type || "audio/wav" }));
-  const uploaded = await postJson("/api/timeline/upload_audio", {
-    filename: name,
-    audio_b64: audioB64,
-  });
-  state.current.data.audio_tracks.push({
-    source_path: uploaded.audio_path,
-    url: uploaded.audio_url,
-    start_time: 0,
-    volume: 1.0,
-  });
-  renderAudioTrack();
-  setTimelineStatus(`Audio IA añadido: ${name}`);
 }
 
 export function initTimelineTab() {
@@ -1000,6 +1121,7 @@ export function initTimelineTab() {
     triggerAiAction(($("timeline-ai-action") && $("timeline-ai-action").value) || "continue_i2v");
   });
   on("btn-timeline-ai-cancel", "click", (event) => cancelJob(event, setAiStatus));
+  on("timeline-ai-action", "change", syncTimelineAiAction);
 
   on("btn-timeline-add-audio", "click", () => {
     const input = $("timeline-audio-input");
@@ -1007,8 +1129,12 @@ export function initTimelineTab() {
   });
 
   on("btn-timeline-gen-audio", "click", () => {
-    generateTimelineAudio().catch((err) => setTimelineStatus(err.message, true));
+    generateTimelineAudio().catch((err) => {
+      setAudioBusy(false);
+      setTimelineStatus(err.message, true);
+    });
   });
+  on("btn-timeline-audio-cancel", "click", (event) => cancelJob(event, setTimelineStatus));
 
   on("timeline-audio-input", "change", async (e) => {
     const file = (e.target.files || [])[0];
@@ -1031,6 +1157,8 @@ export function initTimelineTab() {
   }
 
   setExportActions("");
+  syncTimelineAiAction();
+  setAudioBusy(false);
   loadTimelineProjects();
   refreshTimelineMedia();
   renderTracks();

@@ -539,6 +539,33 @@ class TestAudioRouter(unittest.TestCase):
         self.assertEqual(data.get("duration"), 5.06)
         self.assertEqual(data.get("sample_rate"), 48000)
 
+    @patch("app.audio.probe_clip_audio")
+    def test_api_audio_generate_accepts_source_gen_id(self, mock_probe: MagicMock) -> None:
+        """W13: Estudio envía source_gen_id del primer clip de vídeo, no una ruta."""
+        mock_probe.return_value = {
+            "duration": 4.0,
+            "fps": 16.0,
+            "width": 432,
+            "height": 768,
+            "has_audio": False,
+        }
+        vid_gen_id = self.store.add("wan", "clip de referencia", kind="video")
+        gal_dir = self.cfg.data_dir / "gallery" / str(vid_gen_id)
+        gal_dir.mkdir(parents=True, exist_ok=True)
+        (gal_dir / "clip.mp4").write_bytes(b"dummy-mp4")
+        self.store.update(vid_gen_id, status="done", outputs=["clip.mp4"], kind="video")
+
+        res = self.client.post(
+            "/api/audio/generate",
+            json={"source_gen_id": vid_gen_id, "action": "replace", "voice_enabled": False},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("job_id", data)
+        self.assertIn("gen_id", data)
+        self.assertEqual(data.get("duration"), 4.0)
+        self.assertEqual(data.get("sample_rate"), 48000)
+
 
 class TestRunAudioGeneration(unittest.TestCase):
     """Comprueba la ejecución del runner con Mock del Engine."""

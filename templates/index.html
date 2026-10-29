@@ -1162,20 +1162,18 @@
             <span>Prompt de acción</span>
             <textarea id="timeline-ai-prompt" rows="3" placeholder="Describe la acción (ej: el personaje empieza a correr y salta un obstáculo)..."></textarea>
           </label>
-          <label class="field">
+          <label class="field" id="timeline-ai-seconds-field">
             <span>Duración vídeo</span>
             <select id="timeline-ai-seconds">
               <option value="5" selected>5s (Rápido)</option>
               <option value="8">8s (Estándar)</option>
               <option value="10">10s (Largo)</option>
               <option value="12">12s</option>
-              <option value="15">15s (Máx. 1 segmento)</option>
-              <option value="20">20s (2 segmentos)</option>
-              <option value="25">25s (2 segmentos)</option>
-              <option value="30">30s (2 segmentos)</option>
+              <option value="15">15s (Máximo)</option>
             </select>
           </label>
-          <button id="btn-timeline-ai-generate" class="primary" type="button">✨ Generar e Insertar en Timeline</button>
+          <p id="timeline-ai-hint" class="field-hint"></p>
+          <button id="btn-timeline-ai-generate" class="primary" type="button">✨ Generar clip I2V</button>
           <button id="btn-timeline-ai-cancel" class="secondary hidden" type="button">Cancelar generación</button>
           <p id="timeline-ai-status" class="field-hint"></p>
         </fieldset>
@@ -1205,8 +1203,9 @@
           <div class="timeline-track-header" style="margin-top: 6px;">
             <span>Pista 2 — Audio Externo / Música</span>
             <div>
-              <button id="btn-timeline-add-audio" class="secondary" type="button" style="font-size:11px; padding:2px 8px;">+ Subir Audio</button>
-              <button id="btn-timeline-gen-audio" class="secondary" type="button" style="font-size:11px; padding:2px 8px;">Generar audio IA</button>
+              <button id="btn-timeline-add-audio" class="secondary" type="button" style="font-size:11px; padding:2px 8px;">+ Añadir audio</button>
+              <button id="btn-timeline-gen-audio" class="secondary" type="button" style="font-size:11px; padding:2px 8px;">Generar audio</button>
+              <button id="btn-timeline-audio-cancel" class="secondary hidden" type="button" style="font-size:11px; padding:2px 8px;">Cancelar audio</button>
               <input type="file" id="timeline-audio-input" accept="audio/*" hidden>
             </div>
           </div>
