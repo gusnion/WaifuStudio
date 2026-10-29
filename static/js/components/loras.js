@@ -4,7 +4,7 @@
 // Dependencias: static/js/state.js, static/js/dom.js y static/js/api.js.
 
 import { state } from "../state.js";
-import { $, on, setStatus, readFileBase64 } from "../dom.js";
+import { $, on, setStatus, setEditorStatus, readFileBase64 } from "../dom.js";
 import { api, postJson, putJson } from "../api.js";
 
 function getLoraCompatibility(lora) {
@@ -99,6 +99,22 @@ async function onToggleAllChanged(checked) {
   await loadLoras({ preserveSelection: true });
 }
 
+const EDITOR_ONLY_LORA_FAMILIES = new Set([
+  "qwen",
+  "qwen-image",
+  "qwen_image",
+  "editor",
+]);
+const VIDEO_ONLY_LORA_FAMILIES = new Set(["wan", "lightx2v", "h3", "minimax"]);
+
+function isEditorOnlyLora(lora) {
+  if (!lora || typeof lora !== "object") return false;
+  const fam = String(lora.family || "").trim().toLowerCase();
+  if (EDITOR_ONLY_LORA_FAMILIES.has(fam)) return true;
+  const file = String(lora.file || "").trim().toLowerCase();
+  return /^(qwen|qwen-image|qwen_image|editor)[\\/]/i.test(file);
+}
+
 async function loadLoras(options = {}) {
   const family = state.family || "anima";
   const subfamily = state.subfamily || "";
@@ -120,7 +136,14 @@ async function loadLoras(options = {}) {
   const data = await api(
     `/api/loras?${query.toString()}`
   );
-  state.loras = data.items || [];
+  const rawItems = data.items || [];
+  state.loras = showAll
+    ? rawItems
+    : rawItems.filter(
+        (item) =>
+          !isEditorOnlyLora(item) &&
+          !VIDEO_ONLY_LORA_FAMILIES.has(String(item?.family || "").toLowerCase())
+      );
   if (previousSelection) {
     const validIds = new Set(state.loras.map((l) => l.id));
     const nextSelection = new Map();
@@ -167,7 +190,7 @@ function renderLoraChips() {
     const famLabel = fam === "anima" ? "Anima" : fam.toUpperCase();
     container.appendChild(
       emptyLoraMessage(
-        `No hay LoRAs de imagen registradas compatibles con ${famLabel}. Añádelas en models/loras o con «Gestionar biblioteca».`
+        `No hay LoRAs de imagen registradas compatibles con ${famLabel}. Usa «Cargar LoRA», añádelas en models/loras o con «Gestionar biblioteca».`
       )
     );
     return;
@@ -301,7 +324,7 @@ function renderLoraModalList() {
     const famLabel = fam === "anima" ? "Anima" : fam.toUpperCase();
     container.appendChild(
       emptyLoraMessage(
-        `No hay LoRAs registradas compatibles con ${famLabel}. Activa «Ver todas» o añádelas desde «Gestionar biblioteca».`
+        `No hay LoRAs registradas compatibles con ${famLabel}. Activa «Ver todas» o añádelas con «Cargar LoRA» / «Gestionar biblioteca».`
       )
     );
     return;
@@ -708,6 +731,365 @@ async function deleteLoraEntry(loraId, options = {}) {
   );
 }
 
+function parseSafetensorsHeaderFromBase64(fileB64) {
+  const clean = String(fileB64 || "").replace(/\s+/g, "");
+  const b64 =
+    clean.startsWith("data:") && clean.includes(",")
+      ? clean.split(",", 2)[1]
+      : clean;
+  if (!b64 || b64.length < 12) {
+    return null;
+  }
+  try {
+    const prefix8 = atob(b64.slice(0, 12));
+    if (prefix8.length < 8) {
+      return null;
+    }
+    const lo =
+      (prefix8.charCodeAt(0) |
+        (prefix8.charCodeAt(1) << 8) |
+        (prefix8.charCodeAt(2) << 16) |
+        (prefix8.charCodeAt(3) << 24)) >>>
+      0;
+    const hi =
+      (prefix8.charCodeAt(4) |
+        (prefix8.charCodeAt(5) << 8) |
+        (prefix8.charCodeAt(6) << 16) |
+        (prefix8.charCodeAt(7) << 24)) >>>
+      0;
+    const hlen = hi * 0x100000000 + lo;
+    if (!Number.isFinite(hlen) || hlen <= 0 || hlen > 32 * 1024 * 1024) {
+      return null;
+    }
+    const totalBytes = 8 + hlen;
+    const neededChars = Math.ceil(totalBytes / 3) * 4;
+    if (b64.length < neededChars) {
+      return null;
+    }
+    const rawSlice = atob(b64.slice(0, neededChars));
+    if (rawSlice.length < totalBytes) {
+      return null;
+    }
+    const bytes = new Uint8Array(hlen);
+    for (let i = 0; i < hlen; i += 1) {
+      bytes[i] = rawSlice.charCodeAt(8 + i);
+    }
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function checkLoraRootCompatibility(header, filename, scope = "image", targetFamily = "") {
+  const name = String(filename || "").trim();
+  if (!name.toLowerCase().endsWith(".safetensors") || name.toLowerCase() === ".safetensors") {
+    return {
+      compatible: false,
+      family: "",
+      reason: "Archivo incompatible de raíz: debe ser un archivo .safetensors.",
+    };
+  }
+  if (!header || typeof header !== "object") {
+    return {
+      compatible: false,
+      family: "",
+      reason: "Archivo incompatible de raíz: cabecera .safetensors inválida.",
+    };
+  }
+  const keys = Object.keys(header).filter((k) => k !== "__metadata__");
+  const meta =
+    header.__metadata__ && typeof header.__metadata__ === "object"
+      ? header.__metadata__
+      : {};
+  const loraMarkers = [
+    ".lora_down",
+    ".lora_up",
+    ".lora_A.",
+    ".lora_B.",
+    "lora_unet",
+    "lora_te",
+    "hada_w",
+    "lokr_w",
+  ];
+  const hasLoraKeys = keys.some(
+    (k) => loraMarkers.some((m) => k.includes(m)) || k.endsWith(".alpha")
+  );
+  if (keys.length > 0 && !hasLoraKeys) {
+    const isVideoModel = keys.some(
+      (k) =>
+        k.startsWith("audio_patch_proj.") ||
+        k.startsWith("adaln_t_table") ||
+        k.startsWith("patch_embedding.") ||
+        k.startsWith("time_projection.")
+    );
+    const isCheckpoint =
+      keys.some((k) => k.startsWith("model.diffusion_model.")) &&
+      keys.some(
+        (k) =>
+          k.startsWith("first_stage_model.") ||
+          k.startsWith("conditioner.") ||
+          k.startsWith("cond_stage_model.")
+      );
+    const isFullUnet = keys.some(
+      (k) =>
+        k.startsWith("net.blocks.") ||
+        k.startsWith("model.diffusion_model.blocks.") ||
+        k.startsWith("diffusion_model.blocks.")
+    );
+    if (isVideoModel || isCheckpoint || isFullUnet) {
+      return {
+        compatible: false,
+        family: "",
+        reason:
+          "Archivo incompatible de raíz: el .safetensors es un modelo base o checkpoint, no un LoRA.",
+      };
+    }
+  }
+
+  const arch = String(meta["modelspec.architecture"] || "").toLowerCase();
+  const base = String(meta["ss_base_model_version"] || "").toLowerCase();
+  const sdName = String(meta["ss_sd_model_name"] || "").toLowerCase();
+  const combinedMeta = `${arch} ${base} ${sdName}`.toLowerCase();
+  const lowerName = name.toLowerCase();
+  const lowerKeys = keys.map((k) => k.toLowerCase());
+
+  let detectedFamily = "";
+  if (
+    combinedMeta.includes("wan") ||
+    combinedMeta.includes("lightx2v") ||
+    lowerKeys.some((k) => k.includes("wan"))
+  ) {
+    detectedFamily = "wan";
+  } else if (
+    combinedMeta.includes("h3") ||
+    combinedMeta.includes("minimax") ||
+    lowerName.startsWith("minimax_h3")
+  ) {
+    detectedFamily = "h3";
+  } else if (
+    combinedMeta.includes("qwen") ||
+    lowerName.includes("qwen") ||
+    lowerKeys.some((k) => k.includes("qwen"))
+  ) {
+    detectedFamily = "qwen";
+  } else if (
+    combinedMeta.includes("anima") ||
+    keys.some(
+      (k) =>
+        k.startsWith("diffusion_model.blocks.") ||
+        k.startsWith("lora_te_layers_") ||
+        k.startsWith("net.blocks.")
+    )
+  ) {
+    detectedFamily = "anima";
+  } else if (
+    combinedMeta.includes("sdxl") ||
+    combinedMeta.includes("illustrious") ||
+    combinedMeta.includes("pony") ||
+    combinedMeta.includes("noobai") ||
+    keys.some((k) => k.startsWith("lora_te1_") || k.startsWith("lora_te2_")) ||
+    keys.some(
+      (k) =>
+        k.includes("input_blocks") ||
+        k.includes("output_blocks") ||
+        k.includes("lora_unet_down_blocks") ||
+        k.includes("lora_unet_up_blocks") ||
+        k.includes("down_blocks.") ||
+        k.includes("up_blocks.")
+    )
+  ) {
+    detectedFamily = "sdxl";
+  } else if (
+    combinedMeta.includes("sd_v1") ||
+    combinedMeta.includes("sd15") ||
+    combinedMeta.includes("sd 1.5") ||
+    combinedMeta.includes("v1-5") ||
+    combinedMeta.includes("flux")
+  ) {
+    detectedFamily = "unsupported";
+  }
+
+  if (detectedFamily === "wan" || detectedFamily === "h3") {
+    return {
+      compatible: false,
+      family: detectedFamily,
+      reason: `LoRA incompatible de raíz: pertenece a vídeo (${detectedFamily.toUpperCase()}).`,
+    };
+  }
+  if (detectedFamily === "unsupported") {
+    return {
+      compatible: false,
+      family: detectedFamily,
+      reason: "LoRA incompatible de raíz: arquitectura base no soportada.",
+    };
+  }
+
+  const normalizedScope = String(scope || "image").toLowerCase();
+  const wantedFamily = String(
+    targetFamily || (normalizedScope === "editor" ? "qwen" : state.family || "anima")
+  )
+    .trim()
+    .toLowerCase();
+
+  if (normalizedScope === "editor") {
+    if (detectedFamily && detectedFamily !== "qwen") {
+      return {
+        compatible: false,
+        family: detectedFamily,
+        reason: `LoRA incompatible de raíz con Editor (Qwen): detectada familia ${detectedFamily.toUpperCase()}.`,
+      };
+    }
+    return { compatible: true, family: "qwen", reason: null };
+  }
+
+  if (normalizedScope === "image") {
+    if (detectedFamily === "qwen") {
+      return {
+        compatible: false,
+        family: detectedFamily,
+        reason: "LoRA incompatible de raíz con Imagen: el archivo es exclusivo del Editor (Qwen).",
+      };
+    }
+    if (detectedFamily && wantedFamily && detectedFamily !== wantedFamily) {
+      return {
+        compatible: false,
+        family: detectedFamily,
+        reason: `LoRA incompatible de raíz con el modelo activo (${detectedFamily.toUpperCase()} vs ${wantedFamily.toUpperCase()}).`,
+      };
+    }
+    return {
+      compatible: true,
+      family: detectedFamily || wantedFamily || "anima",
+      reason: null,
+    };
+  }
+
+  return {
+    compatible: true,
+    family: detectedFamily || wantedFamily || "anima",
+    reason: null,
+  };
+}
+
+async function uploadLocalLora(file, options = {}) {
+  const scope = options.scope || "image";
+  const onStatus =
+    typeof options.onStatus === "function"
+      ? options.onStatus
+      : scope === "editor"
+      ? setEditorStatus
+      : scope === "library"
+      ? setLoraLibraryStatus
+      : setStatus;
+  const input = options.input || null;
+
+  if (!file) {
+    onStatus("Elige un archivo .safetensors para cargar", true);
+    return null;
+  }
+
+  onStatus("Subiendo y registrando…");
+  try {
+    const fileB64 = await readFileBase64(file);
+    const header = parseSafetensorsHeaderFromBase64(fileB64);
+    const targetFamily =
+      options.family ||
+      (scope === "editor" ? "qwen" : state.family || "anima");
+    const rootCompat = checkLoraRootCompatibility(
+      header,
+      file.name,
+      scope,
+      targetFamily
+    );
+    if (!rootCompat.compatible) {
+      throw new Error(rootCompat.reason || "LoRA incompatible de raíz");
+    }
+
+    const payload = {
+      filename: file.name,
+      family: rootCompat.family || targetFamily,
+      file_b64: fileB64,
+    };
+    const displayName = options.displayName
+      ? String(options.displayName).trim()
+      : "";
+    if (displayName) {
+      payload.display_name = displayName;
+    }
+    const trigger = options.trigger ? String(options.trigger).trim() : "";
+    if (trigger) {
+      payload.trigger = trigger;
+    }
+
+    const data = await postJson("/api/loras/upload", payload);
+    if (input) {
+      input.value = "";
+    }
+    await loadLoraLibrary();
+    await loadLoras({ preserveSelection: true });
+    if (typeof options.onUploaded === "function") {
+      await options.onUploaded(data);
+    }
+    const inferred = data.trigger_inferido
+      ? ` · trigger: ${data.trigger_inferido}`
+      : "";
+    const statusText = `Registrado ✓ («${data.item.id}»${inferred})`;
+    setLoraLibraryStatus(statusText);
+    const compat = data && data.item ? getLoraCompatibility(data.item) : null;
+    if (scope !== "editor" && compat && compat.isMismatch && compat.warning) {
+      onStatus(`${statusText} · ${compat.warning}`, true);
+    } else {
+      onStatus(statusText);
+    }
+    window.dispatchEvent(new CustomEvent("waifu:lora-uploaded", { detail: data }));
+    return data;
+  } catch (error) {
+    if (input) {
+      input.value = "";
+    }
+    const rawMsg = String(error?.message || error || "Error al cargar LoRA");
+    const msg = /cabecera safetensors invalida/i.test(rawMsg)
+      ? `Archivo incompatible de raíz: ${rawMsg}`
+      : rawMsg;
+    setLoraLibraryStatus(msg, true);
+    onStatus(msg, true);
+    throw error;
+  }
+}
+
+function triggerLoraUpload(defaultFamily = null) {
+  const familyStr = typeof defaultFamily === "string" ? defaultFamily : "";
+  if (familyStr === "qwen") {
+    const editorInput = $("editor-lora-import-file");
+    if (editorInput) {
+      editorInput.click();
+      return;
+    }
+  } else {
+    const imageInput = $("lora-import-file");
+    if (imageInput) {
+      imageInput.click();
+      return;
+    }
+  }
+  openLoraLibrary();
+  if (familyStr) {
+    const familyInput = $("lora-form-family");
+    if (familyInput) {
+      familyInput.value = familyStr;
+    }
+  }
+  const input = $("lora-upload");
+  if (input) {
+    input.click();
+  }
+}
+
 async function uploadLoraFile() {
   const input = $("lora-upload");
   const file = input && input.files ? input.files[0] : null;
@@ -715,33 +1097,20 @@ async function uploadLoraFile() {
     setLoraLibraryStatus("Elige un archivo .safetensors para cargar", true);
     return;
   }
-  setLoraLibraryStatus("Subiendo y registrando…");
+  const family = $("lora-form-family")?.value.trim() || "anima";
+  const displayName = $("lora-form-display")?.value.trim() || "";
+  const trigger = $("lora-form-trigger")?.value.trim() || "";
   try {
-    const payload = {
-      filename: file.name,
-      family: $("lora-form-family").value.trim() || "anima",
-      file_b64: await readFileBase64(file),
-    };
-    const displayName = $("lora-form-display").value.trim();
-    if (displayName) {
-      payload.display_name = displayName;
-    }
-    const trigger = $("lora-form-trigger").value.trim();
-    if (trigger) {
-      payload.trigger = trigger;
-    }
-    const data = await postJson("/api/loras/upload", payload);
-    if (input) {
-      input.value = "";
-    }
-    await loadLoraLibrary();
-    await loadLoras({ preserveSelection: true });
-    const inferred = data.trigger_inferido
-      ? ` · trigger: ${data.trigger_inferido}`
-      : "";
-    setLoraLibraryStatus(`Registrado ✓ («${data.item.id}»${inferred})`);
-  } catch (error) {
-    setLoraLibraryStatus(error.message, true);
+    await uploadLocalLora(file, {
+      scope: "library",
+      family,
+      displayName,
+      trigger,
+      input,
+      onStatus: setLoraLibraryStatus,
+    });
+  } catch (_error) {
+    // Error ya reportado por uploadLocalLora
   }
 }
 
@@ -824,6 +1193,10 @@ export {
   readLoraForm,
   saveLoraEntry,
   deleteLoraEntry,
+  parseSafetensorsHeaderFromBase64,
+  checkLoraRootCompatibility,
+  uploadLocalLora,
+  triggerLoraUpload,
   uploadLoraFile,
   openLoraLibrary,
   closeLoraLibrary,

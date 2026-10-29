@@ -234,6 +234,8 @@
                   <div class="lora-actions">
                     <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
                     <button id="btn-lora-manage" type="button">Gestionar biblioteca</button>
+                    <button id="btn-lora-import" type="button">Cargar LoRA</button>
+                    <input id="lora-import-file" type="file" accept=".safetensors" class="hidden">
                   </div>
                   <div id="loras-list" class="lora-chips"></div>
                 </div>
@@ -888,6 +890,11 @@
               </label>
               <div id="editor-loras-field" class="editor-multiview-excluded">
                 <label class="field"><span>LoRAs compatibles (opcional, múltiple)</span><select id="editor-loras" multiple size="4"></select></label>
+                <div class="lora-actions">
+                  <button id="btn-editor-lora-import" type="button">Cargar LoRA</button>
+                  <input id="editor-lora-import-file" type="file" accept=".safetensors" class="hidden">
+                </div>
+                <p id="editor-loras-empty" class="field-hint hidden">No hay LoRAs compatibles con Qwen registradas. Usa «Cargar LoRA» para añadir un .safetensors.</p>
                 <p class="field-hint">Solo se listan LoRAs de la familia del Editor; se aplican con peso 1.0.</p>
               </div>
             </div>

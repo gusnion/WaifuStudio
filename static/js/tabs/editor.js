@@ -49,6 +49,7 @@ import {
   poseToDataUrl,
 } from "../components/pose_library.js";
 import { runMultiviewGeneration, renderSheet } from "../components/editor_multiview.js";
+import { triggerLoraUpload } from "../components/loras.js";
 import { t } from "../i18n.js";
 
 let editorResolutionKit = null;
@@ -89,13 +90,13 @@ function isEditorLora(item) {
   return /qwen/i.test(`${item?.file || ""} ${item?.display_name || ""} ${item?.id || ""}`);
 }
 
-async function loadEditorLoras() {
+async function loadEditorLoras(scan = false) {
   const select = $("editor-loras");
   if (!select) {
     return;
   }
   try {
-    const data = await api("/api/loras?scan=0");
+    const data = await api(scan ? "/api/loras?scan=1" : "/api/loras?scan=0");
     const items = Array.isArray(data) ? data : data?.items || [];
     const currentSelected = new Set(
       pendingEditorLoras !== null
@@ -996,6 +997,10 @@ function initEditorTab() {
   });
   on("btn-editor-license", "click", acceptEditorLicense);
   on("editor-size", "change", applyEditorSizeSelection);
+  on("btn-editor-lora-import", "click", () => triggerLoraUpload("qwen"));
+  window.addEventListener("waifu:lora-uploaded", () => {
+    loadEditorLoras(true).catch((error) => setEditorStatus(error.message, true));
+  });
   loadEditorLoras().catch(() => {});
 
   const orient = $("editor-res-orientation");

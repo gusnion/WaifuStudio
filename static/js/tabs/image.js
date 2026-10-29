@@ -40,6 +40,7 @@ import {
   readLorasPayload,
   applyLorasSelection,
   loadLoras,
+  triggerLoraUpload,
 } from "../components/loras.js";
 import { applyVideoEngine } from "./video.js";
 import { fillEditorSizes } from "./editor.js";
@@ -856,6 +857,7 @@ function clearImagePosePreview() {
 
 function initImageTab() {
   on("btn-enhance", "click", enhancePrompt);
+  on("btn-lora-import", "click", triggerLoraUpload);
   on("btn-image-poses", "click", () => openPoseLibrary("image"));
   on("btn-image-pose-clear", "click", clearImagePosePreview);
   registerPoseCallback("image", applyPoseToImageTab);

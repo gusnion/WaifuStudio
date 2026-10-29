@@ -7242,6 +7242,30 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn("#panel-editor .advanced.panel-section", ed_css)
         self.assertIn('#panel-editor[data-editor-mode="multiview"] .editor-multiview-excluded', ed_css)
 
+    def test_w10_lora_loader_buttons_and_upload_hook(self):
+        """W10 (2.5.0_bugfix): botones de importacion LoRA en Imagen y Editor reutilizan #lora-upload y refrescan catalogos."""
+        base_dir = Path(__file__).resolve().parents[1]
+
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-lora-import"', html)
+        self.assertIn('id="btn-editor-lora-import"', html)
+
+        loras_js = (base_dir / "static" / "js" / "components" / "loras.js").read_text(encoding="utf-8")
+        self.assertIn("function triggerLoraUpload(", loras_js)
+        self.assertIn("triggerLoraUpload,", loras_js)
+        self.assertIn('new CustomEvent("waifu:lora-uploaded", { detail: data })', loras_js)
+
+        img_js = (base_dir / "static" / "js" / "tabs" / "image.js").read_text(encoding="utf-8")
+        self.assertIn("triggerLoraUpload", img_js)
+        self.assertIn('on("btn-lora-import", "click", triggerLoraUpload)', img_js)
+
+        ed_js = (base_dir / "static" / "js" / "tabs" / "editor.js").read_text(encoding="utf-8")
+        self.assertIn("triggerLoraUpload", ed_js)
+        self.assertIn('"btn-editor-lora-import"', ed_js)
+        self.assertIn("triggerLoraUpload", ed_js)
+        self.assertIn("waifu:lora-uploaded", ed_js)
+        self.assertIn("loadEditorLoras(true)", ed_js)
+
 
 if __name__ == "__main__":
     unittest.main()
