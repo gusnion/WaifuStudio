@@ -48,6 +48,9 @@ function galleryKindLabel(kind) {
   if (kind === "video") {
     return "Vídeo";
   }
+  if (kind === "audio") {
+    return "Audio";
+  }
   return kind || "Sin tipo";
 }
 
@@ -90,6 +93,8 @@ function renderGalleryTab() {
         ? "Sin vídeos."
         : gallery.kind === "image"
         ? "Sin imágenes."
+        : gallery.kind === "audio"
+        ? "Sin audios."
         : "Sin generaciones.";
     empty.classList.remove("hidden");
     grid.classList.add("hidden");
@@ -107,7 +112,17 @@ function renderGalleryTab() {
     const media = document.createElement("span");
     media.className = "gallery-card-media";
     const url = galleryItemUrl(item);
-    if (url && isVideoUrl(url)) {
+    const isAudio = Boolean(
+      (item.kind === "audio" || /\.(wav|mp3)(?:[?#]|$)/i.test(url || "")) && url
+    );
+    if (isAudio) {
+      const audio = document.createElement("audio");
+      audio.src = url;
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.addEventListener("click", (event) => event.stopPropagation());
+      media.appendChild(audio);
+    } else if (url && isVideoUrl(url)) {
       const video = document.createElement("video");
       video.src = url;
       video.muted = true;

@@ -316,6 +316,17 @@ class ReadRoutesTests(ServerTestCase):
         self.assertEqual(len(data["items"]), 1)
         self.assertEqual(data["items"][0]["kind"], "video")
 
+    def test_gallery_filtro_kind_audio(self):
+        self.store.add(MODEL_ID, "image prompt", kind="image")
+        self.store.add(MODEL_ID, "audio prompt", kind="audio")
+        client = self.make_client()
+        res = client.get("/api/gallery?kind=audio")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(data["items"][0]["kind"], "audio")
+
 
 class LorasRouteTests(ServerTestCase):
     def test_loras_200_con_items_y_familias(self):
@@ -3184,6 +3195,22 @@ class MediaTests(ServerTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn("error", response.json())
 
+    def test_sirve_audio_media_types_wav_mp3(self):
+        gen_id = self.store.add(MODEL_ID, "audio gen", kind="audio")
+        out_dir = self.config.data_dir / "gallery" / str(gen_id)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "sound.wav").write_bytes(b"RIFFdummywavdata")
+        (out_dir / "track.mp3").write_bytes(b"ID3dummymp3data")
+        client = self.make_client()
+        res_wav = client.get(f"/media/{gen_id}/sound.wav")
+        self.assertEqual(res_wav.status_code, 200)
+        self.assertEqual(res_wav.headers["content-type"], "audio/wav")
+        self.assertEqual(res_wav.content, b"RIFFdummywavdata")
+        res_mp3 = client.get(f"/media/{gen_id}/track.mp3")
+        self.assertEqual(res_mp3.status_code, 200)
+        self.assertEqual(res_mp3.headers["content-type"], "audio/mpeg")
+        self.assertEqual(res_mp3.content, b"ID3dummymp3data")
+
 
 class DownloadRouteTests(ServerTestCase):
     def test_download_200_adjunto(self):
@@ -3338,7 +3365,7 @@ class GalleryKindFilterTests(ServerTestCase):
     def test_kind_desconocido_400(self):
         response = self.make_client().get("/api/gallery", params={"kind": "nope"})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "kind invalido; usar image|video")
+        self.assertEqual(response.json()["error"], "kind invalido; usar image|video|audio")
 
     def test_sin_kind_mantiene_feed_mixto(self):
         images, videos = self.seed_mixed()

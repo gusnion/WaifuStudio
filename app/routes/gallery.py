@@ -19,6 +19,8 @@ MEDIA_TYPES = {
     ".png": "image/png",
     ".mp4": "video/mp4",
     ".webm": "video/webm",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
 }
 CHARACTER_MEDIA_TYPES = {
     ".png": "image/png",
@@ -38,7 +40,7 @@ async def api_gallery(
     kind: str | None = None,
     q: str | None = None,
 ) -> Any:
-    """Feed paginado (mas nuevo primero); `kind` opcional filtra image|video.
+    """Feed paginado (mas nuevo primero); `kind` opcional filtra image|video|audio.
 
     `count` refleja el filtro aplicado, no solo la ventana: el visor de
     video pide `kind=video&limit=5&offset=…` y calcula su pagina X de Y.
@@ -46,9 +48,9 @@ async def api_gallery(
     """
     st = request.app.state.store
     kind = kind or None
-    if kind not in (None, "image", "video"):
+    if kind not in (None, "image", "video", "audio"):
         return JSONResponse(
-            status_code=400, content={"error": "kind invalido; usar image|video"}
+            status_code=400, content={"error": "kind invalido; usar image|video|audio"}
         )
     limit = max(1, min(int(limit), 24))
     offset = max(0, int(offset))
