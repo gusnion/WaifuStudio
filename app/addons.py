@@ -370,6 +370,17 @@ def set_addon_enabled(data_dir: str | Path, addon_id: str, enabled: bool) -> dic
     return {"id": addon_id, "enabled": bool(enabled)}
 
 
+def remove_addon(data_dir: str | Path, addon_id: str) -> dict[str, Any]:
+    if not isinstance(addon_id, str) or ID_RE.fullmatch(addon_id) is None:
+        raise EngineError("id de addon invalido")
+    path = addons_root(data_dir) / addon_id
+    if not path.is_dir():
+        raise EngineError(f"addon no instalado: {addon_id}")
+    _write_state(path, False)
+    shutil.rmtree(path)
+    return {"id": addon_id, "removed": True}
+
+
 def list_video_engines(data_dir: str | Path) -> dict[str, Any]:
     engines: dict[str, Any] = {}
     if VIDEO_ENGINES_PATH.is_file():
@@ -401,5 +412,6 @@ __all__ = [
     "import_addon",
     "list_addons",
     "list_video_engines",
+    "remove_addon",
     "set_addon_enabled",
 ]

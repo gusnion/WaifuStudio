@@ -15,6 +15,7 @@ from app.addons import (
     import_catalog,
     list_addons,
     list_video_engines,
+    remove_addon,
     set_addon_enabled,
 )
 from app.engine import EngineError
@@ -54,6 +55,15 @@ class AddonManagerTests(unittest.TestCase):
         self.assertEqual(list_addons(self.data)[0]["enabled"], True)
         set_addon_enabled(self.data, "demo-pack", False)
         self.assertEqual(list_addons(self.data)[0]["enabled"], False)
+
+    def test_remove_addon(self):
+        imported = import_addon(self.data, make_zip(MANIFEST))
+        addon_dir = self.data / "addons" / imported["id"]
+        self.assertTrue(addon_dir.is_dir())
+        set_addon_enabled(self.data, imported["id"], False)
+        result = remove_addon(self.data, imported["id"])
+        self.assertEqual(result, {"id": imported["id"], "removed": True})
+        self.assertFalse(addon_dir.exists())
 
     def test_rechaza_zip_sin_manifiesto(self):
         with self.assertRaises(EngineError):

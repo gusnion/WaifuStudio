@@ -13,6 +13,7 @@ from app.addons import (
     import_catalog,
     list_addons,
     list_video_engines,
+    remove_addon,
     set_addon_enabled,
 )
 from app.engine import EngineError
@@ -83,6 +84,14 @@ async def api_addon(request: Request, addon_id: str) -> Any:
     if found is None:
         return JSONResponse(status_code=404, content={"error": "addon no instalado"})
     return found
+
+
+@router.delete("/api/addons/{addon_id}")
+async def api_addon_delete(request: Request, addon_id: str) -> Any:
+    try:
+        return remove_addon(request.app.state.config.data_dir, addon_id)
+    except EngineError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
 
 
 @router.get("/api/video/engines")
