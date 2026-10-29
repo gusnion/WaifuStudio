@@ -246,3 +246,22 @@
   font-size: 0.8rem;
   line-height: 1.4;
 }
+
+/* W6: el aviso ocupa su propia fila superior del grid canónico (antes competía con
+   la única fila 1fr y quedaba tapado por el módulo Generar y el Previewer). */
+#panel-video.tab-canonical-layout.active {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+#panel-video > .video-license-notice {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 20;
+  margin: 0;
+}
+
+#panel-video > .tab-sidebar,
+#panel-video > .tab-viewport {
+  grid-row: 2;
+}
