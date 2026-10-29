@@ -43,6 +43,7 @@ from app.registry import (
     infer_subfamily,
 )
 from app.params import SAMPLER_NAMES, SCHEDULER_NAMES
+from app.preprompts import default_preprompt
 
 
 from app import loras as _loras_module
@@ -276,11 +277,14 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             model_id = f"{base_id}-{suffix}"
             suffix += 1
         meta = {}
+        tensor_names: list[str] = []
         if raw_hdr:
             hdr = safetensors_header(raw_hdr)
-            if isinstance(hdr, dict) and isinstance(hdr.get("__metadata__"), dict):
-                meta = hdr["__metadata__"]
-        subfamily = infer_subfamily(meta)
+            if isinstance(hdr, dict):
+                if isinstance(hdr.get("__metadata__"), dict):
+                    meta = hdr["__metadata__"]
+                tensor_names = [k for k in hdr if k != "__metadata__"]
+        subfamily = infer_subfamily(meta, tensor_names, rel_name)
 
         if kind == "checkpoint":
             model_family = "sdxl"
@@ -326,7 +330,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
             profile=profile,
             source=source,
             license="no verificada (archivo local del usuario)",
-            preprompt="sdxl_default" if model_family == "sdxl" else "glossy",
+            preprompt=default_preprompt(model_family),
             defaults=defaults,
             notes=notes,
             prompt_profile=infer_prompt_profile(
@@ -334,6 +338,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
                 family=model_family,
                 display_name=path.stem,
                 unet_name=rel_name,
+                subfamily=subfamily,
             ),
             subfamily=subfamily,
         )

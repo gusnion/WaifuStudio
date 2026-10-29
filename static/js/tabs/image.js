@@ -151,10 +151,11 @@ function getModelBadgeLabel(model) {
   if (!model) {
     return "Sin clasificar";
   }
-  const subfamily = String(model.subfamily || "").trim().toLowerCase();
+  const rawSubfamily = String(model.subfamily || "").trim().toLowerCase();
   const family = String(model.family || "").trim().toLowerCase();
+  const subfamily = rawSubfamily && rawSubfamily !== "sin_clasificar" ? rawSubfamily : family;
 
-  if (subfamily === "anima" || (!subfamily && family === "anima")) {
+  if (subfamily === "anima") {
     return "Anima";
   }
   if (subfamily === "illustrious") {
@@ -166,14 +167,17 @@ function getModelBadgeLabel(model) {
   if (subfamily === "noobai") {
     return "SDXL NoobAI";
   }
-  if (subfamily === "sdxl_base" || subfamily === "sdxl" || (!subfamily && family === "sdxl")) {
+  if (subfamily === "sdxl_base" || subfamily === "sdxl") {
     return "SDXL";
   }
-  if (subfamily === "wan" || (!subfamily && family === "wan")) {
+  if (subfamily === "wan") {
     return "Wan";
   }
-  if (subfamily === "h3" || (!subfamily && family === "h3")) {
+  if (subfamily === "h3") {
     return "H3";
+  }
+  if (subfamily && subfamily !== "sin_clasificar") {
+    return subfamily.charAt(0).toUpperCase() + subfamily.slice(1);
   }
   return "Sin clasificar";
 }

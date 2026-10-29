@@ -34,17 +34,102 @@ KNOWN_SUBFAMILIES = (
 DEFAULT_SUBFAMILY = "sin_clasificar"
 
 
+_ANIMA_RE = re.compile(r"(?<![a-z])anima(?![a-z])")
+_SDXL_TENSOR_PREFIX = "model.diffusion_model.input_blocks."
+_ANIMA_TENSOR_PREFIXES = ("model.diffusion_model.blocks.", "net.blocks.", "diffusion_model.blocks.")
+_VIDEO_TENSOR_PREFIXES = (
+    "patch_embedding.",
+    "time_projection.",
+    "audio_patch_proj.",
+    "model.diffusion_model.patch_embedding.",
+    "model.diffusion_model.time_projection.",
+)
+
+
+def _infer_from_tensor_names(tensor_names) -> str:
+    """Subfamilia base por layout de tensores (evidencia fuerte). ``""`` si no hay layout claro."""
+    if tensor_names is None:
+        return ""
+    try:
+        names = [str(n) for n in tensor_names if n != "__metadata__"]
+    except TypeError:
+        return ""
+    if not names:
+        return ""
+    has_cond = any(n.startswith("conditioner.embedders.") for n in names)
+    has_vae = any(n.startswith("first_stage_model.") for n in names)
+    has_input = any(n.startswith(_SDXL_TENSOR_PREFIX) for n in names)
+    if has_cond and has_vae and has_input:
+        return "sdxl_base"
+    if any(n.startswith(_VIDEO_TENSOR_PREFIXES) for n in names):
+        return ""
+    if any(n.startswith(_ANIMA_TENSOR_PREFIXES) for n in names):
+        return "anima"
+    return ""
+
+
+def _infer_from_filename(filename: str, *, sdxl_layout: bool = False) -> str:
+    """Pista debil por nombre de archivo. Animagine se evalua antes que Anima."""
+    name = str(filename or "").lower()
+    if not name:
+        return ""
+    if "animagine" in name:
+        return "sdxl_base"
+    if "illustrious" in name or re.search(r"(?<![a-z])illu(?![a-z])", name):
+        return "illustrious"
+    if "pony" in name:
+        return "pony"
+    if "noobai" in name or "noob-ai" in name:
+        return "noobai"
+    if sdxl_layout:
+        return ""
+    if _ANIMA_RE.search(name):
+        return "anima"
+    if "sdxl" in name or "sd_xl" in name:
+        return "sdxl_base"
+    return ""
+
+
 def infer_subfamily(
     metadata_or_base: dict | str | None = None,
-    modelspec_architecture: str = "",
+    tensor_names=None,
+    filename: str = "",
     *,
+    modelspec_architecture: str = "",
     ss_base_model_version: str = "",
 ) -> str:
-    """Infiere la subfamilia de metadatos safetensors (ss_base_model_version y modelspec.architecture).
+    """Infiere la subfamilia base de un modelo/LoRA safetensors.
+
+    Orden de evidencia: 1) metadata (ss_base_model_version / modelspec.architecture),
+    2) layout de tensores (``tensor_names``: SDXL = conditioner.embedders + first_stage_model
+    + input_blocks; Anima = ``*.blocks.*``), 3) nombre de archivo solo como pista.
+    Sin evidencia devuelve ``sin_clasificar``; nunca inventa.
 
     Valores conocidos:
     - anima, illustrious, pony, noobai, sdxl_base, wan, h3, sin_clasificar.
     """
+    from_meta = _infer_from_metadata(
+        metadata_or_base,
+        modelspec_architecture=modelspec_architecture,
+        ss_base_model_version=ss_base_model_version,
+    )
+    if from_meta != DEFAULT_SUBFAMILY:
+        return from_meta
+    layout = _infer_from_tensor_names(tensor_names)
+    if layout:
+        if layout == "sdxl_base":
+            return _infer_from_filename(filename, sdxl_layout=True) or "sdxl_base"
+        return layout
+    return _infer_from_filename(filename) or DEFAULT_SUBFAMILY
+
+
+def _infer_from_metadata(
+    metadata_or_base: dict | str | None = None,
+    *,
+    modelspec_architecture: str = "",
+    ss_base_model_version: str = "",
+) -> str:
+    """Subfamilia segun texto de metadata (ss_base_model_version y modelspec.architecture)."""
     if isinstance(metadata_or_base, dict):
         meta_ci = {str(k).lower(): v for k, v in metadata_or_base.items()}
         base_ver = str(
@@ -82,8 +167,10 @@ def infer_subfamily(
     if "noobai" in combined or "noob-ai" in combined or "noob" in combined.split():
         return "noobai"
 
-    # 4. Anima
-    if "anima" in combined:
+    # 4. Animagine (SDXL; antes de Anima por colision de prefijo) y Anima
+    if "animagine" in combined:
+        return "sdxl_base"
+    if _ANIMA_RE.search(combined):
         return "anima"
 
     # 5. Wan
@@ -106,13 +193,15 @@ def infer_prompt_profile(
     family: str = "",
     display_name: str = "",
     unet_name: str = "",
+    subfamily: str = "",
 ) -> str:
     """Infiere el prompt_profile para compatibilidad retroactiva con modelos conocidos.
 
     Reglas:
     - animagine -> "sdxl_tags" (evaluado antes de anima por colision de prefijo)
     - realvis / juggernaut -> "sdxl_natural"
-    - anima (familia o en nombre/id) -> "anima"
+    - subfamilia illustrious / pony / noobai -> "sdxl_tags"
+    - anima (familia, subfamilia, o nombre/id si la familia no es sdxl) -> "anima"
     - resto -> "sdxl_tags" (default retrocompatible)
     """
     if isinstance(model_id, dict):
@@ -147,11 +236,19 @@ def infer_prompt_profile(
     if "realvis" in combined or "juggernaut" in combined:
         return "sdxl_natural"
 
-    # 3. Anima
-    if fam_l == "anima" or "anima" in combined:
+    # 3. Subfamilia SDXL basada en tags (evidencia de metadata/tensores/nombre)
+    if str(subfamily or "").lower() in ("illustrious", "pony", "noobai"):
+        return "sdxl_tags"
+
+    # 4. Anima: familia/subfamilia anima, o nombre solo si la familia no es SDXL
+    if (
+        fam_l == "anima"
+        or str(subfamily or "").lower() == "anima"
+        or (fam_l != "sdxl" and "anima" in combined)
+    ):
         return "anima"
 
-    # 4. Resto (default retrocompatible)
+    # 5. Resto (default retrocompatible)
     return DEFAULT_PROMPT_PROFILE
 
 
