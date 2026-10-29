@@ -286,6 +286,25 @@ async def api_editor_generate(request: Request, payload: dict = Body(...)) -> An
     if loras is not None and not isinstance(loras, list):
         return JSONResponse(status_code=400, content={"error": "loras invalido; usar lista"})
 
+    parent_gen_id = payload.get("parent_gen_id")
+    if parent_gen_id is not None:
+        if isinstance(parent_gen_id, bool) or (
+            isinstance(parent_gen_id, float) and not parent_gen_id.is_integer()
+        ):
+            return JSONResponse(
+                status_code=400, content={"error": "parent_gen_id invalido"}
+            )
+        try:
+            parent_gen_id = int(parent_gen_id)
+        except (TypeError, ValueError):
+            return JSONResponse(
+                status_code=400, content={"error": "parent_gen_id invalido"}
+            )
+        if parent_gen_id <= 0:
+            return JSONResponse(
+                status_code=400, content={"error": "parent_gen_id invalido"}
+            )
+
     if original_size:
         if not raw_refs:
             return JSONResponse(
@@ -338,6 +357,26 @@ async def api_editor_generate(request: Request, payload: dict = Body(...)) -> An
         params["pose_preset"] = pose_preset
     if loras:
         params["loras"] = loras
+    if parent_gen_id is not None:
+        params["parent_gen_id"] = parent_gen_id
+        parent_row = st.get(parent_gen_id)
+        parent_params = (
+            parent_row.get("params") if isinstance(parent_row, dict) else None
+        )
+        raw_root = (
+            parent_params.get("root_gen_id")
+            if isinstance(parent_params, dict)
+            else None
+        )
+        root_gen_id = parent_gen_id
+        if raw_root is not None and not isinstance(raw_root, bool):
+            try:
+                candidate_root = int(raw_root)
+                if candidate_root > 0:
+                    root_gen_id = candidate_root
+            except (TypeError, ValueError):
+                pass
+        params["root_gen_id"] = root_gen_id
 
     gen_id = st.add(
         EDITOR_MODEL, prompt.strip(), negative.strip(), params, kind="image"

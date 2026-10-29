@@ -83,6 +83,89 @@ async def api_gallery_item(id: int, request: Request) -> Any:
     return item
 
 
+def _hydrate_gallery_item(row: dict) -> dict:
+    item = dict(row)
+    item["urls"] = [
+        MEDIA_URL.format(gen_id=row["id"], name=name)
+        for name in (row.get("outputs") or [])
+    ]
+    return item
+
+
+def _positive_int_or_none(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+@router.get("/api/gallery/{id}/lineage")
+async def api_gallery_lineage(id: int, request: Request) -> Any:
+    """Devuelve el nodo, cadena de ancestros hasta la raiz, hijos directos y `root_id`."""
+    st = request.app.state.store
+    row = st.get(id)
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": "no encontrado"})
+
+    node = _hydrate_gallery_item(row)
+    node_params = node.get("params") if isinstance(node.get("params"), dict) else {}
+
+    ancestors: list[dict] = []
+    visited: set[int] = {id}
+    curr_params = node_params
+    while True:
+        parent_id = _positive_int_or_none(curr_params.get("parent_gen_id"))
+        if parent_id is None or parent_id in visited:
+            break
+        visited.add(parent_id)
+        parent_row = st.get(parent_id)
+        if parent_row is None:
+            break
+        parent_item = _hydrate_gallery_item(parent_row)
+        ancestors.append(parent_item)
+        curr_params = (
+            parent_item.get("params")
+            if isinstance(parent_item.get("params"), dict)
+            else {}
+        )
+
+    top = ancestors[-1] if ancestors else node
+    top_params = top.get("params") if isinstance(top.get("params"), dict) else {}
+    root_id = (
+        _positive_int_or_none(top_params.get("root_gen_id"))
+        or _positive_int_or_none(node_params.get("root_gen_id"))
+        or _positive_int_or_none(top_params.get("parent_gen_id"))
+        or int(top["id"])
+    )
+
+    total = st.count() if hasattr(st, "count") else 0
+    all_rows = st.list(limit=max(total, 1000), offset=0, order="asc")
+    children: list[dict] = []
+    for candidate in all_rows:
+        cand_id = int(candidate.get("id", 0))
+        if cand_id == id:
+            continue
+        cand_params = (
+            candidate.get("params")
+            if isinstance(candidate.get("params"), dict)
+            else {}
+        )
+        if _positive_int_or_none(cand_params.get("parent_gen_id")) == id:
+            children.append(_hydrate_gallery_item(candidate))
+
+    return {
+        "node": node,
+        "ancestors": ancestors,
+        "children": children,
+        "root_id": root_id,
+    }
+
+
 @router.delete("/api/gallery/{id}")
 async def api_gallery_delete(id: int, request: Request) -> Any:
     st = request.app.state.store

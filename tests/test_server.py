@@ -7282,5 +7282,70 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn("loadEditorLoras(true)", ed_js)
 
 
+    def test_w9_editor_worktree_lineage_backend(self):
+        """W9 (2.5.0_bugfix): POST /api/editor/generate guarda parent_gen_id/root_gen_id y GET /api/gallery/{id}/lineage devuelve node, ancestors, children y root_id."""
+        for relative in server_module.EDITOR_MODEL_FILES:
+            path = self.config.comfy_root / "models" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fake-model")
+
+        client = self.make_client()
+
+        missing = client.get("/api/gallery/999999/lineage")
+        self.assertEqual(missing.status_code, 404)
+
+        legacy_id = self.store.add(MODEL_ID, "legacy prompt", "", {"steps": 20})
+        self.store.update(legacy_id, status="done", outputs=["legacy.png"])
+
+        res_legacy = client.get(f"/api/gallery/{legacy_id}/lineage")
+        self.assertEqual(res_legacy.status_code, 200)
+        data_legacy = res_legacy.json()
+        self.assertEqual(data_legacy["node"]["id"], legacy_id)
+        self.assertEqual(data_legacy["node"]["urls"], [f"/media/{legacy_id}/legacy.png"])
+        self.assertEqual(data_legacy["ancestors"], [])
+        self.assertEqual(data_legacy["children"], [])
+        self.assertEqual(data_legacy["root_id"], legacy_id)
+
+        res_c1 = client.post(
+            "/api/editor/generate",
+            json={"prompt": "branch 1", "parent_gen_id": legacy_id},
+        )
+        self.assertEqual(res_c1.status_code, 200)
+        c1_id = client.app.state.jobs[res_c1.json()["job_id"]]["gen_id"]
+        self.store.update(c1_id, status="done", outputs=["c1.png"])
+
+        res_c2 = client.post(
+            "/api/editor/generate",
+            json={"prompt": "branch 2", "parent_gen_id": legacy_id},
+        )
+        self.assertEqual(res_c2.status_code, 200)
+        c2_id = client.app.state.jobs[res_c2.json()["job_id"]]["gen_id"]
+
+        res_gc = client.post(
+            "/api/editor/generate",
+            json={"prompt": "sub branch 1", "parent_gen_id": c1_id},
+        )
+        self.assertEqual(res_gc.status_code, 200)
+        gc_id = client.app.state.jobs[res_gc.json()["job_id"]]["gen_id"]
+
+        root_lineage = client.get(f"/api/gallery/{legacy_id}/lineage").json()
+        self.assertEqual(root_lineage["root_id"], legacy_id)
+        self.assertEqual(root_lineage["ancestors"], [])
+        self.assertEqual([c["id"] for c in root_lineage["children"]], [c1_id, c2_id])
+
+        mid_lineage = client.get(f"/api/gallery/{c1_id}/lineage").json()
+        self.assertEqual(mid_lineage["node"]["id"], c1_id)
+        self.assertEqual(mid_lineage["node"]["urls"], [f"/media/{c1_id}/c1.png"])
+        self.assertEqual(mid_lineage["root_id"], legacy_id)
+        self.assertEqual([a["id"] for a in mid_lineage["ancestors"]], [legacy_id])
+        self.assertEqual([c["id"] for c in mid_lineage["children"]], [gc_id])
+
+        leaf_lineage = client.get(f"/api/gallery/{gc_id}/lineage").json()
+        self.assertEqual(leaf_lineage["node"]["id"], gc_id)
+        self.assertEqual(leaf_lineage["root_id"], legacy_id)
+        self.assertEqual([a["id"] for a in leaf_lineage["ancestors"]], [c1_id, legacy_id])
+        self.assertEqual(leaf_lineage["children"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

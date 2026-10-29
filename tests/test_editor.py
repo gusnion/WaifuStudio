@@ -980,5 +980,55 @@ class EditorRouteFeaturesTests(unittest.TestCase):
             self.assertEqual(res.status_code, 400)
 
 
+    def test_api_editor_generate_parent_y_root_gen_id(self):
+        self.install_model()
+        root_id = self.store.add("anima-2.9b-preview", "root prompt", "", {"task": "txt2img"})
+        app = create_app(
+            config=self.config,
+            store=self.store,
+            registry=self.registry,
+            queue=JobQueue(lambda j: None),
+        )
+        with TestClient(app) as client:
+            res_no_parent = client.post(
+                "/api/editor/generate",
+                json={"prompt": "standalone edit"},
+            )
+            self.assertEqual(res_no_parent.status_code, 200)
+            standalone_job = app.state.jobs[res_no_parent.json()["job_id"]]
+            standalone_row = self.store.get(standalone_job["gen_id"])
+            self.assertNotIn("parent_gen_id", standalone_row["params"])
+            self.assertNotIn("root_gen_id", standalone_row["params"])
+
+            res_child = client.post(
+                "/api/editor/generate",
+                json={"prompt": "first edit", "parent_gen_id": root_id},
+            )
+            self.assertEqual(res_child.status_code, 200)
+            child_job = app.state.jobs[res_child.json()["job_id"]]
+            child_id = child_job["gen_id"]
+            child_row = self.store.get(child_id)
+            self.assertEqual(child_row["params"]["parent_gen_id"], root_id)
+            self.assertEqual(child_row["params"]["root_gen_id"], root_id)
+
+            res_grandchild = client.post(
+                "/api/editor/generate",
+                json={"prompt": "second edit", "parent_gen_id": child_id},
+            )
+            self.assertEqual(res_grandchild.status_code, 200)
+            grandchild_job = app.state.jobs[res_grandchild.json()["job_id"]]
+            grandchild_row = self.store.get(grandchild_job["gen_id"])
+            self.assertEqual(grandchild_row["params"]["parent_gen_id"], child_id)
+            self.assertEqual(grandchild_row["params"]["root_gen_id"], root_id)
+
+            for invalid_parent in (0, -3, "abc", True, 2.5):
+                res_bad = client.post(
+                    "/api/editor/generate",
+                    json={"prompt": "bad parent", "parent_gen_id": invalid_parent},
+                )
+                self.assertEqual(res_bad.status_code, 400)
+                self.assertIn("parent_gen_id", res_bad.json().get("error", ""))
+
+
 if __name__ == "__main__":
     unittest.main()
