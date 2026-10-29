@@ -1,27 +1,36 @@
-/* Sistema de diseño v2 para las pestañas con layout canónico. */
+/* Sistema de diseño v2 para las pestañas con layout canónico y modales estándar. */
 
-.tab-canonical-layout .controls {
+.tab-canonical-layout .controls,
+.model-defaults-body {
   padding: var(--space-4);
   background: color-mix(in srgb, var(--panel) 82%, var(--bg));
   border-right: 1px solid var(--border);
 }
 
-.tab-canonical-layout .control-card {
+.model-defaults-body {
+  border-right: 0;
+}
+
+.tab-canonical-layout .control-card,
+.model-defaults-modal .control-card {
   background: var(--panel);
   border-color: color-mix(in srgb, var(--border) 80%, transparent);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
-.tab-canonical-layout .control-card > legend {
+.tab-canonical-layout .control-card > legend,
+.model-defaults-modal .control-card > legend {
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
-.tab-canonical-layout .control-card .field > span {
+.tab-canonical-layout .control-card .field > span,
+.model-defaults-modal .control-card .field > span {
   font-weight: 600;
 }
 
-.tab-canonical-layout button.primary {
+.tab-canonical-layout button.primary,
+.model-defaults-modal button.primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: 0;
   font-weight: 700;
@@ -38,10 +47,12 @@
   border-color: color-mix(in srgb, var(--border) 70%, transparent);
 }
 
-html[data-theme="light"] .tab-canonical-layout .controls {
+html[data-theme="light"] .tab-canonical-layout .controls,
+html[data-theme="light"] .model-defaults-body {
   background: var(--panel-2);
 }
 
-html[data-theme="light"] .tab-canonical-layout .control-card {
+html[data-theme="light"] .tab-canonical-layout .control-card,
+html[data-theme="light"] .model-defaults-modal .control-card {
   box-shadow: 0 6px 18px rgba(30, 35, 50, 0.08);
 }

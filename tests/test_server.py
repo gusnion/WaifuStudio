@@ -7166,6 +7166,45 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn("state.editorRefs.push", ed_js)
         self.assertIn("updateEditorRefs()", ed_js)
 
+    def test_w4_model_defaults_canonical_modal(self):
+        """W4 (2.5.0_bugfix): modal de Defaults usa fieldset.control-card, legend, btn-help y botones canonicos sin .model-defaults-grid."""
+        base_dir = Path(__file__).resolve().parents[1]
+
+        js_code = (base_dir / "static" / "js" / "components" / "model_defaults.js").read_text(encoding="utf-8")
+        self.assertIn('const FIELDS = ["seed", "steps", "cfg", "sampler_name", "scheduler", "width", "height"];', js_code)
+        self.assertIn("async function saveDefaults(modelId, values)", js_code)
+        self.assertIn("function openDefaults(modelId)", js_code)
+        self.assertIn("export function initModelDefaults()", js_code)
+        self.assertIn("modal model-defaults-modal", js_code)
+        self.assertIn("modal-header", js_code)
+        self.assertIn("model-defaults-body", js_code)
+        self.assertIn('document.createElement("fieldset")', js_code)
+        self.assertIn('"control-card"', js_code)
+        self.assertIn('document.createElement("legend")', js_code)
+        self.assertIn('"btn-help"', js_code)
+        self.assertIn('"grid-2"', js_code)
+        self.assertIn("modal-footer", js_code)
+        self.assertIn('cancel.className = "secondary"', js_code)
+        self.assertIn('save.className = "primary"', js_code)
+        self.assertNotIn("model-defaults-grid", js_code)
+        self.assertNotIn(".style.", js_code)
+
+        base_css = (base_dir / "static" / "css" / "base.css").read_text(encoding="utf-8")
+        self.assertNotIn(".model-defaults-grid", base_css)
+
+        comp_css = (base_dir / "static" / "css" / "components.css").read_text(encoding="utf-8")
+        self.assertIn(".model-defaults-modal .modal-box", comp_css)
+        self.assertIn(".model-defaults-body", comp_css)
+        self.assertIn(".model-defaults-body .control-card", comp_css)
+        self.assertIn("button.secondary", comp_css)
+
+        design_v2_css = (base_dir / "static" / "css" / "design-v2.css").read_text(encoding="utf-8")
+        self.assertIn(".model-defaults-modal .control-card", design_v2_css)
+        self.assertIn('html[data-theme="light"] .model-defaults-modal .control-card', design_v2_css)
+
+        html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-model-defaults" type="button" class="secondary"', html)
+
 
 if __name__ == "__main__":
     unittest.main()

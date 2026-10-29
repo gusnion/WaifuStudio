@@ -34,6 +34,12 @@ button.primary {
   font-weight: 600;
 }
 
+button.secondary {
+  background: var(--panel-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
 button.danger {
   color: var(--error);
   border-color: var(--error);
@@ -128,6 +134,8 @@ input[type="checkbox"] {
 
 .generate-row .primary {
   flex: 1;
+  border: 1px solid var(--accent);
+  box-sizing: border-box;
 }
 
 #btn-seed-random,
@@ -1026,6 +1034,52 @@ input[type="checkbox"] {
 
 .oc-save-body .status {
   font-size: 0.8rem;
+}
+
+/* Defaults de modelo (W4): modal estándar con fieldset.control-card */
+.model-defaults-modal .modal-box {
+  width: min(560px, 100%);
+}
+
+.model-defaults-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 0.75rem);
+  padding: var(--space-4, 1rem);
+  overflow-y: auto;
+}
+
+.model-defaults-body .control-card {
+  margin: 0;
+}
+
+.model-defaults-body .status {
+  font-size: 0.8rem;
+}
+
+.model-defaults-body .status:empty {
+  display: none;
+}
+
+.model-defaults-modal .modal-footer {
+  gap: var(--space-2, 0.5rem);
+}
+
+.model-defaults-modal input:focus-visible,
+.model-defaults-modal button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .model-defaults-body .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .model-defaults-modal .modal-footer {
+    flex-wrap: wrap;
+  }
 }
 
 /* OCMaker: librería de poses (Item C-27) */
@@ -1971,10 +2025,10 @@ input[type="checkbox"] {
 .control-card,
 .video-block {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin: 0 0 0.75rem 0;
-  background: #1c1f26;
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-3, 0.75rem);
+  margin: 0 0 var(--space-3, 0.75rem) 0;
+  background: var(--panel);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -2020,19 +2074,19 @@ input[type="checkbox"] {
 
 .btn-help:hover,
 .btn-help:focus {
-  color: #fff;
+  color: var(--text);
   border-color: var(--accent);
-  background: rgba(224, 86, 122, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .tooltip-popover {
   position: fixed;
   z-index: 9999;
   max-width: 290px;
-  padding: 0.5rem 0.75rem;
-  background: #181a22;
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   color: var(--text);
   font-size: 0.78rem;
   line-height: 1.35;

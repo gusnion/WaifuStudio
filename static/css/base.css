@@ -44,17 +44,6 @@
   }
 }
 
-.model-defaults-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin: 0.8rem 0;
-}
-
-.model-defaults-modal .modal-box {
-  width: min(620px, 92vw);
-}
-
 .addon-sidebar {
   display: grid;
   gap: 0.5rem;

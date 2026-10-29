@@ -1,5 +1,6 @@
 import { state } from "../state.js";
 import { applyModel } from "../tabs/image.js";
+import { hideTooltip, showTooltip } from "./tooltip_help.js";
 
 const FIELDS = ["seed", "steps", "cfg", "sampler_name", "scheduler", "width", "height"];
 
@@ -28,10 +29,34 @@ function openDefaults(modelId) {
   overlay.className = "modal model-defaults-modal";
   const box = document.createElement("div");
   box.className = "modal-box";
+  const header = document.createElement("div");
+  header.className = "modal-header";
   const title = document.createElement("h2");
   title.textContent = `Defaults · ${model.display_name || model.id}`;
+  header.appendChild(title);
+  const body = document.createElement("div");
+  body.className = "model-defaults-body";
+  const card = document.createElement("fieldset");
+  card.className = "control-card";
+  const legend = document.createElement("legend");
+  legend.append("Valores por defecto");
+  const help = document.createElement("button");
+  help.type = "button";
+  help.className = "btn-help";
+  help.textContent = "?";
+  help.dataset.help = "Valores iniciales que se aplican al elegir este modelo. Los campos vacíos no se guardan.";
+  help.addEventListener("mouseenter", () => showTooltip(help, help.dataset.help));
+  help.addEventListener("mouseleave", () => hideTooltip());
+  help.addEventListener("focus", () => showTooltip(help, help.dataset.help));
+  help.addEventListener("blur", () => hideTooltip());
+  help.addEventListener("click", (event) => {
+    event.preventDefault();
+    showTooltip(help, help.dataset.help);
+  });
+  legend.appendChild(help);
   const form = document.createElement("div");
-  form.className = "model-defaults-grid";
+  form.className = "grid-2";
+  card.append(legend, form);
   const inputs = {};
   for (const name of FIELDS) {
     const label = document.createElement("label");
@@ -49,9 +74,10 @@ function openDefaults(modelId) {
   const status = document.createElement("p");
   status.className = "status";
   const actions = document.createElement("div");
-  actions.className = "modal-actions";
+  actions.className = "modal-footer";
   const cancel = document.createElement("button");
   cancel.type = "button";
+  cancel.className = "secondary";
   cancel.textContent = "Cancelar";
   cancel.addEventListener("click", () => overlay.remove());
   const save = document.createElement("button");
@@ -75,7 +101,8 @@ function openDefaults(modelId) {
     }
   });
   actions.append(cancel, save);
-  box.append(title, form, status, actions);
+  body.append(card, status);
+  box.append(header, body, actions);
   overlay.appendChild(box);
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) overlay.remove();
