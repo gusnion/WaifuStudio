@@ -120,5 +120,30 @@ class TestPoses(unittest.TestCase):
         self.assertEqual(tags_special, [])
 
 
+class PoseLibraryStaticTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def test_image_card_has_pose_entry_and_no_duplicate(self):
+        html = (self.ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-pose-open-image"', html)
+        self.assertNotIn('id="btn-image-poses"', html)
+        self.assertIn("Ajustes de referencia", html)
+        self.assertNotIn("<span>Imagen de referencia (PNG)</span>", html)
+
+    def test_pose_library_loads_catalog_download_and_tags(self):
+        js = (self.ROOT / "static" / "js" / "components" / "pose_library.js").read_text(encoding="utf-8")
+        self.assertIn("/api/poses", js)
+        self.assertIn("/api/poses/download", js)
+        self.assertIn("btn-pose-download", js)
+        self.assertIn("pose.tags", js)
+        catalog = json.loads((self.ROOT / "registry" / "pose-catalog-v1.json").read_text(encoding="utf-8"))
+        self.assertEqual(catalog["bytes"], 505624)
+        self.assertEqual(catalog["count"], 1439)
+        self.assertEqual(
+            catalog["sha256"],
+            "dc35f253d56b9eff973fd399b5a04bfd40257a0e72b2f0696a60de7837ecf3f0",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

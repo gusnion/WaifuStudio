@@ -1183,8 +1183,30 @@ input[type="checkbox"] {
 }
 
 .pose-card.no-detection {
-  opacity: 0.55;
-  cursor: default;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.pose-card-fallback,
+.pose-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  min-height: 96px;
+  padding: 0.35rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.pose-preview-fallback {
+  width: 150px;
+  min-height: 150px;
+  font-size: 0.82rem;
 }
 
 .pose-canvas {

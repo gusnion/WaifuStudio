@@ -1050,7 +1050,8 @@ export async function generateCharacterMultiview(character) {
 
 function buildPosePrompt(character, pose) {
   const charTags = ((character && character.tags) || []).join(", ");
-  const poseText = `${pose.clase_es || "pose"}, ${pose.angulo_es || ""}`.replace(/,\s*$/, "");
+  const tags = Array.isArray(pose?.tags) ? pose.tags : [];
+  const poseText = tags.length ? tags.join(", ") : (pose?.nombre_ja || "pose");
   const base = `${poseText}, same character, same outfit, full body, neutral background`;
   return charTags ? `${charTags}, ${base}` : base;
 }

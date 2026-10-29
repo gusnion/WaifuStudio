@@ -802,6 +802,9 @@ const POSE_ANGLE_TAGS = {
 
 function formatPoseTagsForImage(pose) {
   if (!pose) return "";
+  if (Array.isArray(pose.tags) && pose.tags.length) {
+    return [...new Set(pose.tags)].join(", ");
+  }
   const parts = [];
   if (pose.clase_es && POSE_CLASS_TAGS[pose.clase_es]) {
     parts.push(POSE_CLASS_TAGS[pose.clase_es]);
@@ -872,7 +875,7 @@ function initImageTab() {
     const file = event.target?.files?.[0] || null;
     uploadImageLora(file).catch((error) => setStatus(error.message, true));
   });
-  on("btn-image-poses", "click", () => openPoseLibrary("image"));
+  on("btn-pose-open-image", "click", () => openPoseLibrary("image"));
   on("btn-image-pose-clear", "click", clearImagePosePreview);
   registerPoseCallback("image", applyPoseToImageTab);
   on("btn-generate", "click", generate);

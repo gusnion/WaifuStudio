@@ -8,6 +8,10 @@
 import { $, on } from "../dom.js";
 
 const POSE_DATA_URL = "/static/pose-skeletons.json";
+const POSE_API_URL = "/api/poses";
+const POSE_TAGS_URL = "/api/poses/tags";
+const POSE_STATUS_URL = "/api/poses/status";
+const POSE_DOWNLOAD_URL = "/api/poses/download";
 const POSE_PAGE_SIZE = 60;
 const KP_MIN_CONF = 0.1;
 const KP_DIM_CONF = 0.3;
@@ -28,6 +32,8 @@ const poseState = {
   loading: null,
   activeCaller: "oc",
   callerPoses: {},
+  tags: { classes: {}, angles: {} },
+  catalogInstalled: false,
 };
 
 let poseLibraryInitialized = false;
@@ -63,6 +69,21 @@ function hasDetection(pose) {
 function poseTitle(pose) {
   return `${pose.clase_es || "Pose"} · ${pose.angulo_es || "—"}`;
 }
+
+function poseTags(pose) {
+  if (!pose) return [];
+  const tags = [];
+  const add = (value) => {
+    const text = String(value || "").trim();
+    if (text && !tags.includes(text)) tags.push(text);
+  };
+  for (const tag of poseState.tags.classes[pose.clase_es] || []) add(tag);
+  for (const tag of poseState.tags.angles[pose.angulo_es] || []) add(tag);
+  return tags;
+}
+
+
+
 
 function filterPoses(poses, { text = "", sistema = "", clase = "", angulo = "", onlyDetected = false } = {}) {
   const tokens = normalizeText(text).split(/\s+/).filter(Boolean);
@@ -167,28 +188,31 @@ function currentFilters() {
 
 function renderPoseCard(pose) {
   const detected = hasDetection(pose);
-  const card = document.createElement(detected ? "button" : "div");
+  const card = document.createElement("button");
+  card.type = "button";
   card.className = "pose-card";
   card.dataset.poseId = pose.id;
+  card.title = `${poseTitle(pose)} — ${pose.sistema_es || ""}${detected ? "" : " — ficha sin esqueleto"}`;
+  card.classList.toggle("selected", poseState.pendingId === pose.id);
+  card.addEventListener("click", () => selectPendingPose(pose.id));
   if (detected) {
-    card.type = "button";
-    card.title = `${poseTitle(pose)} — ${pose.sistema_es}`;
-    card.classList.toggle("selected", poseState.pendingId === pose.id);
-    card.addEventListener("click", () => selectPendingPose(pose.id));
+    const canvas = makeCanvas(pose, 96);
+    card.appendChild(canvas);
+    drawSkeleton(canvas, pose, skeletonBones());
   } else {
     card.classList.add("no-detection");
-    card.title = `${poseTitle(pose)} — ${NO_DETECTION_TEXT}`;
+    const fallback = document.createElement("span");
+    fallback.className = "pose-card-fallback";
+    fallback.textContent = `${pose.clase_es || "Pose"} · ${pose.angulo_es || "—"}`;
+    card.appendChild(fallback);
   }
-  const canvas = makeCanvas(pose, 96);
-  card.appendChild(canvas);
-  drawSkeleton(canvas, pose, skeletonBones());
   const label = document.createElement("span");
   label.className = "pose-card-label";
-  label.textContent = poseTitle(pose);
+  label.textContent = pose.nombre_ja || poseTitle(pose);
   card.appendChild(label);
   const sub = document.createElement("span");
   sub.className = "pose-card-sub";
-  sub.textContent = detected ? pose.sistema_es || "" : NO_DETECTION_TEXT;
+  sub.textContent = detected ? pose.sistema_es || "" : "ficha sin esqueleto";
   card.appendChild(sub);
   return card;
 }
@@ -257,8 +281,15 @@ function renderPreview() {
     return;
   }
   const canvas = makeCanvas(pose, 150);
-  box.appendChild(canvas);
-  drawSkeleton(canvas, pose, skeletonBones());
+  if (hasDetection(pose)) {
+    box.appendChild(canvas);
+    drawSkeleton(canvas, pose, skeletonBones());
+  } else {
+    const fallback = document.createElement("div");
+    fallback.className = "pose-preview-fallback";
+    fallback.textContent = `${pose.clase_es || "Pose"} · ${pose.angulo_es || "—"}`;
+    box.appendChild(fallback);
+  }
   const info = document.createElement("div");
   info.className = "pose-preview-info";
   const title = document.createElement("strong");
@@ -306,7 +337,8 @@ function emitSelection(caller = null) {
 
 function confirmPose() {
   const pose = findPose(poseState.pendingId);
-  if (!pose || !hasDetection(pose)) return;
+  if (!pose) return;
+  pose.tags = poseTags(pose);
   poseState.selected = pose;
   const caller = poseState.activeCaller || "oc";
   if (!poseState.callerPoses) {
@@ -362,6 +394,98 @@ function poseToDataUrl(pose, width = 512) {
   return canvas.toDataURL();
 }
 
+function ensurePoseDownload() {
+  const modal = $("pose-modal");
+  if (!modal) return;
+  let hint = $("pose-empty-hint");
+  if (!hint) {
+    hint = document.createElement("p");
+    hint.id = "pose-empty-hint";
+    hint.className = "field-hint";
+    const header = modal.querySelector(".modal-header");
+    if (header) header.appendChild(hint);
+  }
+  let button = $("btn-pose-download");
+  if (!button) {
+    button = document.createElement("button");
+    button.id = "btn-pose-download";
+    button.type = "button";
+    button.className = "secondary";
+    button.textContent = "Descargar catálogo (505 KB)";
+    button.addEventListener("click", () => {
+      downloadPoseCatalog().catch((error) => setPoseStatus(error.message, true));
+    });
+    const header = modal.querySelector(".modal-header");
+    if (header) header.appendChild(button);
+  }
+  const installed = poseState.catalogInstalled;
+  button.classList.toggle("hidden", installed);
+  hint.classList.toggle("hidden", installed);
+  hint.textContent = installed
+    ? ""
+    : "Catálogo de poses no instalado (505 KB). Descárgalo para ver las 1.439 fichas.";
+}
+
+async function downloadPoseCatalog() {
+  setPoseStatus("Descargando catálogo de poses…");
+  const response = await fetch(POSE_DOWNLOAD_URL, { method: "POST" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.detail || `HTTP ${response.status}`);
+  poseState.data = null;
+  poseState.loading = null;
+  await loadPoseLibrary();
+  applyPoseFilters();
+  setPoseStatus(`Catálogo instalado: ${poseState.poses.length} poses`);
+}
+
+function mergePoseCatalog(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  const byId = new Map(poseState.poses.map((pose) => [pose.id, pose]));
+  for (const item of items) {
+    if (!item || !item.id) continue;
+    const existing = byId.get(item.id);
+    if (existing) {
+      const keypoints = existing.keypoints;
+      Object.assign(existing, item);
+      if (keypoints) existing.keypoints = keypoints;
+    } else {
+      byId.set(item.id, item);
+    }
+  }
+  poseState.poses = [...byId.values()];
+}
+
+async function loadRemotePoses() {
+  try {
+    const statusResponse = await fetch(POSE_STATUS_URL, { cache: "no-store" });
+    if (!statusResponse.ok) throw new Error(`HTTP ${statusResponse.status}`);
+    const status = await statusResponse.json();
+    poseState.catalogInstalled = Boolean(status.installed);
+    ensurePoseDownload();
+    if (!status.installed) return;
+    const [indexResponse, tagsResponse] = await Promise.all([
+      fetch(POSE_API_URL, { cache: "no-store" }),
+      fetch(POSE_TAGS_URL, { cache: "no-store" }),
+    ]);
+    if (!indexResponse.ok) throw new Error(`No se pudo leer el índice de poses (HTTP ${indexResponse.status})`);
+    const index = await indexResponse.json();
+    mergePoseCatalog(index.items || []);
+    if (tagsResponse.ok) {
+      const tags = await tagsResponse.json();
+      poseState.tags = {
+        classes: tags.classes || {},
+        angles: tags.angles || {},
+      };
+    }
+    poseState.catalogInstalled = true;
+    ensurePoseDownload();
+  } catch (_error) {
+    poseState.catalogInstalled = false;
+    ensurePoseDownload();
+  }
+}
+
+
 function loadPoseLibrary() {
   if (poseState.data) return Promise.resolve(poseState.data);
   if (!poseState.loading) {
@@ -374,8 +498,10 @@ function loadPoseLibrary() {
         if (!data || !Array.isArray(data.poses)) throw new Error("pose-skeletons.json inválido");
         poseState.data = data;
         poseState.poses = data.poses;
-        populateFilters();
-        return data;
+        return loadRemotePoses().then(() => {
+          populateFilters();
+          return data;
+        });
       })
       .catch((error) => {
         poseState.loading = null;
@@ -391,7 +517,7 @@ function openPoseLibrary(callerOrEvent) {
     caller = callerOrEvent;
   } else if (callerOrEvent && callerOrEvent.target && callerOrEvent.target.id) {
     const id = callerOrEvent.target.id;
-    if (id === "btn-image-poses") caller = "image";
+    if (id === "btn-image-poses" || id === "btn-pose-open-image") caller = "image";
     else if (id === "btn-editor-poses") caller = "editor";
     else if (id === "btn-oc-poses") caller = "oc";
   } else {
