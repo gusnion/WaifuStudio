@@ -45,6 +45,37 @@ def _read_manifest(path: Path) -> dict[str, Any]:
         raise EngineError(f"slots invalidos; permitidos: {', '.join(SLOTS)}")
     if len(set(slots)) != len(slots):
         raise EngineError("slots duplicados")
+    models = data.get("models")
+    if models is not None:
+        if not isinstance(models, list):
+            raise EngineError("models debe ser una lista")
+        seen_model_ids: set[str] = set()
+        seen_model_files: set[str] = set()
+        for m in models:
+            if not isinstance(m, dict):
+                raise EngineError("cada modelo debe ser un objeto")
+            for field in ("id", "file"):
+                v = m.get(field)
+                if not isinstance(v, str) or not v.strip():
+                    raise EngineError(f"campo obligatorio del modelo: {field}")
+            model_id = m["id"].strip()
+            if ID_RE.fullmatch(model_id) is None:
+                raise EngineError("id de modelo invalido")
+            if model_id in seen_model_ids:
+                raise EngineError(f"id de modelo duplicado: {model_id}")
+            seen_model_ids.add(model_id)
+
+            file_name = m["file"].strip()
+            # Validar que sea un nombre simple de archivo (sin rutas relativas/absolutas ni separadores)
+            if not file_name or "/" in file_name or "\\" in file_name or Path(file_name).name != file_name or file_name in (".", ".."):
+                raise EngineError(f"nombre simple de archivo invalido en modelo: {file_name}")
+            if file_name in seen_model_files:
+                raise EngineError(f"archivo de modelo duplicado: {file_name}")
+            seen_model_files.add(file_name)
+
+            sha256 = m.get("sha256")
+            if sha256 is not None and not isinstance(sha256, str):
+                raise EngineError("sha256 de modelo debe ser texto si esta presente")
     return data
 
 
@@ -107,7 +138,57 @@ def _safe_extract(archive: zipfile.ZipFile, target: Path) -> None:
             shutil.copyfileobj(source, output)
 
 
-def list_addons(data_dir: str | Path) -> list[dict[str, Any]]:
+def addon_model_entries(
+    addon_dir: str | Path,
+    manifest: dict[str, Any],
+    models_dir: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    addon_path = Path(addon_dir)
+    addon_id = str(manifest.get("id") or addon_path.name)
+    raw_models = manifest.get("models")
+    if not isinstance(raw_models, list):
+        return []
+
+    models_base = Path(models_dir) if models_dir is not None else None
+    archive_dir = addon_path / "models" / "archive"
+    entries: list[dict[str, Any]] = []
+
+    for m in raw_models:
+        if not isinstance(m, dict):
+            continue
+        file_name = m.get("file", "")
+        active_path = (models_base / file_name) if models_base is not None else None
+        archived_path = archive_dir / file_name
+
+        if active_path is not None and active_path.is_file():
+            model_state = "activo"
+            resolved_path = str(active_path)
+        elif archived_path.is_file():
+            model_state = "archivado"
+            resolved_path = str(archived_path)
+        else:
+            model_state = "no instalado"
+            resolved_path = ""
+
+        entry: dict[str, Any] = {
+            "id": m.get("id", ""),
+            "file": file_name,
+            "owner_addon": addon_id,
+            "state": model_state,
+            "path": resolved_path,
+            "movable": bool(addon_id),
+        }
+        if "sha256" in m:
+            entry["sha256"] = m.get("sha256", "")
+        entries.append(entry)
+
+    return entries
+
+
+def list_addons(
+    data_dir: str | Path,
+    comfy_models_dir: str | Path | None = None,
+) -> list[dict[str, Any]]:
     root = addons_root(data_dir)
     if not root.is_dir():
         return []
@@ -129,19 +210,22 @@ def list_addons(data_dir: str | Path) -> list[dict[str, Any]]:
             continue
         state = _read_state(path)
         compatible = _compatible(manifest["requires_core"])
-        result.append(
-            {
-                "id": manifest["id"],
-                "name": manifest["name"],
-                "version": manifest["version"],
-                "requires_core": manifest["requires_core"],
-                "slots": manifest.get("slots", []),
-                "description": str(manifest.get("description", "")),
-                "enabled": state["enabled"],
-                "valid": compatible,
-                "reason": "" if compatible else "requires_core incompatible",
-            }
-        )
+        addon_id = manifest["id"]
+        models_list = addon_model_entries(path, manifest, comfy_models_dir)
+
+        item: dict[str, Any] = {
+            "id": addon_id,
+            "name": manifest["name"],
+            "version": manifest["version"],
+            "requires_core": manifest["requires_core"],
+            "slots": manifest.get("slots", []),
+            "description": str(manifest.get("description", "")),
+            "enabled": state["enabled"],
+            "valid": compatible,
+            "reason": "" if compatible else "requires_core incompatible",
+            "models": models_list,
+        }
+        result.append(item)
     return result
 
 
@@ -253,6 +337,7 @@ def set_addon_enabled(data_dir: str | Path, addon_id: str, enabled: bool) -> dic
 
 __all__ = [
     "ADDONS_DIRNAME",
+    "addon_model_entries",
     "addons_root",
     "import_addon",
     "list_addons",

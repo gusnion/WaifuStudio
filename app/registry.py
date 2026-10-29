@@ -404,6 +404,7 @@ class ModelEntry:
     notes: str = ""
     prompt_profile: str = ""
     subfamily: str = DEFAULT_SUBFAMILY
+    owner_addon: str | None = None
 
     def __post_init__(self) -> None:
         if not self.prompt_profile:
@@ -470,6 +471,10 @@ def _validate_entry(entry: object) -> ModelEntry:
         raise EngineError(
             f"subfamily invalida: {entry.subfamily!r} (esperada una de {KNOWN_SUBFAMILIES})"
         )
+    if entry.owner_addon is not None and not isinstance(entry.owner_addon, str):
+        raise EngineError(
+            f"owner_addon debe ser str o None: {entry.owner_addon!r}"
+        )
     return replace(entry, profile=_validate_profile(entry.profile))
 
 
@@ -504,6 +509,7 @@ def _entry_from_dict(data: object) -> ModelEntry:
         subfamily = str(raw_subfamily).strip()
     else:
         subfamily = DEFAULT_SUBFAMILY
+    owner_addon = data.get("owner_addon")
     entry = ModelEntry(
         id=data["id"],
         family=data["family"],
@@ -518,6 +524,7 @@ def _entry_from_dict(data: object) -> ModelEntry:
         notes=data.get("notes", ""),
         prompt_profile=prompt_profile,
         subfamily=subfamily,
+        owner_addon=owner_addon,
     )
     return _validate_entry(entry)
 
@@ -571,9 +578,15 @@ class ModelRegistry:
         return updated
 
     def to_dict(self) -> dict:
+        models = []
+        for entry in self._models:
+            d = asdict(entry)
+            if entry.owner_addon is None:
+                d.pop("owner_addon", None)
+            models.append(d)
         return {
             "version": REGISTRY_VERSION,
-            "models": [asdict(entry) for entry in self._models],
+            "models": models,
         }
 
     @classmethod

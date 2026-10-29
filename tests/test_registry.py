@@ -229,9 +229,12 @@ class RoundtripTests(unittest.TestCase):
         reloaded = ModelRegistry.from_dict(json.loads(json.dumps(registry.to_dict())))
 
         self.assertEqual(reloaded.to_dict(), registry.to_dict())
+        expected = asdict(make_entry())
+        if expected.get("owner_addon") is None:
+            expected.pop("owner_addon", None)
         self.assertEqual(
             json.loads(json.dumps(reloaded.to_dict()["models"][0])),
-            json.loads(json.dumps(asdict(make_entry()))),
+            json.loads(json.dumps(expected)),
         )
 
     def test_dataclasses_frozen(self):

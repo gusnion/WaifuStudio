@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.addons import import_addon, import_catalog, list_addons, set_addon_enabled
+from app.addons import addons_root, import_addon, import_catalog, list_addons, set_addon_enabled
 from app.engine import EngineError
 
 router = APIRouter()
@@ -15,7 +15,15 @@ router = APIRouter()
 
 @router.get("/api/addons")
 async def api_addons(request: Request) -> dict:
-    return {"items": list_addons(request.app.state.config.data_dir)}
+    cfg = request.app.state.config
+    items = list_addons(cfg.data_dir, cfg.comfy_models_dir)
+    return {
+        "items": items,
+        "paths": {
+            "models_dir": str(cfg.comfy_models_dir),
+            "addons_dir": str(addons_root(cfg.data_dir)),
+        },
+    }
 
 
 @router.post("/api/addons/import")
