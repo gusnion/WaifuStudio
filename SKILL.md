@@ -64,7 +64,7 @@ Estados: `queued`, `running`, `done`, `error`, `cancelled`.
 ```
 
 `preset=rapido` (4 pasos, CFG 1, LoRA 1) o `calidad` (30 pasos, CFG 4, LoRA 0).
-`GET /api/video/presets` lista tamaños y perfiles. El MP4 sale **sin audio** (mudo); el audio se genera aparte en la pestaña AUDIO (MMAudio/Irodori) y se mezcla con Estudio.
+`GET /api/video/presets` lista tamaños y perfiles. El motor AIO usa el text encoder NSFW fp8 y el LoRA `NSFW-22-H-e8` a 0.8 de forma fija. El MP4 sale **sin audio** (mudo); el audio se genera aparte en la pestaña AUDIO (MMAudio/Irodori) y se mezcla con Estudio.
 
 ## 7. Editor Qwen-Image 2.1
 

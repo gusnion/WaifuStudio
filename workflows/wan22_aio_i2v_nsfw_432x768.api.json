@@ -6,9 +6,9 @@
     }
   },
   "3": {
-    "class_type": "CLIPLoaderGGUF",
+    "class_type": "CLIPLoader",
     "inputs": {
-      "clip_name": "umt5-xxl-encoder-Q5_K_M.gguf",
+      "clip_name": "nsfw_wan_umt5-xxl_fp8_scaled.safetensors",
       "type": "wan"
     }
   },
@@ -48,7 +48,7 @@
     "class_type": "ModelSamplingSD3",
     "inputs": {
       "model": [
-        "1",
+        "20",
         0
       ],
       "shift": 8.0
@@ -141,6 +141,17 @@
       ],
       "filename_prefix": "waifu/video",
       "format": "auto"
+    }
+  },
+  "20": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "wan22_uncensored\\lopi999\\NSFW-22-H-e8.safetensors",
+      "strength_model": 0.8
     }
   }
 }

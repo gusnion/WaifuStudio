@@ -16,7 +16,7 @@ Webapp local autónoma (**FastAPI + Jinja2 + Vanilla ES Modules / CSS modular**,
 - **LLM / Visión en CPU (`:8290`)**: `Qwen3.5-9B NSFW Captioning v5` (`Q4_K_M` + `mmproj-Q8_0`) servido por `tools/llama.cpp/llama-server.exe` con `-ngl 0` (100% CPU, 0 VRAM). La app lo arranca y detiene automáticamente mediante `app/llm_server.py`.
 - **8 Pestañas**:
   1. **Imagen**: Anima Aesthetic v1.1, Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok, con `prompt_profile`, badge de subrama y LoRAs filtradas.
-  2. **Vídeo**: **Wan 2.2 NSFW AIO v10** como único motor, I2V, un `KSampler`, mudo; aviso de licencia comunitaria.
+  2. **Vídeo**: **Wan 2.2 NSFW AIO v10** como único motor, I2V, un `KSampler`, mudo, con TE NSFW fp8 y LoRA `NSFW-22-H-e8` a 0.8; aviso de licencia comunitaria.
   3. **Editor**: **Qwen-Image 2.1 Uncensored** (GGUF `Q4_K_M`, hasta 10 referencias, inpaint/edición con modo «Original 1ª ref» y `CFG=1`).
   4. **Audio**: tres pasos; Modo B MMAudio con job y Modo A Irodori síncrono; stems y envío a Timeline.
   5. **Estudio/Timeline**: secuenciador de clips e imágenes con export MP4, audio y proyectos; sin BETA.
@@ -58,7 +58,7 @@ El instalador está diseñado en **Modo Hermético 100% Portable** para no colis
 2. **Prohibido leer archivos >300 líneas completos**: Consulta primero las tablas de las secciones 4, 5 y 6 de este documento, localiza el símbolo con `grep` / `Select-String` y lee únicamente el rango necesario (`offset`, `limit=80`).
 3. **Verificación obligatoria antes de cerrar cambios**:
    ```powershell
-   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1879 tests offline en CPU (~85 s)
+   & .\.venv\Scripts\python.exe -m unittest discover -s tests   # 1880 tests offline en CPU (~85 s)
    node tests/test_upscale_compare_logic.mjs                    # 10 tests de lógica JS del comparador
    & .\.venv\Scripts\python.exe -m app.health                   # Diagnóstico de rutas y servicios
    ```

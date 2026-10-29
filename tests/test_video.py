@@ -674,7 +674,17 @@ class BuildVideoGraphWanProfileTests(unittest.TestCase):
         )
         self.assertNotIn("2", graph)
         self.assertNotIn("13", graph)
-        self.assertNotIn("20", graph)
+        self.assertEqual(graph["20"]["class_type"], "LoraLoaderModelOnly")
+        self.assertEqual(
+            graph["20"]["inputs"]["lora_name"],
+            "wan22_uncensored\\lopi999\\NSFW-22-H-e8.safetensors",
+        )
+        self.assertEqual(graph["20"]["inputs"]["strength_model"], 0.8)
+        self.assertEqual(graph["10"]["inputs"]["model"], ["20", 0])
+        self.assertEqual(
+            graph["3"]["inputs"]["clip_name"],
+            "nsfw_wan_umt5-xxl_fp8_scaled.safetensors",
+        )
         self.assertNotIn("21", graph)
         self.assertNotIn("30", graph)
         self.assertNotIn("31", graph)

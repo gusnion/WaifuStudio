@@ -306,7 +306,11 @@ def _patch_cfg(graph: dict, cfg: float) -> None:
 
 
 def _patch_wan_lora_strength(graph: dict, strength: float) -> None:
-    """Ajusta los LoraLoaderModelOnly de Wan; 0.0 deja el modelo base."""
+    """Ajusta los LoraLoaderModelOnly de Wan; 0.0 deja el modelo base.
+
+    El LoRA NSFW del AIO es fijo (0.8) y no forma parte del perfil de pasos:
+    se respeta y no se sobrescribe con el `lora_strength` del preset.
+    """
     applied = 0
     for node in graph.values():
         if not isinstance(node, dict) or node.get("class_type") != "LoraLoaderModelOnly":
@@ -314,10 +318,12 @@ def _patch_wan_lora_strength(graph: dict, strength: float) -> None:
         inputs = node.get("inputs")
         if not isinstance(inputs, dict):
             continue
+        if "NSFW-22-" in str(inputs.get("lora_name", "")):
+            continue
         inputs["strength_model"] = strength
         applied += 1
     if not applied:
-        raise EngineError("grafo Wan sin LoraLoaderModelOnly")
+        return
 
 
 def _patch_wan_audio(graph: dict) -> None:

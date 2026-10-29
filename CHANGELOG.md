@@ -6,7 +6,7 @@ Primer y único tag de la línea 2.5. Cubre las funciones congeladas de 2.5 y la
 
 - `[COMPAT]` Registro de capacidades y motores de vídeo; validación por registro y endpoint de lectura.
 - `[REGISTRY]` Contrato de propiedad/estado de pesos por addon y ruta efectiva del directorio de modelos.
-- `[MODEL]` Evaluación de LoRA y text encoder de vídeo; sin adopción sin comparación visual.
+- `[MODEL]` Vídeo Wan AIO adopta el text encoder NSFW fp8 y el LoRA `NSFW-22-H-e8` a 0.8; comparación previa de 4 variantes sin adopción del resto.
 - `[UI]` AUDIO en tres pasos; selector de poses en Referencia; OC Maker como pestaña real; fichas flotantes de modelo, LoRA y prompts.
 - `[FIX]` Correcciones de Estudio, audio a demanda, vídeo local por tramos y textos de referencia.
 - `[DOCS]` `SKILL.md` descargable y ampliado; guía de conexión de agentes; README reescrito.
