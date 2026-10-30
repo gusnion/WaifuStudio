@@ -960,11 +960,23 @@ async function editCharacter(character) {
 }
 
 async function duplicateCharacter(character) {
-  fillCharacterForm(character);
-  state.ocEditingId = null;
-  $("oc-form-name").value = `${character.name} (copia)`;
-  updateOcFormMode();
-  setOcStatus("Ajusta el nombre y guarda la copia");
+  const copyName = `Copia de ${character.name}`;
+  const created = await postJson("/api/characters", {
+    name: copyName,
+    tags: [...(character.tags || [])],
+    extras: [...(character.extras || [])],
+    preprompt: "ninguno",
+    rating: character.rating || "nsfw",
+    notes: character.notes || "",
+  });
+  state.activeCharacterId = created.id;
+  state.ocSelectedTags = [...(character.tags || [])];
+  state.ocExtras = [...(character.extras || [])];
+  await loadCharacters();
+  renderOcSelected();
+  renderOcCatalogResults();
+  await loadCharacterRefs();
+  setOcStatus(`OC duplicado como «${copyName}»`);
 }
 
 async function renameCharacter(character, newName) {
