@@ -2955,3 +2955,13 @@ input[type="checkbox"] {
   }
 }
 
+
+.oc-special-btn {
+  border-color: var(--accent, #e0567a);
+  box-shadow: 0 0 0 1px rgba(224, 86, 122, 0.35), 0 0 14px rgba(224, 86, 122, 0.45);
+}
+
+.oc-special-btn:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(224, 86, 122, 0.55), 0 0 20px rgba(224, 86, 122, 0.6);
+}
+
