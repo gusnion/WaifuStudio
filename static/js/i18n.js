@@ -205,7 +205,6 @@ export function getCurrentLang() {
 
 export function applyLanguage(lang) {
   let target = isSupportedLang(lang) ? String(lang).toLowerCase() : DEFAULT_LANG;
-  if (DEFAULT_LANG !== "en" && target !== "es") target = "es";
   setCoreLang(target);
   try {
     localStorage.setItem(STORAGE_KEY, target);

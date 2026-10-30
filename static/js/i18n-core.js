@@ -5,7 +5,7 @@
 import { TEXT } from "./i18n-data.js";
 
 const HAS_ENGLISH = Object.keys(TEXT.en || {}).length > 0;
-export const DEFAULT_LANG = HAS_ENGLISH ? "en" : "es";
+export const DEFAULT_LANG = "es";
 export const LOCALES = ["en", "es", "ja", "zh", "ru"];
 export const LOCALE_LABELS = {
   en: "English",
