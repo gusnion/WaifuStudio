@@ -197,6 +197,20 @@ async function reloadImageViewerFirstPage() {
 }
 
 
+let imagePageNavigating = false;
+
+async function goImagePage(delta) {
+  if (imagePageNavigating) return;
+  imagePageNavigating = true;
+  const viewer = state.imageViewer;
+  viewer.page = Math.max(1, Number(viewer.page || 1) + delta);
+  try {
+    await loadImageViewer();
+  } finally {
+    imagePageNavigating = false;
+  }
+}
+
 function initImageViewer() {
   on("image-preview", "click", () => {
     const cmp = $("image-compare");
@@ -207,14 +221,8 @@ function initImageViewer() {
       openLightbox(url, `Generación #${item.id}`);
     }
   });
-  on("image-prev-page", "click", () => {
-    state.imageViewer.page -= 1;
-    loadImageViewer();
-  });
-  on("image-next-page", "click", () => {
-    state.imageViewer.page += 1;
-    loadImageViewer();
-  });
+  on("image-prev-page", "click", () => goImagePage(-1));
+  on("image-next-page", "click", () => goImagePage(1));
   on("btn-reload", "click", () => {
     state.imageViewer.page = 1;
     loadImageViewer();
