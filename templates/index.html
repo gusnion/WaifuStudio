@@ -93,7 +93,7 @@
         </div>
 
         <!-- CATEGORÍA 1: PROMPTING -->
-        <details id="image-cat-prompting" class="image-category-card" open name="image-cat-accordion">
+        <details id="image-cat-prompting" class="image-category-card" open>
           <summary class="image-category-header">
             <span class="category-title">PROMPT</span>
             <span class="category-indicator">▼</span>
@@ -190,9 +190,18 @@
           </div>
         </details>
 
-        <fieldset class="control-card image-model-visible" id="image-block-model-visible">
-          <legend>Modelo <button type="button" class="btn-help" data-help="Elige el modelo de imagen y consulta su familia y subfamilia.">?</button></legend>
-          <label class="field">
+
+
+        <!-- CATEGORÍA 2: CONFIGURACIÓN -->
+        <details id="image-cat-config" class="image-category-card" open>
+          <summary class="image-category-header">
+            <span class="category-title">CONFIGURACIÓN</span>
+            <span class="category-indicator">▼</span>
+          </summary>
+          <div class="image-category-body controls-column-primary">
+            <fieldset class="control-card image-model-visible" id="image-block-model-visible">
+              <legend>Modelo <button type="button" class="btn-help" data-help="Elige el modelo de imagen y consulta su familia y subfamilia.">?</button></legend>
+              <label class="field">
             <div class="field-header-row">
               <span>Modelo</span>
               <span id="model-family-badge" class="model-badge">Sin clasificar</span>
@@ -200,18 +209,10 @@
             <select id="model"></select>
             <button id="btn-model-card" type="button" class="secondary field-action">Ficha del modelo</button>
           </label>
-          <div class="field">
+              <div class="field">
             <button id="btn-model-defaults" type="button" class="secondary">Editar defaults del modelo</button>
           </div>
-        </fieldset>
-
-        <!-- CATEGORÍA 2: CONFIGURACIÓN -->
-        <details id="image-cat-config" class="image-category-card" name="image-cat-accordion" open>
-          <summary class="image-category-header">
-            <span class="category-title">CONFIGURACIÓN</span>
-            <span class="category-indicator">▼</span>
-          </summary>
-          <div class="image-category-body controls-column-primary">
+            </fieldset>
             <!-- BLOQUE 1: Estilo y LoRAs -->
             <fieldset class="control-card" id="image-block-model">
               <legend>1. Estilo y LoRAs <button type="button" class="btn-help" data-help="Elige el preprompt de estilo, la clasificación de contenido y las LoRAs instaladas.">?</button></legend>
