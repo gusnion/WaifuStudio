@@ -2893,3 +2893,65 @@ input[type="checkbox"] {
   cursor: not-allowed;
 }
 
+
+.oc-form-details {
+  display: none;
+}
+
+.oc-create-box {
+  width: min(760px, 96vw);
+}
+
+.oc-create-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.8rem 1rem;
+  min-height: 0;
+}
+
+.oc-create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 0.8fr);
+  gap: 0.8rem;
+  min-height: 0;
+}
+
+.oc-create-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.oc-create-traits {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+  gap: 0.35rem;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.oc-create-selected {
+  border-left: 1px solid var(--border);
+  padding-left: 0.8rem;
+  min-height: 0;
+}
+
+.oc-create-selected h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+@media (max-width: 700px) {
+  .oc-create-grid {
+    grid-template-columns: 1fr;
+  }
+  .oc-create-selected {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+

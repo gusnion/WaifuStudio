@@ -27,6 +27,8 @@ import { t } from "../i18n.js";
 
 let ocSearchTimer = null;
 let ocConfirmResolver = null;
+let ocCreating = false;
+let ocSaveTagsTimer = null;
 
 function showOcConfirmModal({
   title = "Confirmar",
@@ -478,6 +480,160 @@ async function loadOcPreprompts() {
 }
 
 
+function renderOcCreateSelected() {
+  const container = $("oc-create-selected");
+  if (!container) return;
+  container.replaceChildren();
+  if (!state.ocSelectedTags?.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Ningún rasgo seleccionado.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const tag of state.ocSelectedTags) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "oc-chip selected";
+    chip.textContent = `${tag} ×`;
+    chip.title = "Quitar";
+    chip.addEventListener("click", () => toggleOcTag(tag));
+    container.appendChild(chip);
+  }
+}
+
+function renderOcCreateTraits() {
+  const container = $("oc-create-traits");
+  const select = $("oc-create-group");
+  if (!container) return;
+  const group = select?.value || "hair";
+  const items = (state.ocCatalogItems || []).filter(
+    (item) => (item.group || getOcTagGroup(item.tag)) === group
+  );
+  container.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Sin rasgos en este grupo.";
+    container.appendChild(empty);
+    return;
+  }
+  for (const item of items) {
+    const selected = isOcTagSelected(item.tag);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `oc-trait-card oc-chip${selected ? " selected" : ""}`;
+    button.title = item.tag;
+    const check = document.createElement("span");
+    check.className = "oc-trait-check";
+    check.textContent = selected ? "✓" : "+";
+    const info = document.createElement("span");
+    info.className = "oc-trait-info";
+    const label = document.createElement("span");
+    label.className = "oc-trait-label";
+    label.textContent = item.label || item.tag;
+    info.appendChild(label);
+    if (item.label && item.label.toLowerCase() !== item.tag.toLowerCase()) {
+      const sub = document.createElement("span");
+      sub.className = "oc-trait-subtag";
+      sub.textContent = item.tag;
+      info.appendChild(sub);
+    }
+    button.append(check, info);
+    button.addEventListener("click", () => toggleOcTag(item.tag));
+    container.appendChild(button);
+  }
+}
+
+function renderOcCreateModal() {
+  renderOcCreateTraits();
+  renderOcCreateSelected();
+}
+
+function openOcCreateModal() {
+  const modal = $("oc-create-modal");
+  if (!modal) return;
+  ocCreating = true;
+  state.ocSelectedTags = [];
+  state.ocExtras = [];
+  const name = $("oc-create-name");
+  if (name) name.value = "";
+  const select = $("oc-create-group");
+  if (select && !select.options.length) {
+    for (const group of OC_TRAIT_GROUPS) {
+      select.appendChild(option(group, GROUP_LABELS[group] || group));
+    }
+  }
+  renderOcCreateModal();
+  modal.classList.remove("hidden");
+  name?.focus();
+}
+
+function closeOcCreateModal(restore = true) {
+  ocCreating = false;
+  $("oc-create-modal")?.classList.add("hidden");
+  if (restore) {
+    const character = characterById(state.activeCharacterId);
+    state.ocSelectedTags = [...(character?.tags || [])];
+    state.ocExtras = [...(character?.extras || [])];
+    renderOcSelected();
+    renderOcCatalogResults();
+  }
+}
+
+async function saveOcFromModal() {
+  const name = ($("oc-create-name")?.value || "").trim();
+  const status = $("oc-create-status");
+  if (!name) {
+    if (status) status.textContent = "El nombre es obligatorio.";
+    return;
+  }
+  const save = $("btn-oc-create-save");
+  if (save) save.disabled = true;
+  try {
+    const created = await postJson("/api/characters", {
+      name,
+      tags: [...state.ocSelectedTags],
+      preprompt: "ninguno",
+      rating: "nsfw",
+      notes: "",
+    });
+    state.activeCharacterId = created.id;
+    ocCreating = false;
+    closeOcCreateModal(false);
+    await loadCharacters();
+    renderOcSelected();
+    renderOcCatalogResults();
+    await loadCharacterRefs();
+    setOcStatus(`OC «${name}» creado`);
+  } catch (error) {
+    if (status) status.textContent = error.message;
+  } finally {
+    if (save) save.disabled = false;
+  }
+}
+
+function scheduleSaveActiveOcTags() {
+  clearTimeout(ocSaveTagsTimer);
+  ocSaveTagsTimer = setTimeout(async () => {
+    const character = characterById(state.activeCharacterId);
+    if (!character || ocCreating) return;
+    try {
+      await putJson(`/api/characters/${character.id}`, {
+        name: character.name,
+        tags: [...state.ocSelectedTags],
+        preprompt: "ninguno",
+        rating: character.rating || "nsfw",
+        notes: character.notes || "",
+      });
+      character.tags = [...state.ocSelectedTags];
+      setOcStatus("Rasgos del OC guardados");
+    } catch (error) {
+      setOcStatus(error.message, true);
+    }
+  }, 450);
+}
+
 function toggleOcTag(tag) {
   const folded = tag.toLowerCase();
   const index = state.ocSelectedTags.findIndex(
@@ -488,8 +644,13 @@ function toggleOcTag(tag) {
   } else {
     state.ocSelectedTags.push(tag);
   }
+  if (ocCreating) {
+    renderOcCreateModal();
+    return;
+  }
   renderOcSelected();
   renderOcCatalogResults();
+  scheduleSaveActiveOcTags();
 }
 
 function characterById(charId) {
@@ -504,6 +665,7 @@ function updateOcActiveHeader() {
   const add = $("btn-oc-add");
   const train = $("btn-oc-train");
   const addRef = $("btn-oc-add-ref");
+  const useImage = $("btn-oc-use-image");
   const hasActive = Boolean(character);
   if (name) name.textContent = hasActive ? character.name : "Sin OC activo";
   if (meta) {
@@ -511,7 +673,7 @@ function updateOcActiveHeader() {
       ? `${(character.tags || []).length} rasgos · ${(character.extras || []).length} extras · ${(state.characterRefs || []).length} referencias`
       : "Crea o selecciona un OC para ver su ficha.";
   }
-  for (const button of [edit, add, train, addRef]) {
+  for (const button of [edit, add, train, addRef, useImage]) {
     if (button) button.disabled = !hasActive;
   }
 }
@@ -743,6 +905,10 @@ async function cancelOcEdit() {
 async function selectCharacter(character) {
   if (!character) return;
   state.activeCharacterId = character.id;
+  state.ocSelectedTags = [...(character.tags || [])];
+  state.ocExtras = [...(character.extras || [])];
+  renderOcSelected();
+  renderOcCatalogResults();
   renderCharacters();
   await loadCharacterRefs();
   setOcStatus(`OC «${character.name}» seleccionado; pulsa «Usar» para cargarlo en Imagen.`);
@@ -1279,6 +1445,15 @@ function closeOcModal() {
 
 
 function initOcPicker() {
+  on("btn-oc-create", "click", openOcCreateModal);
+  on("btn-oc-create-close", "click", () => closeOcCreateModal(true));
+  on("btn-oc-create-cancel", "click", () => closeOcCreateModal(true));
+  on("btn-oc-create-save", "click", () => saveOcFromModal().catch((error) => setOcStatus(error.message, true)));
+  on("oc-create-group", "change", renderOcCreateTraits);
+  on("btn-oc-use-image", "click", () => {
+    const character = characterById(state.activeCharacterId);
+    if (character) useCharacter(character).catch((error) => setOcStatus(error.message, true));
+  });
   on("btn-oc-add", "click", addOcTagsToPrompt);
   on("btn-oc-edit-active", "click", () => {
     const character = characterById(state.activeCharacterId);

@@ -1109,8 +1109,9 @@
         <!-- MÓDULO SUPERIOR: Acción Principal y Estado -->
         <div class="generate-block oc-header-block">
           <div class="generate-row">
-            <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
+            <button id="btn-oc-create" class="primary" type="button">Crear OC</button>
             <button id="btn-oc-train" type="button" title="Entrena una LoRA con las referencias del OC activo">Entrenar LoRA</button>
+            <button id="btn-oc-add" class="hidden" type="button">Añadir al prompt</button>
           </div>
           <p id="oc-status" class="status oc-status">Listo</p>
         </div>
@@ -1174,6 +1175,7 @@
         <div class="gallery-header">
           <h2>Referencias <span id="oc-refs-title" class="oc-refs-title"></span></h2>
           <div class="oc-refs-actions">
+            <button id="btn-oc-use-image" class="primary" type="button" disabled>Usar en Imagen</button>
             <button id="btn-oc-add-ref" type="button" title="Añadir una imagen de referencia desde tu disco">Añadir referencia</button>
             <input id="oc-ref-upload" type="file" accept="image/png,image/jpeg,image/webp" hidden>
             <button id="btn-oc-sheet" type="button" title="Genera una hoja catálogo para IPAdapter (M10); no se adjunta como referencia I2I" disabled>Crear hoja</button>
@@ -1979,6 +1981,36 @@
         <button id="btn-enrich-close" type="button">Cerrar</button>
       </div>
       <div id="enrich-body" class="enrich-body"></div>
+    </div>
+  </div>
+
+  <div id="oc-create-modal" class="modal hidden">
+    <div class="modal-box oc-create-box">
+      <div class="modal-header">
+        <h2>Crear OC</h2>
+        <button id="btn-oc-create-close" type="button">Cerrar</button>
+      </div>
+      <div class="oc-create-body">
+        <label class="field">
+          <span>Nombre</span>
+          <input id="oc-create-name" type="text" placeholder="Nombre del OC">
+        </label>
+        <div class="oc-create-grid">
+          <div class="oc-create-catalog">
+            <select id="oc-create-group" aria-label="Grupo de rasgos"></select>
+            <div id="oc-create-traits" class="oc-create-traits"></div>
+          </div>
+          <div class="oc-create-selected">
+            <h3>Seleccionados</h3>
+            <div id="oc-create-selected" class="oc-chips"></div>
+          </div>
+        </div>
+        <p id="oc-create-status" class="field-hint"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-oc-create-cancel" class="secondary" type="button">Cancelar</button>
+        <button id="btn-oc-create-save" class="primary" type="button">Guardar OC</button>
+      </div>
     </div>
   </div>
 
