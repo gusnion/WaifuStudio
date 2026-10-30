@@ -774,9 +774,9 @@ async function reuseGeneration(item) {
   // BUG-IMAGE-01: Usar general_prompt si es string; de lo contrario dejarlo vacío
   const promptGeneral = $("prompt-general");
   if (promptGeneral) {
-    if (typeof params.general_prompt === "string") {
+    if (typeof params.general_prompt === "string" && params.general_prompt.trim()) {
       promptGeneral.value = params.general_prompt;
-    } else if (savedPrompt && (externalResult || !isTagPromptProfile(state.prompt_profile))) {
+    } else if (savedPrompt) {
       promptGeneral.value = savedPrompt;
     } else {
       promptGeneral.value = "";
