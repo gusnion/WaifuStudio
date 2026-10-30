@@ -6962,7 +6962,6 @@ class TopbarNavigationStaticTests(ServerTestCase):
             "oc-form",
             "oc-form-title",
             "oc-form-name",
-            "oc-form-preprompt",
             "oc-form-notes",
             "btn-oc-save",
             "btn-oc-new",

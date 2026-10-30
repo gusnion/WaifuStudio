@@ -468,6 +468,7 @@ async function loadOcPreprompts() {
   const data = await api(`/api/preprompts?family=${encodeURIComponent(family)}`);
   const custom = new Set(data.custom || []);
   const select = $("oc-form-preprompt");
+  if (!select) return;
   select.replaceChildren();
   for (const name of data.names || []) {
     select.appendChild(option(name, custom.has(name) ? `${name} (propio)` : name));
@@ -696,10 +697,6 @@ function resetOcForm() {
   state.ocSelectedTags = [];
   state.ocExtras = [];
   $("oc-form-name").value = "";
-  const preprompt = $("oc-form-preprompt");
-  preprompt.value =
-    state.ocPrepromptDefault ||
-    (preprompt.options.length ? preprompt.options[0].value : "");
   const ratingField = $("oc-form-rating");
   if (ratingField) ratingField.value = "nsfw";
   $("oc-form-notes").value = "";
@@ -720,7 +717,6 @@ function fillCharacterForm(character) {
   state.ocSelectedTags = [...(character.tags || [])];
   state.ocExtras = [...(character.extras || [])];
   $("oc-form-name").value = character.name;
-  $("oc-form-preprompt").value = character.preprompt;
   const ratingFieldEdit = $("oc-form-rating");
   if (ratingFieldEdit) ratingFieldEdit.value = character.rating;
   $("oc-form-notes").value = character.notes;
@@ -752,9 +748,36 @@ async function selectCharacter(character) {
   setOcStatus(`OC «${character.name}» seleccionado; pulsa «Usar» para cargarlo en Imagen.`);
 }
 
+function ocUsesTagZones() {
+  const info = state.prompt_profile_info;
+  if (info && typeof info.zones_visible === "boolean") return info.zones_visible;
+  return ["anima", "animagine", "sdxl_tags"].includes(String(state.prompt_profile || ""));
+}
+
+async function applyOcTagsToImagePrompt(text, extras = []) {
+  const tags = promptTagsFromText(text);
+  if (ocUsesTagZones()) {
+    if (tags.length) addTagsToZone("character", tags);
+    if (extras.length) await mergeZonesText(extras.join(", "));
+    return;
+  }
+  const field = $("prompt-general");
+  if (!field) return;
+  const current = String(field.value || "").trim();
+  const existing = new Set(
+    current.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean)
+  );
+  const missing = [...tags, ...extras]
+    .map((tag) => String(tag || "").trim())
+    .filter((tag) => tag && !existing.has(tag.toLowerCase()));
+  if (!missing.length) return;
+  field.value = current ? `${current}, ${missing.join(", ")}` : missing.join(", ");
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 async function useCharacter(character) {
   const profile = await fetchCharacterProfile(character, "auto");
-  addTagsToZone("character", promptTagsFromText(profile.text));
+  await applyOcTagsToImagePrompt(profile.text, profile.extras || []);
   let loraNote = "";
   if (profile.lora) {
     const selected = selectLora(profile.lora.id, profile.lora.default_weight);
@@ -762,12 +785,9 @@ async function useCharacter(character) {
       ? ` · LoRA ${profile.lora.id} @ ${profile.lora.default_weight}`
       : ` · LoRA ${profile.lora.id} fuera del panel (familia activa)`;
   }
-  let extrasNote = "";
-  if ((profile.extras || []).length) {
-    await mergeZonesText(profile.extras.join(", "));
-    extrasNote = ` · extras a General: ${profile.extras.join(", ")}`;
-  }
-  $("preprompt").value = character.preprompt;
+  const extrasNote = (profile.extras || []).length
+    ? ` · extras: ${profile.extras.join(", ")}`
+    : "";
   $("rating").value = character.rating;
   state.activeCharacterId = character.id;
   renderCharacters();
@@ -871,7 +891,7 @@ async function saveCharacter(event) {
   const payload = {
     name,
     tags: state.ocSelectedTags.slice(),
-    preprompt: $("oc-form-preprompt").value,
+    preprompt: "ninguno",
     rating: $("oc-form-rating")?.value || "nsfw",
     notes: $("oc-form-notes").value,
   };
@@ -1178,11 +1198,8 @@ function addOcTagsToPrompt() {
     return;
   }
   const text = promptFromTags(state.ocSelectedTags);
-  mergeZonesText(text)
-    .then(() => {
-      $("tab-image")?.click();
-      setStatus("Tags añadidos al prompt");
-    })
+  applyOcTagsToImagePrompt(text)
+    .then(() => setOcStatus("Rasgos añadidos al prompt, sin cambiar de pestaña"))
     .catch((error) => setOcStatus(error.message, true));
 }
 
