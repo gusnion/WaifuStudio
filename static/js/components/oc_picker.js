@@ -29,6 +29,8 @@ let ocSearchTimer = null;
 let ocConfirmResolver = null;
 let ocCreating = false;
 let ocSaveTagsTimer = null;
+let ocRemoveMode = false;
+const ocSelectedRefIds = new Set();
 
 function showOcConfirmModal({
   title = "Confirmar",
@@ -690,6 +692,7 @@ function updateOcActiveHeader() {
   const useImage = $("btn-oc-use-image");
   const multiview = $("btn-oc-multiview");
   const multiviewCount = $("oc-multiview-count");
+  const removeRefs = $("btn-oc-remove-refs");
   const hasActive = Boolean(character);
   if (name) name.textContent = hasActive ? character.name : "Sin OC activo";
   if (meta) {
@@ -700,6 +703,7 @@ function updateOcActiveHeader() {
   for (const button of [edit, add, train, addRef, addRefGallery, useImage, multiview, multiviewCount]) {
     if (button) button.disabled = !hasActive;
   }
+  if (removeRefs) removeRefs.disabled = !hasActive || !(state.characterRefs || []).length;
 }
 
 function renderCharacters() {
@@ -929,6 +933,9 @@ async function cancelOcEdit() {
 async function selectCharacter(character) {
   if (!character) return;
   state.activeCharacterId = character.id;
+  ocRemoveMode = false;
+  ocSelectedRefIds.clear();
+  $("btn-oc-remove-cancel")?.classList.add("hidden");
   state.ocSelectedTags = [...(character.tags || [])];
   state.ocExtras = [...(character.extras || [])];
   renderOcSelected();
@@ -1207,6 +1214,7 @@ async function loadCharacterRefs() {
   const refs = await api(`/api/characters/${state.activeCharacterId}/refs`);
   state.characterRefs = refs;
   title.textContent = character ? `de ${character.name}` : "";
+  updateOcActiveHeader();
   if (button) button.disabled = refs.length < 2;
   updateOcActiveHeader();
   if (!refs.length) {
@@ -1228,6 +1236,10 @@ async function loadCharacterRefs() {
     img.loading = "lazy";
     img.style.cursor = "pointer";
     img.addEventListener("click", () => {
+      if (ocRemoveMode) {
+        toggleOcRefSelection(ref);
+        return;
+      }
       openLightbox(ref.url, img.alt);
     });
     figure.appendChild(img);
@@ -1240,17 +1252,54 @@ async function loadCharacterRefs() {
       note.textContent = "Para IPAdapter (M10); no recomendada como referencia I2I";
       figure.append(badge, note);
     }
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.textContent = "Quitar";
-    remove.addEventListener("click", () => {
-      removeCharacterRef(ref).catch((error) =>
-        setOcStatus(error.message, true)
-      );
-    });
-    figure.append(remove);
+    if (ocSelectedRefIds.has(ref.id)) figure.classList.add("selected");
     container.appendChild(figure);
   }
+}
+
+function updateOcRemoveModeUi() {
+  const button = $("btn-oc-remove-refs");
+  const cancel = $("btn-oc-remove-cancel");
+  if (button) {
+    button.textContent = ocRemoveMode
+      ? `Confirmar quitar (${ocSelectedRefIds.size})`
+      : "Quitar imágenes";
+  }
+  if (cancel) cancel.classList.toggle("hidden", !ocRemoveMode);
+}
+
+function toggleOcRemoveMode() {
+  ocRemoveMode = !ocRemoveMode;
+  ocSelectedRefIds.clear();
+  updateOcRemoveModeUi();
+  loadCharacterRefs().catch(() => {});
+  if (ocRemoveMode) setOcStatus("Selecciona las imágenes y pulsa «Confirmar quitar»");
+}
+
+function toggleOcRefSelection(ref) {
+  if (!ref || ref.id == null) return;
+  if (ocSelectedRefIds.has(ref.id)) ocSelectedRefIds.delete(ref.id);
+  else ocSelectedRefIds.add(ref.id);
+  updateOcRemoveModeUi();
+  loadCharacterRefs().catch(() => {});
+}
+
+async function confirmRemoveSelectedRefs() {
+  if (!ocSelectedRefIds.size) {
+    toggleOcRemoveMode();
+    return;
+  }
+  const ids = [...ocSelectedRefIds];
+  for (const refId of ids) {
+    await api(`/api/characters/${state.activeCharacterId}/refs/${refId}`, {
+      method: "DELETE",
+    });
+  }
+  ocSelectedRefIds.clear();
+  ocRemoveMode = false;
+  updateOcRemoveModeUi();
+  await loadCharacterRefs();
+  setOcStatus(`${ids.length} referencia(s) quitada(s)`);
 }
 
 async function removeCharacterRef(ref) {
@@ -1596,6 +1645,19 @@ function initOcPicker() {
     openTrainModal(character);
   });
   on("btn-oc-add-ref", "click", () => $("oc-ref-upload").click());
+  on("btn-oc-remove-refs", "click", () => {
+    if (ocRemoveMode) {
+      confirmRemoveSelectedRefs().catch((error) => setOcStatus(error.message, true));
+    } else {
+      toggleOcRemoveMode();
+    }
+  });
+  on("btn-oc-remove-cancel", "click", () => {
+    ocRemoveMode = false;
+    ocSelectedRefIds.clear();
+    updateOcRemoveModeUi();
+    loadCharacterRefs().catch(() => {});
+  });
   on("btn-oc-add-ref-gallery", "click", () => {
     openOcRefGallery().catch((error) => setOcStatus(error.message, true));
   });

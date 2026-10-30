@@ -3011,3 +3011,14 @@ input[type="checkbox"] {
   min-width: 92px;
 }
 
+
+.oc-ref.selected img {
+  outline: 2px solid var(--danger, #e74c3c);
+  outline-offset: -2px;
+  opacity: 0.72;
+}
+
+#btn-oc-remove-refs {
+  white-space: nowrap;
+}
+
