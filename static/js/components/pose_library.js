@@ -34,6 +34,8 @@ const poseState = {
   callerPoses: {},
   tags: { classes: {}, angles: {} },
   catalogInstalled: false,
+  catalogState: "unknown",
+  imagesBase: "",
 };
 
 let poseLibraryInitialized = false;
@@ -186,6 +188,32 @@ function currentFilters() {
   };
 }
 
+function makePosePhoto(pose, field, width, className = "pose-photo") {
+  const relative = String(pose?.[field] || "").trim();
+  if (!relative || !poseState.imagesBase) return null;
+  const img = document.createElement("img");
+  img.className = className;
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.src = `${poseState.imagesBase}${relative}`;
+  img.alt = pose.nombre_ja || poseTitle(pose);
+  img.style.width = `${width}px`;
+  img.style.maxWidth = "100%";
+  img.addEventListener("error", () => {
+    const fallback = hasDetection(pose)
+      ? makeCanvas(pose, width)
+      : document.createElement("span");
+    if (fallback.tagName === "CANVAS") {
+      drawSkeleton(fallback, pose, skeletonBones());
+    } else {
+      fallback.className = "pose-card-fallback";
+      fallback.textContent = `${pose.clase_es || "Pose"} · ${pose.angulo_es || "—"}`;
+    }
+    img.replaceWith(fallback);
+  });
+  return img;
+}
+
 function renderPoseCard(pose) {
   const detected = hasDetection(pose);
   const card = document.createElement("button");
@@ -195,7 +223,10 @@ function renderPoseCard(pose) {
   card.title = `${poseTitle(pose)} — ${pose.sistema_es || ""}${detected ? "" : " — ficha sin esqueleto"}`;
   card.classList.toggle("selected", poseState.pendingId === pose.id);
   card.addEventListener("click", () => selectPendingPose(pose.id));
-  if (detected) {
+  const photo = makePosePhoto(pose, "thumb", 96);
+  if (photo) {
+    card.appendChild(photo);
+  } else if (detected) {
     const canvas = makeCanvas(pose, 96);
     card.appendChild(canvas);
     drawSkeleton(canvas, pose, skeletonBones());
@@ -280,8 +311,11 @@ function renderPreview() {
     box.appendChild(hint);
     return;
   }
-  const canvas = makeCanvas(pose, 150);
-  if (hasDetection(pose)) {
+  const photo = makePosePhoto(pose, "img", 150, "pose-photo pose-photo-preview");
+  if (photo) {
+    box.appendChild(photo);
+  } else if (hasDetection(pose)) {
+    const canvas = makeCanvas(pose, 150);
     box.appendChild(canvas);
     drawSkeleton(canvas, pose, skeletonBones());
   } else {
@@ -418,12 +452,20 @@ function ensurePoseDownload() {
     const header = modal.querySelector(".modal-header");
     if (header) header.appendChild(button);
   }
-  const installed = poseState.catalogInstalled;
-  button.classList.toggle("hidden", installed);
+  const state = poseState.catalogState;
+  const installed = state === "installed";
+  const missing = state === "missing";
+  const unavailable = state === "unavailable";
+  button.classList.toggle("hidden", !missing);
   hint.classList.toggle("hidden", installed);
-  hint.textContent = installed
-    ? ""
-    : "Catálogo de poses no instalado (505 KB). Descárgalo para ver las 1.439 fichas.";
+  hint.classList.toggle("error", unavailable);
+  if (installed) {
+    hint.textContent = "";
+  } else if (unavailable) {
+    hint.textContent = "La app no responde a la API de poses. Reinicia la app y vuelve a abrir esta ventana.";
+  } else {
+    hint.textContent = "Catálogo de poses no instalado (505 KB). Descárgalo para ver las 1.439 fichas.";
+  }
 }
 
 async function downloadPoseCatalog() {
@@ -461,6 +503,8 @@ async function loadRemotePoses() {
     if (!statusResponse.ok) throw new Error(`HTTP ${statusResponse.status}`);
     const status = await statusResponse.json();
     poseState.catalogInstalled = Boolean(status.installed);
+    poseState.catalogState = status.installed ? "installed" : "missing";
+    poseState.imagesBase = String(status.images_base || "");
     ensurePoseDownload();
     if (!status.installed) return;
     const [indexResponse, tagsResponse] = await Promise.all([
@@ -478,9 +522,11 @@ async function loadRemotePoses() {
       };
     }
     poseState.catalogInstalled = true;
+    poseState.catalogState = "installed";
     ensurePoseDownload();
   } catch (_error) {
     poseState.catalogInstalled = false;
+    poseState.catalogState = "unavailable";
     ensurePoseDownload();
   }
 }

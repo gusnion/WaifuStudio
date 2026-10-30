@@ -4,5 +4,6 @@
   "url": "https://huggingface.co/datasets/Gusitir/pose-db-01/resolve/main/poses-index.json",
   "bytes": 505624,
   "sha256": "dc35f253d56b9eff973fd399b5a04bfd40257a0e72b2f0696a60de7837ecf3f0",
-  "count": 1439
+  "count": 1439,
+  "images_base": "https://huggingface.co/datasets/Gusitir/pose-db-01/resolve/main/"
 }

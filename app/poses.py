@@ -52,6 +52,7 @@ def pose_status(data_dir: str | Path) -> dict[str, Any]:
     version = str(catalog.get("version", ""))
     bytes_count = int(catalog.get("bytes", 0))
     url = str(catalog.get("url", ""))
+    images_base = str(catalog.get("images_base", ""))
 
     if installed:
         try:
@@ -68,6 +69,7 @@ def pose_status(data_dir: str | Path) -> dict[str, Any]:
         "version": version,
         "bytes": bytes_count,
         "url": url,
+        "images_base": images_base,
     }
 
 

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "app": "WAIFU",
+  "task": "B-20 poses por defecto en instalación limpia",
+  "destination_root": "data/poses",
+  "files": [
+    {
+      "id": "poses-index",
+      "filename": "poses-index.json",
+      "url": "https://huggingface.co/datasets/Gusitir/pose-db-01/resolve/main/poses-index.json",
+      "bytes": 505624,
+      "sha256": "dc35f253d56b9eff973fd399b5a04bfd40257a0e72b2f0696a60de7837ecf3f0"
+    }
+  ]
+}
