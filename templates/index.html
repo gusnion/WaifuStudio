@@ -996,32 +996,37 @@
 
         <!-- BLOQUE 2: Modelo y Parámetros -->
         <fieldset class="control-card" id="upscale-block-model">
-          <legend>2. Modelo y Parámetros <button type="button" class="btn-help" data-help="RealESRGAN x2 duplica el tamaño preservando nitidez. RIFE interpola fotogramas en vídeos para máxima fluidez.">?</button></legend>
+          <legend>2. Escalador, mejora y nitidez <button type="button" class="btn-help" data-help="Tres ejes: escalador GAN, mejora de detalle por difusión o Qwen, y nitidez posterior.">?</button></legend>
           <label class="field" id="upscale-model-field">
-            <span>Modelo</span>
+            <span>1. Escalador</span>
             <select id="upscale-model"></select>
             <p id="upscale-model-note" class="field-hint"></p>
           </label>
           <p class="field-hint">RealESRGAN x2 duplica el tamaño; aplica a la imagen o al vídeo (conservando fps y audio del origen).</p>
 
           <label class="field" id="upscale-mode-field">
-            <span>Modo de Escalado</span>
+            <span>2. Mejora de detalle</span>
             <select id="upscale-mode">
-              <option value="fast">Rápido (GAN)</option>
-              <option value="hires" disabled>Hires Fix (no disponible: falta Anima-2.9B-preview-v1)</option>
-              <option value="qwen_remaster">Qwen refine (no 2K)</option>
+              <option value="fast" selected>Ninguna</option>
+              <option value="hires">Highres Fix (difusión)</option>
+              <option value="qwen_remaster">Qwen refine</option>
             </select>
+          </label>
+          <label class="field hidden" id="upscale-diffusion-model-field">
+            <span>Modelo de difusión (Highres Fix)</span>
+            <select id="upscale-diffusion-model"></select>
+            <p class="field-hint">Solo se muestran los modelos de imagen registrados. El escalador GAN se aplica antes.</p>
           </label>
 
           <label class="field hidden" id="upscale-denoise-field">
-            <span>Fuerza Difusión (Denoise)</span>
-            <input id="upscale-denoise" type="number" min="0.10" max="0.50" step="0.05" value="0.25">
+            <span>Fuerza de difusión (denoise)</span>
+            <input id="upscale-denoise" type="number" min="0.20" max="0.40" step="0.05" value="0.30">
             <p class="field-hint">Nivel de reinterpretación creativa (0.10 sutil a 0.50 fuerte).</p>
           </label>
 
           <div class="grid-2">
             <label class="field" id="upscale-passes-field">
-              <span>Escalado</span>
+              <span>Pasadas GAN</span>
               <select id="upscale-passes">
                 <option value="1">×2 (1 pasada)</option>
                 <option value="2">×4 (2 pasadas)</option>
@@ -1029,7 +1034,7 @@
             </label>
 
             <label class="field" id="upscale-sharpen-field">
-              <span>Mejora de detalle</span>
+              <span>3. Nitidez</span>
               <select id="upscale-sharpen">
                 <option value="0">OFF</option>
                 <option value="1">Suave</option>
@@ -1041,9 +1046,9 @@
           <label class="field" id="upscale-sharpen-method-field">
             <span>Método de Nitidez</span>
             <select id="upscale-sharpen-method">
-              <option value="legacy">Legacy (ImageSharpen)</option>
-              <option value="rcas">RCAS (Robust Contrast)</option>
-              <option value="adaptive_usm">Adaptive USM</option>
+              <option value="none" selected>Ninguna</option>
+              <option value="rcas">RCAS</option>
+              <option value="legacy">ImageSharpen</option>
             </select>
           </label>
           <p class="field-hint">Nitidez extra tras la ampliación (imagen y vídeo).</p>

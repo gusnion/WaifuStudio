@@ -869,12 +869,14 @@ function applyUpscaleKind() {
     const hint = $("upscale-chunk-hint");
     if (hint) hint.hidden = true;
   }
-  $("upscale-passes-field").classList.toggle("hidden", isVideo);
-  $("upscale-mode-field").classList.toggle("hidden", isVideo);
-  const isDiffMode = !isVideo && $("upscale-mode") && $("upscale-mode").value !== "fast";
-  $("upscale-denoise-field").classList.toggle("hidden", !isDiffMode);
-  $("upscale-sharpen-field").classList.toggle("hidden", isFps);
+  $("upscale-passes-field").classList.toggle("hidden", isVideo || isFps);
+  $("upscale-mode-field").classList.toggle("hidden", isVideo || isFps);
+  const isDiffMode = !isVideo && !isFps && $("upscale-mode") && $("upscale-mode").value !== "fast";
+  $("upscale-denoise-field").classList.toggle("hidden", !isDiffMode || $("upscale-mode")?.value !== "hires");
+  $("upscale-diffusion-model-field")?.classList.toggle("hidden", !isDiffMode || $("upscale-mode")?.value !== "hires");
   $("upscale-sharpen-method-field").classList.toggle("hidden", isFps);
+  const sharpenOn = $("upscale-sharpen-method") && $("upscale-sharpen-method").value !== "none";
+  $("upscale-sharpen-field").classList.toggle("hidden", isFps || !sharpenOn);
   $("upscale-rife-model-field").classList.toggle("hidden", kind !== "video");
   $("btn-upscale").textContent = upscaleActionLabel();  updateUpscaleSourceView();
   updateUpscaleActions();
@@ -1028,6 +1030,10 @@ async function generateUpscale() {
       if (Number.isFinite(denoiseVal)) {
         payload.denoise = denoiseVal;
       }
+      const diffusion = $("upscale-diffusion-model")?.value;
+      if (upscaleMode === "hires" && diffusion) {
+        payload.diffusion_model = diffusion;
+      }
     }
     if (localImage) {
       payload.image_b64 = localImage.b64;
@@ -1063,6 +1069,36 @@ async function generateUpscale() {
   }
 }
 
+
+async function loadDiffusionModels() {
+  const select = $("upscale-diffusion-model");
+  if (!select) return;
+  try {
+    const data = await api("/api/models");
+    const items = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+    const imageModels = items.filter((model) => ["anima", "sdxl"].includes(String(model.family || "").toLowerCase()));
+    select.replaceChildren();
+    for (const model of imageModels) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.display_name || model.id} · ${model.subfamily || model.family || ""}`;
+      select.appendChild(option);
+    }
+    if (!imageModels.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Sin modelos de imagen registrados";
+      select.appendChild(option);
+      select.disabled = true;
+    }
+  } catch (_error) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No se pudieron cargar los modelos";
+    select.replaceChildren(option);
+    select.disabled = true;
+  }
+}
 
 function initUpscalerTab() {
   on("upscale-kind", "change", () => {
@@ -1104,6 +1140,9 @@ function initUpscalerTab() {
     const isDiffMode = upscaleKind() === "image" && $("upscale-mode") && $("upscale-mode").value !== "fast";
     $("upscale-denoise-field").classList.toggle("hidden", !isDiffMode);
   });
+  loadDiffusionModels();
+  on("upscale-mode", "change", applyUpscaleKind);
+  on("upscale-sharpen-method", "change", applyUpscaleKind);
   on("btn-upscale", "click", generateUpscale);
   on("btn-upscale-cancel", "click", cancelJob);
   on("upscale-preview", "click", () => {
