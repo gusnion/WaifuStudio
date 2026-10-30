@@ -122,15 +122,6 @@
                 </div>
                 <p id="enhance-hint" class="field-hint">Escribe la escena: el asistente la adapta al formato del modelo seleccionado.</p>
                 <p id="prompt-prose-guide" class="field-hint hidden"></p>
-                <div id="image-pose-badge" class="image-pose-badge hidden" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.35rem 0.6rem; background: var(--bg-surface, #181a20); border: 1px solid var(--border-color, #2b2e38); border-radius: 6px;">
-                  <canvas id="image-pose-thumb" class="pose-canvas" style="width: 48px; height: 64px; border-radius: 4px; background: #0e0f13; flex-shrink: 0;"></canvas>
-                  <img id="image-pose-photo" class="image-pose-photo hidden" alt="Pose de referencia">
-                  <div style="flex: 1; min-width: 0;">
-                    <strong id="image-pose-name" style="font-size: 0.85rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Pose</strong>
-                    <span id="image-pose-note" style="font-size: 0.75rem; color: var(--text-muted, #8b92a5); display: block;">Referencia visual de pose</span>
-                  </div>
-                  <button id="btn-image-pose-clear" type="button" title="Quitar miniatura de pose" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">✕</button>
-                </div>
               </div>
             </fieldset>
 
@@ -262,7 +253,6 @@
                   </div>
                   <div class="enhance-row">
                     <button id="btn-describe-ref" type="button">Describir imagen</button>
-                    <button id="btn-pose-open-image" type="button">Poses</button>
                     <input id="describe-file" type="file" accept="image/*" class="hidden">
                   </div>
                   <p class="field-hint">Elige una imagen de tu disco y añade su descripción (tags + caption) al prompt, igual que «Describir» en la galería.</p>
@@ -779,7 +769,6 @@
           <label class="field" id="editor-refs-field">
             <div class="field-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
               <span>Imágenes de referencia (hasta 10)</span>
-              <button id="btn-editor-poses" type="button" title="Librería de poses (adjuntar esqueleto COCO-17 como referencia)">Poses</button>
             </div>
             <input id="editor-refs" type="file" accept="image/*" multiple>
           </label>
@@ -1117,13 +1106,7 @@
         <div class="generate-block oc-header-block">
           <div class="generate-row">
             <button id="btn-oc-add" class="primary" type="button">Añadir al prompt</button>
-            <button id="btn-oc-poses" type="button" title="Librería de poses (esqueletos COCO-17 locales)">Poses</button>
             <button id="btn-oc-train" type="button" title="Entrena una LoRA con las referencias del OC activo">Entrenar LoRA</button>
-          </div>
-          <div class="oc-pose-row">
-            <span id="oc-pose-selected" class="oc-refs-note">Pose: ninguna</span>
-            <button id="btn-oc-pose-generate" type="button" title="Genera la pose elegida con la primera referencia del OC activo y la guarda como nueva referencia (sin abrir el Editor)">Generar pose</button>
-            <button id="btn-oc-pose-clear" class="hidden" type="button">Quitar pose</button>
           </div>
           <p id="oc-status" class="status oc-status">Listo</p>
         </div>
@@ -1435,7 +1418,7 @@
       <article class="guide-accordion">
         <h3>Documentación para agentes</h3>
         <p>Ocho guías operativas en <code>docs/agent-guides/README.md</code> y el manual completo en <code>SKILL.md</code> (descargable arriba). Cubren modelos, imagen, vídeo Wan, audio, editor, upscaler, galería, addons y diagnóstico.</p>
-        <p>Catálogos de referencia: <a href="https://huggingface.co/datasets/Gusitir/pose-db-01" target="_blank" rel="noopener">pose-db-01</a> · <a href="https://huggingface.co/datasets/Gusitir/costume-db-01" target="_blank" rel="noopener">costume-db-01</a>. El vestuario llega como addon; no hay pestaña de ropa en 2.5.1.</p>
+        <p>Catálogo de referencia: <a href="https://huggingface.co/datasets/Gusitir/costume-db-01" target="_blank" rel="noopener">costume-db-01</a>. El vestuario llega como addon; no hay pestaña de ropa en 2.5.1.</p>
       </article>
 
       <!-- Barra de Filtros y Búsqueda -->
@@ -1951,13 +1934,6 @@
                   <span>Configuración y banco de workflows Wan 2.2</span>
                 </div>
               </li>
-              <li>
-                <div class="social-credit-meta">
-                  <strong>ギア (@giaaibusi)</strong>
-                  <span>Base de referencias de pose POSE-DB-01</span>
-                </div>
-                <a href="https://x.com/giaaibusi" class="social-sublink" target="_blank" rel="noopener noreferrer">X / Twitter (@giaaibusi)</a>
-              </li>
             </ul>
             <div class="social-license-box">
               <a href="https://github.com/gusnion/WaifuStudio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
@@ -1988,37 +1964,6 @@
         <button id="btn-enrich-close" type="button">Cerrar</button>
       </div>
       <div id="enrich-body" class="enrich-body"></div>
-    </div>
-  </div>
-
-  <div id="pose-modal" class="modal hidden">
-    <div class="modal-box pose-box">
-      <div class="modal-header">
-        <h2>Librería de poses</h2>
-        <span id="pose-status" class="oc-status">Listo</span>
-        <button id="btn-pose-close" type="button">Cerrar</button>
-      </div>
-      <div class="pose-filters">
-        <input id="pose-search" type="search" placeholder="Buscar pose (clase, ángulo, sistema, id)..." aria-label="Buscar pose">
-        <select id="pose-filter-sistema" aria-label="Sistema"></select>
-        <select id="pose-filter-clase" aria-label="Clase"></select>
-        <select id="pose-filter-angulo" aria-label="Ángulo"></select>
-        <label class="field field-inline pose-only">
-          <span>Solo con detección</span>
-          <input id="pose-only-detected" type="checkbox">
-        </label>
-        <button id="btn-pose-reset" type="button">Limpiar filtros</button>
-      </div>
-      <div class="pose-body">
-        <div class="pose-list">
-          <div id="pose-grid" class="pose-grid"></div>
-          <button id="btn-pose-more" class="hidden" type="button">Mostrar más</button>
-        </div>
-        <aside class="pose-side">
-          <div id="pose-preview" class="pose-preview"></div>
-          <button id="btn-pose-use" class="primary" type="button" disabled>Usar pose</button>
-        </aside>
-      </div>
     </div>
   </div>
 

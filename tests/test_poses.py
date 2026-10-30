@@ -123,9 +123,9 @@ class TestPoses(unittest.TestCase):
 class PoseLibraryStaticTests(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[1]
 
-    def test_image_card_has_pose_entry_and_no_duplicate(self):
+    def test_image_card_sin_entrada_de_poses(self):
         html = (self.ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('id="btn-pose-open-image"', html)
+        self.assertNotIn('id="btn-pose-open-image"', html)
         self.assertNotIn('id="btn-image-poses"', html)
         self.assertIn("Ajustes de referencia", html)
         self.assertNotIn("<span>Imagen de referencia (PNG)</span>", html)

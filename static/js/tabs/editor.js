@@ -1162,8 +1162,6 @@ function initEditorTab() {
       setEditorStatus(error.message, true)
     );
   });
-  on("btn-editor-poses", "click", () => openPoseLibrary("editor"));
-  registerPoseCallback("editor", applyPoseToEditorRef);
   on("btn-editor-generate", "click", generateEditor);
   on("editor-license-check", "change", () => {
     const check = $("editor-license-check");

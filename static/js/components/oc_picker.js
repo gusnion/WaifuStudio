@@ -1243,11 +1243,6 @@ function initOcPicker() {
         $("oc-ref-upload").value = "";
       });
   });
-  on("btn-oc-poses", "click", openPoseLibrary);
-  initPoseLibrary();
-  on("btn-oc-pose-generate", "click", () => {
-    generateCharacterPose().catch((error) => setOcStatus(error.message, true));
-  });
   on("oc-catalog-group", "change", () => {
     refreshOcCatalog().catch((error) => setOcStatus(error.message, true));
   });

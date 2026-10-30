@@ -932,9 +932,6 @@ function initImageTab() {
     const modelId = $("model")?.value;
     if (modelId) openModelCard(modelId).catch((error) => setStatus(error.message, true));
   });
-  on("btn-pose-open-image", "click", () => openPoseLibrary("image"));
-  on("btn-image-pose-clear", "click", clearImagePosePreview);
-  registerPoseCallback("image", applyPoseToImageTab);
   on("btn-generate", "click", generate);
   on("btn-cancel", "click", cancelJob);
   on("btn-new-generation", "click", () => {

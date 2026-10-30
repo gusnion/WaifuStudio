@@ -898,128 +898,68 @@ class LoraUploadRouteTests(ServerTestCase):
 
 
 class PoseLibraryUiStaticTests(ServerTestCase):
-    """C-27: librería de poses de OC Maker (estática, sin red ni PNGs)."""
+    """Ronda 3: la librería de poses se retiró de la UI y queda como código dormido."""
 
     def _root(self) -> Path:
         return Path(__file__).resolve().parent.parent
 
-    def test_index_incluye_boton_y_modal_de_poses(self):
+    def test_index_no_expone_botones_ni_modal_de_poses(self):
         text = self.make_client().get("/").text
         for marker in (
             'id="btn-oc-poses"',
-            ">Poses<",
-            'id="oc-pose-selected"',
-            'id="btn-oc-pose-clear"',
             'id="pose-modal"',
-            'id="btn-pose-close"',
-            'id="pose-status"',
-            'id="pose-search"',
-            'id="pose-filter-sistema"',
-            'id="pose-filter-clase"',
-            'id="pose-filter-angulo"',
-            'id="pose-only-detected"',
-            'id="btn-pose-reset"',
-            'id="pose-grid"',
-            'id="btn-pose-more"',
-            'id="pose-preview"',
             'id="btn-pose-use"',
+            'id="pose-grid"',
+            'id="btn-editor-poses"',
+            'id="btn-pose-open-image"',
         ):
             with self.subTest(marker=marker):
-                self.assertIn(marker, text)
+                self.assertNotIn(marker, text)
 
-    def test_modulo_pose_library_local_sin_red_ni_png(self):
+    def test_modulo_pose_library_conservado_para_addon(self):
         js = (self._root() / "static" / "js" / "components" / "pose_library.js").read_text(
             encoding="utf-8"
         )
         for marker in (
             '"/static/pose-skeletons.json"',
-            "getContext(\"2d\")",
-            "document.createElement(\"canvas\")",
-            "sin detección",
             "filterPoses",
             "sistema_es",
             "clase_es",
             "angulo_es",
             "waifu:pose-select",
-            "export {",
             "initPoseLibrary",
+            "/api/poses",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, js)
-        self.assertNotIn("http://", js)
-        self.assertNotIn("https://", js)
-        self.assertNotIn(".png", js.lower())
-        self.assertNotIn("new Image(", js)
-        self.assertNotIn("<img", js)
-        self.assertGreaterEqual(len(re.findall(r"\bfetch\(", js)), 1)
-        self.assertIn("/api/poses", js)
 
-    def test_oc_picker_conecta_la_libreria_de_poses(self):
+    def test_oc_picker_conserva_codigo_pero_no_cablea_la_ui(self):
         js = (self._root() / "static" / "js" / "components" / "oc_picker.js").read_text(
             encoding="utf-8"
         )
         self.assertIn('from "./pose_library.js"', js)
-        self.assertIn('on("btn-oc-poses", "click", openPoseLibrary);', js)
-        self.assertIn("initPoseLibrary();", js)
+        self.assertNotIn('on("btn-oc-poses", "click", openPoseLibrary);', js)
+        self.assertNotIn("initPoseLibrary();", js)
 
-    def test_css_incluye_estilos_de_poses(self):
+    def test_css_de_poses_conservado(self):
         css = self.get_static_css()
         for marker in (".pose-box", ".pose-grid", ".pose-card", ".pose-canvas", ".pose-filters"):
             with self.subTest(marker=marker):
                 self.assertIn(marker, css)
 
-    def test_c29_generar_pose_boton_handler_y_llamada(self):
-        """C-29: botón Generar pose → /api/editor/generate → nueva referencia del OC."""
+    def test_c29_generar_pose_retirado_de_la_ui(self):
         html = self.make_client().get("/").text
-        self.assertIn('id="btn-oc-pose-generate"', html)
-        self.assertIn(">Generar pose<", html)
+        self.assertNotIn('id="btn-oc-pose-generate"', html)
         js = (self._root() / "static" / "js" / "components" / "oc_picker.js").read_text(
             encoding="utf-8"
         )
-        for marker in (
-            "getSelectedPose",
-            "pollJob",
-            "async function generateCharacterPose()",
-            'on("btn-oc-pose-generate", "click"',
-            'postJson("/api/editor/generate"',
-            'mode: "generate"',
-            "size: { original: true }",
-            "cfg: 1,",
-            "pose.clase_es",
-            "pose.angulo_es",
-            "ref_images_b64: [refB64]",
-            "attachable[0].url",
-            "/api/characters/${character.id}/refs",
-            "gen_id: done.gen_id",
-            "Elige una pose",
-            "no tiene referencias válidas",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, js)
-        self.assertIn("generateCharacterPose,", js)
-        self.assertIn("#btn-oc-pose-generate", self.get_static_css())
+        self.assertIn("async function generateCharacterPose()", js)
 
-    def test_dataset_de_poses_contrato_esperado(self):
+    def test_dataset_de_poses_ya_no_esta_en_la_app(self):
         path = self._root() / "static" / "pose-skeletons.json"
-        data = json.loads(path.read_text(encoding="utf-8"))
-        poses = data["poses"]
-        self.assertEqual(data["count"], len(poses))
-        self.assertEqual(len(data["keypoint_names"]), 17)
-        self.assertTrue(data["skeleton"])
-        con_pose = [p for p in poses if p.get("keypoints")]
-        sin_pose = [p for p in poses if not p.get("keypoints")]
-        self.assertTrue(con_pose)
-        self.assertTrue(sin_pose)
-        for pose in poses:
-            for field in ("id", "sistema_es", "clase_es", "angulo_es"):
-                self.assertTrue(pose.get(field), (pose.get("id"), field))
-        for pose in con_pose:
-            self.assertEqual(len(pose["keypoints"]), 17, pose["id"])
-            for kp in pose["keypoints"]:
-                self.assertEqual(len(kp), 3, pose["id"])
-        # El endpoint estático sirve el JSON localmente.
-        response = self.make_client().get("/static/pose-skeletons.json")
-        self.assertEqual(response.status_code, 200)
+        self.assertFalse(path.exists())
+        external = Path(r"E:\IA\ADDONS-DEV\pose-library-2.5.1\static\pose-skeletons.json")
+        self.assertTrue(external.exists(), "la copia de referencia debe existir fuera de WAIFU")
 
 
 class LoraLibraryUiStaticTests(ServerTestCase):
@@ -6828,8 +6768,6 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn("social-block-credits", panel_html)
         self.assertIn("Artelive", panel_html)
         self.assertIn("Wan 2.2", panel_html)
-        self.assertIn("ギア (@giaaibusi)", panel_html)
-        self.assertIn("POSE-DB-01", panel_html)
         self.assertIn("LICENSE", panel_html)
 
         # 4. Bloque C: Línea de cortesía exacta de TAREA-02
@@ -7168,58 +7106,37 @@ class TopbarNavigationStaticTests(ServerTestCase):
         resp_ref = client.post("/api/characters/999999/refs", json={"gen_id": 1})
         self.assertEqual(resp_ref.status_code, 404)
 
-    def test_c37_panel_poses_accessible_from_image_editor_ocmaker(self):
-        """C-37: panel de poses accesible desde Imagen, Editor y OCMaker con el mismo modal."""
+    def test_c37_poses_retiradas_de_la_ui_y_conservadas_como_codigo(self):
         base_dir = Path(__file__).resolve().parents[1]
         html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('id="btn-pose-open-image"', html)
-        self.assertNotIn('id="btn-image-poses"', html)
-        self.assertIn('id="btn-editor-poses"', html)
-        self.assertIn('id="btn-oc-poses"', html)
-        self.assertIn('id="pose-modal"', html)
-
+        for marker in ('id="btn-pose-open-image"', 'id="btn-editor-poses"', 'id="btn-oc-poses"', 'id="pose-modal"'):
+            self.assertNotIn(marker, html)
         pose_js = (base_dir / "static" / "js" / "components" / "pose_library.js").read_text(encoding="utf-8")
-        self.assertIn("openPoseLibrary", pose_js)
-        self.assertIn("registerPoseCallback", pose_js)
-        self.assertIn("poseToDataUrl", pose_js)
-        self.assertIn("initPoseLibrary", pose_js)
-        self.assertIn("poseLibraryInitialized", pose_js, "initPoseLibrary debe ser idempotente")
-
+        for marker in ("openPoseLibrary", "registerPoseCallback", "poseToDataUrl", "initPoseLibrary", "poseLibraryInitialized"):
+            self.assertIn(marker, pose_js)
         main_js = (base_dir / "static" / "js" / "main.js").read_text(encoding="utf-8")
-        self.assertIn("initPoseLibrary();", main_js)
-        self.assertIn("closePoseLibrary();", main_js)
+        self.assertNotIn("initPoseLibrary();", main_js)
+        self.assertNotIn("closePoseLibrary();", main_js)
 
-    def test_c34_imagen_pose_prompt_tags_thumbnail_no_controlnet(self):
-        """C-34: al elegir pose en Imagen, inserta etiquetas/clase/ángulo en prompt, muestra miniatura sin ControlNet."""
+    def test_c34_poses_retiradas_de_imagen(self):
         base_dir = Path(__file__).resolve().parents[1]
         html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('id="image-pose-badge"', html)
-        self.assertIn('id="image-pose-thumb"', html)
-        self.assertIn('id="image-pose-name"', html)
-        self.assertIn('id="image-pose-note"', html)
-        self.assertIn('id="btn-image-pose-clear"', html)
-
+        for marker in ('id="image-pose-badge"', 'id="image-pose-thumb"', 'id="btn-image-pose-clear"'):
+            self.assertNotIn(marker, html)
         img_js = (base_dir / "static" / "js" / "tabs" / "image.js").read_text(encoding="utf-8")
-        self.assertIn('openPoseLibrary("image")', img_js)
-        self.assertIn('registerPoseCallback("image"', img_js)
         self.assertIn("formatPoseTagsForImage", img_js)
         self.assertIn("applyPoseToImageTab", img_js)
         self.assertIn("attachReferenceFromUrl", img_js)
-        self.assertIn("drawPoseSkeleton", img_js)
+        self.assertNotIn('registerPoseCallback("image"', img_js)
 
-    def test_c33_editor_pose_drawn_skeleton_to_png_dataurl_reference(self):
-        """C-33: al elegir pose en Editor, convierte el esqueleto dibujado a PNG (dataURL) y lo adjunta como referencia."""
+    def test_c33_poses_retiradas_del_editor(self):
         base_dir = Path(__file__).resolve().parents[1]
         html = (base_dir / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('id="btn-editor-poses"', html)
-
+        self.assertNotIn('id="btn-editor-poses"', html)
         ed_js = (base_dir / "static" / "js" / "tabs" / "editor.js").read_text(encoding="utf-8")
-        self.assertIn('openPoseLibrary("editor")', ed_js)
-        self.assertIn('registerPoseCallback("editor"', ed_js)
         self.assertIn("applyPoseToEditorRef", ed_js)
         self.assertIn("poseToDataUrl", ed_js)
-        self.assertIn("state.editorRefs.push", ed_js)
-        self.assertIn("updateEditorRefs()", ed_js)
+        self.assertNotIn('registerPoseCallback("editor"', ed_js)
 
     def test_w4_model_defaults_canonical_modal(self):
         """W4 (2.5.0_bugfix): modal de Defaults usa fieldset.control-card, legend, btn-help y botones canonicos sin .model-defaults-grid."""
