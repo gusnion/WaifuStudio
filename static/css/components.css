@@ -3057,7 +3057,9 @@ input[type="checkbox"] {
 
 
 #oc-selected {
-  flex-wrap: nowrap;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
   overflow-x: hidden;
   max-height: 18rem;
 }
