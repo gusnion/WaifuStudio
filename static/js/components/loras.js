@@ -217,17 +217,21 @@ function renderLoraChips() {
     const triggerList = Array.isArray(lora.triggers) && lora.triggers.length
       ? lora.triggers
       : (lora.trigger ? [lora.trigger] : []);
-    if (triggerList.length) {
-      const triggerButton = document.createElement("button");
-      triggerButton.type = "button";
-      triggerButton.className = "lora-chip-trigger";
-      triggerButton.textContent = "trigger";
-      triggerButton.title = `Añadir al prompt: ${triggerList.join(", ")}`;
-      triggerButton.addEventListener("click", () => {
+    const triggerButton = document.createElement("button");
+    triggerButton.type = "button";
+    triggerButton.className = "lora-chip-trigger";
+    triggerButton.textContent = "trigger";
+    triggerButton.title = triggerList.length
+      ? `Añadir al prompt: ${triggerList.join(", ")}`
+      : "Esta LoRA no tiene trigger; abre la ficha para revisarlo";
+    triggerButton.addEventListener("click", () => {
+      if (triggerList.length) {
         for (const trigger of triggerList) insertTriggerWithWeight(trigger, 1);
-      });
-      chip.appendChild(triggerButton);
-    }
+      } else {
+        openLoraCard(lora.id);
+      }
+    });
+    chip.appendChild(triggerButton);
 
     const remove = document.createElement("button");
     remove.type = "button";
