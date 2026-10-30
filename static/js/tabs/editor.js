@@ -41,7 +41,7 @@ import {
 } from "../components/compare.js";
 import { reloadImageViewerFirstPage, selectedImageView, imageViewUrl } from "./image_viewer.js";
 import { loadGalleryTab, openGalleryModal } from "./gallery.js";
-import { switchTab } from "../main.js";
+import { switchTab } from "../navigation.js";
 import { ResolutionKit } from "../components/resolution_kit.js";
 import {
   openPoseLibrary,

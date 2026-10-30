@@ -94,9 +94,17 @@ function setImageCompareEnabled(on) {
       button.setAttribute("aria-pressed", "true");
       button.disabled = false;
     }
-    const info = $("image-preview-info");
-    if (info) {
-      info.textContent = "Selecciona una imagen de la minigalería para comparar";
+    const items = state.imageViewer.items || [];
+    const index = items.findIndex((item) => item.id === state.imageViewer.selectedId);
+    const other = items[index + 1] || items[index - 1];
+    const otherUrl = other ? imageViewUrl(other) : "";
+    if (otherUrl) {
+      setImageCompareSlot2(otherUrl);
+    } else {
+      const info = $("image-preview-info");
+      if (info) {
+        info.textContent = "Selecciona una imagen de la minigalería para comparar";
+      }
     }
   } else {
     imageCompareActive = false;

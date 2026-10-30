@@ -15,7 +15,7 @@ import {
 } from "../dom.js";
 import { api, postJson } from "../api.js";
 import { openLightbox } from "../components/lightbox.js";
-import { switchTab } from "../main.js";
+import { switchTab } from "../navigation.js";
 import {
   setUpscaleStatus,
   clearUpscaleSelection,

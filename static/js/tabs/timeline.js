@@ -1199,9 +1199,6 @@ export function initTimelineTab() {
     triggerAiAction(($("timeline-ai-action") && $("timeline-ai-action").value) || "continue_i2v");
   });
   on("btn-timeline-ai-cancel", "click", (event) => cancelJob(event, setAiStatus));
-  on("btn-timeline-ai-audio", "click", () => {
-    generateTimelineAudio().catch((err) => setTimelineStatus(err.message, true));
-  });
   on("timeline-ai-action", "change", syncTimelineAiAction);
   on("timeline-ai-audio-mode", "change", syncTimelineAiAction);
   on("timeline-ai-audio-text", "input", syncTimelineAiAction);

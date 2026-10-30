@@ -23,7 +23,7 @@ import { openLightbox } from "../components/lightbox.js";
 import { t } from "../i18n.js";
 import { imageViewUrl, reloadImageViewerFirstPage } from "./image_viewer.js";
 import { reloadVideoViewerFirstPage, videoEngineLabel, videoViewUrl } from "./video.js";
-import { switchTab } from "../main.js";
+import { switchTab } from "../navigation.js";
 
 
 function setUpscaleProgress(progress) {
