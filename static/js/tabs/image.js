@@ -300,6 +300,18 @@ async function loadPrepromptOptions() {
 }
 
 
+function currentPromptInputText() {
+  const general = $("prompt-general") ? $("prompt-general").value.trim() : "";
+  if (!isTagPromptProfile(state.prompt_profile)) return general;
+  let zones = "";
+  try {
+    zones = String(composePrompt() || "").trim();
+  } catch (_error) {
+    zones = "";
+  }
+  return zones || general;
+}
+
 async function applyModel(modelId) {
   const model = state.models.find((item) => item.id === modelId);
   if (!model) {
@@ -925,7 +937,16 @@ function initImageTab() {
   });
   on("ref-image", "change", updateReferencePreview);
   on("model", "change", (event) => {
-    applyModel(event.target.value).catch((error) => setStatus(error.message, true));
+    const carriedPrompt = currentPromptInputText();
+    applyModel(event.target.value)
+      .then(() => {
+        if (carriedPrompt && $("prompt-general")) {
+          $("prompt-general").value = carriedPrompt;
+          updateGenerateButtonState();
+          setStatus("Prompt conservado al cambiar de modelo");
+        }
+      })
+      .catch((error) => setStatus(error.message, true));
   });
   on("strength", "input", (event) => {
     $("strength-value").textContent = Number(event.target.value).toFixed(2);
