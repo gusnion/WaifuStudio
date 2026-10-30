@@ -404,8 +404,8 @@ header.topbar h1 {
   border-radius: 50%;
   background: var(--accent);
   color: transparent;
-  font-size: 0;
-  line-height: 0;
+  font-size: 11px;
+  line-height: 1;
   overflow: hidden;
 }
 
