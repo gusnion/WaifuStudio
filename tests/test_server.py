@@ -7204,7 +7204,7 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn('registerPoseCallback("image"', img_js)
         self.assertIn("formatPoseTagsForImage", img_js)
         self.assertIn("applyPoseToImageTab", img_js)
-        self.assertIn("sin ControlNet", img_js)
+        self.assertIn("attachReferenceFromUrl", img_js)
         self.assertIn("drawPoseSkeleton", img_js)
 
     def test_c33_editor_pose_drawn_skeleton_to_png_dataurl_reference(self):

@@ -875,8 +875,15 @@ function applyPoseToImageTab(pose) {
     }
   }
 
-  // 3. C-34: Sin ControlNet, no prometas aplicarlo
-  setStatus(`Pose «${pose.clase_es || "pose"} · ${pose.angulo_es || ""}» añadida al prompt (referencia visual, sin ControlNet)`);
+  // 3. La pose también entra como imagen de referencia (IPAdapter), no solo como tags.
+  const poseImage = pose.img || pose.thumb || "";
+  if (pose._imagesBase && poseImage) {
+    attachReferenceFromUrl(`${pose._imagesBase}${poseImage}`, `pose_${pose.id || "pose"}.png`)
+      .then(() => setStatus("Pose aplicada como referencia visual y en el prompt"))
+      .catch((error) => setStatus(`Pose en prompt, pero no se pudo cargar la imagen: ${error.message}`, true));
+  } else {
+    setStatus(`Pose «${pose.clase_es || "pose"} · ${pose.angulo_es || ""}» añadida al prompt (sin imagen de referencia)`);
+  }
 }
 
 function clearImagePosePreview() {
