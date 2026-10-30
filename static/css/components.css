@@ -3093,3 +3093,10 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
+
+.oc-ref-gallery-controls {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.6rem 1rem 0;
+}
+

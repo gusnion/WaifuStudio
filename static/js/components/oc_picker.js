@@ -1091,25 +1091,37 @@ async function openOcRefGallery() {
     return;
   }
   $("oc-ref-gallery-modal")?.classList.remove("hidden");
-  await loadOcRefGallery();
+  await loadOcRefGallery(1);
 }
 
-async function loadOcRefGallery() {
+const OC_REF_GALLERY_LIMIT = 24;
+let ocRefGalleryPage = 1;
+
+async function loadOcRefGallery(page = 1) {
   const grid = $("oc-ref-gallery-grid");
   const status = $("oc-ref-gallery-status");
+  const prev = $("oc-ref-gallery-prev");
+  const next = $("oc-ref-gallery-next");
+  const pageInfo = $("oc-ref-gallery-page-info");
   if (!grid) return;
+  page = Math.max(1, Number(page) || 1);
   grid.replaceChildren();
   if (status) status.textContent = "Cargando…";
   try {
-    const data = await api("/api/gallery?kind=image&limit=24&offset=0");
+    const offset = (page - 1) * OC_REF_GALLERY_LIMIT;
+    const data = await api(
+      `/api/gallery?kind=image&limit=${OC_REF_GALLERY_LIMIT}&offset=${offset}`
+    );
     const items = (data.items || []).filter((item) => item.status === "done");
+    const count = Number(data.count || items.length);
+    const totalPages = Math.max(1, Math.ceil(count / OC_REF_GALLERY_LIMIT));
+    if (page > totalPages) return loadOcRefGallery(totalPages);
+    ocRefGalleryPage = page;
     if (!items.length) {
       const empty = document.createElement("p");
       empty.className = "empty";
       empty.textContent = "No hay imágenes en la galería.";
       grid.appendChild(empty);
-      if (status) status.textContent = "Vacío";
-      return;
     }
     for (const item of items) {
       const url = ocGalleryImageUrl(item);
@@ -1128,12 +1140,14 @@ async function loadOcRefGallery() {
       });
       grid.appendChild(card);
     }
-    if (status) status.textContent = `${items.length} imágenes`;
+    if (status) status.textContent = `${items.length} imágenes · página ${page}`;
+    if (pageInfo) pageInfo.textContent = `página ${page} de ${totalPages}`;
+    if (prev) prev.disabled = page <= 1;
+    if (next) next.disabled = page >= totalPages;
   } catch (error) {
     if (status) status.textContent = error.message;
   }
 }
-
 async function addOcRefFromGallery(genId) {
   const charId = state.activeCharacterId;
   if (charId == null) return;
@@ -1642,6 +1656,8 @@ function initOcPicker() {
   on("btn-oc-add-ref-gallery", "click", () => {
     openOcRefGallery().catch((error) => setOcStatus(error.message, true));
   });
+  on("oc-ref-gallery-prev", "click", () => loadOcRefGallery(ocRefGalleryPage - 1));
+  on("oc-ref-gallery-next", "click", () => loadOcRefGallery(ocRefGalleryPage + 1));
   on("btn-oc-ref-gallery-close", "click", () => $("oc-ref-gallery-modal")?.classList.add("hidden"));
   on("oc-ref-gallery-modal", "click", (event) => {
     if (event.target === $("oc-ref-gallery-modal")) $("oc-ref-gallery-modal")?.classList.add("hidden");
