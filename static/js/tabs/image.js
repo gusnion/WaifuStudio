@@ -731,6 +731,10 @@ async function reuseGeneration(item) {
   if (savedPrompt) {
     const data = await postJson("/api/prompt/zones", { text: savedPrompt });
     applyZonesPayload(data.zones || [], { replace: true });
+    if (!isTagPromptProfile(state.prompt_profile)) {
+      $("prompt-general").value = savedPrompt;
+      updateGenerateButtonState();
+    }
   } else {
     resetPromptZones();
     renderZoneEditor();
@@ -769,7 +773,13 @@ async function reuseGeneration(item) {
   // BUG-IMAGE-01: Usar general_prompt si es string; de lo contrario dejarlo vacío
   const promptGeneral = $("prompt-general");
   if (promptGeneral) {
-    promptGeneral.value = typeof params.general_prompt === "string" ? params.general_prompt : "";
+    if (typeof params.general_prompt === "string") {
+      promptGeneral.value = params.general_prompt;
+    } else if (!isTagPromptProfile(state.prompt_profile)) {
+      promptGeneral.value = savedPrompt;
+    } else {
+      promptGeneral.value = "";
+    }
   }
   if (warning) {
     setStatus(`Cargado #${item.id} · ${warning}`, true);
