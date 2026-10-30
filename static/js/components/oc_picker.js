@@ -557,25 +557,22 @@ function closeOcCreateModal(restore = true) {
 
 function openOcGenerateModal() {
   openOcCreateModal();
-  const groups = [...OC_TRAIT_GROUPS];
-  const picked = [];
-  for (const group of groups) {
-    const items = (state.ocCatalogItems || []).filter(
-      (item) => (item.group || getOcTagGroup(item.tag)) === group
-    );
-    if (!items.length) continue;
-    picked.push(items[Math.floor(Math.random() * items.length)].tag);
+  const items = (state.ocCatalogItems || []).filter((item) => item && item.tag);
+  const unique = [...new Map(items.map((item) => [item.tag.toLowerCase(), item])).values()];
+  for (let i = unique.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unique[i], unique[j]] = [unique[j], unique[i]];
   }
-  state.ocSelectedTags = [...new Set(picked)];
+  const target = Math.min(15, unique.length);
+  state.ocSelectedTags = unique.slice(0, target).map((item) => item.tag);
   renderOcCreateModal();
   const status = $("oc-create-status");
   if (status) {
     status.textContent = state.ocSelectedTags.length
-      ? "Etiquetas aleatorias generadas. Escribe el nombre y guarda."
+      ? `${state.ocSelectedTags.length} etiquetas aleatorias generadas. Escribe el nombre y guarda.`
       : "No hay rasgos cargados para generar un OC.";
   }
 }
-
 async function saveOcFromModal() {
   const name = ($("oc-create-name")?.value || "").trim();
   const status = $("oc-create-status");
