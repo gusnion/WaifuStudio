@@ -178,6 +178,8 @@ export function initLanguageSelector() {
   const dropdown = $("language-dropdown");
   const label = $("lang-current-label");
   if (!langBtn || !dropdown) return;
+  if (langBtn.dataset.langBound === "1") return;
+  langBtn.dataset.langBound = "1";
 
   const currentLang = getCurrentLang();
   if (label) label.textContent = currentLang.toUpperCase();

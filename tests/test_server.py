@@ -6359,7 +6359,6 @@ class UnifiedDescribeUiStaticTests(ServerTestCase):
         text = self.make_client().get("/").text
         for marker in (
             'id="llm-status"',
-            'id="vision-advanced"',
             'id="btn-vision-tags-only"',
             "Solo tags (rápido)",
         ):

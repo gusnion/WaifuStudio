@@ -239,11 +239,11 @@ function renderPoseCard(pose) {
   }
   const label = document.createElement("span");
   label.className = "pose-card-label";
-  label.textContent = pose.nombre_ja || poseTitle(pose);
+  label.textContent = poseTitle(pose);
   card.appendChild(label);
   const sub = document.createElement("span");
   sub.className = "pose-card-sub";
-  sub.textContent = detected ? pose.sistema_es || "" : "ficha sin esqueleto";
+  sub.textContent = pose.nombre_ja || pose.sistema_es || (detected ? "" : "ficha sin esqueleto");
   card.appendChild(sub);
   return card;
 }
@@ -275,22 +275,51 @@ function applyPoseFilters() {
   renderPoseGrid();
 }
 
+function fillFilterSelect(id, label, values, selected = "") {
+  const select = $(id);
+  if (!select) return;
+  select.replaceChildren();
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = label;
+  select.appendChild(all);
+  for (const value of values) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = value;
+    select.appendChild(opt);
+  }
+  select.value = values.includes(selected) ? selected : "";
+}
+
+function refreshDependentFilters() {
+  const sistema = $("pose-filter-sistema")?.value || "";
+  const clase = $("pose-filter-clase")?.value || "";
+  const claseValues = uniqueSorted(
+    poseState.poses.filter((pose) => !sistema || pose.sistema_es === sistema),
+    "clase_es",
+  );
+  fillFilterSelect("pose-filter-clase", "Todas las clases", claseValues, clase);
+  const claseActual = $("pose-filter-clase")?.value || "";
+  const angleValues = uniqueSorted(
+    poseState.poses.filter(
+      (pose) =>
+        (!sistema || pose.sistema_es === sistema) &&
+        (!claseActual || pose.clase_es === claseActual),
+    ),
+    "angulo_es",
+  );
+  fillFilterSelect("pose-filter-angulo", "Todos los ángulos", angleValues, $("pose-filter-angulo")?.value || "");
+}
+
 function populateFilters() {
-  POSE_FILTERS.forEach(({ id, field, label }) => {
-    const select = $(id);
-    if (!select) return;
-    select.replaceChildren();
-    const all = document.createElement("option");
-    all.value = "";
-    all.textContent = label;
-    select.appendChild(all);
-    uniqueSorted(poseState.poses, field).forEach((value) => {
-      const opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = value;
-      select.appendChild(opt);
-    });
-  });
+  fillFilterSelect(
+    "pose-filter-sistema",
+    "Todos los sistemas",
+    uniqueSorted(poseState.poses, "sistema_es"),
+    $("pose-filter-sistema")?.value || "",
+  );
+  refreshDependentFilters();
 }
 
 function findPose(id) {
@@ -489,8 +518,10 @@ function mergePoseCatalog(items) {
     if (existing) {
       const keypoints = existing.keypoints;
       Object.assign(existing, item);
+      existing._imagesBase = poseState.imagesBase;
       if (keypoints) existing.keypoints = keypoints;
     } else {
+      item._imagesBase = poseState.imagesBase;
       byId.set(item.id, item);
     }
   }
@@ -621,7 +652,18 @@ function initPoseLibrary() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(applyPoseFilters, 200);
   });
-  POSE_FILTERS.forEach(({ id }) => on(id, "change", applyPoseFilters));
+  on("pose-filter-sistema", "change", () => {
+    fillFilterSelect("pose-filter-clase", "Todas las clases", []);
+    fillFilterSelect("pose-filter-angulo", "Todos los ángulos", []);
+    refreshDependentFilters();
+    applyPoseFilters();
+  });
+  on("pose-filter-clase", "change", () => {
+    fillFilterSelect("pose-filter-angulo", "Todos los ángulos", []);
+    refreshDependentFilters();
+    applyPoseFilters();
+  });
+  on("pose-filter-angulo", "change", applyPoseFilters);
   on("pose-only-detected", "change", applyPoseFilters);
   on("btn-pose-reset", "click", () => {
     const search = $("pose-search");
@@ -632,6 +674,7 @@ function initPoseLibrary() {
     });
     const only = $("pose-only-detected");
     if (only) only.checked = false;
+    populateFilters();
     applyPoseFilters();
   });
   on("btn-oc-pose-clear", "click", () => clearSelectedPose("oc"));

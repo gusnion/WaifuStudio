@@ -697,11 +697,6 @@ async function reuseGeneration(item) {
     $("negative").value = item.negative;
     state.negativeTouched = true;
   }
-  const modelId = item.model_id;
-  if (modelId && state.models.some((model) => model.id === modelId)) {
-    $("model").value = modelId;
-    await applyModel(modelId);
-  }
   if (typeof params.preprompt === "string") {
     setSelectValue($("preprompt"), params.preprompt);
   }
@@ -737,10 +732,9 @@ async function reuseGeneration(item) {
   if (warning) {
     setStatus(`Cargado #${item.id} · ${warning}`, true);
   } else {
-    setStatus(`Cargado #${item.id}`);
+    setStatus(`Prompt heredado de #${item.id}; el modelo activo se mantiene`);
   }
 }
-
 
 function updateReferencePreview() {
   const file = $("ref-image").files[0];
@@ -839,13 +833,28 @@ function applyPoseToImageTab(pose) {
   // 2. C-34: Muestra la miniatura del esqueleto
   const badge = $("image-pose-badge");
   const thumb = $("image-pose-thumb");
+  const photo = $("image-pose-photo");
   const name = $("image-pose-name");
   const note = $("image-pose-note");
   if (badge) {
     badge.classList.remove("hidden");
-    if (name) name.textContent = `${pose.clase_es || "Pose"} · ${pose.angulo_es || ""}`;
+    if (name) name.textContent = `Pose: ${pose.clase_es || "Pose"} · ${pose.angulo_es || ""}`;
     if (note) note.textContent = "Referencia visual de pose";
-    if (thumb) {
+    const src = pose._imagesBase && pose.thumb ? `${pose._imagesBase}${pose.thumb}` : "";
+    if (photo && src) {
+      photo.src = src;
+      photo.classList.remove("hidden");
+      if (thumb) thumb.classList.add("hidden");
+      photo.onerror = () => {
+        photo.classList.add("hidden");
+        if (thumb) {
+          thumb.classList.remove("hidden");
+          drawPoseSkeleton(thumb, pose);
+        }
+      };
+    } else if (thumb) {
+      photo?.classList.add("hidden");
+      thumb.classList.remove("hidden");
       drawPoseSkeleton(thumb, pose);
     }
   }
@@ -857,6 +866,12 @@ function applyPoseToImageTab(pose) {
 function clearImagePosePreview() {
   const badge = $("image-pose-badge");
   if (badge) badge.classList.add("hidden");
+  const photo = $("image-pose-photo");
+  if (photo) {
+    photo.classList.add("hidden");
+    photo.removeAttribute("src");
+  }
+  $("image-pose-thumb")?.classList.remove("hidden");
   setStatus("Miniatura de pose quitada");
 }
 

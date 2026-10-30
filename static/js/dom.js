@@ -178,6 +178,7 @@ function updateSeedRandomButton() {
     if (!button) {
       continue;
     }
+    button.disabled = false;
     button.classList.toggle("active", state.seedRandom);
     button.setAttribute("aria-pressed", state.seedRandom ? "true" : "false");
   }

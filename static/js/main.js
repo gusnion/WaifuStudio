@@ -178,7 +178,7 @@ const REQUIRED_IDS = [
   "lora-form-family", "lora-form-file", "lora-form-display", "lora-form-trigger", "lora-form-weight", "lora-form-source",
   "lora-form-license", "lora-form-notes", "btn-lora-form-cancel", "btn-lora-upload", "lora-upload", "vision-modal",
   "btn-vision-close", "vision-status", "vision-mode", "vision-empty", "vision-caption-block", "vision-caption", "btn-vision-copy-caption",
-  "vision-tags-block", "vision-tags", "btn-vision-copy-tags", "btn-vision-insert-caption", "btn-vision-insert-tags", "vision-advanced",
+  "vision-tags-block", "vision-tags", "btn-vision-copy-tags", "btn-vision-insert-caption", "btn-vision-insert-tags",
   "btn-vision-tags-only", "btn-vision-llm", "custom-tags-modal", "custom-tags-status", "btn-custom-tags-close", "custom-tags-form", "custom-tag-name",
   "custom-tag-category", "custom-tag-count", "btn-custom-tag-add", "custom-tags-list",
 ];
