@@ -35,6 +35,8 @@ import {
   openPoseLibrary,
   registerPoseCallback,
   drawPoseSkeleton,
+  poseToDataUrl,
+  hasDetection,
 } from "../components/pose_library.js";
 import {
   readLorasPayload,
@@ -875,18 +877,30 @@ function applyPoseToImageTab(pose) {
     }
   }
 
-  // 3. La pose también entra como imagen de referencia (IPAdapter), no solo como tags.
-  const poseImage = pose.img || pose.thumb || "";
-  if (pose._imagesBase && poseImage) {
-    attachReferenceFromUrl(`${pose._imagesBase}${poseImage}`, `pose_${pose.id || "pose"}.png`)
-      .then(() => setStatus("Pose aplicada como referencia visual y en el prompt"))
-      .catch((error) => setStatus(`Pose en prompt, pero no se pudo cargar la imagen: ${error.message}`, true));
-  } else {
-    setStatus(`Pose «${pose.clase_es || "pose"} · ${pose.angulo_es || ""}» añadida al prompt (sin imagen de referencia)`);
+  // 3. Referencia de pose: esqueleto, no la foto del maniquí (evita heredar su estilo).
+  try {
+    if (!hasDetection(pose)) throw new Error("la pose no tiene esqueleto detectable");
+    const skeletonUrl = poseToDataUrl(pose, 512);
+    attachReferenceFromUrl(skeletonUrl, `pose_${pose.id || "pose"}.png`)
+      .then(() => {
+        state.poseReferenceActive = true;
+        if ($("strength")) $("strength").value = "0.35";
+        if ($("strength-value")) $("strength-value").textContent = "0.35";
+        setStatus("Pose aplicada como esqueleto de referencia (sin estilo del maniquí)");
+      })
+      .catch((error) => setStatus(`Pose en prompt, pero no se pudo preparar el esqueleto: ${error.message}`, true));
+  } catch (error) {
+    setStatus(`Pose en prompt, pero no se pudo dibujar el esqueleto: ${error.message}`, true);
   }
 }
 
 function clearImagePosePreview() {
+  if (state.poseReferenceActive) {
+    state.poseReferenceActive = false;
+    const ref = $("ref-image");
+    if (ref) ref.value = "";
+    updateReferencePreview();
+  }
   const badge = $("image-pose-badge");
   if (badge) badge.classList.add("hidden");
   const photo = $("image-pose-photo");
