@@ -630,6 +630,28 @@ function scheduleSaveActiveOcTags() {
   }, 450);
 }
 
+function addManualOcTags(rawValue) {
+  const values = String(rawValue || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  if (!values.length) return;
+  for (const tag of values) {
+    const exists = state.ocSelectedTags.some(
+      (item) => item.toLowerCase() === tag.toLowerCase()
+    );
+    if (!exists) state.ocSelectedTags.push(tag);
+    if (!tagCategoryCache.has(tag.toLowerCase())) tagCategoryCache.set(tag.toLowerCase(), "other");
+  }
+  if (ocCreating) {
+    renderOcCreateModal();
+  } else {
+    renderOcSelected();
+    renderOcCatalogResults();
+    scheduleSaveActiveOcTags();
+  }
+}
+
 function toggleOcTag(tag) {
   const folded = tag.toLowerCase();
   const index = state.ocSelectedTags.findIndex(
@@ -1548,6 +1570,26 @@ function closeOcModal() {
 
 
 function initOcPicker() {
+  on("btn-oc-add-manual", "click", () => {
+    const input = $("oc-manual-tag");
+    addManualOcTags(input?.value || "");
+    if (input) input.value = "";
+  });
+  on("oc-manual-tag", "keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    $("btn-oc-add-manual")?.click();
+  });
+  on("btn-oc-create-add-manual", "click", () => {
+    const input = $("oc-create-manual");
+    addManualOcTags(input?.value || "");
+    if (input) input.value = "";
+  });
+  on("oc-create-manual", "keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    $("btn-oc-create-add-manual")?.click();
+  });
   on("btn-oc-create", "click", openOcCreateModal);
   on("btn-oc-generate", "click", openOcGenerateModal);
   on("btn-oc-create-close", "click", () => closeOcCreateModal(true));

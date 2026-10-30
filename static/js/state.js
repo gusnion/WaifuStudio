@@ -137,7 +137,7 @@ const STARTUP_DEFAULTS = {
 const SEED_RANDOM_KEY = "waifu.seed.random";
 const SEED_RANDOM_MAX = 2147483647;
 
-const OC_TRAIT_GROUPS = ["hair", "eyes", "face", "body"];
+const OC_TRAIT_GROUPS = ["hair", "eyes", "face", "body", "outfit", "expression", "accessories", "setting", "action", "meta"];
 
 const TRAIN_PAGE = 24;
 const TRAIN_MIN = 10;

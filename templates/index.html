@@ -1144,10 +1144,14 @@
         <!-- BLOQUE 2: Catálogo de Rasgos -->
         <fieldset class="control-card oc-section" id="oc-block-catalog">
           <legend>2. Catálogo de Rasgos</legend>
-          <p id="oc-catalog-note" class="oc-refs-note">Solo rasgos del personaje (pelo/ojos/cara/cuerpo); ropa/entorno se eligen en Composición (General).</p>
+          <p id="oc-catalog-note" class="oc-refs-note">Rasgos, ropa, expresión y accesorios del OC. También puedes escribir tags manuales.</p>
           <div class="oc-catalog-controls">
             <select id="oc-catalog-group" aria-label="Grupo de tags"></select>
             <input id="oc-catalog-search" type="search" placeholder="Buscar tag...">
+          </div>
+          <div class="oc-manual-tag">
+            <input id="oc-manual-tag" type="text" placeholder="Insertar tag manual (separadas por coma)...">
+            <button id="btn-oc-add-manual" type="button">+</button>
           </div>
           <div id="oc-catalog-results" class="oc-catalog-panel"></div>
           <div class="oc-selected-box">
@@ -2029,6 +2033,10 @@
         <div class="oc-create-grid">
           <div class="oc-create-catalog">
             <select id="oc-create-group" aria-label="Grupo de rasgos"></select>
+            <div class="oc-manual-tag">
+              <input id="oc-create-manual" type="text" placeholder="Añadir tag manual...">
+              <button id="btn-oc-create-add-manual" type="button">+</button>
+            </div>
             <div id="oc-create-traits" class="oc-create-traits"></div>
           </div>
           <div class="oc-create-selected">

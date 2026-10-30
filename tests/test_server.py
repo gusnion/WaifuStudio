@@ -4250,7 +4250,7 @@ class CharacterProfileUiStaticTests(ServerTestCase):
             'id="oc-extras-box"',
             'id="btn-oc-extras-move"',
             "Mover a General",
-            "Solo rasgos del personaje",
+            "Rasgos, ropa, expresión y accesorios del OC",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, text)

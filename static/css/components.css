@@ -3038,3 +3038,20 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 
+
+.oc-manual-tag {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.oc-manual-tag input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.oc-manual-tag button {
+  flex: 0 0 auto;
+  min-width: 32px;
+}
+
