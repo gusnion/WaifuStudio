@@ -684,7 +684,6 @@ function updateOcActiveHeader() {
   const character = characterById(state.activeCharacterId);
   const name = $("oc-active-name");
   const meta = $("oc-active-meta");
-  const edit = $("btn-oc-edit-active");
   const add = $("btn-oc-add");
   const train = $("btn-oc-train");
   const addRef = $("btn-oc-add-ref");
@@ -700,7 +699,7 @@ function updateOcActiveHeader() {
       ? `${(character.tags || []).length} rasgos · ${(character.extras || []).length} extras · ${(state.characterRefs || []).length} referencias`
       : "Crea o selecciona un OC para ver su ficha.";
   }
-  for (const button of [edit, add, train, addRef, addRefGallery, useImage, multiview, multiviewCount]) {
+  for (const button of [add, train, addRef, addRefGallery, useImage, multiview, multiviewCount]) {
     if (button) button.disabled = !hasActive;
   }
   if (removeRefs) removeRefs.disabled = !hasActive || !(state.characterRefs || []).length;
@@ -815,7 +814,6 @@ function characterRow(character) {
 
   const menuItems = [
     ["8 vistas", () => generateCharacterMultiview(character)],
-    ["Editar", () => editCharacter(character)],
     ["Duplicar", () => duplicateCharacter(character)],
     [
       "Renombrar",
@@ -1632,10 +1630,6 @@ function initOcPicker() {
     if (character) useCharacter(character).catch((error) => setOcStatus(error.message, true));
   });
   on("btn-oc-add", "click", addOcTagsToPrompt);
-  on("btn-oc-edit-active", "click", () => {
-    const character = characterById(state.activeCharacterId);
-    if (character) editCharacter(character).catch((error) => setOcStatus(error.message, true));
-  });
   on("btn-oc-train", "click", () => {
     const character = characterById(state.activeCharacterId) || state.characters[0];
     if (!character) {
