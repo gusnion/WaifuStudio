@@ -834,6 +834,20 @@ async function sendAmbientToTimeline() {
   }
 }
 
+async function loadLatestAudioVideo() {
+  setAudioStatus("Buscando el último vídeo de la galería...");
+  try {
+    const clips = await api("/api/audio/clips");
+    if (clips && clips.length > 0) {
+      await selectClip(clips[0]);
+    } else {
+      setAudioStatus("No hay vídeos disponibles en la galería.", true);
+    }
+  } catch (err) {
+    setAudioStatus(`Error: ${err.message}`, true);
+  }
+}
+
 export function initAudioTab() {
   on("btn-audio-generate", "click", handleGenerateAudio);
   on("btn-audio-voice-generate", "click", handleGenerateVoice);
@@ -879,17 +893,11 @@ export function initAudioTab() {
     $("audio-gallery-grid")?.scrollIntoView({ behavior: "smooth" });
   });
 
-  on("btn-audio-latest-video", async () => {
-    try {
-      const clips = await api("/api/audio/clips");
-      if (clips && clips.length > 0) {
-        selectClip(clips[0]);
-      } else {
-        setAudioStatus("No hay vídeos disponibles en la galería.", true);
-      }
-    } catch (err) {
-      setAudioStatus(`Error: ${err.message}`, true);
-    }
+  document.addEventListener("click", (event) => {
+    const target = event.target?.closest?.("#btn-audio-latest-video");
+    if (!target) return;
+    event.preventDefault();
+    loadLatestAudioVideo().catch((error) => setAudioStatus(error.message, true));
   });
 
   on("btn-audio-random-seed", "click", () => {
