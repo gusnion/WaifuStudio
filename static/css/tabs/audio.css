@@ -243,3 +243,28 @@
   margin-top: 2px;
 }
 
+
+/* El resultado de Audio puede crecer con Stems abiertos: debe poder desplazarse. */
+#panel-audio .tab-viewport {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#panel-audio #audio-step-3 {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+#audio-mix-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+#audio-mix-card input {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
