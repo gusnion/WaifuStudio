@@ -1563,6 +1563,16 @@
         <fieldset class="control-card audio-step" id="audio-step-1">
           <legend>1. Tarea y entrada</legend>
           <h2>Audio &amp; Sonido</h2>
+          <div class="audio-cta-sticky">
+            <button id="btn-audio-generate" class="primary btn-primary" type="button" disabled>Generar ambiente</button>
+            <button id="btn-audio-cancel" class="secondary" type="button" style="display:none;">Cancelar</button>
+
+            <div id="audio-status" class="field-hint" style="margin-top:0.5rem; min-height:1.2rem;"></div>
+            <div id="audio-progress" class="progress" style="display:none; margin-top:0.3rem;">
+              <div id="audio-progress-fill" class="progress-fill" style="width:0%;"></div>
+            </div>
+            <div id="audio-progress-text" class="field-hint" style="text-align:right; font-size:0.72rem;"></div>
+          </div>
           <div class="audio-mode-switch" role="group" aria-label="Tipo de audio">
             <button id="btn-audio-mode-b" class="tab active" type="button">B · Ambiente desde vídeo</button>
             <button id="btn-audio-mode-a" class="tab" type="button">A · Voz libre</button>
@@ -1644,7 +1654,7 @@
             </div>
 
             <div class="audio-cta-sticky">
-              <button id="btn-audio-voice-generate" class="primary btn-primary" type="button">🎙️ Generar voz</button>
+              <button id="btn-audio-voice-generate" class="primary btn-primary" type="button">Generar voz</button>
               <div id="audio-voice-progress" class="progress" style="display:none; margin-top:0.5rem;">
                 <div id="audio-voice-progress-fill" class="progress-fill" style="width:0%;"></div>
               </div>
@@ -1716,16 +1726,7 @@
             </div>
           </label>
 
-          <div class="audio-cta-sticky">
-            <button id="btn-audio-generate" class="primary btn-primary" type="button" disabled>🎵 Generar ambiente</button>
-            <button id="btn-audio-cancel" class="secondary" type="button" style="display:none;">Cancelar</button>
 
-            <div id="audio-status" class="field-hint" style="margin-top:0.5rem; min-height:1.2rem;"></div>
-            <div id="audio-progress" class="progress" style="display:none; margin-top:0.3rem;">
-              <div id="audio-progress-fill" class="progress-fill" style="width:0%;"></div>
-            </div>
-            <div id="audio-progress-text" class="field-hint" style="text-align:right; font-size:0.72rem;"></div>
-          </div>
         </fieldset>
         </div>
       </div>
