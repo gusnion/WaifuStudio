@@ -437,6 +437,18 @@
   align-items: center;
 }
 
+.gallery-card-media.is-audio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.gallery-card-media.is-audio .audio-player-compact {
+  width: 100%;
+}
+
 .audio-play {
   flex: 0 0 auto;
   min-width: 28px;

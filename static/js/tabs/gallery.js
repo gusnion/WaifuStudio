@@ -116,6 +116,7 @@ function renderGalleryTab() {
       (item.kind === "audio" || /\.(wav|mp3)(?:[?#]|$)/i.test(url || "")) && url
     );
     if (isAudio) {
+      media.classList.add("is-audio");
       media.appendChild(createAudioPlayer(url, true));
     } else if (url && isVideoUrl(url)) {
       const video = document.createElement("video");
