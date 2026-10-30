@@ -757,6 +757,21 @@ async function useUpscaleLocalFile(file) {
   setUpscaleStatus(`Archivo local: ${file.name}`);
 }
 
+async function refreshUpscaleLargeWarning() {
+  const warning = $("upscale-large-warning");
+  if (!warning) return;
+  const dims = await currentUpscaleSourceDimensions();
+  if (!dims) {
+    warning.classList.add("hidden");
+    return;
+  }
+  const large = Math.max(dims.width, dims.height) >= 2048 || dims.width * dims.height >= 4_000_000;
+  warning.classList.toggle("hidden", !large);
+  if (large) {
+    warning.textContent = `IMAGEN MUY GRANDE (${dims.width}×${dims.height}) · SE NECESITA MÁS VRAM PARA UPSCALE`;
+  }
+}
+
 function updateUpscaleSourceView() {
   const isVideo = upscaleSourceKind() === "video";
   const local = isVideo ? state.upscaleLocalVideo : state.upscaleLocalFile;
@@ -846,6 +861,7 @@ function updateUpscaleSourceView() {
     ? "Elige una miniatura de la galería o genera un vídeo en la pestaña Vídeo"
     : "Elige una miniatura o un archivo local";
 
+  refreshUpscaleLargeWarning().catch(() => {});
   updateUpscaleActions();
 }
 

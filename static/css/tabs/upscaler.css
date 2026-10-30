@@ -121,3 +121,16 @@
   font-size: 0.82rem;
 }
 
+
+.upscale-large-warning {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--warning, #e6a23c);
+  border-radius: 6px;
+  background: rgba(230, 162, 60, 0.1);
+  color: var(--warning, #e6a23c);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
