@@ -1074,7 +1074,7 @@ class TestAudioVoiceStaticUI(unittest.TestCase):
         self.assertIn("crossfade", js)
 
     def test_audio_css_exists_and_is_linked(self) -> None:
-        self.assertIn('href="/static/css/tabs/audio.css"', self._read("templates/index.html"))
+        self.assertIn('href="/static/css/tabs/audio.css', self._read("templates/index.html"))
         css = self._read("static/css/tabs/audio.css")
         self.assertIn(".audio-emoji-palette", css)
         self.assertIn(".audio-mode-group", css)

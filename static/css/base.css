@@ -376,3 +376,15 @@ main {
   color: var(--accent);
   background: var(--panel-2);
 }
+
+.build-stamp {
+  align-self: center;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+

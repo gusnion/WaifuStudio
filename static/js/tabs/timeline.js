@@ -85,13 +85,23 @@ function setExportActions(outputPath = "") {
     copyBtn.disabled = !visible;
     copyBtn.title = visible ? state.lastExportPath : "Copiar ruta";
   }
+  if (visible) setExportFeedback("");
+}
+
+function setExportFeedback(message, isError = false) {
+  const el = $("timeline-export-feedback");
+  if (!el) return;
+  el.textContent = message || "";
+  el.classList.toggle("error", Boolean(isError));
 }
 
 export async function revealTimelineExport() {
   if (!state.lastExportPath) return;
   try {
     await postJson("/api/timeline/reveal", { path: state.lastExportPath });
+    setExportFeedback("Carpeta abierta");
   } catch (err) {
+    setExportFeedback(`No se pudo abrir carpeta: ${err.message}`, true);
     setTimelineStatus(`No se pudo abrir carpeta: ${err.message}`, true);
   }
 }
@@ -114,8 +124,10 @@ export async function copyTimelineExportPath() {
       ta.remove();
     }
     setTimelineStatus(`Ruta copiada: ${path}`);
+    setExportFeedback("Ruta copiada");
   } catch (err) {
     setTimelineStatus(`No se pudo copiar la ruta (${path}): ${err.message}`, true);
+    setExportFeedback(`No se pudo copiar: ${err.message}`, true);
   }
 }
 
@@ -946,7 +958,7 @@ async function triggerAiAction(actionType, targetClipIndex = null) {
       state.aiGenerating = true;
       renderTracks();
       setAiStatus("Generando imagen con el modelo de Imagen...");
-      const modelId = document.getElementById("model")?.value || "anima_aestheticv11";
+      const modelId = $("timeline-ai-model")?.value || document.getElementById("model")?.value || "anima_aestheticv11";
       const project = state.current.data || {};
       const width = Number(project.width) || 1280;
       const height = Number(project.height) || 720;
@@ -1036,6 +1048,27 @@ async function generateTimelineAudio() {
   } catch (err) {
     setAudioBusy(false);
     setTimelineStatus(err.message, true);
+  }
+}
+
+async function loadTimelineAiModels() {
+  const select = $("timeline-ai-model");
+  if (!select) return;
+  try {
+    const data = await api("/api/models");
+    const items = Array.isArray(data.items) ? data.items : Array.isArray(data.models) ? data.models : [];
+    select.replaceChildren();
+    for (const model of items) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = `${model.display_name || model.id} · ${model.family || "—"}`;
+      select.appendChild(option);
+    }
+  } catch (_error) {
+    const option = document.createElement("option");
+    option.value = "anima_aestheticv11";
+    option.textContent = "Anima Aesthetic v1.1";
+    select.replaceChildren(option);
   }
 }
 
@@ -1137,6 +1170,9 @@ export function initTimelineTab() {
     triggerAiAction(($("timeline-ai-action") && $("timeline-ai-action").value) || "continue_i2v");
   });
   on("btn-timeline-ai-cancel", "click", (event) => cancelJob(event, setAiStatus));
+  on("btn-timeline-ai-audio", "click", () => {
+    generateTimelineAudio().catch((err) => setTimelineStatus(err.message, true));
+  });
   on("timeline-ai-action", "change", syncTimelineAiAction);
 
   on("btn-timeline-add-audio", "click", () => {
@@ -1176,6 +1212,7 @@ export function initTimelineTab() {
   syncTimelineAiAction();
   setAudioBusy(false);
   loadTimelineProjects();
+  loadTimelineAiModels();
   refreshTimelineMedia();
   renderTracks();
 }

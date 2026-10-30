@@ -27,7 +27,7 @@ export function syncThemeUI(theme) {
 
   const icon = $("theme-toggle-icon");
   if (icon) {
-    icon.textContent = isLight ? "☀" : "◐";
+    icon.classList.toggle("is-light", isLight);
   }
 }
 

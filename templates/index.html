@@ -7,19 +7,19 @@
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" sizes="any">
   <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
   <meta name="theme-color" content="#14151a">
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/components.css">
-  <link rel="stylesheet" href="/static/css/tabs/image.css">
-  <link rel="stylesheet" href="/static/css/tabs/video.css">
-  <link rel="stylesheet" href="/static/css/tabs/editor.css">
-  <link rel="stylesheet" href="/static/css/tabs/upscaler.css">
-  <link rel="stylesheet" href="/static/css/tabs/timeline.css">
-  <link rel="stylesheet" href="/static/css/tabs/guide.css">
-  <link rel="stylesheet" href="/static/css/tabs/gallery.css">
-<link rel="stylesheet" href="/static/css/tabs/audio.css">
-  <link rel="stylesheet" href="/static/css/design-v2.css">
-  <link rel="stylesheet" href="/static/css/light-theme.css">
+  <link rel="stylesheet" href="/static/css/base.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tokens.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/components.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/image.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/video.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/editor.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/upscaler.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/timeline.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/guide.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/tabs/gallery.css?v={{ build }}">
+<link rel="stylesheet" href="/static/css/tabs/audio.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/design-v2.css?v={{ build }}">
+  <link rel="stylesheet" href="/static/css/light-theme.css?v={{ build }}">
   <script>
     (function() {
       try {
@@ -34,6 +34,7 @@
 <body>
   <header class="topbar">
     <h1>WAIFU</h1>
+    <span id="build-stamp" class="build-stamp" title="Build {{ build }} · {{ build_mtime }}">{{ build }}</span>
     <nav class="tabs">
       <button id="tab-image" class="tab active" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Imagen</button>
       <button id="tab-editor" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editor</button>
@@ -46,7 +47,7 @@
     </nav>
     <div class="topbar-actions">
       <button id="btn-theme-toggle" class="topbar-btn" type="button" title="Cambiar tema" aria-label="Cambiar a tema claro" aria-pressed="false">
-        <span id="theme-toggle-icon" class="theme-toggle-icon" aria-hidden="true">◐</span>
+        <span id="theme-toggle-icon" class="theme-toggle-icon" aria-hidden="true"></span>
       </button>
       <button id="btn-universal-reload" class="topbar-btn" type="button" title="Recargar pestaña actual" aria-label="Recargar pestaña actual">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -81,7 +82,7 @@
             <button id="btn-generate" class="primary" type="button">Generar</button>
             <select id="batch-size" class="batch-size-select" title="Cantidad de imagenes por lote (1 a 4)" aria-label="Cantidad de imagenes"><option value="1" selected>x1</option><option value="2">x2</option><option value="3">x3</option><option value="4">x4</option></select>
             <button id="btn-cancel" class="hidden" type="button">Cancelar</button>
-            <button id="btn-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
+            <button id="btn-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">Aleatoria</button>
           </div>
           <p id="job-status" class="status">Listo</p>
           <div id="job-progress" class="progress hidden">
@@ -190,7 +191,7 @@
         </details>
 
         <!-- CATEGORÍA 2: CONFIGURACIÓN -->
-        <details id="image-cat-config" class="image-category-card" name="image-cat-accordion">
+        <details id="image-cat-config" class="image-category-card" name="image-cat-accordion" open>
           <summary class="image-category-header">
             <span class="category-title">CONFIGURACIÓN</span>
             <span class="category-indicator">▼</span>
@@ -205,7 +206,7 @@
                   <span id="model-family-badge" class="model-badge">Sin clasificar</span>
                 </div>
                 <select id="model"></select>
-                <button id="btn-model-card" type="button" class="secondary" style="margin-top:0.35rem;">Ficha del modelo</button>
+                <button id="btn-model-card" type="button" class="secondary field-action">Ficha del modelo</button>
               </label>
               <div class="field">
                 <button id="btn-model-defaults" type="button" class="secondary">Editar defaults del modelo</button>
@@ -374,7 +375,7 @@
           <div class="generate-row">
             <button id="btn-video-generate" class="primary" type="button">Generar video</button>
             <button id="btn-video-cancel" class="hidden" type="button">Cancelar</button>
-            <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
+            <button id="btn-video-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">Aleatoria</button>
           </div>
           <p id="video-status" class="status">Listo</p>
           <div id="video-progress" class="progress hidden">
@@ -737,7 +738,7 @@
         <div class="generate-block">
           <div class="generate-row">
             <button id="btn-editor-generate" class="primary" type="button" disabled>Generar</button>
-            <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">🎲</button>
+            <button id="btn-editor-seed-random" type="button" title="Seed aleatoria" aria-pressed="false">Aleatoria</button>
           </div>
           <p id="editor-status" class="status">Listo</p>
           <div id="editor-progress" class="progress hidden">
@@ -810,7 +811,6 @@
               <label class="field" id="editor-prompt-field">
                 <span>Prompt</span>
                 <textarea id="editor-prompt" rows="4" placeholder="Describe qué generar o editar..."></textarea>
-                <button id="btn-editor-prompt-card" type="button" class="secondary" style="margin-top:0.35rem;">Abrir panel de prompts</button>
               </label>
               <label class="field" id="editor-negative-field">
                 <span>Negativo</span>
@@ -1135,13 +1135,6 @@
                 <span>Preprompt</span>
                 <select id="oc-form-preprompt"></select>
               </label>
-              <label class="field">
-                <span>Rating</span>
-                <select id="oc-form-rating">
-                  <option value="sfw">sfw</option>
-                  <option value="nsfw">nsfw</option>
-                </select>
-              </label>
             </div>
             <label class="field">
               <span>Notas</span>
@@ -1212,12 +1205,13 @@
             <button id="btn-timeline-new" class="secondary" type="button">Nuevo</button>
             <button id="btn-timeline-save" class="secondary" type="button">Guardar</button>
           </div>
-          <button id="btn-timeline-export" class="primary" type="button">🎬 Exportar MP4</button>
+          <button id="btn-timeline-export" class="primary" type="button">Exportar MP4</button>
           <p id="timeline-status" class="field-hint"></p>
           <div id="timeline-export-actions" class="control-inline hidden" hidden>
             <button id="btn-timeline-open-folder" class="secondary timeline-btn-mini" type="button">Abrir carpeta</button>
             <button id="btn-timeline-copy-path" class="secondary timeline-btn-mini" type="button">Copiar ruta</button>
           </div>
+          <p id="timeline-export-feedback" class="field-hint" role="status" aria-live="polite"></p>
         </fieldset>
 
         <!-- BLOQUE 2: Biblioteca de Medios (Galería) -->
@@ -1267,8 +1261,13 @@
               <option value="15">15s (Máximo)</option>
             </select>
           </label>
+          <label class="field" id="timeline-ai-model-field">
+            <span>Modelo de imagen</span>
+            <select id="timeline-ai-model"></select>
+          </label>
           <p id="timeline-ai-hint" class="field-hint"></p>
-          <button id="btn-timeline-ai-generate" class="primary" type="button">✨ Generar clip I2V</button>
+          <button id="btn-timeline-ai-generate" class="primary" type="button">Generar clip I2V</button>
+          <button id="btn-timeline-ai-audio" class="secondary" type="button">Generar audio del proyecto</button>
           <button id="btn-timeline-ai-cancel" class="secondary hidden" type="button">Cancelar generación</button>
           <p id="timeline-ai-status" class="field-hint"></p>
         </fieldset>
@@ -1368,38 +1367,56 @@
       <!-- Hero Banner Superior -->
       <div class="guide-hero">
         <h2>Bienvenido a WaifuStudio — Guía Interactiva de Producción</h2>
-        <p>Flujo integral de creación: desde el diseño conceptual de tu personaje hasta la animación de episodios de más de 3 minutos y escalado cinematográfico en 2K a 60 FPS, 100% en local sin censura.</p>
+        <p>Flujo local para imagen, personaje, vídeo corto, audio, edición y montaje. Sin cuenta, sin nube y sin telemetría.</p>
         <p class="field-hint"><strong>Alcance beta:</strong> Solo Vídeo está marcado como beta. El resto de pestañas del set oficial son estables para producción local.</p>
         <div class="guide-quickstart-grid">
           <div class="guide-step-card">
-            <h3>🎨 Paso 1: Crea tu Personaje</h3>
-            <p>Diseña tu waifu con Anima 2.9B o SDXL, guarda su identidad en OC Maker y genera su hoja de vistas.</p>
+            <h3>Paso 1: Crea tu personaje</h3>
+            <p>Usa Anima Aesthetic v1.1, Animagine XL 4.0 Opt, RealVisXL V5 o Juggernaut XL Ragnarok. Guarda la identidad en OC Maker.</p>
             <button type="button" class="btn small" data-goto-tab="image">Ir a Imagen →</button>
           </div>
           <div class="guide-step-card">
-            <h3>🎞️ Paso 2: Anima en 8 Pasos</h3>
-            <p>Genera clips con Wan 2.2 en segundos usando I2V o FLF2V.</p>
+            <h3>Paso 2: Anima con Wan 2.2</h3>
+            <p>Genera clips I2V o FLF2V con el motor Wan 2.2 AIO. El vídeo sale mudo; el audio va aparte.</p>
             <button type="button" class="btn small" data-goto-tab="video">Ir a Vídeo →</button>
           </div>
           <div class="guide-step-card">
-            <h3>🎬 Paso 3: Monta en Estudio</h3>
+            <h3>Paso 3: Monta en Estudio</h3>
             <p>Organiza tus clips en la línea de tiempo, añade música y usa 'Continuar I2V' para secuencias largas.</p>
             <button type="button" class="btn small" data-goto-tab="timeline">Ir a Estudio →</button>
           </div>
           <div class="guide-step-card">
-            <h3>🔍 Paso 4: Escala a 2K / 60 FPS</h3>
-            <p>Aplica Upscaler Pro 2.0 con RCAS y RIFE para fluidez cinematográfica a 60 fotogramas por segundo.</p>
+            <h3>Paso 4: Escala e interpola</h3>
+            <p>RealESRGAN, AnimeSharp, UltraSharp o AnimeJaNai y RIFE para subir resolución o fluidez.</p>
             <button type="button" class="btn small" data-goto-tab="upscaler">Ir a Upscaler →</button>
           </div>
         </div>
       </div>
+
+      <article class="guide-accordion">
+        <h3>Conecta tu agente de IA</h3>
+        <p>Descarga <code>SKILL.md</code> y dáselo a tu agente junto con este repositorio. El manual explica la API local, cómo registrar modelos y LoRAs y cómo operar la app sin inventar valores.</p>
+        <p>
+          <a id="btn-download-skill" class="primary btn btn-download-skill" href="/api/skill" download="SKILL.md">Descargar SKILL.md</a>
+        </p>
+        <ul>
+          <li><strong>Claude / Codex / DSH:</strong> abre el repositorio, adjunta <code>SKILL.md</code> y pide “configura y ejecuta WaifuStudio siguiendo este manual”.</li>
+          <li><strong>Antigravity:</strong> importa el repositorio y usa <code>SKILL.md</code> como contexto del agente.</li>
+          <li><strong>Cualquier agente HTTP:</strong> base local <code>http://127.0.0.1:8765</code>; no hay API keys.</li>
+        </ul>
+      </article>
+      <article class="guide-accordion">
+        <h3>Documentación para agentes</h3>
+        <p>Ocho guías operativas en <code>docs/agent-guides/README.md</code> y el manual completo en <code>SKILL.md</code> (descargable arriba). Cubren modelos, imagen, vídeo Wan, audio, editor, upscaler, galería, addons y diagnóstico.</p>
+        <p>Catálogos de referencia: <a href="https://huggingface.co/datasets/Gusitir/pose-db-01" target="_blank" rel="noopener">pose-db-01</a> · <a href="https://huggingface.co/datasets/Gusitir/costume-db-01" target="_blank" rel="noopener">costume-db-01</a>. El vestuario llega como addon; no hay pestaña de ropa en 2.5.1.</p>
+      </article>
 
       <!-- Barra de Filtros y Búsqueda -->
       <div class="guide-toolbar">
         <div class="guide-nav" id="guide-nav">
           <button type="button" class="guide-nav-btn active" data-filter="all">Todos los Módulos</button>
           <button type="button" class="guide-nav-btn" data-filter="image">1. Imagen &amp; OC</button>
-          <button type="button" class="guide-nav-btn" data-filter="video">2. Vídeo H3</button>
+          <button type="button" class="guide-nav-btn" data-filter="video">2. Vídeo Wan</button>
           <button type="button" class="guide-nav-btn" data-filter="editor">3. Editor Qwen</button>
           <button type="button" class="guide-nav-btn" data-filter="timeline">4. Estudio Timeline</button>
           <button type="button" class="guide-nav-btn" data-filter="upscale">5. Upscaler Pro</button>
@@ -1410,10 +1427,10 @@
 
       <!-- SECCIÓN 1: Imagen & OC Maker -->
       <article class="guide-section" data-category="image">
-        <h3>1. 🎨 Imagen &amp; OC Maker (Diseño de Personajes)</h3>
+        <h3>1. Imagen y OC Maker (diseño de personajes)</h3>
         <p>WaifuStudio combina dos familias de modelos para generación de imagen fija:</p>
         <ul>
-          <li><strong>Anima 2.9B (SD3/Turbo)</strong>: Motor nativo optimizado para RTX 3060. Extremadamente rápido (~3-5 s por imagen), responde con gran precisión a tags Danbooru (ej. <code>1girl, solo, blue_hair, twintails</code>) y opera idealmente con 14 pasos y CFG 4.0.</li>
+          <li><strong>Anima Aesthetic v1.1</strong>: modelo nativo para RTX 3060, rápido y preciso con tags Danbooru; el perfil de prompt y los defaults se editan desde la app.</li>
           <li><strong>SDXL / Illustrious</strong>: Motor clásico para estilos artísticos densos e ilustraciones complejas. Detecta automáticamente la arquitectura de tensores al cargar LoRAs.</li>
         </ul>
         <p><strong>Zonas de Prompt</strong>: Puedes estructurar tu prompt dividiéndolo en bloques modulares (<em>Sujeto, Atuendo, Entorno/Fondo, NSFW y Acción</em>) para evitar que los tags se contaminen entre sí.</p>
@@ -1440,7 +1457,7 @@
 
       <!-- SECCIÓN 3: Editor Qwen 2.1 -->
       <article class="guide-section" data-category="editor">
-        <h3>3. 🖌️ Editor Qwen 2.1 (Inpaint &amp; Presets de Pose)</h3>
+        <h3>3. Editor Qwen-Image 2.1</h3>
         <p>El Editor integra el modelo de visión y difusión <strong>Qwen 2.1</strong> para edición quirúrgica:</p>
         <ul>
           <li><strong>Inpainting con Máscara</strong>: Pinta con el pincel sobre cualquier área de la imagen para cambiar ropa, alterar expresiones faciales o corregir detalles anatómicos sin tocar el resto de la ilustración.</li>
@@ -1458,13 +1475,13 @@
 
       <!-- SECCIÓN 4: Estudio Timeline -->
       <article class="guide-section" data-category="timeline">
-        <h3>4. 🎬 Estudio / Timeline (Montaje de Miniseries)</h3>
+        <h3>4. Estudio / Timeline (Montaje de Miniseries)</h3>
         <p>La pestaña Estudio convierte a WaifuStudio en un entorno NLE (Non-Linear Editor) completo para crear episodios de más de 3 minutos:</p>
         <ul>
           <li><strong>Pista 1 (Vídeo e Imagen)</strong>: Añade clips de tu galería o genera directamente con IA. Cada clip cuenta con control de duración, selector de transiciones (Fade, Zoom In, Zoom Out) y botón de silenciar (<code>🔇</code>).</li>
           <li><strong>Continuar I2V (Secuencias Infinitas)</strong>: Al hacer clic en <em>"⏭️ I2V"</em> en cualquier clip, la app extrae automáticamente su último fotograma y lo anima con la acción descrita, encadenando escenas sucesivas sin límite de tiempo.</li>
           <li><strong>Pista 2 (Audio y Música)</strong>: Sube archivos de audio (.mp3, .wav), colócalos en el segundo exacto que desees y gradúa su volumen para añadir bandas sonoras y efectos.</li>
-          <li><strong>Exportación Directa</strong>: El botón <em>"🎬 Exportar MP4"</em> procesa todos los segmentos y mezcla las pistas en un único archivo de alta calidad mediante FFmpeg.</li>
+          <li><strong>Exportación Directa</strong>: El botón <em>"Exportar MP4"</em> procesa todos los segmentos y mezcla las pistas en un único archivo de alta calidad mediante FFmpeg.</li>
         </ul>
       </article>
 
@@ -1523,23 +1540,7 @@
           </div>
         </div>
       </article>
-      <article class="guide-accordion">
-        <h3>Conecta tu agente de IA</h3>
-        <p>Descarga <code>SKILL.md</code> y dáselo a tu agente junto con este repositorio. El manual explica la API local, cómo registrar modelos y LoRAs y cómo operar la app sin inventar valores.</p>
-        <p>
-          <a id="btn-download-skill" class="primary btn" href="/api/skill" download="SKILL.md" style="text-decoration:none; padding:6px 12px;">Descargar SKILL.md</a>
-        </p>
-        <ul>
-          <li><strong>Claude / Codex / DSH:</strong> abre el repositorio, adjunta <code>SKILL.md</code> y pide “configura y ejecuta WaifuStudio siguiendo este manual”.</li>
-          <li><strong>Antigravity:</strong> importa el repositorio y usa <code>SKILL.md</code> como contexto del agente.</li>
-          <li><strong>Cualquier agente HTTP:</strong> base local <code>http://127.0.0.1:8765</code>; no hay API keys.</li>
-        </ul>
-      </article>
-      <article class="guide-accordion">
-        <h3>Documentación para agentes</h3>
-        <p>Ocho guías operativas en <code>docs/agent-guides/README.md</code> y el manual completo en <code>SKILL.md</code> (descargable arriba). Cubren modelos, imagen, vídeo Wan, audio, editor, upscaler, galería, addons y diagnóstico.</p>
-        <p>Catálogos de referencia: <a href="https://huggingface.co/datasets/Gusitir/pose-db-01" target="_blank" rel="noopener">pose-db-01</a> · <a href="https://huggingface.co/datasets/Gusitir/costume-db-01" target="_blank" rel="noopener">costume-db-01</a>. El vestuario llega como addon; no hay pestaña de ropa en 2.5.1.</p>
-      </article>
+
     </section>
 
     <section id="panel-addons" class="panel" hidden>
@@ -1611,7 +1612,7 @@
               <span class="field-label">Seed (-1 = aleatoria):</span>
               <div style="display:flex; gap:0.3rem;">
                 <input type="number" id="audio-voice-seed" value="-1" style="flex:1;">
-                <button id="btn-audio-voice-random-seed" class="secondary" type="button" style="font-size:0.75rem;">🎲</button>
+                <button id="btn-audio-voice-random-seed" class="secondary" type="button" style="font-size:0.75rem;">Aleatoria</button>
               </div>
             </label>
 
@@ -1711,7 +1712,7 @@
             <span class="field-label">Seed:</span>
             <div style="display:flex; gap:0.3rem;">
               <input type="number" id="audio-seed" value="-1" style="flex:1;">
-              <button id="btn-audio-random-seed" class="secondary" type="button" style="font-size:0.75rem;">🎲</button>
+              <button id="btn-audio-random-seed" class="secondary" type="button" style="font-size:0.75rem;">Aleatoria</button>
             </div>
           </label>
 
@@ -1818,8 +1819,8 @@
 
           <div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
             <a id="btn-audio-download-mp4" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar MP4 con audio</a>
-            <a id="btn-audio-download-wav" class="secondary btn" style="text-decoration:none; padding:6px 12px; font-size:0.82rem;" download>⬇️ Descargar WAV 48 kHz</a>
-            <button id="btn-audio-send-timeline" class="secondary btn" type="button" style="padding:6px 12px; font-size:0.82rem;">🎬 Enviar a Timeline</button>
+            <a id="btn-audio-download-wav" class="secondary btn" download>Descargar WAV 48 kHz</a>
+            <button id="btn-audio-send-timeline" class="secondary btn" type="button">Enviar a Timeline</button>
           </div>
           <p class="field-hint" style="margin-top:0.5rem; font-size:0.75rem;">Nota: el clip original de vídeo no se ha modificado. Se han generado un archivo MP4 nuevo y un WAV de 48 kHz independiente.</p>
         </div>
@@ -2304,6 +2305,6 @@
     <img id="lightbox-img" alt="" draggable="false">
   </div>
 
-  <script type="module" src="/static/js/main.js"></script>
+  <script type="module" src="/static/js/main.js?v={{ build }}"></script>
 </body>
 </html>

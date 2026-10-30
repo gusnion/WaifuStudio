@@ -672,7 +672,8 @@ function resetOcForm() {
   preprompt.value =
     state.ocPrepromptDefault ||
     (preprompt.options.length ? preprompt.options[0].value : "");
-  $("oc-form-rating").value = "sfw";
+  const ratingField = $("oc-form-rating");
+  if (ratingField) ratingField.value = "nsfw";
   $("oc-form-notes").value = "";
   updateOcFormMode();
   renderOcSelected();
@@ -690,7 +691,8 @@ function fillCharacterForm(character) {
   state.ocExtras = [...(character.extras || [])];
   $("oc-form-name").value = character.name;
   $("oc-form-preprompt").value = character.preprompt;
-  $("oc-form-rating").value = character.rating;
+  const ratingFieldEdit = $("oc-form-rating");
+  if (ratingFieldEdit) ratingFieldEdit.value = character.rating;
   $("oc-form-notes").value = character.notes;
   updateOcFormMode();
   renderOcSelected();
@@ -835,7 +837,7 @@ async function saveCharacter(event) {
     name,
     tags: state.ocSelectedTags.slice(),
     preprompt: $("oc-form-preprompt").value,
-    rating: $("oc-form-rating").value,
+    rating: $("oc-form-rating")?.value || "nsfw",
     notes: $("oc-form-notes").value,
   };
   try {

@@ -128,6 +128,11 @@ function renderGalleryTab() {
       video.muted = true;
       video.preload = "metadata";
       video.playsInline = true;
+      video.addEventListener("loadedmetadata", () => {
+        if (Number.isFinite(video.duration) && video.duration > 0.15) {
+          video.currentTime = 0.15;
+        }
+      });
       media.appendChild(video);
     } else if (url) {
       const img = document.createElement("img");

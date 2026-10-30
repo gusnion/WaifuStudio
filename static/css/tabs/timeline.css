@@ -250,12 +250,13 @@
 }
 
 .timeline-btn-mini {
-  padding: 2px 5px;
-  font-size: 10px;
-  background: #2b2b36;
-  color: #eee;
-  border: 1px solid #3d3d4c;
-  border-radius: 3px;
+  padding: 6px 10px;
+  min-height: 28px;
+  font-size: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   cursor: pointer;
 }
 

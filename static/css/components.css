@@ -18,7 +18,7 @@ button {
 .tab.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: #14151a;
 }
 
 button.primary {
@@ -450,7 +450,7 @@ input[type="checkbox"] {
   margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-strong, #f2f3f8);
   letter-spacing: 0.02em;
 }
 
@@ -976,19 +976,19 @@ input[type="checkbox"] {
 }
 
 .oc-header-block {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 15 !important;
-  background: var(--bg) !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0.5rem !important;
-  padding: 0.2rem 0 0.65rem 0 !important;
-  margin-top: 0 !important;
-  margin-bottom: 0.4rem !important;
-  border-bottom: 1px solid var(--border) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-  flex-shrink: 0 !important;
+  position: static;
+  z-index: auto;
+  background: var(--panel);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  margin: 0 0 var(--space-2, 8px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: none;
+  flex-shrink: 0;
 }
 
 @media (max-width: 1100px) {
@@ -2020,15 +2020,16 @@ input[type="checkbox"] {
   position: sticky !important;
   top: 0 !important;
   z-index: 15 !important;
-  background: var(--bg) !important;
+  background: var(--panel) !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 0.5rem !important;
-  padding: 0.2rem 0 0.65rem 0 !important;
+  padding: 0.4rem 0.45rem 0.55rem !important;
   margin-top: 0 !important;
   margin-bottom: 0.4rem !important;
-  border-bottom: 1px solid var(--border) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--shadow, #000) 30%, transparent) !important;
   flex-shrink: 0 !important;
 }
 
@@ -2083,8 +2084,8 @@ input[type="checkbox"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 1px solid var(--muted);
   background: transparent;
@@ -2550,8 +2551,17 @@ input[type="checkbox"] {
 #btn-theme-toggle #theme-toggle-icon,
 #btn-theme-toggle .theme-toggle-icon {
   display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
   line-height: 1;
   user-select: none;
+}
+
+#btn-theme-toggle .theme-toggle-icon.is-light {
+  background: currentColor;
 }
 
 /* Base de navegación para pestañas (8 tabs) */
@@ -2656,5 +2666,35 @@ input[type="checkbox"] {
 .lora-info-btn {
   padding: 0.2rem 0.45rem;
   font-size: 0.72rem;
+}
+
+
+.pose-photo {
+  display: block;
+  width: 96px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+
+.pose-photo-preview {
+  width: 150px;
+}
+
+
+.field-action {
+  margin-top: var(--space-1, 4px);
+}
+
+.btn-download-skill {
+  text-decoration: none;
+  padding: 6px 12px;
+}
+
+
+.modal.enrich-stack {
+  z-index: 2200 !important;
 }
 

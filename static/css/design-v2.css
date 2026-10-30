@@ -31,7 +31,7 @@
 
 .tab-canonical-layout button.primary,
 .model-defaults-modal button.primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   border: 0;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -39,7 +39,7 @@
 
 .tab-canonical-layout .tab-viewport {
   background:
-    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 45%),
+    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 45%),
     var(--bg);
 }
 

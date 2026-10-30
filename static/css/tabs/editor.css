@@ -119,11 +119,11 @@
   max-height: calc(100% - 1.2rem);
   overflow-y: auto;
   padding: 0.5rem 0.6rem;
-  background: rgba(20, 22, 28, 0.92);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: 8px;
   backdrop-filter: blur(6px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow, #000) 45%, transparent);
   cursor: default;
 }
 

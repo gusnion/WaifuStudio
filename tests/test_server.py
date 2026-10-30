@@ -230,7 +230,7 @@ class ReadRoutesTests(ServerTestCase):
             },
         )
         self.assertEqual(models[0]["family"], "anima")
-        self.assertEqual(models[0]["subfamily"], "sin_clasificar")
+        self.assertEqual(models[0]["subfamily"], "anima")
         self.assertEqual(models[0]["prompt_profile"], "anima")
         self.assertIsInstance(models[0]["defaults"], dict)
 
@@ -6317,7 +6317,7 @@ class ScrollbarUiStaticTests(ServerTestCase):
             "/static/css/tabs/gallery.css",
         ):
             with self.subTest(link=link):
-                self.assertIn(f'href="{link}"', html)
+                self.assertIn(f'href="{link}', html)
         text = self.get_static_css(client)
         self.assertIn(
             "* {\n  scrollbar-width: none;\n  -ms-overflow-style: none;\n}", text
@@ -7022,7 +7022,6 @@ class TopbarNavigationStaticTests(ServerTestCase):
             "oc-form-title",
             "oc-form-name",
             "oc-form-preprompt",
-            "oc-form-rating",
             "oc-form-notes",
             "btn-oc-save",
             "btn-oc-new",

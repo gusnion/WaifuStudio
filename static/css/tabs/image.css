@@ -78,7 +78,7 @@
 
 .category-indicator {
   font-size: 0.72rem;
-  color: var(--muted);
+  color: var(--text);
   transition: transform 0.2s ease;
 }
 
