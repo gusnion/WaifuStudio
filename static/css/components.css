@@ -2842,3 +2842,54 @@ input[type="checkbox"] {
   border-radius: 4px;
 }
 
+
+/* OC Maker: las tarjetas no deben encogerse ni montarse sobre la siguiente seccion */
+#panel-oc .oc-controls > .oc-section {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.oc-form-details > summary {
+  cursor: pointer;
+  padding: 0.45rem 0.55rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.oc-form-details[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+.oc-active-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.oc-active-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.oc-active-meta {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+
+#panel-oc button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

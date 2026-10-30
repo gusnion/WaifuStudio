@@ -1119,6 +1119,8 @@
         <fieldset class="control-card oc-section" id="oc-block-manage">
           <legend>1. Mis Personajes (OCs)</legend>
           <div id="oc-list" class="oc-list"></div>
+          <details id="oc-form-details" class="oc-form-details">
+            <summary id="oc-form-summary">Nuevo OC / Editar</summary>
           <form id="oc-form" class="oc-form">
             <h3 id="oc-form-title">Crear OC</h3>
             <label class="field">
@@ -1141,6 +1143,7 @@
               <button id="btn-oc-cancel-edit" type="button" class="hidden">Cancelar edición</button>
             </div>
           </form>
+          </details>
         </fieldset>
 
         <!-- BLOQUE 2: Catálogo de Rasgos -->
@@ -1167,6 +1170,13 @@
 
       <!-- Columna Derecha: Visor de Referencias / Galería -->
       <section class="gallery-panel tab-viewport oc-viewport oc-section">
+        <div class="oc-active-header">
+          <div>
+            <h2 id="oc-active-name">Sin OC activo</h2>
+            <p id="oc-active-meta" class="oc-active-meta">Crea o selecciona un OC para ver su ficha.</p>
+          </div>
+          <button id="btn-oc-edit-active" class="secondary" type="button" disabled>Editar OC</button>
+        </div>
         <div class="gallery-header">
           <h2>Referencias <span id="oc-refs-title" class="oc-refs-title"></span></h2>
           <div class="oc-refs-actions">

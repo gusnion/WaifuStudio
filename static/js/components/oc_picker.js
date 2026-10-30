@@ -495,6 +495,26 @@ function characterById(charId) {
   return state.characters.find((item) => item.id === charId) || null;
 }
 
+function updateOcActiveHeader() {
+  const character = characterById(state.activeCharacterId);
+  const name = $("oc-active-name");
+  const meta = $("oc-active-meta");
+  const edit = $("btn-oc-edit-active");
+  const add = $("btn-oc-add");
+  const train = $("btn-oc-train");
+  const addRef = $("btn-oc-add-ref");
+  const hasActive = Boolean(character);
+  if (name) name.textContent = hasActive ? character.name : "Sin OC activo";
+  if (meta) {
+    meta.textContent = hasActive
+      ? `${(character.tags || []).length} rasgos · ${(character.extras || []).length} extras · ${(state.characterRefs || []).length} referencias`
+      : "Crea o selecciona un OC para ver su ficha.";
+  }
+  for (const button of [edit, add, train, addRef]) {
+    if (button) button.disabled = !hasActive;
+  }
+}
+
 function renderCharacters() {
   const container = $("oc-list");
   container.replaceChildren();
@@ -513,11 +533,13 @@ function renderCharacters() {
     });
     empty.append(text, create);
     container.appendChild(empty);
+    updateOcActiveHeader();
     return;
   }
   for (const character of state.characters) {
     container.appendChild(characterRow(character));
   }
+  updateOcActiveHeader();
 }
 
 function characterRow(character) {
@@ -661,6 +683,8 @@ function updateOcFormMode() {
   $("btn-oc-save").textContent = editing ? "Guardar cambios" : "Guardar OC";
   $("btn-oc-cancel-edit").classList.toggle("hidden", !editing);
   $("oc-form").classList.toggle("editing", editing);
+  const summary = $("oc-form-summary");
+  if (summary) summary.textContent = editing ? `Editar: ${character ? character.name : "OC"}` : "Nuevo OC / Editar";
 }
 
 function resetOcForm() {
@@ -682,6 +706,8 @@ function resetOcForm() {
 }
 
 function fillCharacterForm(character) {
+  const details = $("oc-form-details");
+  if (details && character) details.open = true;
   if (!character) {
     resetOcForm();
     return;
@@ -701,6 +727,8 @@ function fillCharacterForm(character) {
 }
 
 async function startNewOc() {
+  const details = $("oc-form-details");
+  if (details) details.open = true;
   resetOcForm();
   await loadCharacterRefs();
   setOcStatus("Modo crear: nuevo OC");
@@ -750,6 +778,8 @@ async function useCharacter(character) {
 }
 
 async function editCharacter(character) {
+  const details = $("oc-form-details");
+  if (details) details.open = true;
   fillCharacterForm(character);
   setOcStatus(`Editando: ${character.name}`);
 }
@@ -887,6 +917,7 @@ async function loadCharacterRefs() {
   if (state.activeCharacterId == null) {
     title.textContent = "sin OC activo";
     button.disabled = true;
+    updateOcActiveHeader();
     const empty = document.createElement("p");
     empty.className = "empty";
     empty.textContent = "Selecciona un OC de la lista o crea uno nuevo para ver sus referencias.";
@@ -898,6 +929,7 @@ async function loadCharacterRefs() {
   state.characterRefs = refs;
   title.textContent = character ? `de ${character.name}` : "";
   button.disabled = refs.length < 2;
+  updateOcActiveHeader();
   if (!refs.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
@@ -1226,6 +1258,10 @@ function closeOcModal() {
 
 function initOcPicker() {
   on("btn-oc-add", "click", addOcTagsToPrompt);
+  on("btn-oc-edit-active", "click", () => {
+    const character = characterById(state.activeCharacterId);
+    if (character) editCharacter(character).catch((error) => setOcStatus(error.message, true));
+  });
   on("btn-oc-train", "click", () => {
     const character = characterById(state.activeCharacterId) || state.characters[0];
     if (!character) {
