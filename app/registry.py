@@ -550,6 +550,42 @@ def _entry_from_dict(data: object) -> ModelEntry:
     return _validate_entry(entry)
 
 
+def migrate_user_subfamilies(path: str | Path) -> int:
+    """Rellena subfamily vacia/sin_clasificar en la capa de usuario.
+
+    No toca entradas con una subfamilia elegida a mano. Devuelve cuantas cambio.
+    """
+    target = Path(path)
+    if not target.is_file():
+        return 0
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(models, list):
+        return 0
+    changed = 0
+    for item in models:
+        if not isinstance(item, dict):
+            continue
+        current = str(item.get("subfamily") or "").strip()
+        if current and current != DEFAULT_SUBFAMILY:
+            continue
+        inferred = infer_subfamily(
+            filename=" ".join(
+                str(item.get(key) or "")
+                for key in ("id", "display_name", "family")
+            )
+        )
+        if inferred and inferred != current:
+            item["subfamily"] = inferred
+            changed += 1
+    if changed:
+        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return changed
+
+
 class ModelRegistry:
     """Coleccion en memoria de ModelEntry, cargable y guardable como JSON."""
 

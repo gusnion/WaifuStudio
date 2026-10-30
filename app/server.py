@@ -25,7 +25,7 @@ from app.engine import ComfyEngine, EngineError
 from app.enhancer import load_server_llm
 from app.h3_presets import is_vdn_installed
 from app.jobs import JobQueue
-from app.registry import DEFAULT_PATH as REGISTRY_PATH, ModelRegistry
+from app.registry import DEFAULT_PATH as REGISTRY_PATH, ModelRegistry, migrate_user_subfamilies
 from app.store import Store
 from app.upscale import run_fps, run_upscale, run_video_upscale
 from app.video import VIDEO_HISTORY_TIMEOUT_S, run_video_generation
@@ -89,6 +89,8 @@ def create_app(
     if character_store is None:
         chars.init()
     reg = registry if registry is not None else ModelRegistry.load(REGISTRY_PATH)
+    if registry is None and getattr(cfg, "data_dir", None):
+        migrate_user_subfamilies(Path(cfg.data_dir) / "registry" / "models.json")
     factory = engine_factory if engine_factory is not None else (lambda: ComfyEngine(cfg))
     video_factory = (
         engine_factory if engine_factory is not None
