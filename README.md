@@ -23,18 +23,26 @@ One web app for the full character pipeline:
 4. Assemble the result in a timeline and export MP4.
 5. Keep everything in a local gallery.
 
+## Current state — 2.5.1
+
+- **OC Maker redesigned:** create or generate an OC in a floating modal, edit traits directly with autosave, add local or gallery references (paginated), generate 4/6/8 multiviews from a chosen base image, duplicate, rename and delete with confirmation.
+- **Complete trait catalog:** hair, eyes, face, body, outfit, expression, accessories, setting, action and meta; manual tags can be inserted at any time.
+- **Image workflow:** natural-language SDXL models receive the prompt in the general field; tag-based models keep using prompt zones.
+- **Offline verification:** `1880` tests OK, `1` skipped. No cloud account, telemetry or remote API.
+- **Tag:** `v2.5.1` marks this state. Poses and “create sheet” actions were retired until ControlNet support exists.
+
 ## Tabs
 
 | Tab | What it does |
 |---|---|
 | **Image** | Anima Aesthetic v1.1, Animagine XL 4.0 Opt, RealVisXL V5 and Juggernaut XL Ragnarok; prompt zones, `prompt_profile`, LoRA filtering and model/LoRA cards. |
 | **Video** | Wan 2.2 I2V/FLF2V with Fast/Standard/Quality/Manual profiles. **Beta: VIDEO only.** Videos are silent; audio is generated separately. |
-| **Editor** | Qwen-Image 2.1 editing with up to 10 references, pose references and a floating prompt panel. |
+| **Editor** | Qwen-Image 2.1 editing with up to 10 references and a floating prompt panel. |
 | **Audio** | Three steps: task/input, settings/generate, result. Voice (Irodori) or ambient (MMAudio), with stems and “send to Timeline”. |
 | **Studio / Timeline** | Arrange clips and images, trim, fade, audio tracks, projects and MP4 export. |
 | **Upscaler** | RealESRGAN image/video upscaling, local video input, chunked video jobs and RIFE interpolation. |
 | **Gallery** | SQLite gallery with images, videos and audio; filters, preview, download and lineage. |
-| **OC Maker** | Real tab: character sheet, references from disk, poses, multiview and LoRA training entry. |
+| **OC Maker** | Character library with create/generate modal, full trait catalog and manual tags, local/gallery references, 4/6/8 multiviews, duplicate/rename/delete and LoRA training entry. |
 
 **Guide** and **Addons** live in the top bar. **Social** sits between language and Guide.
 

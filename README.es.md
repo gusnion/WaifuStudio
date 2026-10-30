@@ -1,10 +1,10 @@
-# WaifuStudio v2.0 — Estudio local de producción anime
+# WaifuStudio 2.5.1 — Estudio local de producción anime
 
 <p align="center">
   <img src="static/waifustudio-icon.png" width="112" alt="Icono de WaifuStudio">
 </p>
 
-[![Versión](https://img.shields.io/badge/versión-2.0.0-ff4081.svg)](https://github.com/gusnion/WaifuStudio)
+[![Versión](https://img.shields.io/badge/versión-2.5.1-ff4081.svg)](https://github.com/gusnion/WaifuStudio)
 [![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GPU de referencia](https://img.shields.io/badge/GPU%20de%20referencia-RTX%203060%2012GB-76b900.svg)](https://www.nvidia.com)
 [![Motor](https://img.shields.io/badge/Motor-ComfyUI%20Backend-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
@@ -29,10 +29,11 @@ La aplicación está pensada para una única GPU NVIDIA y un escritorio Windows.
 | Módulo | Estado | Qué hace |
 |---|---|---|
 | **Instalador Windows** | Disponible | Prepara Python portable, ComfyUI, nodos, modelos, FFmpeg/FFprobe y el acceso directo de la app. |
-| **Imagen y OC Maker** | Disponible | Anima 2.9B y SDXL/Illustrious, zonas de prompt, LoRAs, perfiles de personaje, referencias y entrenamiento opcional de LoRA. |
+| **Imagen** | Disponible | Anima Aesthetic v1.1, Animagine XL 4.0 Opt, RealVisXL V5 y Juggernaut XL Ragnarok; zonas de prompt, perfiles y LoRAs. |
+| **OC Maker** | Disponible | Crear o generar un OC en modal, catálogo completo y tags manuales, autosave, referencias local/galería paginada, multivistas 4/6/8 y entrenamiento LoRA. |
 | **Asistente de prompts** | Disponible | Índice local de tags Danbooru y LLM opcional en CPU para expandir prompts y describir imágenes. |
-| **Vídeo H3** | Disponible | Generación en 8 pasos con VideoDeltaNet en modos I2V, FLF2V, Ref2VA y V2V, audio nativo y plantillas de prompt cortas. |
-| **Editor** | Disponible | Edición por instrucción con Qwen-Image 2.1, hasta diez referencias y presets de pose L0–L3. El inpainting con máscara no forma parte de esta versión. |
+| **Vídeo** | Disponible | Wan 2.2 I2V/FLF2V con perfiles Fast/Standard/Quality/Manual; el vídeo es mudo y el audio se genera aparte. |
+| **Editor** | Disponible | Edición por instrucción con Qwen-Image 2.1 y hasta diez referencias. El inpainting con máscara no forma parte de esta versión. |
 | **Timeline** | Disponible | Ordena clips e imágenes, ajusta duración, aplica fade/zoom, silencia clips, añade audio externo, continúa con I2V/FLF2V y exporta MP4. Es un secuenciador enfocado, no un NLE completo. |
 | **Upscaler** | Disponible | Escalado de imagen con GAN, Hires Fix y Qwen Remaster, nitidez RCAS/Adaptive USM e interpolación RIFE. El escalado de vídeo está limitado a 300 frames por trabajo. |
 | **Galería y cola** | Disponible | Galería sobre SQLite, historial de trabajos y cola FIFO de una sola GPU compartida por todas las pestañas. |
