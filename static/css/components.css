@@ -2698,3 +2698,18 @@ input[type="checkbox"] {
   z-index: 2200 !important;
 }
 
+
+@media (max-width: 1180px) {
+  .tabs .tab {
+    font-size: 0;
+    gap: 0;
+    padding: 8px 9px;
+  }
+
+  .tabs .tab .tab-icon {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+}
+
