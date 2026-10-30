@@ -685,6 +685,10 @@ async function reuseGeneration(item) {
     setStatus(`Resultado de ${taskName}; ábrelo en su pestaña`, true);
     return;
   }
+  if (item.model_id && $("model") && $("model").value !== item.model_id) {
+    $("model").value = item.model_id;
+    await applyModel(item.model_id);
+  }
   const savedPrompt = String(item.prompt || "");
   if (savedPrompt) {
     const data = await postJson("/api/prompt/zones", { text: savedPrompt });
@@ -732,7 +736,7 @@ async function reuseGeneration(item) {
   if (warning) {
     setStatus(`Cargado #${item.id} · ${warning}`, true);
   } else {
-    setStatus(`Prompt heredado de #${item.id}; el modelo activo se mantiene`);
+    setStatus(`Metadata heredada de #${item.id}: modelo, prompt y configuración`);
   }
 }
 
