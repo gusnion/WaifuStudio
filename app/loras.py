@@ -280,12 +280,7 @@ def update_entry(
             continue
         if "id" in changes and changes["id"] != loras_id:
             raise EngineError(f"id inmutable: {loras_id!r}")
-        data = {
-            key: changes[key] if key in changes else value
-            for key, value in item.items()
-        }
-        if "subfamily" in changes:
-            data["subfamily"] = changes["subfamily"]
+        data = {**item, **changes}
         candidate = _entry_from_dict(data)
         registry["loras"][position] = candidate
         save_registry(registry, path=path)

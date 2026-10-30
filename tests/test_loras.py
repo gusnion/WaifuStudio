@@ -585,9 +585,31 @@ class UpdateDeleteEntryTests(unittest.TestCase):
         self.assertEqual(saved["trigger"], "t1")
 
     def test_update_parcial_conserva_el_resto(self):
-        update_entry("lora-test", {"trigger": "t1"}, path=self.path)
+        update_entry(
+            "lora-test",
+            {
+                "trigger": "t1",
+                "description": "desc",
+                "triggers": ["t1", "t2"],
+                "keywords": ["pose"],
+                "image": "registry/media/lora-test.jpg",
+                "url": "https://civitai.com/models/1",
+                "recommended_weight": 0.8,
+                "enriched_by": "agent:civitai",
+                "updated_at": "2026-10-30T00:00:00Z",
+            },
+            path=self.path,
+        )
         saved = get("lora-test", path=self.path)
         self.assertEqual(saved["trigger"], "t1")
+        self.assertEqual(saved["description"], "desc")
+        self.assertEqual(saved["triggers"], ["t1", "t2"])
+        self.assertEqual(saved["keywords"], ["pose"])
+        self.assertEqual(saved["image"], "registry/media/lora-test.jpg")
+        self.assertEqual(saved["url"], "https://civitai.com/models/1")
+        self.assertEqual(saved["recommended_weight"], 0.8)
+        self.assertEqual(saved["enriched_by"], "agent:civitai")
+        self.assertEqual(saved["updated_at"], "2026-10-30T00:00:00Z")
         self.assertEqual(saved["source"], "local (test)")
         self.assertEqual(saved["license"], "test")
 
