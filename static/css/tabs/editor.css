@@ -203,3 +203,11 @@
   color: var(--muted);
   font-size: 0.72rem;
 }
+
+.viewer-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0 var(--space-1, 4px);
+}
+

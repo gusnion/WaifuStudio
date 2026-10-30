@@ -898,6 +898,10 @@ function showEditorResult(job) {
     job && typeof job === "object"
       ? { ...(job.params || {}), prompt: job.prompt, negative: job.negative }
       : null;
+  for (const id of ["btn-editor-open-gallery", "btn-editor-edit-result", "btn-editor-download"]) {
+    const action = $(id);
+    if (action) action.disabled = false;
+  }
   box.classList.remove("hidden");
   updateEditorPreview();
   refreshEditorLineage(genId);
