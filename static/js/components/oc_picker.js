@@ -656,6 +656,10 @@ function characterRow(character) {
   }
   actions.append(useButton, moreButton, menu);
   row.append(header, tags, renameBox, actions);
+  row.addEventListener("click", (event) => {
+    if (event.target.closest("button, input, select, textarea, a, label")) return;
+    selectCharacter(character).catch((error) => setOcStatus(error.message, true));
+  });
   return row;
 }
 
@@ -738,6 +742,14 @@ async function cancelOcEdit() {
   resetOcForm();
   await loadCharacterRefs();
   setOcStatus("Edición cancelada: modo crear");
+}
+
+async function selectCharacter(character) {
+  if (!character) return;
+  state.activeCharacterId = character.id;
+  renderCharacters();
+  await loadCharacterRefs();
+  setOcStatus(`OC «${character.name}» seleccionado; pulsa «Usar» para cargarlo en Imagen.`);
 }
 
 async function useCharacter(character) {
