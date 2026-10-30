@@ -17,7 +17,7 @@ ni dependencias.
 from __future__ import annotations
 
 from app.engine import EngineError
-from app.tags import BULK_GROUPS, all_tags, get as tag_get
+from app.tags import BULK_GROUPS, all_tags, by_group, get as tag_get
 
 ZONE_ORDER = ("quality", "safety", "subject", "character", "artist", "general")
 ZONE_LABELS = {
@@ -680,6 +680,12 @@ _OPTION_TAGS = {
     "subject": SUBJECT_OPTIONS,
 }
 _CAMERA_TAG_SET = frozenset(CAMERA_TAGS)
+_ARTIST_TAG_SET = frozenset(
+    str(item.get("tag", "")).strip().lower()
+    for item in by_group("artist")
+    if isinstance(item, dict) and item.get("tag")
+)
+
 _CURATED_SUBCAT: dict[str, str] = {}
 for _subcat, _tags in (
     ("poses", POSES_TAGS),
@@ -738,6 +744,8 @@ def classify_tag(tag: str) -> str:
         return "safety"
     if normalized in SUBJECT_TAGS:
         return "subject"
+    if normalized in _ARTIST_TAG_SET:
+        return "artist"
     entry = tag_get(normalized)
     if entry is not None:
         return "general"
@@ -975,8 +983,16 @@ def prompt_options(zone: str) -> dict:
         )
     if zone == "general":
         subgroups = _general_option_subgroups()
-    elif zone in ("character", "artist"):
+    elif zone == "character":
         subgroups = []
+    elif zone == "artist":
+        subgroups = [
+            {
+                "id": "artist",
+                "label": ZONE_LABELS["artist"],
+                "tags": [_option_tag(item["tag"]) for item in by_group("artist")],
+            }
+        ]
     else:
         subgroups = [
             {
