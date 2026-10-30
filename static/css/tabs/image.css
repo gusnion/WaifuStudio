@@ -584,3 +584,12 @@
   flex-shrink: 0;
 }
 
+
+.image-gallery-pager {
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: auto;
+  padding-top: var(--space-2, 8px);
+  flex: 0 0 auto;
+}
+

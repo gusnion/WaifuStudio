@@ -156,8 +156,8 @@ function renderImageViewer() {
 
 async function loadImageViewer({ selectNewest = false } = {}) {
   const viewer = state.imageViewer;
-  const pageSize = getThumbsCapacity("image-thumbs");
-  viewer.pageSize = pageSize;
+  if (!viewer.pageSize) viewer.pageSize = getThumbsCapacity("image-thumbs");
+  const pageSize = viewer.pageSize;
   viewer.page = Math.max(1, viewer.page);
   const offset = (viewer.page - 1) * pageSize;
   try {
