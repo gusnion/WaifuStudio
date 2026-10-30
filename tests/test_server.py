@@ -4962,6 +4962,7 @@ class UpscaleRouteTests(ServerTestCase):
                 "source_file": "ok.png",
                 "model": self.MODEL,
                 "scale": 2,
+                "output_scale": 2,
                 "passes": 1,
                 "sharpen": 0,
             },
@@ -5002,6 +5003,7 @@ class UpscaleRouteTests(ServerTestCase):
                 "source_file": None,
                 "model": self.MODEL,
                 "scale": 2,
+                "output_scale": 2,
                 "passes": 1,
                 "sharpen": 0,
             },
@@ -5380,6 +5382,7 @@ class UpscaleRouteTests(ServerTestCase):
                 "source_file": "clip.mp4",
                 "model": self.MODEL,
                 "scale": 2,
+                "output_scale": None,
                 "fps": None,
             },
         )

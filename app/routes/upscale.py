@@ -56,6 +56,19 @@ def _image_dimensions(source: Path | bytes) -> tuple[int, int] | None:
         return None
 
 
+def _parse_output_scale(payload: dict, native: int) -> int:
+    raw = payload.get("output_scale")
+    if raw is None:
+        return int(native)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise EngineError("output_scale invalido")
+    if value not in (2, 4):
+        raise EngineError("output_scale debe ser 2 o 4")
+    return value
+
+
 def _risk_guard(
     payload: dict,
     *,
@@ -182,6 +195,14 @@ async def api_upscale_preflight(payload: dict = Body(...)) -> Any:
         return JSONResponse(status_code=400, content={"error": str(exc)})
     if width <= 0 or height <= 0:
         return JSONResponse(status_code=400, content={"error": "dimensiones invalidas"})
+    output_scale = payload.get("output_scale")
+    if output_scale is not None:
+        try:
+            output_scale = int(output_scale)
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"error": "output_scale invalido"})
+        if output_scale not in (2, 4):
+            return JSONResponse(status_code=400, content={"error": "output_scale debe ser 2 o 4"})
     return evaluate_upscale_risk(
         width,
         height,
@@ -189,6 +210,7 @@ async def api_upscale_preflight(payload: dict = Body(...)) -> Any:
         passes=passes,
         mode=mode,
         vram_gb=payload.get("vram_gb"),
+        output_scale=output_scale,
     )
 
 
@@ -258,6 +280,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
     rife_model = payload.get("rife_model")
     if rife_model is not None:
         rife_model = fps_ckpt(rife_model)
+    output_scale = None
 
     if source_kind == "image" and image_b64 is not None:
         if payload.get("source_gen") is not None:
@@ -265,6 +288,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
                 "source_gen y image_b64 son mutuamente excluyentes"
             )
         entry = get_upscaler(payload.get("model"))
+        output_scale = _parse_output_scale(payload, entry["scale"])
         raw_bytes = _decode_image_b64(image_b64, "image_b64")
         dims = _image_dimensions(raw_bytes)
         if dims:
@@ -292,6 +316,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             "source_file": None,
             "model": entry["id"],
             "scale": entry["scale"],
+            "output_scale": output_scale,
             "passes": passes,
             "sharpen": sharpen,
         }
@@ -312,6 +337,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             "model": entry["id"],
             "model_file": entry["file"],
             "scale": entry["scale"],
+            "output_scale": output_scale,
             "passes": passes,
             "sharpen": sharpen,
             "sharpen_method": sharpen_method,
@@ -405,6 +431,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
         entry = get_upscaler(payload.get("model"))
 
     if source_kind == "image":
+        output_scale = _parse_output_scale(payload, entry["scale"])
         resolved_model = resolve_upscale_model_file(entry["file"], cfg)
         passes = clamp_or_validate_upscale_dimensions(
             source,
@@ -481,6 +508,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             "source_file": file_name,
             "model": entry["id"],
             "scale": entry["scale"],
+            "output_scale": None,
             "fps": None,
         }
         if sharpen != 0:
@@ -506,6 +534,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             "model": entry["id"],
             "model_file": entry["file"],
             "scale": entry["scale"],
+            "output_scale": None,
             "fps": None,
             "sharpen": sharpen,
             "sharpen_method": sharpen_method,
@@ -519,6 +548,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             "source_file": file_name,
             "model": entry["id"],
             "scale": entry["scale"],
+            "output_scale": output_scale,
             "passes": passes,
             "sharpen": sharpen,
         }
@@ -543,6 +573,7 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             "model": entry["id"],
             "model_file": entry["file"],
             "scale": entry["scale"],
+            "output_scale": output_scale,
             "passes": passes,
             "sharpen": sharpen,
             "sharpen_method": sharpen_method,

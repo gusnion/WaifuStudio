@@ -872,6 +872,7 @@ function applyUpscaleKind() {
     if (hint) hint.hidden = true;
   }
   $("upscale-passes-field").classList.toggle("hidden", isVideo || isFps);
+  $("upscale-scale-field")?.classList.toggle("hidden", isVideo || isFps);
   $("upscale-mode-field").classList.toggle("hidden", isVideo || isFps);
   const isDiffMode = !isVideo && !isFps && $("upscale-mode") && $("upscale-mode").value !== "fast";
   $("upscale-denoise-field").classList.toggle("hidden", !isDiffMode || $("upscale-mode")?.value !== "hires");
@@ -948,7 +949,8 @@ function currentUpscaleRiskConfig() {
   const entry = (state.upscalers || []).find((item) => item.id === modelId) || null;
   const passes = Number($("upscale-passes")?.value || 1);
   const mode = $("upscale-mode")?.value || "fast";
-  return { entry, scale: Number(entry?.scale || 2), passes, mode };
+  const outputScale = Number($("upscale-scale")?.value || entry?.scale || 2);
+  return { entry, scale: Number(entry?.scale || 2), passes, mode, outputScale };
 }
 
 async function imageFileDimensions(b64) {
@@ -1000,7 +1002,11 @@ function renderUpscaleRiskPanel(risk) {
   const strong = document.createElement("strong");
   strong.textContent = `${label}: ${out.width}×${out.height} (${Number(out.megapixels).toFixed(2)} MP)`;
   const detail = document.createElement("span");
-  detail.textContent = `GPU ${risk.vram_gb} GB · presupuesto ${risk.budget_mp} MP · modo ${risk.mode}`;
+  const compute = risk.compute || {};
+  const computeNote = compute.megapixels && compute.megapixels !== Number(out.megapixels)
+    ? ` · cálculo x${compute.native_scale}: ${compute.width}×${compute.height} (${compute.megapixels} MP)`
+    : "";
+  detail.textContent = `GPU ${risk.vram_gb} GB · presupuesto ${risk.budget_mp} MP · modo ${risk.mode}${computeNote}`;
   panel.append(strong, detail);
   panel.className = `upscale-risk-panel risk-${risk.risk}`;
 }
@@ -1014,13 +1020,14 @@ async function refreshUpscaleRisk() {
       renderUpscaleRiskPanel(null);
       return null;
     }
-    const { scale, passes, mode } = currentUpscaleRiskConfig();
+    const { scale, passes, mode, outputScale } = currentUpscaleRiskConfig();
     const risk = await postJson("/api/upscale/preflight", {
       width: dims.width,
       height: dims.height,
       scale,
       passes,
       upscale_mode: mode,
+      output_scale: outputScale,
     });
     state.upscaleRisk = risk;
     renderUpscaleRiskPanel(risk);
@@ -1050,6 +1057,7 @@ function applyUpscaleRecommendation(risk) {
     passes.value = String(recommended.passes);
   }
   const scale = Number(recommended.scale);
+  if ($("upscale-scale") && [2, 4].includes(scale)) $("upscale-scale").value = String(scale);
   const model = (state.upscalers || []).find((item) => Number(item.scale) === scale);
   if (model && $("upscale-model")) {
     $("upscale-model").value = model.id;
@@ -1205,6 +1213,7 @@ async function generateUpscale() {
     }
     payload.model = model;
     payload.passes = passes;
+    payload.output_scale = Number($("upscale-scale")?.value || 2);
     payload.sharpen = sharpen;
     const sharpenMethod = $("upscale-sharpen-method") ? $("upscale-sharpen-method").value : "legacy";
     if (sharpenMethod && sharpenMethod !== "legacy") {
@@ -1342,6 +1351,7 @@ function initUpscalerTab() {
     scheduleUpscaleRisk();
   });
   on("upscale-passes", "change", scheduleUpscaleRisk);
+  on("upscale-scale", "change", scheduleUpscaleRisk);
   on("upscale-ckpt", "change", upscaleCkptNote);
   on("upscale-mode", "change", () => {
     const isDiffMode = upscaleKind() === "image" && $("upscale-mode") && $("upscale-mode").value !== "fast";

@@ -89,34 +89,51 @@ def evaluate_upscale_risk(
     passes: int,
     mode: str,
     vram_gb: float | None = None,
+    output_scale: int | None = None,
 ) -> dict[str, Any]:
-    """Calcula salida y riesgo de una ampliacion antes de encolarla."""
+    """Calcula salida y riesgo de una ampliacion antes de encolarla.
+
+    ``scale`` es la escala nativa que ejecuta el modelo; ``output_scale`` es la
+    escala final solicitada. Un modelo x4 con salida x2 sigue calculando x4 y
+    luego reduce, por eso el riesgo se mide sobre el calculo real.
+    """
     width = max(1, int(width))
     height = max(1, int(height))
     scale = max(1, int(scale))
     passes = 1 if int(passes) <= 1 else 2
     mode = str(mode or "fast")
+    target_scale = max(1, int(output_scale or scale))
     vram = float(vram_gb if vram_gb is not None else detect_gpu_vram_gb())
-    factor = scale ** passes
-    out_w, out_h = width * factor, height * factor
+    compute_factor = scale ** passes
+    output_factor = target_scale ** passes
+    compute_w, compute_h = width * compute_factor, height * compute_factor
+    out_w, out_h = width * output_factor, height * output_factor
     megapixels = round((out_w * out_h) / 1_000_000, 2)
+    compute_megapixels = round((compute_w * compute_h) / 1_000_000, 2)
     per_gb = _HIRES_MP_PER_GB if mode in ("hires", "qwen_remaster") else _FAST_MP_PER_GB
     budget = round(max(1.5, vram * per_gb), 2)
     hard_limit = round(min(40.0, budget * 1.25), 2)
     if mode in ("hires", "qwen_remaster"):
         budget = min(budget, 10.0)
         hard_limit = min(hard_limit, 12.5)
+    work_megapixels = max(megapixels, compute_megapixels)
     reasons: list[str] = []
-    if mode in ("hires", "qwen_remaster") and megapixels > budget:
+    if mode in ("hires", "qwen_remaster") and work_megapixels > budget:
         reasons.append("highres_over_budget")
-    if megapixels > hard_limit:
+    if work_megapixels > hard_limit:
         reasons.append("output_over_hard_limit")
-    risk = "blocked" if megapixels > hard_limit else ("warn" if reasons else "ok")
-    recommended_scale = 2 if scale > 2 else scale
+    risk = "blocked" if work_megapixels > hard_limit else ("warn" if reasons else "ok")
+    recommended_scale = 2 if target_scale > 2 else target_scale
     recommended_mode = "fast" if mode != "fast" else mode
     return {
         "source": {"width": width, "height": height},
         "output": {"width": out_w, "height": out_h, "megapixels": megapixels},
+        "compute": {
+            "width": compute_w,
+            "height": compute_h,
+            "megapixels": compute_megapixels,
+            "native_scale": scale,
+        },
         "vram_gb": vram,
         "mode": mode,
         "budget_mp": budget,
@@ -1408,6 +1425,19 @@ def run_upscale(
             target = gallery_dir / path.name
             shutil.copy2(path, target)
             names.append(target.name)
+        native_scale = int(job.get("scale") or 0)
+        output_scale = int(job.get("output_scale") or native_scale or 0)
+        if native_scale > 0 and output_scale > 0 and output_scale != native_scale:
+            ratio = output_scale / native_scale
+            for name in names:
+                target = gallery_dir / name
+                try:
+                    with Image.open(target) as img:
+                        size = (max(1, round(img.width * ratio)), max(1, round(img.height * ratio)))
+                        resized = img.resize(size, Image.Resampling.LANCZOS)
+                        resized.save(target)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("no se pudo ajustar escala de salida %s: %s", target, exc)
         store.update(gen_id, status="done", outputs=names, kind="image")
         job["outputs"] = names
         job["error"] = None
