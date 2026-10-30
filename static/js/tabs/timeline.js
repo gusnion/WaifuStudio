@@ -173,6 +173,18 @@ function syncTimelineAiAction() {
     const isImage = ((select && select.value) || "") === "insert_image";
     modelField.hidden = !isImage;
   }
+  const action = (select && select.value) || "";
+  const audioFields = $("timeline-ai-audio-fields");
+  if (audioFields) audioFields.hidden = action !== "generate_audio";
+  const audioMode = $("timeline-ai-audio-mode");
+  const textField = $("timeline-ai-audio-text-field");
+  if (textField) textField.hidden = action !== "generate_audio" || (audioMode && audioMode.value !== "voice");
+  const audioBtn = $("btn-timeline-ai-generate");
+  if (audioBtn && action === "generate_audio") {
+    const voice = audioMode && audioMode.value === "voice";
+    const text = ($("timeline-ai-audio-text")?.value || "").trim();
+    audioBtn.disabled = voice ? !text : !findAudioSourceClip(state.current.data.clips || []);
+  }
 }
 
 function calcTotalDuration() {  const clips = state.current.data.clips || [];
@@ -1004,10 +1016,12 @@ async function generateTimelineAudio() {
   setAudioBusy(true);
   setTimelineStatus("Encolando generación de audio (MMAudio)…");
   try {
+    const seconds = Number($("timeline-ai-audio-seconds")?.value) || 5;
     const res = await postJson("/api/audio/generate", {
       source_gen_id: clip.generation_id,
       action: "replace",
       voice_enabled: false,
+      duration: seconds,
     });
     if (!res || res.job_id == null) throw new Error("El servidor no devolvió job_id de audio");
     await enqueueJobs(res.job_id, {
@@ -1189,6 +1203,8 @@ export function initTimelineTab() {
     generateTimelineAudio().catch((err) => setTimelineStatus(err.message, true));
   });
   on("timeline-ai-action", "change", syncTimelineAiAction);
+  on("timeline-ai-audio-mode", "change", syncTimelineAiAction);
+  on("timeline-ai-audio-text", "input", syncTimelineAiAction);
 
   on("btn-timeline-add-audio", "click", () => {
     const input = $("timeline-audio-input");

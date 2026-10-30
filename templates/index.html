@@ -1269,6 +1269,23 @@
             <span>Modelo de imagen</span>
             <select id="timeline-ai-model"><option value="anima_aestheticv11">Anima Aesthetic v1.1</option></select>
           </label>
+          <div id="timeline-ai-audio-fields" class="audio-ai-fields" hidden>
+            <label class="field">
+              <span>Duración audio (2–30 s)</span>
+              <input id="timeline-ai-audio-seconds" type="number" min="2" max="30" step="1" value="5">
+            </label>
+            <label class="field">
+              <span>Modo de audio</span>
+              <select id="timeline-ai-audio-mode">
+                <option value="ambient" selected>Ambiente (MMAudio)</option>
+                <option value="voice">Voz (Irodori)</option>
+              </select>
+            </label>
+            <label class="field" id="timeline-ai-audio-text-field" hidden>
+              <span>Texto a decir</span>
+              <textarea id="timeline-ai-audio-text" rows="2" placeholder="Obligatorio en modo voz"></textarea>
+            </label>
+          </div>
           <p id="timeline-ai-hint" class="field-hint"></p>
           <button id="btn-timeline-ai-generate" class="primary" type="button">Generar clip I2V</button>
           <button id="btn-timeline-ai-cancel" class="secondary hidden" type="button">Cancelar generación</button>
