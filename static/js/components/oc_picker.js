@@ -791,59 +791,22 @@ function characterRow(character) {
 
   const actions = document.createElement("div");
   actions.className = "oc-item-actions";
-  const useButton = document.createElement("button");
-  useButton.type = "button";
-  useButton.className = "primary";
-  useButton.textContent = t("Usar");
-  useButton.addEventListener("click", () => {
-    Promise.resolve(useCharacter(character)).catch((error) => setOcStatus(error.message, true));
+  const duplicateButton = document.createElement("button");
+  duplicateButton.type = "button";
+  duplicateButton.textContent = t("Duplicar");
+  duplicateButton.addEventListener("click", () => {
+    Promise.resolve(duplicateCharacter(character)).catch((error) => setOcStatus(error.message, true));
   });
-  const moreButton = document.createElement("button");
-  moreButton.type = "button";
-  moreButton.textContent = t("Más");
-  moreButton.setAttribute("aria-haspopup", "menu");
-  moreButton.setAttribute("aria-expanded", "false");
-  const menu = document.createElement("div");
-  menu.className = "oc-item-menu hidden";
-  menu.setAttribute("role", "menu");
-  moreButton.addEventListener("click", () => {
-    const opening = menu.classList.contains("hidden");
-    menu.classList.toggle("hidden", !opening);
-    moreButton.setAttribute("aria-expanded", opening ? "true" : "false");
+  const renameButton = document.createElement("button");
+  renameButton.type = "button";
+  renameButton.textContent = t("Renombrar");
+  renameButton.addEventListener("click", () => {
+    renameBox.classList.remove("hidden");
+    renameInput.value = character.name;
+    renameInput.focus();
+    renameInput.select();
   });
-
-  const menuItems = [
-    ["8 vistas", () => generateCharacterMultiview(character)],
-    ["Duplicar", () => duplicateCharacter(character)],
-    [
-      "Renombrar",
-      () => {
-        renameBox.classList.remove("hidden");
-        renameInput.value = character.name;
-        renameInput.focus();
-        renameInput.select();
-      },
-    ],
-    ["Eliminar", () => deleteCharacter(character)],
-  ];
-  for (const [label, handler] of menuItems) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.setAttribute("role", "menuitem");
-    button.textContent = t(label);
-    if (label === "8 vistas") {
-      button.className = "oc-btn-multiview";
-      button.setAttribute("data-action", "multiview-8");
-      button.title = "Genera 8 vistas coherentes con Qwen usando la primera referencia";
-    }
-    button.addEventListener("click", () => {
-      menu.classList.add("hidden");
-      moreButton.setAttribute("aria-expanded", "false");
-      Promise.resolve(handler()).catch((error) => setOcStatus(error.message, true));
-    });
-    menu.appendChild(button);
-  }
-  actions.append(useButton, moreButton, menu);
+  actions.append(duplicateButton, renameButton);
   row.append(header, tags, renameBox, actions);
   row.addEventListener("click", (event) => {
     if (event.target.closest("button, input, select, textarea, a, label")) return;

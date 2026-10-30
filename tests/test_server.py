@@ -7009,11 +7009,11 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn('id="btn-oc-train"', html)
         self.assertNotIn("panel.appendChild(modal)", picker)
         self.assertNotIn("oc-inline", picker)
-        self.assertIn("oc-item-menu", picker)
-        self.assertIn('t("Usar")', picker)
-        self.assertIn('t("Más")', picker)
-        self.assertIn('"8 vistas"', picker)
-        self.assertIn("t(label)", picker)
+        self.assertNotIn("oc-item-menu", picker)
+        self.assertNotIn('t("Usar")', picker)
+        self.assertNotIn('t("Más")', picker)
+        self.assertIn('t("Duplicar")', picker)
+        self.assertIn('t("Renombrar")', picker)
         self.assertIn("closeOcConfirmModal(false)", main)
         self.assertIn("closeOcSaveModal()", main)
         self.assertNotIn("closeOcModal()", main)
@@ -7078,12 +7078,11 @@ class TopbarNavigationStaticTests(ServerTestCase):
         # 1. oc_picker.js contiene el control '8 vistas' en la tarjeta y el handler
         picker_path = base_dir / "static" / "js" / "components" / "oc_picker.js"
         picker_code = picker_path.read_text(encoding="utf-8")
-        self.assertIn("8 vistas", picker_code, "oc_picker.js debe incluir el control '8 vistas' en la tarjeta")
         self.assertIn("generateCharacterMultiview", picker_code, "oc_picker.js debe definir generateCharacterMultiview")
         self.assertIn("runMultiviewGeneration", picker_code, "oc_picker.js debe reutilizar runMultiviewGeneration")
         self.assertIn("/api/characters/", picker_code, "oc_picker.js debe llamar al endpoint de refs del personaje")
         self.assertIn("loadCharacterRefs", picker_code, "oc_picker.js debe recargar referencias en OCMaker")
-        self.assertIn("data-action", picker_code, "oc_picker.js debe asignar data-action al control")
+        self.assertIn("btn-oc-multiview", picker_code, "oc_picker.js debe cablear el botón de multivistas")
 
         # 2. editor_multiview.js exporta la lógica de generación reutilizable y llama al endpoint existente
         mv_path = base_dir / "static" / "js" / "components" / "editor_multiview.js"
