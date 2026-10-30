@@ -2999,3 +2999,15 @@ input[type="checkbox"] {
   border-color: var(--accent);
 }
 
+
+.oc-multiview-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.oc-multiview-controls select {
+  width: auto;
+  min-width: 92px;
+}
+

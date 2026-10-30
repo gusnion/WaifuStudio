@@ -688,6 +688,8 @@ function updateOcActiveHeader() {
   const addRef = $("btn-oc-add-ref");
   const addRefGallery = $("btn-oc-add-ref-gallery");
   const useImage = $("btn-oc-use-image");
+  const multiview = $("btn-oc-multiview");
+  const multiviewCount = $("oc-multiview-count");
   const hasActive = Boolean(character);
   if (name) name.textContent = hasActive ? character.name : "Sin OC activo";
   if (meta) {
@@ -695,7 +697,7 @@ function updateOcActiveHeader() {
       ? `${(character.tags || []).length} rasgos · ${(character.extras || []).length} extras · ${(state.characterRefs || []).length} referencias`
       : "Crea o selecciona un OC para ver su ficha.";
   }
-  for (const button of [edit, add, train, addRef, addRefGallery, useImage]) {
+  for (const button of [edit, add, train, addRef, addRefGallery, useImage, multiview, multiviewCount]) {
     if (button) button.disabled = !hasActive;
   }
 }
@@ -1284,7 +1286,44 @@ async function createCharacterSheet() {
   }
 }
 
-export async function generateCharacterMultiview(character) {
+async function openOcMultiviewPicker() {
+  const character = characterById(state.activeCharacterId);
+  if (!character) {
+    setOcStatus("Selecciona un OC antes de generar multivistas", true);
+    return;
+  }
+  await loadCharacterRefs();
+  const refs = (state.characterRefs || []).filter((ref) => !isSheetRef(ref));
+  if (!refs.length) {
+    setOcStatus("El OC no tiene referencias para usar como base", true);
+    return;
+  }
+  const modal = $("oc-multiview-modal");
+  const grid = $("oc-multiview-grid");
+  if (!modal || !grid) return;
+  grid.replaceChildren();
+  for (const ref of refs) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "oc-ref-gallery-card";
+    card.title = "Usar esta referencia como base";
+    const img = document.createElement("img");
+    img.src = ref.url;
+    img.alt = "Referencia base";
+    img.loading = "lazy";
+    card.appendChild(img);
+    card.addEventListener("click", () => {
+      modal.classList.add("hidden");
+      const count = Number($("oc-multiview-count")?.value || 4);
+      generateCharacterMultiview(character, { ref, count })
+        .catch((error) => setOcStatus(error.message, true));
+    });
+    grid.appendChild(card);
+  }
+  modal.classList.remove("hidden");
+}
+
+export async function generateCharacterMultiview(character, options = {}) {
   if (!character || !character.id) return;
   state.activeCharacterId = character.id;
   renderCharacters();
@@ -1299,7 +1338,7 @@ export async function generateCharacterMultiview(character) {
     );
     return;
   }
-  const firstRef = attachable[0];
+  const firstRef = options.ref || attachable[0];
 
   if (!state.editorLicenseAccepted) {
     try {
@@ -1327,12 +1366,13 @@ export async function generateCharacterMultiview(character) {
     ? `${charTags}, character turnaround, full body, neutral background`
     : "character turnaround, full body, neutral background";
 
-  setOcStatus(`Iniciando generación de 8 vistas para «${character.name}»…`);
+  const count = [4, 6, 8].includes(Number(options.count)) ? Number(options.count) : 8;
+  setOcStatus(`Iniciando generación de ${count} vistas para «${character.name}»…`);
 
   const entries = await runMultiviewGeneration({
     refs: [refB64],
     prompt,
-    count: 8,
+    count,
     seed: 42,
     steps: 25,
     cfg: 1.0,
@@ -1355,7 +1395,7 @@ export async function generateCharacterMultiview(character) {
   }
 
   await loadCharacterRefs();
-  setOcStatus(`8 vistas generadas y guardadas como referencias para «${character.name}»`);
+  setOcStatus(`${count} vistas generadas y guardadas como referencias para «${character.name}»`);
   return entries;
 }
 
@@ -1537,6 +1577,13 @@ function initOcPicker() {
   on("btn-oc-create-cancel", "click", () => closeOcCreateModal(true));
   on("btn-oc-create-save", "click", () => saveOcFromModal().catch((error) => setOcStatus(error.message, true)));
   on("oc-create-group", "change", renderOcCreateTraits);
+  on("btn-oc-multiview", "click", () => {
+    openOcMultiviewPicker().catch((error) => setOcStatus(error.message, true));
+  });
+  on("btn-oc-multiview-close", "click", () => $("oc-multiview-modal")?.classList.add("hidden"));
+  on("oc-multiview-modal", "click", (event) => {
+    if (event.target === $("oc-multiview-modal")) $("oc-multiview-modal")?.classList.add("hidden");
+  });
   on("btn-oc-use-image", "click", () => {
     const character = characterById(state.activeCharacterId);
     if (character) useCharacter(character).catch((error) => setOcStatus(error.message, true));
