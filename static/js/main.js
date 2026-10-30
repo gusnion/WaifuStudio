@@ -169,7 +169,7 @@ const REQUIRED_IDS = [
   "zone-popover-close", "zone-popover-search", "zone-popover-insert", "zone-popover-clear", "zone-ocs-extras", "zone-ocs-traits",
   "ref-image", "model", "strength", "strength-value", "btn-oc-train",
   "btn-oc-add", "oc-catalog-group", "oc-catalog-search", "oc-form", "btn-oc-new",
-  "btn-oc-cancel-edit", "btn-oc-sheet", "btn-oc-extras-move", "btn-oc-save-close", "btn-oc-save-confirm", "oc-save-modal",
+  "btn-oc-cancel-edit", "btn-oc-extras-move", "btn-oc-save-close", "btn-oc-save-confirm", "oc-save-modal",
   "btn-oc-train-close", "oc-train-modal", "btn-train-more", "btn-train-start", "train-rank", "train-epochs",
   "train-trigger", "train-auto-tags", "train-tag-threshold", "btn-lora-modal", "lora-modal", "btn-lora-close",
   "btn-lora-done", "btn-lora-clear", "lora-search", "btn-lora-manage", "btn-lora-manage-modal", "lora-library-modal",

@@ -1172,7 +1172,7 @@ async function loadCharacterRefs() {
   state.characterRefs = [];
   if (state.activeCharacterId == null) {
     title.textContent = "sin OC activo";
-    button.disabled = true;
+    if (button) button.disabled = true;
     updateOcActiveHeader();
     const empty = document.createElement("p");
     empty.className = "empty";
@@ -1184,7 +1184,7 @@ async function loadCharacterRefs() {
   const refs = await api(`/api/characters/${state.activeCharacterId}/refs`);
   state.characterRefs = refs;
   title.textContent = character ? `de ${character.name}` : "";
-  button.disabled = refs.length < 2;
+  if (button) button.disabled = refs.length < 2;
   updateOcActiveHeader();
   if (!refs.length) {
     const empty = document.createElement("p");
@@ -1565,9 +1565,6 @@ function initOcPicker() {
   });
   on("btn-oc-cancel-edit", "click", () => {
     cancelOcEdit().catch((error) => setOcStatus(error.message, true));
-  });
-  on("btn-oc-sheet", "click", () => {
-    createCharacterSheet().catch((error) => setOcStatus(error.message, true));
   });
   on("btn-oc-extras-move", "click", () => {
     moveOcExtrasToGeneral().catch((error) => setOcStatus(error.message, true));

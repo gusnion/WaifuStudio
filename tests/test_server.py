@@ -6978,7 +6978,6 @@ class TopbarNavigationStaticTests(ServerTestCase):
             "oc-refs-title",
             "oc-refs-note",
             "oc-refs",
-            "btn-oc-sheet",
         ]
         for oc_id in required_oc_ids:
             self.assertIn(f'id="{oc_id}"', html, f"index.html debe preservar el ID '{oc_id}' en OCMaker")
