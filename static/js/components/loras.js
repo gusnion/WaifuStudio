@@ -348,7 +348,7 @@ function renderLoraModalList() {
     if (lora.image) {
       const thumb = document.createElement("img");
       thumb.className = "lora-thumb";
-      thumb.src = lora.image;
+      thumb.src = registryMediaUrl(lora.image);
       thumb.alt = lora.display_name || lora.id;
       thumb.loading = "lazy";
       thumb.addEventListener("error", () => thumb.classList.add("broken"));
@@ -1197,11 +1197,21 @@ function enrichRow(label, value) {
   return row;
 }
 
+function registryMediaUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^(https?:)?\/\//i.test(raw) || raw.startsWith("/")) return raw;
+  if (raw.startsWith("registry/media/")) {
+    return `/api/registry/media/${raw.slice("registry/media/".length).split("/").map(encodeURIComponent).join("/")}`;
+  }
+  return raw;
+}
+
 function openEnrichImage(body, url) {
   if (!url) return;
   const img = document.createElement("img");
   img.className = "enrich-image";
-  img.src = url;
+  img.src = registryMediaUrl(url);
   img.alt = "Imagen de la ficha";
   img.loading = "lazy";
   img.addEventListener("error", () => img.remove());
@@ -1270,26 +1280,69 @@ async function openModelCard(modelId) {
   if (!model) return;
   const body = enrichModal(model.display_name || model.id);
   if (!body) return;
-  openEnrichImage(body, model.image);
+
+  if (model.image) {
+    const thumb = document.createElement("img");
+    thumb.className = "model-card-thumb";
+    thumb.src = registryMediaUrl(model.image);
+    thumb.alt = `Miniatura de ${model.display_name || model.id}`;
+    thumb.loading = "lazy";
+    thumb.addEventListener("error", () => thumb.classList.add("broken"));
+    body.appendChild(thumb);
+  }
+
   body.appendChild(enrichRow("ID", model.id));
   body.appendChild(enrichRow("Familia / subfamilia", `${model.family || "—"} / ${model.subfamily || "sin clasificar"}`));
+  body.appendChild(enrichRow("Autor", model.source || "sin autor"));
+  body.appendChild(enrichRow("Licencia", model.license || "sin licencia"));
   body.appendChild(enrichRow("Base", model.profile?.unet_name || model.profile?.base_model || "—"));
   body.appendChild(enrichRow("Perfil de prompt", model.prompt_profile || "—"));
   body.appendChild(enrichRow("Preprompt", model.preprompt || "—"));
-  body.appendChild(enrichRow("Licencia", model.license || "—"));
-  const defaults = model.defaults || {};
-  body.appendChild(enrichRow("Resolución", defaults.width && defaults.height ? `${defaults.width}x${defaults.height}` : "—"));
-  body.appendChild(enrichRow("Sampler / CFG / pasos", `${defaults.sampler_name || "—"} / ${defaults.cfg ?? "—"} / ${defaults.steps ?? "—"}`));
-  body.appendChild(enrichRow("Triggers", (model.triggers || []).join(", ") || "—"));
+
+  if (Array.isArray(model.triggers) && model.triggers.length) {
+    const row = document.createElement("p");
+    row.className = "enrich-row";
+    const strong = document.createElement("strong");
+    strong.textContent = "Triggers: ";
+    row.appendChild(strong);
+    const chips = document.createElement("span");
+    chips.className = "trigger-chips";
+    for (const trigger of model.triggers) {
+      const chip = document.createElement("span");
+      chip.className = "trigger-chip";
+      chip.textContent = trigger;
+      chips.appendChild(chip);
+    }
+    row.appendChild(chips);
+    body.appendChild(row);
+  } else {
+    body.appendChild(enrichRow("Triggers", "sin trigger"));
+  }
+
+  if (model.notes) {
+    const description = document.createElement("p");
+    description.className = "enrich-row model-card-description";
+    const strong = document.createElement("strong");
+    strong.textContent = "Descripción: ";
+    description.append(strong, document.createTextNode(model.notes));
+    body.appendChild(description);
+  }
+
   if (model.url) {
     const link = document.createElement("a");
+    link.className = "model-card-link";
     link.href = model.url;
     link.target = "_blank";
     link.rel = "noopener";
-    link.textContent = "Fuente del autor";
+    link.textContent = model.url;
     body.appendChild(link);
   }
-  if (!model.image && !model.url && !(model.triggers || []).length) {
+
+  const defaults = model.defaults || {};
+  body.appendChild(enrichRow("Resolución", defaults.width && defaults.height ? `${defaults.width}x${defaults.height}` : "—"));
+  body.appendChild(enrichRow("Sampler / CFG / pasos", `${defaults.sampler_name || "—"} / ${defaults.cfg ?? "—"} / ${defaults.steps ?? "—"}`));
+
+  if (!model.source && !model.license && !model.image) {
     const note = document.createElement("p");
     note.className = "field-hint";
     note.textContent = "Ficha sin enriquecer. Pide a tu agente que lea la ficha del autor y complete imagen, URL y triggers.";

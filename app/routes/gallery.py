@@ -17,6 +17,9 @@ from fastapi.responses import FileResponse, JSONResponse
 MEDIA_URL = "/media/{gen_id}/{name}"
 MEDIA_TYPES = {
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".wav": "audio/wav",
@@ -24,6 +27,9 @@ MEDIA_TYPES = {
 }
 CHARACTER_MEDIA_TYPES = {
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".webp": "image/webp",
@@ -223,6 +229,22 @@ async def api_character_media(char_id: int, name: str, request: Request) -> Any:
         )
     media_type = CHARACTER_MEDIA_TYPES.get(candidate.suffix.lower())
     if media_type is None or not candidate.is_file():
+        return JSONResponse(status_code=404, content={"error": "no encontrado"})
+    return FileResponse(candidate, media_type=media_type)
+
+
+@router.get("/api/registry/media/{name:path}")
+async def api_registry_media(name: str, request: Request) -> Any:
+    """Sirve miniaturas de `data/registry/media` (fichas de modelos y LoRAs)."""
+    cfg = request.app.state.config
+    root = (Path(cfg.data_dir) / "registry" / "media").resolve()
+    candidate = (root / name).resolve()
+    if not candidate.is_relative_to(root):
+        return JSONResponse(status_code=403, content={"error": "ruta fuera de registry media"})
+    media_type = MEDIA_TYPES.get(candidate.suffix.lower())
+    if media_type is None:
+        return JSONResponse(status_code=403, content={"error": "extension no permitida"})
+    if not candidate.is_file():
         return JSONResponse(status_code=404, content={"error": "no encontrado"})
     return FileResponse(candidate, media_type=media_type)
 

@@ -2773,3 +2773,43 @@ input[type="checkbox"] {
   display: none;
 }
 
+
+.model-card-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  display: block;
+}
+
+.model-card-thumb.broken {
+  display: none;
+}
+
+.trigger-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.trigger-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 0.78rem;
+}
+
+.model-card-description {
+  white-space: pre-wrap;
+}
+
+.model-card-link {
+  display: inline-block;
+  overflow-wrap: anywhere;
+  margin: 2px 0 6px;
+}
+
