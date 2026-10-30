@@ -2550,18 +2550,38 @@ input[type="checkbox"] {
 
 #btn-theme-toggle #theme-toggle-icon,
 #btn-theme-toggle .theme-toggle-icon {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: currentColor;
   line-height: 1;
   user-select: none;
 }
 
-#btn-theme-toggle .theme-toggle-icon.is-light {
-  background: currentColor;
+#btn-theme-toggle .theme-toggle-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#btn-theme-toggle .theme-icon-sun {
+  display: none;
+}
+
+#btn-theme-toggle .theme-icon-moon {
+  display: block;
+}
+
+#btn-theme-toggle .theme-toggle-icon.is-light .theme-icon-moon {
+  display: none;
+}
+
+#btn-theme-toggle .theme-toggle-icon.is-light .theme-icon-sun {
+  display: block;
 }
 
 /* Base de navegación para pestañas (8 tabs) */
@@ -2581,8 +2601,7 @@ input[type="checkbox"] {
   .topbar {
     gap: 0.75rem;
     padding: 0.5rem 0.75rem;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
@@ -2711,5 +2730,23 @@ input[type="checkbox"] {
     height: 18px;
     margin: 0;
   }
+}
+
+
+.icon-dice {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.icon-dice circle {
+  fill: currentColor;
+  stroke: none;
+}
+
+.batch-size-select {
+  padding-right: 20px;
 }
 

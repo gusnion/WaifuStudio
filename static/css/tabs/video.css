@@ -265,3 +265,21 @@
 #panel-video > .tab-viewport {
   grid-row: 2;
 }
+
+#video-image-preview {
+  position: relative;
+}
+
+#btn-video-clear-first {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+

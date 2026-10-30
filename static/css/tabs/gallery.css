@@ -432,6 +432,9 @@
 .audio-player-compact {
   padding: 6px;
   gap: 4px;
+  margin: auto;
+  justify-content: center;
+  align-items: center;
 }
 
 .audio-play {

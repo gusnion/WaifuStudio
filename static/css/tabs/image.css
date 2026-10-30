@@ -573,3 +573,14 @@
   color: var(--accent, #e0567a);
   border: 1px solid rgba(224, 86, 122, 0.35);
 }
+
+.image-pose-photo {
+  width: 48px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  flex-shrink: 0;
+}
+

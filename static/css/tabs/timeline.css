@@ -298,3 +298,15 @@
   gap: 4px;
   font-size: 11px;
 }
+
+#timeline-export-path {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+

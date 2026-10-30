@@ -234,3 +234,27 @@
 .guide-acc-body.hidden {
   display: none !important;
 }
+
+.guide-agent-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.guide-agent-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.guide-agent-card .btn-download-skill {
+  align-self: flex-start;
+  display: inline-block;
+}
+
