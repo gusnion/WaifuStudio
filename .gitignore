@@ -34,3 +34,33 @@ tools/pose/
 # Accesos directos de Windows
 *.lnk
 
+# Plano de control local de agentes: nunca dentro del repo de producto
+.agents/
+.claude/
+.dsh/
+
+# Secretos y credenciales locales
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+
+# Pesos y artefactos de modelos (nunca versionar)
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+*.onnx
+*.gguf
+
+# Bases de datos locales y copias de seguridad
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+
