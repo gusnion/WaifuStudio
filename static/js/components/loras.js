@@ -33,33 +33,6 @@ function getLoraCompatibility(lora) {
 }
 
 function ensureToggleElements() {
-  // 1. En #section-loras .lora-actions (Pestaña Imagen)
-  const actions = document.querySelector("#section-loras .lora-actions");
-  if (actions && !$("lora-toggle-all-container")) {
-    const wrap = document.createElement("label");
-    wrap.id = "lora-toggle-all-container";
-    wrap.className = "lora-toggle-label";
-    wrap.style.display = "inline-flex";
-    wrap.style.alignItems = "center";
-    wrap.style.gap = "6px";
-    wrap.style.fontSize = "0.85rem";
-    wrap.style.cursor = "pointer";
-    wrap.style.marginLeft = "auto";
-    wrap.title = "Desactiva el filtro por subrama y muestra todas las LoRAs";
-
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.id = "lora-toggle-all";
-    chk.checked = Boolean(state.lorasShowAll);
-    chk.addEventListener("change", (e) => onToggleAllChanged(e.target.checked));
-
-    const txt = document.createElement("span");
-    txt.textContent = "Ver todas";
-
-    wrap.append(chk, txt);
-    actions.appendChild(wrap);
-  }
-
   // 2. En #lora-modal .lora-body (Modal Elegir LoRAs)
   const searchInput = $("lora-search");
   if (searchInput && !$("lora-modal-toggle-all-container")) {
@@ -87,8 +60,6 @@ function ensureToggleElements() {
     searchInput.parentNode.insertBefore(wrap, searchInput.nextSibling);
   }
 
-  const c1 = $("lora-toggle-all");
-  if (c1) c1.checked = Boolean(state.lorasShowAll);
   const c2 = $("lora-modal-toggle-all");
   if (c2) c2.checked = Boolean(state.lorasShowAll);
 }
@@ -670,6 +641,7 @@ function editLoraEntry(loraId) {
   $("lora-form-image").value = lora.image || "";
   $("lora-form-url").value = lora.url || "";
   $("lora-form-triggers").value = (Array.isArray(lora.triggers) ? lora.triggers : []).join(", ");
+  $("lora-form-keywords").value = (Array.isArray(lora.keywords) ? lora.keywords : []).join(", ");
   $("lora-form-recommended").value = String(lora.recommended_weight ?? lora.default_weight ?? 1);
   $("lora-library-form-title").textContent = `Editar «${lora.id}»`;
   $("btn-lora-form-cancel").classList.remove("hidden");
@@ -692,6 +664,7 @@ function readLoraForm() {
     image: $("lora-form-image").value.trim(),
     url: $("lora-form-url").value.trim(),
     triggers: $("lora-form-triggers").value.split(",").map((t) => t.trim()).filter(Boolean),
+    keywords: $("lora-form-keywords").value.split(",").map((t) => t.trim()).filter(Boolean),
     recommended_weight: Number($("lora-form-recommended").value),
   };
 }
@@ -1235,39 +1208,136 @@ function insertTrigger(trigger) {
   setStatus(`Trigger añadido: ${value}`);
 }
 
+function appendTriggerChip(container, trigger) {
+  const block = document.createElement("span");
+  block.className = "lora-trigger-block";
+  const chip = document.createElement("span");
+  chip.className = "trigger-chip";
+  chip.textContent = trigger;
+  block.appendChild(chip);
+  for (const weight of [0.1, 0.5, 0.9]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "trigger-weight-btn";
+    button.textContent = String(weight);
+    button.title = `Insertar (${trigger}:${weight})`;
+    button.addEventListener("click", () => insertTriggerWithWeight(trigger, weight));
+    block.appendChild(button);
+  }
+  container.appendChild(block);
+}
+
+function insertTriggerWithWeight(trigger, weight) {
+  const value = String(trigger || "").trim();
+  const target = $("prompt-general") || $("editor-prompt");
+  if (!value || !target) return;
+  const text = weight === 1 ? value : `(${value}:${weight})`;
+  const previous = String(target.value || "").trim();
+  if (previous.includes(text)) {
+    setStatus(`«${text}» ya está en el prompt`);
+    return;
+  }
+  target.value = previous ? `${previous}, ${text}` : text;
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+  setStatus(`Añadido al prompt: ${text}`);
+}
+
 async function openLoraCard(loraId) {
   const lora = state.loras.find((item) => item.id === loraId);
   if (!lora) return;
   const body = enrichModal(lora.display_name || lora.id);
   if (!body) return;
-  openEnrichImage(body, lora.image);
+
+  if (lora.image) {
+    const thumb = document.createElement("img");
+    thumb.className = "model-card-thumb";
+    thumb.src = registryMediaUrl(lora.image);
+    thumb.alt = `Miniatura de ${lora.display_name || lora.id}`;
+    thumb.loading = "lazy";
+    thumb.addEventListener("error", () => thumb.classList.add("broken"));
+    body.appendChild(thumb);
+  } else {
+    const hint = document.createElement("p");
+    hint.className = "field-hint";
+    hint.textContent = "Sin miniatura. Se usará la primera generación con esta LoRA hasta que la cambies en la biblioteca.";
+    body.appendChild(hint);
+  }
+
   body.appendChild(enrichRow("ID", lora.id));
-  body.appendChild(enrichRow("Familia", lora.family));
-  body.appendChild(enrichRow("Subfamilia", lora.subfamily || "sin clasificar"));
-  body.appendChild(enrichRow("Descripción", lora.description || "Sin descripción enriquecida"));
-  const triggers = Array.isArray(lora.triggers) ? lora.triggers : (lora.trigger ? [lora.trigger] : []);
-  body.appendChild(enrichRow("Triggers", triggers.length ? triggers.join(", ") : "sin trigger"));
+  body.appendChild(enrichRow("Familia / subfamilia", `${lora.family || "—"} / ${lora.subfamily || "sin clasificar"}`));
+  body.appendChild(enrichRow("Archivo", lora.file || "—"));
+  body.appendChild(enrichRow("Autor", lora.source || "sin autor"));
+  body.appendChild(enrichRow("Licencia", lora.license || "sin licencia"));
+  body.appendChild(enrichRow("Peso por defecto", String(lora.default_weight ?? "—")));
   body.appendChild(enrichRow("Peso recomendado", String(lora.recommended_weight ?? lora.default_weight ?? "—")));
   body.appendChild(enrichRow("Compatibilidad", getLoraCompatibility(lora).warning || "Compatible / no verificada"));
+
+  if (lora.description) {
+    const description = document.createElement("p");
+    description.className = "enrich-row model-card-description";
+    const strong = document.createElement("strong");
+    strong.textContent = "Descripción: ";
+    description.append(strong, document.createTextNode(lora.description));
+    body.appendChild(description);
+  }
+
+  const triggers = Array.isArray(lora.triggers) && lora.triggers.length
+    ? lora.triggers
+    : (lora.trigger ? [lora.trigger] : []);
+  if (triggers.length) {
+    const row = document.createElement("p");
+    row.className = "enrich-row";
+    const strong = document.createElement("strong");
+    strong.textContent = "Triggers: ";
+    row.appendChild(strong);
+    const chips = document.createElement("span");
+    chips.className = "trigger-chips";
+    for (const trigger of triggers) appendTriggerChip(chips, trigger);
+    row.appendChild(chips);
+    body.appendChild(row);
+  } else {
+    body.appendChild(enrichRow("Triggers", "sin trigger"));
+  }
+
+  if (Array.isArray(lora.keywords) && lora.keywords.length) {
+    const row = document.createElement("p");
+    row.className = "enrich-row";
+    const strong = document.createElement("strong");
+    strong.textContent = "Palabras clave: ";
+    row.appendChild(strong);
+    const chips = document.createElement("span");
+    chips.className = "trigger-chips";
+    for (const keyword of lora.keywords) {
+      const chip = document.createElement("span");
+      chip.className = "trigger-chip";
+      chip.textContent = keyword;
+      chips.appendChild(chip);
+    }
+    row.appendChild(chips);
+    body.appendChild(row);
+  }
+
   if (lora.url) {
     const link = document.createElement("a");
+    link.className = "model-card-link";
     link.href = lora.url;
     link.target = "_blank";
     link.rel = "noopener";
-    link.textContent = "Fuente del autor";
+    link.textContent = lora.url;
     body.appendChild(link);
   }
-  if (triggers.length) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "primary";
-    button.textContent = "Insertar trigger";
-    button.addEventListener("click", () => {
-      insertTrigger(triggers[0]);
-      closeEnrichModal();
-    });
-    body.appendChild(button);
+
+  if (lora.notes) {
+    const notes = document.createElement("p");
+    notes.className = "enrich-row model-card-description";
+    const strong = document.createElement("strong");
+    strong.textContent = "Notas: ";
+    notes.append(strong, document.createTextNode(lora.notes));
+    body.appendChild(notes);
   }
+
+  body.appendChild(enrichRow("Enriquecida por", lora.enriched_by || "—"));
+  body.appendChild(enrichRow("Actualizada", lora.updated_at || "—"));
 }
 
 async function openModelCard(modelId) {

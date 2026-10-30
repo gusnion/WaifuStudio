@@ -1582,7 +1582,7 @@ input[type="checkbox"] {
 }
 
 .lora-box {
-  width: min(620px, 100%);
+  width: min(1200px, 96vw);
 }
 
 .lora-body {
@@ -1629,8 +1629,14 @@ input[type="checkbox"] {
 
 .lora-options {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .lora-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .lora-option {
@@ -2811,5 +2817,20 @@ input[type="checkbox"] {
   display: inline-block;
   overflow-wrap: anywhere;
   margin: 2px 0 6px;
+}
+
+
+.lora-trigger-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 6px 4px 0;
+}
+
+.trigger-weight-btn {
+  padding: 0 4px;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  border-radius: 4px;
 }
 

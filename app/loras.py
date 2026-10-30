@@ -77,6 +77,10 @@ def _entry_from_dict(data: object) -> dict:
     if not isinstance(triggers_raw, list) or not all(isinstance(t, str) for t in triggers_raw):
         raise EngineError(f"triggers debe ser lista de str: {triggers_raw!r}")
     triggers = [t.strip() for t in triggers_raw if t.strip()]
+    keywords_raw = data.get("keywords", [])
+    if not isinstance(keywords_raw, list) or not all(isinstance(t, str) for t in keywords_raw):
+        raise EngineError(f"keywords debe ser lista de str: {keywords_raw!r}")
+    keywords = [t.strip() for t in keywords_raw if t.strip()]
     recommended_weight = data.get("recommended_weight", data.get("default_weight", 1.0))
     image = data.get("image", "")
     url = data.get("url", "")
@@ -104,6 +108,8 @@ def _entry_from_dict(data: object) -> dict:
     }
     if "triggers" in data:
         entry["triggers"] = triggers
+    if "keywords" in data:
+        entry["keywords"] = keywords
     if "description" in data:
         entry["description"] = description
     if "recommended_weight" in data:

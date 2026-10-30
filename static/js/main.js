@@ -175,7 +175,7 @@ const REQUIRED_IDS = [
   "btn-lora-done", "btn-lora-clear", "lora-search", "btn-lora-manage", "btn-lora-manage-modal", "lora-library-modal",
   "btn-lora-library-close", "lora-library-status", "lora-library-list", "lora-library-form", "lora-library-form-title", "lora-form-id",
   "lora-form-family", "lora-form-file", "lora-form-display", "lora-form-trigger", "lora-form-weight", "lora-form-source",
-  "lora-form-license", "lora-form-notes", "lora-form-description", "lora-form-image", "lora-form-url", "lora-form-triggers", "lora-form-recommended", "btn-lora-form-cancel", "vision-modal",
+  "lora-form-license", "lora-form-notes", "lora-form-description", "lora-form-image", "lora-form-url", "lora-form-triggers", "lora-form-keywords", "lora-form-recommended", "btn-lora-form-cancel", "vision-modal",
   "btn-vision-close", "vision-status", "vision-mode", "vision-empty", "vision-caption-block", "vision-caption", "btn-vision-copy-caption",
   "vision-tags-block", "vision-tags", "btn-vision-copy-tags", "btn-vision-insert-caption", "btn-vision-insert-tags",
   "btn-vision-tags-only", "btn-vision-llm", "custom-tags-modal", "custom-tags-status", "btn-custom-tags-close", "custom-tags-form", "custom-tag-name",
