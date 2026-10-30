@@ -417,3 +417,49 @@
   color: var(--muted);
 }
 
+
+.audio-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.audio-player-compact {
+  padding: 6px;
+  gap: 4px;
+}
+
+.audio-play {
+  flex: 0 0 auto;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.audio-progress {
+  flex: 1 1 auto;
+  min-width: 40px;
+}
+
+.audio-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.audio-volume {
+  flex: 0 0 56px;
+  width: 56px;
+}
+
+.audio-player-compact .audio-volume,
+.audio-player-compact .audio-time {
+  display: none;
+}
+

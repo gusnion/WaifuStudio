@@ -116,12 +116,7 @@ function renderGalleryTab() {
       (item.kind === "audio" || /\.(wav|mp3)(?:[?#]|$)/i.test(url || "")) && url
     );
     if (isAudio) {
-      const audio = document.createElement("audio");
-      audio.src = url;
-      audio.controls = true;
-      audio.preload = "metadata";
-      audio.addEventListener("click", (event) => event.stopPropagation());
-      media.appendChild(audio);
+      media.appendChild(createAudioPlayer(url, true));
     } else if (url && isVideoUrl(url)) {
       const video = document.createElement("video");
       video.src = url;
@@ -139,6 +134,12 @@ function renderGalleryTab() {
       img.src = url;
       img.alt = item.prompt || `Generación #${item.id}`;
       img.loading = "lazy";
+      img.addEventListener("error", () => {
+        const ph = document.createElement("span");
+        ph.className = "thumb-missing";
+        ph.textContent = "Miniatura no disponible";
+        img.replaceWith(ph);
+      });
       media.appendChild(img);
     } else if (item.status === "queued" || item.status === "running") {
       const placeholder = document.createElement("span");
@@ -154,7 +155,7 @@ function renderGalleryTab() {
     } else {
       const missing = document.createElement("span");
       missing.className = "thumb-missing";
-      missing.textContent = item.status === "error" ? "Error" : "Sin resultado";
+      missing.textContent = item.status === "error" ? "No se pudo generar" : "Sin resultado";
       media.appendChild(missing);
     }
     const badge = document.createElement("span");
@@ -222,6 +223,61 @@ async function loadGalleryTab(page = 1) {
   }
 }
 
+function createAudioPlayer(url, compact = false) {
+  const wrap = document.createElement("div");
+  wrap.className = compact ? "audio-player audio-player-compact" : "audio-player";
+  wrap.addEventListener("click", (event) => event.stopPropagation());
+  const audio = new Audio(url);
+  audio.preload = "metadata";
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "audio-play";
+  play.setAttribute("aria-label", "Reproducir audio");
+  play.textContent = "▶";
+  const bar = document.createElement("input");
+  bar.type = "range";
+  bar.min = "0";
+  bar.max = "1000";
+  bar.value = "0";
+  bar.className = "audio-progress";
+  bar.setAttribute("aria-label", "Progreso del audio");
+  const time = document.createElement("span");
+  time.className = "audio-time";
+  time.textContent = "0:00";
+  const volume = document.createElement("input");
+  volume.type = "range";
+  volume.min = "0";
+  volume.max = "1";
+  volume.step = "0.05";
+  volume.value = "1";
+  volume.className = "audio-volume";
+  volume.setAttribute("aria-label", "Volumen");
+  const fmt = (value) => {
+    const seconds = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+  play.addEventListener("click", () => {
+    if (audio.paused) audio.play().catch(() => {});
+    else audio.pause();
+  });
+  audio.addEventListener("play", () => { play.textContent = "❚❚"; });
+  audio.addEventListener("pause", () => { play.textContent = "▶"; });
+  audio.addEventListener("timeupdate", () => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      bar.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
+    }
+    time.textContent = `${fmt(audio.currentTime)} / ${fmt(audio.duration)}`;
+  });
+  bar.addEventListener("input", () => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      audio.currentTime = (Number(bar.value) / 1000) * audio.duration;
+    }
+  });
+  volume.addEventListener("input", () => { audio.volume = Number(volume.value); });
+  wrap.append(play, bar, time, volume);
+  return wrap;
+}
+
 function openGalleryModal(item) {
   const modal = $("gallery-modal");
   const media = $("gallery-modal-media");
@@ -231,7 +287,9 @@ function openGalleryModal(item) {
   closeGalleryModal();
   galleryModalItem = item;
   const url = galleryItemUrl(item);
-  if (url && isVideoUrl(url)) {
+  if (url && item.kind === "audio") {
+    media.appendChild(createAudioPlayer(url, false));
+  } else if (url && isVideoUrl(url)) {
     const video = document.createElement("video");
     video.src = url;
     video.controls = true;

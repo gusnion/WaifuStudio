@@ -1212,7 +1212,7 @@ async function openLoraCard(loraId) {
   body.appendChild(enrichRow("Subfamilia", lora.subfamily || "sin clasificar"));
   body.appendChild(enrichRow("Descripción", lora.description || "Sin descripción enriquecida"));
   const triggers = Array.isArray(lora.triggers) ? lora.triggers : (lora.trigger ? [lora.trigger] : []);
-  body.appendChild(enrichRow("Triggers", triggers.length ? triggers.join(", ") : "El autor no publica triggers"));
+  body.appendChild(enrichRow("Triggers", triggers.length ? triggers.join(", ") : "sin trigger"));
   body.appendChild(enrichRow("Peso recomendado", String(lora.recommended_weight ?? lora.default_weight ?? "—")));
   body.appendChild(enrichRow("Compatibilidad", getLoraCompatibility(lora).warning || "Compatible / no verificada"));
   if (lora.url) {
