@@ -581,6 +581,27 @@ function closeOcCreateModal(restore = true) {
   }
 }
 
+function openOcGenerateModal() {
+  openOcCreateModal();
+  const groups = [...OC_TRAIT_GROUPS];
+  const picked = [];
+  for (const group of groups) {
+    const items = (state.ocCatalogItems || []).filter(
+      (item) => (item.group || getOcTagGroup(item.tag)) === group
+    );
+    if (!items.length) continue;
+    picked.push(items[Math.floor(Math.random() * items.length)].tag);
+  }
+  state.ocSelectedTags = [...new Set(picked)];
+  renderOcCreateModal();
+  const status = $("oc-create-status");
+  if (status) {
+    status.textContent = state.ocSelectedTags.length
+      ? "Etiquetas aleatorias generadas. Escribe el nombre y guarda."
+      : "No hay rasgos cargados para generar un OC.";
+  }
+}
+
 async function saveOcFromModal() {
   const name = ($("oc-create-name")?.value || "").trim();
   const status = $("oc-create-status");
@@ -1511,6 +1532,7 @@ function closeOcModal() {
 
 function initOcPicker() {
   on("btn-oc-create", "click", openOcCreateModal);
+  on("btn-oc-generate", "click", openOcGenerateModal);
   on("btn-oc-create-close", "click", () => closeOcCreateModal(true));
   on("btn-oc-create-cancel", "click", () => closeOcCreateModal(true));
   on("btn-oc-create-save", "click", () => saveOcFromModal().catch((error) => setOcStatus(error.message, true)));
