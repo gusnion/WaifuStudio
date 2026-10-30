@@ -3022,3 +3022,19 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
+
+#oc-selected .oc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+#oc-selected .oc-chip-remove {
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+

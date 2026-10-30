@@ -290,72 +290,44 @@ function renderOcSelected() {
   const container = $("oc-selected");
   if (!container) return;
   container.replaceChildren();
-  if (!state.ocSelectedTags || !state.ocSelectedTags.length) {
+  const tags = [...(state.ocSelectedTags || [])];
+  for (const extra of state.ocExtras || []) {
+    if (!tags.some((tag) => tag.toLowerCase() === extra.toLowerCase())) tags.push(extra);
+  }
+  if (!tags.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
-    empty.textContent = "Ningún tag seleccionado.";
+    empty.textContent = "Ninguna tag seleccionada.";
     container.appendChild(empty);
     return;
   }
-
-  const grouped = new Map();
-  for (const g of [...OC_TRAIT_GROUPS, "other"]) {
-    grouped.set(g, []);
-  }
-
-  for (const tag of state.ocSelectedTags) {
-    const g = getOcTagGroup(tag);
-    if (grouped.has(g)) {
-      grouped.get(g).push(tag);
-    } else {
-      grouped.get("other").push(tag);
-    }
-  }
-
-  for (const [groupKey, tags] of grouped.entries()) {
-    if (!tags.length) continue;
-
-    const groupCard = document.createElement("div");
-    groupCard.className = "oc-selected-group";
-    groupCard.dataset.category = groupKey;
-
-    const groupTitle = document.createElement("div");
-    groupTitle.className = "oc-selected-group-title";
-
-    const icon = document.createElement("span");
-    icon.textContent = OC_CATEGORY_ICONS[groupKey] || "🏷️";
-
+  for (const tag of tags) {
+    const isExtra = (state.ocExtras || []).some(
+      (item) => item.toLowerCase() === tag.toLowerCase()
+    );
+    const chip = document.createElement("span");
+    chip.className = "oc-chip selected";
     const label = document.createElement("span");
-    label.textContent = `${GROUP_LABELS[groupKey] || OC_CATEGORY_TITLES[groupKey] || "Otros"} (${tags.length})`;
-
-    groupTitle.append(icon, label);
-    groupCard.appendChild(groupTitle);
-
-    const row = document.createElement("div");
-    row.className = "oc-selected-cards-row";
-
-    for (const tag of tags) {
-      const card = document.createElement("div");
-      card.className = "oc-selected-card oc-selected-chip";
-
-      const text = document.createElement("span");
-      text.className = "oc-selected-card-tag";
-      text.textContent = tag;
-
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "oc-selected-card-remove";
-      remove.textContent = "✕";
-      remove.title = `Quitar ${tag}`;
-      remove.setAttribute("aria-label", `Quitar ${tag}`);
-      remove.addEventListener("click", () => toggleOcTag(tag));
-
-      card.append(text, remove);
-      row.appendChild(card);
-    }
-
-    groupCard.appendChild(row);
-    container.appendChild(groupCard);
+    label.textContent = tag;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "oc-chip-remove";
+    remove.textContent = "×";
+    remove.title = `Quitar ${tag}`;
+    remove.setAttribute("aria-label", `Quitar ${tag}`);
+    remove.addEventListener("click", () => {
+      if (isExtra) {
+        state.ocExtras = state.ocExtras.filter(
+          (item) => item.toLowerCase() !== tag.toLowerCase()
+        );
+        renderOcSelected();
+        scheduleSaveActiveOcTags();
+      } else {
+        toggleOcTag(tag);
+      }
+    });
+    chip.append(label, remove);
+    container.appendChild(chip);
   }
 }
 
@@ -363,7 +335,7 @@ function renderOcExtras() {
   const box = $("oc-extras-box");
   const container = $("oc-extras");
   container.replaceChildren();
-  box.classList.toggle("hidden", !state.ocExtras.length);
+  box.classList.add("hidden");
   for (const tag of state.ocExtras) {
     const chip = document.createElement("span");
     chip.className = "oc-selected-chip";
@@ -645,6 +617,7 @@ function scheduleSaveActiveOcTags() {
       await putJson(`/api/characters/${character.id}`, {
         name: character.name,
         tags: [...state.ocSelectedTags],
+        extras: [...state.ocExtras],
         preprompt: "ninguno",
         rating: character.rating || "nsfw",
         notes: character.notes || "",

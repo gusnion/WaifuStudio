@@ -6916,8 +6916,8 @@ class TopbarNavigationStaticTests(ServerTestCase):
         self.assertIn("oc-category-card", picker_code, "oc_picker.js debe generar tarjetas de categoría")
         self.assertIn("oc-trait-card", picker_code, "oc_picker.js debe generar tarjetas individuales de rasgos")
         self.assertIn("oc-trait-grid", picker_code, "oc_picker.js debe usar el grid de rasgos")
-        self.assertIn("oc-selected-card", picker_code, "oc_picker.js debe renderizar tarjetas seleccionadas")
-        self.assertIn("oc-selected-group", picker_code, "oc_picker.js debe agrupar los seleccionados por categoría")
+        self.assertIn("oc-chip-remove", picker_code, "oc_picker.js debe renderizar chips planos con X")
+        self.assertIn("oc-chip selected", picker_code, "oc_picker.js debe marcar los chips seleccionados")
 
         # 3. Reglas CSS visuales en static/css/components.css
         css = (base_dir / "static" / "css" / "components.css").read_text(encoding="utf-8")
