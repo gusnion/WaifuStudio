@@ -1,3 +1,5 @@
+param([switch]$Force)
+
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\environment.ps1"
 
@@ -12,20 +14,38 @@ if (!$engineListener) {
     Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\start_engine.ps1`"" -WindowStyle Minimized
 }
 
-# 2. Comprobar si el servidor WaifuStudio está corriendo; si no, arrancarlo
+# 2. Comprobar si el servidor WaifuStudio está corriendo; si no, arrancarlo.
+#    -Force mata el proceso obsoleto: el puerto ocupado ya no impide probar el código nuevo.
 $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($Force -and $listener) {
+    $oldPid = $listener.OwningProcess
+    Write-Host "Reiniciando servidor obsoleto (PID $oldPid)..." -ForegroundColor Yellow
+    Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Milliseconds 250
+        if (-not (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)) { break }
+    }
+    $listener = $null
+}
 if (!$listener) {
     Write-Host "Iniciando servidor WaifuStudio en segundo plano..." -ForegroundColor Cyan
     Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\start_app.ps1`"" -WindowStyle Minimized
-    # Esperar hasta 10 segundos a que el puerto responda
+    # Esperar hasta 20 segundos a que el puerto responda
     $ready = $false
-    for ($i = 0; $i -lt 20; $i++) {
-        Start-Sleep -Milliseconds 500
+    for ($i = 0; $i -lt 80; $i++) {
+        Start-Sleep -Milliseconds 250
         $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($listener) { $ready = $true; break }
     }
     if (!$ready) {
         Write-Warning "El servidor tardo en iniciar, abriendo la ventana de todas formas..."
+    } else {
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 5
+            Write-Host "Build activo: $($health.build) (PID $($health.pid))" -ForegroundColor Green
+        } catch {
+            Write-Warning "No se pudo leer /api/health: $($_.Exception.Message)"
+        }
     }
 }
 
