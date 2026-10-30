@@ -2965,3 +2965,37 @@ input[type="checkbox"] {
   box-shadow: 0 0 0 1px rgba(224, 86, 122, 0.55), 0 0 20px rgba(224, 86, 122, 0.6);
 }
 
+
+.oc-ref-gallery-box {
+  width: min(900px, 96vw);
+}
+
+.oc-ref-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.oc-ref-gallery-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0e0f13;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.oc-ref-gallery-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.oc-ref-gallery-card:hover {
+  border-color: var(--accent);
+}
+

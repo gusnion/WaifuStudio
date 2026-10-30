@@ -665,6 +665,7 @@ function updateOcActiveHeader() {
   const add = $("btn-oc-add");
   const train = $("btn-oc-train");
   const addRef = $("btn-oc-add-ref");
+  const addRefGallery = $("btn-oc-add-ref-gallery");
   const useImage = $("btn-oc-use-image");
   const hasActive = Boolean(character);
   if (name) name.textContent = hasActive ? character.name : "Sin OC activo";
@@ -673,7 +674,7 @@ function updateOcActiveHeader() {
       ? `${(character.tags || []).length} rasgos · ${(character.extras || []).length} extras · ${(state.characterRefs || []).length} referencias`
       : "Crea o selecciona un OC para ver su ficha.";
   }
-  for (const button of [edit, add, train, addRef, useImage]) {
+  for (const button of [edit, add, train, addRef, addRefGallery, useImage]) {
     if (button) button.disabled = !hasActive;
   }
 }
@@ -1083,6 +1084,70 @@ async function saveCharacter(event) {
   }
 }
 
+function ocGalleryImageUrl(item) {
+  return (item?.urls && item.urls[0]) || (item?.outputs && item.outputs[0]
+    ? `/media/${item.id}/${item.outputs[0]}`
+    : "");
+}
+
+async function openOcRefGallery() {
+  if (state.activeCharacterId == null) {
+    setOcStatus("Selecciona un OC antes de añadir referencias", true);
+    return;
+  }
+  $("oc-ref-gallery-modal")?.classList.remove("hidden");
+  await loadOcRefGallery();
+}
+
+async function loadOcRefGallery() {
+  const grid = $("oc-ref-gallery-grid");
+  const status = $("oc-ref-gallery-status");
+  if (!grid) return;
+  grid.replaceChildren();
+  if (status) status.textContent = "Cargando…";
+  try {
+    const data = await api("/api/gallery?kind=image&limit=24&offset=0");
+    const items = (data.items || []).filter((item) => item.status === "done");
+    if (!items.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "No hay imágenes en la galería.";
+      grid.appendChild(empty);
+      if (status) status.textContent = "Vacío";
+      return;
+    }
+    for (const item of items) {
+      const url = ocGalleryImageUrl(item);
+      if (!url) continue;
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "oc-ref-gallery-card";
+      card.title = item.prompt || `Generación #${item.id}`;
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = card.title;
+      img.loading = "lazy";
+      card.appendChild(img);
+      card.addEventListener("click", () => {
+        addOcRefFromGallery(item.id).catch((error) => setOcStatus(error.message, true));
+      });
+      grid.appendChild(card);
+    }
+    if (status) status.textContent = `${items.length} imágenes`;
+  } catch (error) {
+    if (status) status.textContent = error.message;
+  }
+}
+
+async function addOcRefFromGallery(genId) {
+  const charId = state.activeCharacterId;
+  if (charId == null) return;
+  $("oc-ref-gallery-modal")?.classList.add("hidden");
+  await postJson(`/api/characters/${charId}/refs`, { gen_id: genId });
+  await loadCharacterRefs();
+  setOcStatus(`Referencia de la galería añadida a #${charId}`);
+}
+
 async function uploadOcRef(file) {
   const charId = state.activeCharacterId;
   if (charId == null) {
@@ -1468,6 +1533,13 @@ function initOcPicker() {
     openTrainModal(character);
   });
   on("btn-oc-add-ref", "click", () => $("oc-ref-upload").click());
+  on("btn-oc-add-ref-gallery", "click", () => {
+    openOcRefGallery().catch((error) => setOcStatus(error.message, true));
+  });
+  on("btn-oc-ref-gallery-close", "click", () => $("oc-ref-gallery-modal")?.classList.add("hidden"));
+  on("oc-ref-gallery-modal", "click", (event) => {
+    if (event.target === $("oc-ref-gallery-modal")) $("oc-ref-gallery-modal")?.classList.add("hidden");
+  });
   on("oc-ref-upload", "change", () => {
     const file = $("oc-ref-upload").files[0];
     uploadOcRef(file)

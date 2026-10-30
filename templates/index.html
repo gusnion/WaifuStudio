@@ -1176,8 +1176,9 @@
           <div class="oc-refs-actions">
             <button id="btn-oc-use-image" class="primary" type="button" disabled>Usar en Imagen</button>
             <button id="btn-oc-train" class="oc-special-btn" type="button" title="Entrena una LoRA con las referencias del OC activo" disabled>Entrenar LoRA</button>
-            <button id="btn-oc-add-ref" type="button" title="Añadir una imagen de referencia desde tu disco">Añadir referencia</button>
+            <button id="btn-oc-add-ref" type="button" title="Añadir una imagen de referencia desde tu disco">Añadir referencia local</button>
             <input id="oc-ref-upload" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+            <button id="btn-oc-add-ref-gallery" type="button" title="Elegir una imagen de la galería como referencia">Añadir referencia galería</button>
             <button id="btn-oc-sheet" type="button" title="Genera una hoja catálogo para IPAdapter (M10); no se adjunta como referencia I2I" disabled>Crear hoja</button>
           </div>
         </div>
@@ -1981,6 +1982,17 @@
         <button id="btn-enrich-close" type="button">Cerrar</button>
       </div>
       <div id="enrich-body" class="enrich-body"></div>
+    </div>
+  </div>
+
+  <div id="oc-ref-gallery-modal" class="modal hidden">
+    <div class="modal-box oc-ref-gallery-box">
+      <div class="modal-header">
+        <h2>Elegir referencia de la galería</h2>
+        <span id="oc-ref-gallery-status" class="oc-status">Cargando…</span>
+        <button id="btn-oc-ref-gallery-close" type="button">Cerrar</button>
+      </div>
+      <div id="oc-ref-gallery-grid" class="oc-ref-gallery-grid"></div>
     </div>
   </div>
 
