@@ -468,6 +468,21 @@ function Install-Trainer {
 }
 
 
+function Install-Poses {
+    Write-Step 'poses por defecto (install\manifest\manifest.poses.json)'
+    $posesScript = Join-Path $Root 'scripts\download_poses.py'
+    if (-not (Test-Path -LiteralPath $posesScript)) {
+        Write-Warn 'scripts\download_poses.py no encontrado; el catálogo de poses se puede descargar desde la app.'
+        return
+    }
+    try {
+        Invoke-Tool -Label 'poses' -Command $VenvPython -ToolArgs @($posesScript)
+    } catch {
+        Write-Warn ("No se pudo descargar el catálogo de poses ({0}); puedes reintentar con 'python scripts\download_poses.py'." -f $_.Exception.Message)
+    }
+}
+
+
 function Install-Models {
     Write-Step 'modelos (install\manifest\manifest.models.json)'
     $manifest = Read-JsonFile $ModelsManifestPath
@@ -515,7 +530,19 @@ function Install-Models {
         }
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
         Write-Step ("descarga {0} ({1} GB)" -f $entry.id, [math]::Round($entry.bytes / 1e9, 2))
-        Get-VerifiedFile -Url $url -Destination $dest -Sha256 $entry.sha256 -Bytes $entry.bytes
+        if ($entry.archive_member) {
+            $zipPath = Join-Path $env:TEMP ("waifu-" + $entry.id + ".zip")
+            $extractDir = Join-Path $env:TEMP ("waifu-" + $entry.id)
+            Remove-Item -LiteralPath $zipPath, $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+            Invoke-WebRequest -Uri $entry.url -OutFile $zipPath -UseBasicParsing
+            Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
+            $memberPath = Join-Path $extractDir ($entry.archive_member -replace '/', '\')
+            Copy-Item -LiteralPath $memberPath -Destination $dest -Force
+            Remove-Item -LiteralPath $zipPath, $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+            Assert-FileHash -Path $dest -Sha256 $entry.sha256 -Bytes $entry.bytes
+        } else {
+            Get-VerifiedFile -Url $url -Destination $dest -Sha256 $entry.sha256 -Bytes $entry.bytes
+        }
         New-Item -ItemType File -Force -Path $marker | Out-Null
         Write-Ok ("verificado: {0}" -f $entry.id)
         $done++
@@ -760,6 +787,7 @@ if ($IncludeTrainer -or ($IncludeOptional -and -not $SkipEngine)) {
 $installRecommended = Confirm-RecommendedModels
 if (-not $installRecommended) { $SkipModels = $true }
 Install-Models
+Install-Poses
 Register-RecommendedModels
 Install-Llm
 Write-Environment

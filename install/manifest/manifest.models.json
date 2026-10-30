@@ -581,6 +581,43 @@
       "required": true,
       "license": "Apache-2.0 (mismo master Qwen3.5-9B; visual.merger afinado emparejado)",
       "notes": "Proyector de vision Q8_0 (mradermacher/oldhag88) afinado para emparejar con el modelo captioning v5. Requerido para «Describir»."
+    },
+    {
+      "id": "anime-sharp-x4",
+      "filename": "4x-AnimeSharp.pth",
+      "subdir": "upscale_models",
+      "bytes": 67010245,
+      "sha256": "e7a7de2dafd7331c1992862bbbcd9e9712a9f9f8e6303f0aaa59b4341d359bab",
+      "url": "https://huggingface.co/Kim2091/AnimeSharp/resolve/main/4x-AnimeSharp.pth",
+      "revision": "main",
+      "license": "ver ficha del autor",
+      "required": true,
+      "notes": "B-38: upscaler de imagen para anime."
+    },
+    {
+      "id": "ultrasharp-x4",
+      "filename": "4x-UltraSharp.pth",
+      "subdir": "upscale_models",
+      "bytes": 66961958,
+      "sha256": "a5812231fc936b42af08a5edba784195495d303d5b3248c24489ef0c4021fe01",
+      "url": "https://huggingface.co/uwg/upscaler/resolve/main/ESRGAN/4x-UltraSharp.pth",
+      "revision": "main",
+      "license": "ver ficha del autor",
+      "required": true,
+      "notes": "B-38: upscaler de imagen 2.5D/foto."
+    },
+    {
+      "id": "animejanai-x2",
+      "filename": "2x-AnimeJaNai_HD_V3_Compact.pth",
+      "subdir": "upscale_models",
+      "bytes": 4838742,
+      "sha256": "af7307eee19e5982a8014dd0e4650d3bde2e25aa78d2105a4bdfd947636e4c8f",
+      "url": "https://github.com/the-database/mpv-upscale-2x_animejanai/releases/download/3.0.0/2x_AnimeJaNai_HD_V3_ModelsOnly.zip",
+      "revision": "3.0.0",
+      "license": "CC-BY-NC-SA-4.0",
+      "required": true,
+      "archive_member": "2x_AnimeJaNai_HD_V3_ModelsOnly/2x_AnimeJaNai_HD_V3_Compact.pth",
+      "notes": "B-38: se extrae del ZIP oficial; upscaler de vídeo 2x."
     }
   ]
 }
