@@ -798,7 +798,14 @@ function characterRow(character) {
     renameInput.focus();
     renameInput.select();
   });
-  actions.append(duplicateButton, renameButton);
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "danger";
+  deleteButton.textContent = t("Eliminar");
+  deleteButton.addEventListener("click", () => {
+    deleteCharacter(character).catch((error) => setOcStatus(error.message, true));
+  });
+  actions.append(duplicateButton, renameButton, deleteButton);
   row.append(header, tags, renameBox, actions);
   row.addEventListener("click", (event) => {
     if (event.target.closest("button, input, select, textarea, a, label")) return;
@@ -1020,8 +1027,8 @@ const handleRename = renameCharacter;
 async function deleteCharacter(character) {
   const confirmed = await showOcConfirmModal({
     title: "Eliminar personaje",
-    message: `¿Eliminar el OC «${character.name}» y sus referencias?`,
-    confirmText: "Confirmar",
+    message: `¿Estás seguro de eliminar este OC «${character.name}» y sus referencias?`,
+    confirmText: "Eliminar",
     cancelText: "Cancelar",
     isDanger: true,
   });
