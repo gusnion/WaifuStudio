@@ -3055,3 +3055,15 @@ input[type="checkbox"] {
   min-width: 32px;
 }
 
+
+#oc-selected {
+  flex-wrap: nowrap;
+  overflow-x: hidden;
+  max-height: 18rem;
+}
+
+#oc-selected .oc-chip {
+  width: fit-content;
+  max-width: 100%;
+}
+
