@@ -3079,3 +3079,17 @@ input[type="checkbox"] {
   width: 100%;
 }
 
+
+.oc-active-header {
+  flex-wrap: nowrap;
+}
+
+.oc-active-header > div {
+  min-width: 0;
+}
+
+#btn-oc-use-image {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
