@@ -187,12 +187,28 @@ function syncTimelineAiAction() {
   }
 }
 
-function calcTotalDuration() {  const clips = state.current.data.clips || [];
+function calcTotalDuration() {
+  const clips = state.current.data.clips || [];
   const total = clips.reduce((acc, c) => acc + (Number(c.duration) || 3.0), 0);
   const durEl = $("timeline-total-duration");
   if (durEl) durEl.textContent = `Duración total: ${total.toFixed(1)}s (${clips.length} clips)`;
   const cntEl = $("timeline-track-count");
   if (cntEl) cntEl.textContent = `${clips.length} clips`;
+  const exportBtn = $("btn-timeline-export");
+  if (exportBtn) {
+    exportBtn.disabled = clips.length === 0;
+    exportBtn.title = clips.length ? "Exportar la secuencia a MP4" : "Añade clips para exportar";
+  }
+  const ruler = $("timeline-ruler");
+  if (ruler) {
+    ruler.hidden = clips.length === 0;
+    ruler.replaceChildren();
+    for (let index = 0; index <= 4; index += 1) {
+      const mark = document.createElement("span");
+      mark.textContent = `${((total * index) / 4).toFixed(1)}s`;
+      ruler.appendChild(mark);
+    }
+  }
 }
 
 function resolveMediaUrl(item) {
@@ -246,6 +262,7 @@ export function clipDurationForItem(item, metadataDuration = null) {
 }
 
 function updatePreviewMedia(clip) {
+  $("timeline-preview-wrap")?.classList.toggle("has-media", Boolean(clip));
   const video = $("timeline-preview-video");
   let img = $("timeline-preview-image");
   if (!img && video && video.parentNode) {

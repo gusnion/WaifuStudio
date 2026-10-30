@@ -317,3 +317,78 @@
   gap: var(--space-2, 8px);
 }
 
+
+/* Estados ocultos que el layout comun estaba pisando */
+#timeline-export-actions[hidden],
+.audio-ai-fields[hidden],
+#timeline-ai-audio-text-field[hidden],
+#timeline-ai-seconds-field[hidden],
+#timeline-ai-model-field[hidden] {
+  display: none;
+}
+
+.timeline-preview-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+#timeline-preview-wrap.has-media .timeline-preview-empty {
+  display: none;
+}
+
+.timeline-ruler {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-media-shelf {
+  max-height: 160px;
+}
+
+.timeline-track {
+  min-height: 96px;
+}
+
+.timeline-audio-track {
+  min-height: 74px;
+}
+
+#btn-timeline-export:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+
+.timeline-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+#timeline-export-actions[hidden] {
+  display: none;
+}
+
+#timeline-preview-wrap:not(.has-media) #timeline-preview-video,
+#timeline-preview-wrap:not(.has-media) #timeline-preview-image {
+  display: none;
+}
+
+
+.timeline-ruler[hidden] {
+  display: none;
+}
+

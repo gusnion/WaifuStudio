@@ -322,6 +322,7 @@
             </fieldset>
           </div>
         </details>
+
       </aside>
 
       <section class="gallery-panel tab-viewport">
@@ -1181,7 +1182,7 @@
       <aside class="controls tab-sidebar timeline-sidebar">
         <!-- BLOQUE 1: Proyecto & Exportación -->
         <fieldset class="control-card" id="timeline-card-project">
-          <legend>1. Proyecto &amp; Exportación</legend>
+          <legend>1. Proyecto</legend>
           <label class="field">
             <span>Proyecto</span>
             <select id="timeline-project-select">
@@ -1196,41 +1197,11 @@
             <button id="btn-timeline-new" class="secondary" type="button">Nuevo</button>
             <button id="btn-timeline-save" class="secondary" type="button">Guardar</button>
           </div>
-          <button id="btn-timeline-export" class="primary" type="button">Exportar MP4</button>
-          <p id="timeline-status" class="field-hint"></p>
-          <div id="timeline-export-actions" class="control-inline hidden" hidden>
-            <button id="btn-timeline-open-folder" class="secondary timeline-btn-mini" type="button">Abrir carpeta</button>
-            <button id="btn-timeline-copy-path" class="secondary timeline-btn-mini" type="button">Copiar ruta</button>
-          </div>
-          <p id="timeline-export-feedback" class="field-hint" role="status" aria-live="polite"></p>
-          <input id="timeline-export-path" class="field-hint hidden" type="text" readonly aria-label="Ruta exportada">
         </fieldset>
 
-        <!-- BLOQUE 2: Biblioteca de Medios (Galería) -->
-        <fieldset class="control-card" id="timeline-card-media">
-          <legend>2. Biblioteca de Medios</legend>
-          <div class="control-inline">
-            <label class="field" style="flex:1;">
-              <select id="timeline-media-filter">
-                <option value="">Todos</option>
-                <option value="video">Vídeos</option>
-                <option value="image">Imágenes</option>
-              </select>
-            </label>
-            <button id="btn-timeline-refresh-media" type="button" class="btn-refresh" title="Refrescar medios">🔄</button>
-          </div>
-          <div id="timeline-media-shelf" class="timeline-media-shelf"></div>
-          <p class="field-hint">Usa el botón '+' en cada miniatura para añadir a la secuencia.</p>
-          <div class="control-inline">
-            <button id="btn-timeline-load-file" type="button">Cargar archivo…</button>
-            <input id="timeline-media-file" type="file" accept="image/*,video/*" hidden>
-            <button id="btn-timeline-open-gallery" type="button">Elegir de galería…</button>
-          </div>
-        </fieldset>
-
-        <!-- BLOQUE 3: Generar en Timeline con IA -->
+        <!-- BLOQUE 2: Generar en Timeline con IA -->
         <fieldset class="control-card" id="timeline-card-ai">
-          <legend>3. Generar en Timeline con IA</legend>
+          <legend>2. Generar en Timeline con IA</legend>
           <label class="field">
             <span>Acción IA</span>
             <select id="timeline-ai-action">
@@ -1280,11 +1251,47 @@
           <button id="btn-timeline-ai-cancel" class="secondary hidden" type="button">Cancelar generación</button>
           <p id="timeline-ai-status" class="field-hint"></p>
         </fieldset>
+        <!-- BLOQUE 2: Biblioteca de Medios (Galería) -->
+        <fieldset class="control-card" id="timeline-card-media">
+          <legend>3. Biblioteca de Medios</legend>
+          <div class="control-inline">
+            <label class="field" style="flex:1;">
+              <select id="timeline-media-filter">
+                <option value="">Todos</option>
+                <option value="video">Vídeos</option>
+                <option value="image">Imágenes</option>
+              </select>
+            </label>
+            <button id="btn-timeline-refresh-media" type="button" class="btn-refresh" title="Refrescar medios">🔄</button>
+          </div>
+          <div id="timeline-media-shelf" class="timeline-media-shelf"></div>
+          <p class="field-hint">Usa el botón '+' en cada miniatura para añadir a la secuencia.</p>
+          <div class="control-inline">
+            <button id="btn-timeline-load-file" type="button">Cargar archivo…</button>
+            <input id="timeline-media-file" type="file" accept="image/*,video/*" hidden>
+            <button id="btn-timeline-open-gallery" type="button">Elegir de galería…</button>
+          </div>
+        </fieldset>
+
+
+        <fieldset class="control-card timeline-export-card" id="timeline-card-export">
+          <legend>4. Exportar</legend>
+          <button id="btn-timeline-export" class="primary" type="button" disabled title="Añade clips para exportar">Exportar MP4</button>
+          <p id="timeline-status" class="field-hint"></p>
+          <div id="timeline-export-actions" class="timeline-export-actions hidden" hidden>
+            <button id="btn-timeline-open-folder" class="secondary timeline-btn-mini" type="button">Abrir carpeta</button>
+            <button id="btn-timeline-copy-path" class="secondary timeline-btn-mini" type="button">Copiar ruta</button>
+          </div>
+          <p id="timeline-export-feedback" class="field-hint" role="status" aria-live="polite"></p>
+          <input id="timeline-export-path" class="field-hint hidden" type="text" readonly aria-label="Ruta exportada">
+        </fieldset>
+
       </aside>
 
       <section class="gallery-panel tab-viewport timeline-viewport">
         <!-- Visor Previsualización -->
         <div class="timeline-preview-wrap" id="timeline-preview-wrap">
+          <p id="timeline-preview-empty" class="timeline-preview-empty">Sin clip seleccionado. Añade un medio o genera un clip con IA.</p>
           <video id="timeline-preview-video" controls playsinline></video>
           <img id="timeline-preview-image" style="display:none;" alt="Preview clip">
           <div class="timeline-preview-controls">
@@ -1295,6 +1302,7 @@
 
         <!-- Área de Pistas -->
         <div class="timeline-tracks-container" id="timeline-tracks-container">
+          <div id="timeline-ruler" class="timeline-ruler" aria-hidden="true"></div>
           <div class="timeline-track-header">
             <span>Pista 1 — Vídeo e Imagen</span>
             <span id="timeline-track-count">0 clips</span>
