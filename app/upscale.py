@@ -48,6 +48,88 @@ from app.video import concat_videos, find_ffmpeg
 
 logger = logging.getLogger(__name__)
 
+# Presupuestos de pixeles por VRAM para evitar que una difusion Highres
+# desborde una GPU pequena. Son orientativos: el bloqueo duro deja margen 1.25x.
+_HIRES_MP_PER_GB = 0.25
+_FAST_MP_PER_GB = 1.25
+
+
+def detect_gpu_vram_gb() -> float:
+    """VRAM total de la GPU mas grande detectada por nvidia-smi; 12 GB si falla."""
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=4,
+            check=False,
+        )
+        values = []
+        for line in (result.stdout or "").splitlines():
+            try:
+                values.append(float(line.strip()))
+            except ValueError:
+                continue
+        if values:
+            return round(max(values) / 1024.0, 1)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return 12.0
+
+
+def evaluate_upscale_risk(
+    width: int,
+    height: int,
+    *,
+    scale: int,
+    passes: int,
+    mode: str,
+    vram_gb: float | None = None,
+) -> dict[str, Any]:
+    """Calcula salida y riesgo de una ampliacion antes de encolarla."""
+    width = max(1, int(width))
+    height = max(1, int(height))
+    scale = max(1, int(scale))
+    passes = 1 if int(passes) <= 1 else 2
+    mode = str(mode or "fast")
+    vram = float(vram_gb if vram_gb is not None else detect_gpu_vram_gb())
+    factor = scale ** passes
+    out_w, out_h = width * factor, height * factor
+    megapixels = round((out_w * out_h) / 1_000_000, 2)
+    per_gb = _HIRES_MP_PER_GB if mode in ("hires", "qwen_remaster") else _FAST_MP_PER_GB
+    budget = round(max(1.5, vram * per_gb), 2)
+    hard_limit = round(min(40.0, budget * 1.25), 2)
+    if mode in ("hires", "qwen_remaster"):
+        budget = min(budget, 10.0)
+        hard_limit = min(hard_limit, 12.5)
+    reasons: list[str] = []
+    if mode in ("hires", "qwen_remaster") and megapixels > budget:
+        reasons.append("highres_over_budget")
+    if megapixels > hard_limit:
+        reasons.append("output_over_hard_limit")
+    risk = "blocked" if megapixels > hard_limit else ("warn" if reasons else "ok")
+    recommended_scale = 2 if scale > 2 else scale
+    recommended_mode = "fast" if mode != "fast" else mode
+    return {
+        "source": {"width": width, "height": height},
+        "output": {"width": out_w, "height": out_h, "megapixels": megapixels},
+        "vram_gb": vram,
+        "mode": mode,
+        "budget_mp": budget,
+        "hard_limit_mp": hard_limit,
+        "risk": risk,
+        "reasons": reasons,
+        "recommended": {
+            "scale": recommended_scale,
+            "passes": 1,
+            "upscale_mode": recommended_mode,
+        },
+    }
+
 UPSCALERS_PATH = APP_ROOT / "registry" / "upscalers-v1.json"
 CATALOG_VERSION = 1
 MIN_UPSCALE_SCALE = 1
@@ -1910,6 +1992,8 @@ __all__ = [
     "build_upscale_graph",
     "build_video_upscale_graph",
     "clamp_or_validate_upscale_dimensions",
+    "detect_gpu_vram_gb",
+    "evaluate_upscale_risk",
     "fps_ckpt",
     "fps_multiplier",
     "frame_interpolation",

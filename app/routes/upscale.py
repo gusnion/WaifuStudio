@@ -9,18 +9,21 @@ from __future__ import annotations
 
 import base64
 import binascii
+import io
 import uuid
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse
+from PIL import Image
 
 from app.engine import EngineError
 from app.routes.image import _decode_image_b64, _write_input_png
 from app.routes.jobs import _JOBS
 from app.upscale import (
     clamp_or_validate_upscale_dimensions,
+    evaluate_upscale_risk,
     fps_ckpt,
     fps_multiplier,
     frame_interpolation,
@@ -40,6 +43,43 @@ from app.upscale import (
 router = APIRouter()
 MAX_LOCAL_VIDEO_BYTES = 1024 * 1024 * 1024
 LOCAL_VIDEO_EXTENSIONS = (".mp4", ".webm")
+
+
+def _image_dimensions(source: Path | bytes) -> tuple[int, int] | None:
+    try:
+        if isinstance(source, (bytes, bytearray)):
+            with Image.open(io.BytesIO(source)) as img:
+                return img.size
+        with Image.open(Path(source)) as img:
+            return img.size
+    except Exception:
+        return None
+
+
+def _risk_guard(
+    payload: dict,
+    *,
+    width: int,
+    height: int,
+    scale: int,
+    passes: int,
+    mode: str,
+) -> JSONResponse | None:
+    risk = evaluate_upscale_risk(
+        width, height, scale=scale, passes=passes, mode=mode
+    )
+    if risk["risk"] == "blocked" and payload.get("confirm_risk") is not True:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": (
+                    f"Ampliación bloqueada: {risk['output']['megapixels']} MP "
+                    f"con {mode} en {risk['vram_gb']} GB de VRAM"
+                ),
+                "risk": risk,
+            },
+        )
+    return None
 
 
 def _decode_video_b64(raw: Any, filename: Any) -> tuple[bytes, str, str]:
@@ -129,6 +169,29 @@ async def api_upscale_plan(request: Request, payload: dict = Body(...)) -> Any:
     return {"ok": True, **plan}
 
 
+@router.post("/api/upscale/preflight")
+async def api_upscale_preflight(payload: dict = Body(...)) -> Any:
+    """Calcula dimensiones y riesgo antes de encolar una ampliacion."""
+    try:
+        width = int(payload.get("width"))
+        height = int(payload.get("height"))
+        scale = int(payload.get("scale") or 2)
+        passes = parse_passes(payload.get("passes"))
+        mode = parse_upscale_mode(payload.get("upscale_mode"))
+    except (TypeError, ValueError, EngineError) as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    if width <= 0 or height <= 0:
+        return JSONResponse(status_code=400, content={"error": "dimensiones invalidas"})
+    return evaluate_upscale_risk(
+        width,
+        height,
+        scale=scale,
+        passes=passes,
+        mode=mode,
+        vram_gb=payload.get("vram_gb"),
+    )
+
+
 @router.post("/api/upscale")
 async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
     """Encola el escalado de una generacion de imagen (U1), de video (U2)
@@ -203,6 +266,18 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             )
         entry = get_upscaler(payload.get("model"))
         raw_bytes = _decode_image_b64(image_b64, "image_b64")
+        dims = _image_dimensions(raw_bytes)
+        if dims:
+            blocked = _risk_guard(
+                payload,
+                width=dims[0],
+                height=dims[1],
+                scale=entry["scale"],
+                passes=passes,
+                mode=upscale_mode,
+            )
+            if blocked is not None:
+                return blocked
         resolved_model = resolve_upscale_model_file(entry["file"], cfg)
         passes = clamp_or_validate_upscale_dimensions(
             raw_bytes,
@@ -337,6 +412,18 @@ async def api_upscale(request: Request, payload: dict = Body(...)) -> Any:
             passes=passes,
             model_file=resolved_model,
         )
+        dims = _image_dimensions(source)
+        if dims:
+            blocked = _risk_guard(
+                payload,
+                width=dims[0],
+                height=dims[1],
+                scale=entry["scale"],
+                passes=passes,
+                mode=upscale_mode,
+            )
+            if blocked is not None:
+                return blocked
     elif source_kind == "video":
         resolved_model = resolve_upscale_model_file(entry["file"], cfg)
         validate_video_upscale_dimensions(

@@ -68,3 +68,56 @@
   letter-spacing: 0.04em;
 }
 
+
+.upscale-risk-panel {
+  margin: 0 0 0.65rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.upscale-risk-panel strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.upscale-risk-panel.risk-ok {
+  border-color: var(--success, #27ae60);
+}
+
+.upscale-risk-panel.risk-warn {
+  border-color: var(--warning, #e6a23c);
+  background: rgba(230, 162, 60, 0.08);
+}
+
+.upscale-risk-panel.risk-blocked {
+  border-color: var(--danger, #e74c3c);
+  background: rgba(231, 76, 60, 0.1);
+}
+
+.upscale-risk-modal .modal-box {
+  width: min(560px, 94vw);
+}
+
+.upscale-risk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+}
+
+.upscale-risk-body p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.upscale-risk-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+}
+

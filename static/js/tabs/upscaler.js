@@ -631,6 +631,7 @@ function selectUpscaleSource(id) {
   state.upscaleCompareSlot2 = null;
   renderUpscaleGallery();
   updateUpscaleSourceView();
+  scheduleUpscaleRisk();
 }
 
 function selectUpscaleGalleryItem(itemOrId) {
@@ -881,6 +882,7 @@ function applyUpscaleKind() {
   $("upscale-rife-model-field").classList.toggle("hidden", kind !== "video");
   $("btn-upscale").textContent = upscaleActionLabel();  updateUpscaleSourceView();
   updateUpscaleActions();
+  scheduleUpscaleRisk();
 }
 
 async function finishUpscale(job) {
@@ -936,6 +938,190 @@ async function finishVideoUpscale() {
   state.upscaleSourceId = state.videoViewer.selectedId;
   await loadUpscaleGallery(1);
   switchTab("video");
+}
+
+let upscaleRiskTimer = null;
+state.upscaleRisk = null;
+
+function currentUpscaleRiskConfig() {
+  const modelId = $("upscale-model")?.value || "";
+  const entry = (state.upscalers || []).find((item) => item.id === modelId) || null;
+  const passes = Number($("upscale-passes")?.value || 1);
+  const mode = $("upscale-mode")?.value || "fast";
+  return { entry, scale: Number(entry?.scale || 2), passes, mode };
+}
+
+async function imageFileDimensions(b64) {
+  if (!b64) return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = String(b64).startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
+  });
+}
+
+async function currentUpscaleSourceDimensions() {
+  const kind = upscaleKind();
+  if (kind !== "image") return null;
+  const local = state.upscaleLocalFile;
+  if (local?.b64) return imageFileDimensions(local.b64);
+  const source = selectedUpscaleSource();
+  if (!source) return null;
+  const width = Number(source.params?.width);
+  const height = Number(source.params?.height);
+  if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+    return { width, height };
+  }
+  const url = resolveItemImageUrl(source);
+  if (!url) return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function renderUpscaleRiskPanel(risk) {
+  const panel = $("upscale-risk-panel");
+  if (!panel) return;
+  if (!risk) {
+    panel.classList.add("hidden");
+    return;
+  }
+  const out = risk.output || {};
+  const label = risk.risk === "blocked"
+    ? "BLOQUEADO"
+    : risk.risk === "warn"
+    ? "RIESGO ALTO"
+    : "DENTRO DEL PRESUPUESTO";
+  panel.replaceChildren();
+  const strong = document.createElement("strong");
+  strong.textContent = `${label}: ${out.width}×${out.height} (${Number(out.megapixels).toFixed(2)} MP)`;
+  const detail = document.createElement("span");
+  detail.textContent = `GPU ${risk.vram_gb} GB · presupuesto ${risk.budget_mp} MP · modo ${risk.mode}`;
+  panel.append(strong, detail);
+  panel.className = `upscale-risk-panel risk-${risk.risk}`;
+}
+
+async function refreshUpscaleRisk() {
+  const panel = $("upscale-risk-panel");
+  try {
+    const dims = await currentUpscaleSourceDimensions();
+    if (!dims) {
+      state.upscaleRisk = null;
+      renderUpscaleRiskPanel(null);
+      return null;
+    }
+    const { scale, passes, mode } = currentUpscaleRiskConfig();
+    const risk = await postJson("/api/upscale/preflight", {
+      width: dims.width,
+      height: dims.height,
+      scale,
+      passes,
+      upscale_mode: mode,
+    });
+    state.upscaleRisk = risk;
+    renderUpscaleRiskPanel(risk);
+    return risk;
+  } catch (error) {
+    state.upscaleRisk = null;
+    renderUpscaleRiskPanel(null);
+    return null;
+  }
+}
+
+function scheduleUpscaleRisk() {
+  clearTimeout(upscaleRiskTimer);
+  upscaleRiskTimer = setTimeout(() => {
+    refreshUpscaleRisk().catch(() => {});
+  }, 300);
+}
+
+function applyUpscaleRecommendation(risk) {
+  const recommended = risk?.recommended || {};
+  const mode = $("upscale-mode");
+  if (mode && recommended.upscale_mode) {
+    mode.value = recommended.upscale_mode;
+  }
+  const passes = $("upscale-passes");
+  if (passes && recommended.passes) {
+    passes.value = String(recommended.passes);
+  }
+  const scale = Number(recommended.scale);
+  const model = (state.upscalers || []).find((item) => Number(item.scale) === scale);
+  if (model && $("upscale-model")) {
+    $("upscale-model").value = model.id;
+  }
+  applyUpscaleKind();
+  scheduleUpscaleRisk();
+}
+
+function showUpscaleRiskModal(risk) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal upscale-risk-modal";
+    const box = document.createElement("div");
+    box.className = "modal-box";
+    const header = document.createElement("div");
+    header.className = "modal-header";
+    const title = document.createElement("h2");
+    title.textContent = "Ampliación demasiado grande";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "Cerrar";
+    header.append(title, close);
+    const body = document.createElement("div");
+    body.className = "upscale-risk-body";
+    const out = risk.output || {};
+    const text = document.createElement("p");
+    text.textContent = `Salida: ${out.width}×${out.height} (${Number(out.megapixels).toFixed(2)} MP). GPU: ${risk.vram_gb} GB. Modo: ${risk.mode}. Puede tardar horas, llenar la VRAM y bloquear el engine.`;
+    const hint = document.createElement("p");
+    hint.className = "field-hint";
+    hint.textContent = `Presupuesto seguro: ${risk.budget_mp} MP. Límite duro: ${risk.hard_limit_mp} MP.`;
+    const label = document.createElement("label");
+    label.className = "upscale-risk-confirm";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    const checkText = document.createElement("span");
+    checkText.textContent = "Entiendo el riesgo y quiero continuar";
+    label.append(check, checkText);
+    body.append(text, hint, label);
+    const actions = document.createElement("div");
+    actions.className = "modal-footer";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "secondary";
+    cancel.textContent = "Cancelar";
+    const recommend = document.createElement("button");
+    recommend.type = "button";
+    recommend.className = "secondary";
+    recommend.textContent = "Usar recomendación";
+    const confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.className = "primary";
+    confirm.textContent = "Generar de todas formas";
+    confirm.disabled = true;
+    check.addEventListener("change", () => {
+      confirm.disabled = !check.checked;
+    });
+    const finish = (decision) => {
+      overlay.remove();
+      resolve(decision);
+    };
+    close.addEventListener("click", () => finish("cancel"));
+    cancel.addEventListener("click", () => finish("cancel"));
+    recommend.addEventListener("click", () => finish("recommended"));
+    confirm.addEventListener("click", () => finish(check.checked ? "confirm" : "cancel"));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) finish("cancel");
+    });
+    actions.append(cancel, recommend, confirm);
+    box.append(header, body, actions);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
 }
 
 async function generateUpscale() {
@@ -1047,6 +1233,22 @@ async function generateUpscale() {
     state.upscaleLastResultUrl = null;
     state.upscaleLastResultId = null;
   }
+  if (kind === "image") {
+    const risk = await refreshUpscaleRisk();
+    if (risk && risk.risk === "blocked") {
+      const decision = await showUpscaleRiskModal(risk);
+      if (decision === "recommended") {
+        applyUpscaleRecommendation(risk);
+        setUpscaleStatus("Configuración recomendada aplicada; revisa y vuelve a generar.");
+        return;
+      }
+      if (decision !== "confirm") {
+        setUpscaleStatus("Generación cancelada por riesgo de VRAM.");
+        return;
+      }
+      payload.confirm_risk = true;
+    }
+  }
   const btn = $("btn-upscale");
   if (btn) btn.disabled = true;
   setUpscaleStatus("Encolando...");
@@ -1135,7 +1337,11 @@ function initUpscalerTab() {
   on("btn-toggle-upscale-thumbs", "click", () =>
     toggleThumbs("upscaler-gallery", "btn-toggle-upscale-thumbs")
   );
-  on("upscale-model", "change", upscaleModelNote);
+  on("upscale-model", "change", () => {
+    upscaleModelNote();
+    scheduleUpscaleRisk();
+  });
+  on("upscale-passes", "change", scheduleUpscaleRisk);
   on("upscale-ckpt", "change", upscaleCkptNote);
   on("upscale-mode", "change", () => {
     const isDiffMode = upscaleKind() === "image" && $("upscale-mode") && $("upscale-mode").value !== "fast";
