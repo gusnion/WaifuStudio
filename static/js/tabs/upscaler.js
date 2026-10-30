@@ -28,12 +28,13 @@ import { switchTab } from "../navigation.js";
 
 function setUpscaleProgress(progress) {
   setProgress(progress, "upscale");
-  const stateText = progress && progress.state;
-  if (stateText) {
-    const txt = $("upscale-progress-text");
-    if (txt) txt.textContent = stateText;
-    setUpscaleStatus(`Escalando (${stateText})...`);
-  }
+  if (!progress) return;
+  const stateText = progress.state || "running";
+  const step = progress.step == null ? "-" : progress.step;
+  const total = progress.total == null ? "-" : progress.total;
+  const percent = progress.percent == null ? "" : ` · ${Number(progress.percent).toFixed(0)}%`;
+  const node = progress.node ? ` · nodo ${progress.node}` : "";
+  setUpscaleStatus(`Escalando ${step}/${total}${percent}${node} (${stateText})`);
 }
 
 function upscaleKind() {
