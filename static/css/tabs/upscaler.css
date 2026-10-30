@@ -56,3 +56,15 @@
   max-height: 100% !important;
   object-fit: contain !important;
 }
+
+.upscale-risk-note {
+  margin: 0 0 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--danger, #e74c3c);
+  background: rgba(231, 76, 60, 0.08);
+  color: var(--danger, #e74c3c);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
