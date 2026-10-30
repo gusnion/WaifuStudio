@@ -141,8 +141,8 @@ async function loadUpscaleModels() {
   for (const model of state.upscalers) {
     const available = model.available !== false;
     const label = available
-      ? `${model.label || model.id} (×${model.scale})`
-      : `${model.label || model.id} (×${model.scale}) — No disponible (falta ${model.file || "archivo"})`;
+      ? `${model.label || model.id}`
+      : `${model.label || model.id} — No disponible (falta ${model.file || "archivo"})`;
     const opt = option(model.id, label);
     if (!available) {
       opt.disabled = true;
