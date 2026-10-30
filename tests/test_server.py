@@ -6628,7 +6628,8 @@ class GalleryUiPhase3Tests(ServerTestCase):
         self.assertIn('<button id="btn-video-generate"', html)
         self.assertIn('<button id="btn-editor-generate"', html)
         self.assertIn('<button id="btn-upscale"', html)
-        self.assertEqual(html.count('class="generate-block"'), 4)
+        self.assertIn('<button id="btn-audio-generate"', html)
+        self.assertEqual(html.count('class="generate-block"'), 5)
 
     def test_model_family_badge_static_html_and_js(self):
         html = self.make_client().get("/").text

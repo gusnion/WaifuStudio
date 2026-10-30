@@ -1082,7 +1082,8 @@ class TestAudioVoiceStaticUI(unittest.TestCase):
     def test_w16b_audio_has_three_numbered_steps(self) -> None:
         panel = self._panel_audio()
         for element_id in (
-            "audio-step-1",
+            "audio-mode-a-sidebar",
+            "audio-mode-b-sidebar",
             "audio-step-2-a",
             "audio-step-2-b",
             "audio-step-3",

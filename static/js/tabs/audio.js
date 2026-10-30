@@ -138,28 +138,13 @@ export async function loadAudioClips() {
     grid.innerHTML = "";
     clips.forEach((clip) => {
       const card = document.createElement("div");
-      card.className = "gallery-item";
-      card.style.cursor = "pointer";
-      card.style.border = "1px solid var(--border-color, #333)";
-      card.style.borderRadius = "4px";
-      card.style.padding = "4px";
-      card.style.background = "rgba(255,255,255,0.02)";
-      card.style.transition = "transform 0.15s, border-color 0.15s";
-
+      card.className = "audio-gallery-card";
+      card.classList.toggle("selected", selectedClip?.gen_id === clip.gen_id);
       card.innerHTML = `
         <video class="audio-clip-thumb" src="${clip.url || ""}" preload="metadata" muted playsinline></video>
-        <div style="font-weight:600; font-size:0.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${clip.name}</div>
-        <div style="font-size:0.7rem; color:var(--text-muted, #888); margin-top:2px;">Gen #${clip.gen_id}</div>
+        <div class="audio-gallery-name">${clip.name}</div>
+        <div class="audio-gallery-meta">Gen #${clip.gen_id}</div>
       `;
-
-      card.addEventListener("mouseenter", () => {
-        card.style.borderColor = "var(--primary, #5c7cfa)";
-      });
-      card.addEventListener("mouseleave", () => {
-        if (selectedClip?.gen_id !== clip.gen_id) {
-          card.style.borderColor = "var(--border-color, #333)";
-        }
-      });
       card.addEventListener("click", () => {
         selectClip({ gen_id: clip.gen_id, name: clip.name, path: clip.path });
       });
@@ -195,6 +180,9 @@ export async function selectClip(clipSource) {
     $("audio-clip-audio-status").textContent = selectedClip.has_audio ? "Con audio" : "Mudo";
     $("audio-selected-path").value = selectedClip.path || "";
     $("audio-selected-gen-id").value = selectedClip.gen_id || "";
+    document.querySelectorAll("#audio-gallery-grid .audio-gallery-card").forEach((card, index) => {
+      card.classList.toggle("selected", Boolean(selectedClip?.gen_id) && card.textContent.includes(`Gen #${selectedClip.gen_id}`));
+    });
 
     const preview = $("audio-clip-preview");
     const previewUrl = clipSource.url
@@ -673,6 +661,10 @@ function setAudioMode(mode) {
   toggle("audio-mode-a-viewport", !isA);
   toggle("audio-mode-b-sidebar", isA);
   toggle("audio-mode-b-viewport", isA);
+  toggle("audio-mode-a-run", !isA);
+  toggle("audio-mode-b-run", isA);
+  $("btn-audio-generate")?.classList.toggle("hidden", isA);
+  $("btn-audio-voice-generate")?.classList.toggle("hidden", !isA);
   const hint = $("audio-mode-hint");
   if (hint) {
     hint.textContent = isA

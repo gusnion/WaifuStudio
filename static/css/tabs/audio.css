@@ -141,3 +141,105 @@
   padding: 4px 6px;
   border-radius: 4px;
 }
+
+
+/* Layout compacto de Audio: viewport útil, galería seleccionable */
+.audio-controls {
+  width: min(380px, 34vw);
+}
+
+.audio-generate-block {
+  margin-bottom: 0.6rem;
+}
+
+.audio-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.audio-gallery-card {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  background: var(--panel-2);
+  min-width: 0;
+}
+
+.audio-gallery-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.audio-gallery-card .audio-clip-thumb {
+  margin-bottom: 4px;
+}
+
+#audio-empty-card,
+#audio-voice-empty-card {
+  margin: 0 0 1rem;
+  max-width: none;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+#audio-empty-card .notice-icon,
+#audio-voice-empty-card .notice-icon {
+  display: none;
+}
+
+#audio-empty-card h2,
+#audio-voice-empty-card h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+#audio-empty-card p,
+#audio-voice-empty-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.audio-result-tabs {
+  margin-bottom: 0.7rem;
+}
+
+@media (max-width: 1200px) {
+  .audio-gallery-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .audio-controls {
+    width: 100%;
+  }
+  .audio-gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.audio-gallery-name {
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audio-gallery-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
