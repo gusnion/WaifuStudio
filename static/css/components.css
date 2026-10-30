@@ -909,7 +909,7 @@ input[type="checkbox"] {
   width: 100% !important;
   height: 100% !important;
   min-height: 0 !important;
-  padding: 0 !important;
+  padding: 1rem !important;
   overflow: hidden !important;
 }
 
