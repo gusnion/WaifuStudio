@@ -156,7 +156,7 @@ const REQUIRED_IDS = [
   "editor-gallery-prev", "editor-gallery-next", "editor-gallery-info", "panel-upscaler", "upscale-kind", "upscale-source-field",
   "upscale-source-label", "upscale-source-info", "upscale-file-field", "upscale-file", "upscale-mode", "upscale-denoise", "upscale-passes-field", "upscale-passes",
   "upscale-sharpen-field", "upscale-sharpen", "upscale-sharpen-method", "upscale-gallery-thumbs", "upscale-gallery-prev", "upscale-gallery-next", "upscale-gallery-info",
-  "upscale-model-field", "upscale-model", "upscale-model-note", "upscale-scale-field", "upscale-scale", "upscale-rife-model", "upscale-ckpt-field", "upscale-ckpt", "upscale-ckpt-note",
+  "upscale-model-field", "upscale-model", "upscale-model-note", "upscale-rife-model", "upscale-ckpt-field", "upscale-ckpt", "upscale-ckpt-note",
   "upscale-multiplier-field", "upscale-multiplier", "btn-upscale", "btn-upscale-cancel", "upscale-status", "upscale-progress",
   "upscale-progress-fill", "upscale-progress-text", "upscale-preview", "upscale-preview-img", "upscale-preview-video", "upscale-preview-empty",
   "btn-upscale-compare", "upscale-compare", "upscale-compare-stage", "upscale-compare-before", "upscale-compare-after", "upscale-compare-handle", "upscale-compare-ratio",
