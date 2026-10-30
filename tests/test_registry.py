@@ -114,7 +114,7 @@ class RealRegistryTests(unittest.TestCase):
         expected = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
         for item in expected["models"]:
             item["prompt_profile"] = "anima"
-            item["subfamily"] = "sin_clasificar"
+            item["subfamily"] = "anima"
         self.assertEqual(expected, payload)
 
 
@@ -455,7 +455,7 @@ class SubfamilySerializationAndEditTests(unittest.TestCase):
         }
         registry = ModelRegistry.from_dict(raw)
         entry = registry.get("modelo-antiguo")
-        self.assertEqual(entry.subfamily, "sin_clasificar")
+        self.assertEqual(entry.subfamily, "sdxl_base")
 
     def test_edicion_subfamily_manual_y_persistencia(self):
         registry = ModelRegistry()

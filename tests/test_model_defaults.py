@@ -95,7 +95,7 @@ class DefaultsRouteTests(unittest.TestCase):
                 self.assertGreaterEqual(len(models), 1)
                 for m in models:
                     self.assertIn("subfamily", m)
-                self.assertEqual(models[0]["subfamily"], "sin_clasificar")
+                self.assertEqual(models[0]["subfamily"], "anima")
 
     def test_api_model_put_subfamily_y_persistencia(self):
         from tests.test_server import REGISTRY_FIXTURE, make_config

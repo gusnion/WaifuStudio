@@ -519,7 +519,12 @@ def _entry_from_dict(data: object) -> ModelEntry:
     if raw_subfamily is not None and str(raw_subfamily).strip():
         subfamily = str(raw_subfamily).strip()
     else:
-        subfamily = DEFAULT_SUBFAMILY
+        subfamily = infer_subfamily(
+            filename=" ".join(
+                str(data.get(key) or "")
+                for key in ("id", "display_name", "family")
+            )
+        )
     owner_addon = data.get("owner_addon")
     entry = ModelEntry(
         id=data["id"],

@@ -1152,12 +1152,16 @@ function enrichModal(title) {
   if (titleEl) titleEl.textContent = title;
   body.replaceChildren();
   modal.classList.remove("hidden");
+  modal.classList.add("enrich-stack");
   return body;
 }
 
 function closeEnrichModal() {
   const modal = $("enrich-modal");
-  if (modal) modal.classList.add("hidden");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.classList.remove("enrich-stack");
+  }
 }
 
 function enrichRow(label, value) {
@@ -1245,7 +1249,8 @@ async function openModelCard(modelId) {
   openEnrichImage(body, model.image);
   body.appendChild(enrichRow("ID", model.id));
   body.appendChild(enrichRow("Familia / subfamilia", `${model.family || "—"} / ${model.subfamily || "sin clasificar"}`));
-  body.appendChild(enrichRow("Base", model.prompt_profile || "—"));
+  body.appendChild(enrichRow("Base", model.profile?.unet_name || model.profile?.base_model || "—"));
+  body.appendChild(enrichRow("Perfil de prompt", model.prompt_profile || "—"));
   body.appendChild(enrichRow("Preprompt", model.preprompt || "—"));
   body.appendChild(enrichRow("Licencia", model.license || "—"));
   const defaults = model.defaults || {};
@@ -1279,38 +1284,6 @@ async function openModelCard(modelId) {
     });
     body.appendChild(button);
   }
-}
-
-function openEditorPromptPanel() {
-  const body = enrichModal("Prompts del Editor");
-  if (!body) return;
-  const prompt = document.createElement("textarea");
-  prompt.rows = 5;
-  prompt.className = "textarea";
-  prompt.value = $("editor-prompt")?.value || "";
-  const negative = document.createElement("textarea");
-  negative.rows = 2;
-  negative.className = "textarea";
-  negative.value = $("editor-negative")?.value || "";
-  const labelPrompt = document.createElement("label");
-  labelPrompt.className = "field";
-  labelPrompt.innerHTML = "<span>Prompt</span>";
-  labelPrompt.appendChild(prompt);
-  const labelNeg = document.createElement("label");
-  labelNeg.className = "field";
-  labelNeg.innerHTML = "<span>Negativo</span>";
-  labelNeg.appendChild(negative);
-  const save = document.createElement("button");
-  save.type = "button";
-  save.className = "primary";
-  save.textContent = "Aplicar al Editor";
-  save.addEventListener("click", () => {
-    if ($("editor-prompt")) $("editor-prompt").value = prompt.value;
-    if ($("editor-negative")) $("editor-negative").value = negative.value;
-    setEditorStatus("Prompts del Editor actualizados");
-    closeEnrichModal();
-  });
-  body.append(labelPrompt, labelNeg, save);
 }
 
 function initLoras() {
@@ -1383,6 +1356,5 @@ export {
   closeLoraLibrary,
   openLoraCard,
   openModelCard,
-  openEditorPromptPanel,
   initLoras,
 };
