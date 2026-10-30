@@ -66,7 +66,7 @@
 }
 
 .image-category-card[open] > .image-category-header {
-  color: var(--accent) !important;
+  color: var(--text) !important;
   background: #232732 !important;
   border-bottom: 1px solid var(--border) !important;
 }
@@ -84,7 +84,7 @@
 
 .image-category-card[open] .category-indicator {
   transform: rotate(180deg);
-  color: var(--accent);
+  color: var(--text);
 }
 
 .image-category-body {

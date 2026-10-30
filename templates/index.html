@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -33,8 +33,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>WAIFU</h1>
-    <span id="build-stamp" class="build-stamp" title="Build {{ build }} · {{ build_mtime }}">{{ build }}</span>
+    <h1 title="Build {{ build }} · {{ build_mtime }}">WAIFU<span id="build-stamp" class="build-stamp" aria-label="Build {{ build }}">{{ build }}</span></h1>
     <nav class="tabs">
       <button id="tab-image" class="tab active" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Imagen</button>
       <button id="tab-editor" class="tab" type="button"><svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editor</button>
@@ -55,7 +54,7 @@
       <div class="language-selector-wrap">
         <button id="btn-language-selector" class="topbar-btn" type="button" title="Seleccionar idioma" aria-label="Idioma">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <span id="lang-current-label">EN</span>
+          <span id="lang-current-label">ES</span>
         </button>
         <div id="language-dropdown" class="language-dropdown hidden">
           <button type="button" class="lang-option" data-lang="en" data-i18n-ignore>English (EN)</button>
@@ -96,7 +95,7 @@
         <!-- CATEGORÍA 1: PROMPTING -->
         <details id="image-cat-prompting" class="image-category-card" open name="image-cat-accordion">
           <summary class="image-category-header">
-            <span class="category-title">PROMPTING</span>
+            <span class="category-title">PROMPT</span>
             <span class="category-indicator">▼</span>
           </summary>
           <div class="image-category-body controls-column-zones">
@@ -190,6 +189,21 @@
           </div>
         </details>
 
+        <fieldset class="control-card image-model-visible" id="image-block-model-visible">
+          <legend>1. Modelo <button type="button" class="btn-help" data-help="Elige el modelo de imagen y consulta su familia y subfamilia.">?</button></legend>
+          <label class="field">
+            <div class="field-header-row">
+              <span>Modelo</span>
+              <span id="model-family-badge" class="model-badge">Sin clasificar</span>
+            </div>
+            <select id="model"></select>
+            <button id="btn-model-card" type="button" class="secondary field-action">Ficha del modelo</button>
+          </label>
+          <div class="field">
+            <button id="btn-model-defaults" type="button" class="secondary">Editar defaults del modelo</button>
+          </div>
+        </fieldset>
+
         <!-- CATEGORÍA 2: CONFIGURACIÓN -->
         <details id="image-cat-config" class="image-category-card" name="image-cat-accordion" open>
           <summary class="image-category-header">
@@ -197,21 +211,9 @@
             <span class="category-indicator">▼</span>
           </summary>
           <div class="image-category-body controls-column-primary">
-            <!-- BLOQUE 1: Modelo y Estilo -->
+            <!-- BLOQUE 1: Estilo y LoRAs -->
             <fieldset class="control-card" id="image-block-model">
-              <legend>1. Modelo y Estilo <button type="button" class="btn-help" data-help="Elige el modelo Anima base, preprompt de estilo, clasificación de contenido y LoRAs instaladas.">?</button></legend>
-              <label class="field">
-                <div class="field-header-row">
-                  <span>Modelo</span>
-                  <span id="model-family-badge" class="model-badge">Sin clasificar</span>
-                </div>
-                <select id="model"></select>
-                <button id="btn-model-card" type="button" class="secondary field-action">Ficha del modelo</button>
-              </label>
-              <div class="field">
-                <button id="btn-model-defaults" type="button" class="secondary">Editar defaults del modelo</button>
-              </div>
-
+              <legend>1. Estilo y LoRAs <button type="button" class="btn-help" data-help="Elige el preprompt de estilo, la clasificación de contenido y las LoRAs instaladas.">?</button></legend>
               <div class="field">
                 <span>Preprompt</span>
                 <div class="preprompt-row">
@@ -1437,7 +1439,7 @@
         <p><strong>OC Maker</strong>: Guarda a tu personaje con nombre, rasgos fijos e imágenes de referencia. Desde la pestaña OC Maker puedes generar automáticamente una <em>Character Sheet</em> (vistas frontal, perfil y espalda) y lanzar el entrenamiento de tu propio <strong>LoRA dedicado</strong> en segundo plano.</p>
       </article>
 
-      <!-- SECCIÓN 2: Vídeo H3 -->
+      <!-- SECCIÓN 2: Vídeo Wan -->
       <article class="guide-section" data-category="video">
         <h3>2. Video Wan 2.2 (I2V / FLF2V)</h3>
         <p>WaifuStudio usa <strong>Wan 2.2</strong> para animar imagenes. La resolucion de salida la fija el perfil elegido; no se hereda del tamano de la imagen de entrada.</p>
@@ -1487,11 +1489,11 @@
 
       <!-- SECCIÓN 5: Upscaler Pro 2.0 -->
       <article class="guide-section" data-category="upscale">
-        <h3>5. 🔍 Upscaler Pro 2.0 &amp; Galería</h3>
+        <h3>5. Upscaler y Galería</h3>
         <p>El motor de escalado amplía imágenes y vídeos. Las opciones no disponibles se muestran deshabilitadas:</p>
         <ul>
-          <li><strong>Modo Rápido (GAN)</strong>: amplía con el modelo disponible en <code>ComfyUI/models/upscale_models</code>; el factor real depende del modelo y de las pasadas.</li>
-          <li><strong>Hires Fix</strong>: temporalmente deshabilitado porque falta el UNET de difusión <code>Anima-2.9B-preview-v1</code>.</li>
+          <li><strong>Modo Rápido (GAN)</strong>: RealESRGAN, AnimeSharp, UltraSharp o AnimeJaNai; el factor real depende del modelo y de las pasadas.</li>
+          <li><strong>Hires Fix</strong>: refinado con Anima Aesthetic v1.1 o un modelo SDXL registrado, con denoise y escala.</li>
           <li><strong>Qwen refine</strong>: refinado con Qwen; no promete 2048 px.</li>
           <li><strong>Nitidez RCAS/USM</strong>: aplica nitidez adaptativa en imagen y vídeo.</li>
           <li><strong>RIFE</strong>: interpolación ×2 disponible; el vídeo conserva el audio.</li>
@@ -1500,7 +1502,7 @@
 
       <!-- SECCIÓN 6: FAQ & Trucos -->
       <article class="guide-section" data-category="faq">
-        <h3>💡 Recetario de Trucos Pro &amp; Preguntas Frecuentes</h3>
+        <h3>Recetario de trucos y preguntas frecuentes</h3>
         
         <div class="guide-accordion">
           <div class="guide-acc-header">
@@ -1534,9 +1536,9 @@
             <span>▼</span>
           </div>
           <div class="guide-acc-body">
-            En los modelos I2V basados en Wan 2.1 / H3, el movimiento proviene del prompt:
+            En los modelos I2V basados en Wan 2.2, el movimiento proviene del prompt:
             1. Usa verbos dinámicos en inglés: <em>"running towards camera, intense action, wind blowing hair strongly, dramatic expression"</em>.
-            2. En el panel de Vídeo, puedes usar el selector de presets H3 para aplicar movimientos de cámara como <em>Zoom In, Pan Left, Tilt Up o Dynamic Action</em>.
+            2. En el panel de Vídeo, describe el movimiento de cámara en el prompt (zoom, paneo, inclinación o acción dinámica).
           </div>
         </div>
       </article>

@@ -388,3 +388,24 @@ main {
   letter-spacing: 0.04em;
 }
 
+
+header.topbar h1 {
+  position: relative;
+}
+
+.build-stamp {
+  position: absolute;
+  right: -10px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+}
+

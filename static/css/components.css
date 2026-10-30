@@ -24,7 +24,7 @@ button {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: #14151a;
   font-weight: 600;
 }
 
@@ -2699,7 +2699,7 @@ input[type="checkbox"] {
 }
 
 
-@media (max-width: 1180px) {
+@media (max-width: 1360px) {
   .tabs .tab {
     font-size: 0;
     gap: 0;
