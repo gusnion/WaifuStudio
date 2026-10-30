@@ -716,14 +716,11 @@ async function reuseGeneration(item) {
     Array.isArray(state.models) &&
     state.models.some((model) => model.id === item.model_id)
   );
-  if (isOtherTask || !isKnownModel) {
-    const taskName = isOtherTask
-      ? (params.task === "upscale" ? "Upscaler" : "Editor")
-      : (params.task || item.model_id || "otra tarea");
-    setStatus(`Resultado de ${taskName}; ábrelo en su pestaña`, true);
-    return;
-  }
-  if (item.model_id && $("model") && $("model").value !== item.model_id) {
+  const externalResult = isOtherTask || !isKnownModel;
+  const sourceLabel = isOtherTask
+    ? (params.task === "upscale" ? "Upscaler" : "Editor")
+    : (params.task || item.model_id || "otra tarea");
+  if (isKnownModel && item.model_id && $("model") && $("model").value !== item.model_id) {
     $("model").value = item.model_id;
     await applyModel(item.model_id);
   }
@@ -763,19 +760,23 @@ async function reuseGeneration(item) {
   if (params.width != null || params.height != null) {
     setSizeFromDefaults(params.width, params.height);
   }
-  applyLorasSelection(Array.isArray(params.loras) ? params.loras : []);
+  if (!externalResult) {
+    applyLorasSelection(Array.isArray(params.loras) ? params.loras : []);
+  }
   let warning = "";
-  try {
-    await applySavedReference(params);
-  } catch (error) {
-    warning = error.message;
+  if (!isOtherTask) {
+    try {
+      await applySavedReference(params);
+    } catch (error) {
+      warning = error.message;
+    }
   }
   // BUG-IMAGE-01: Usar general_prompt si es string; de lo contrario dejarlo vacío
   const promptGeneral = $("prompt-general");
   if (promptGeneral) {
     if (typeof params.general_prompt === "string") {
       promptGeneral.value = params.general_prompt;
-    } else if (!isTagPromptProfile(state.prompt_profile)) {
+    } else if (savedPrompt && (externalResult || !isTagPromptProfile(state.prompt_profile))) {
       promptGeneral.value = savedPrompt;
     } else {
       promptGeneral.value = "";
@@ -783,6 +784,8 @@ async function reuseGeneration(item) {
   }
   if (warning) {
     setStatus(`Cargado #${item.id} · ${warning}`, true);
+  } else if (externalResult) {
+    setStatus(`Prompt heredado de ${sourceLabel} #${item.id}; el modelo de Imagen no cambia`);
   } else {
     setStatus(`Metadata heredada de #${item.id}: modelo, prompt y configuración`);
   }
