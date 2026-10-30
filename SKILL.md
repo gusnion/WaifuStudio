@@ -492,7 +492,7 @@ Esto es todo lo que un agente necesita para generar imágenes en esta máquina s
 2. `GET /api/models?scan=1`; localiza el `id` y revisa `family`, `subfamily` y `prompt_profile`.
 3. Si la arquitectura es desconocida, no inventes familia: deja `sin_clasificar` y pide revisión.
 4. Lee la ficha del autor (base, resolución, sampler/CFG/pasos, triggers y licencia).
-5. Edita la entrada con `PUT /api/models/{id}` (`family`, `subfamily`, `prompt_profile`, `defaults`).
+5. Edita la entrada con `PUT /api/models/{id}` (`display_name`, `family`, `subfamily`, `prompt_profile`, `defaults`, `image`, `url`, `source`, `license`, `triggers`, `notes`). En la UI: «Ficha y defaults del modelo».
 6. Añade el preprompt recomendado con `POST /api/preprompts/custom` (sin duplicar).
 7. Descarga la imagen del autor a `data/registry/media/` y referencia su ruta en la entrada.
 8. Comprueba en la UI: badge, placeholder, preprompt y defaults. Si no aparece, `?scan=1`.
@@ -502,7 +502,8 @@ Esto es todo lo que un agente necesita para generar imágenes en esta máquina s
 - 2–4 líneas: qué hace, cuándo usarla y qué no hace.
 - `triggers[]`: exactamente los del autor, sin traducir ni inventar.
 - `recommended_weight`: el peso probado por el autor o el medido en la app.
-- `description`, `source`, `url`, `image`, `enriched_by`, `updated_at`.
+- `description`, `source`, `url`, `image`, `triggers`, `recommended_weight`, `enriched_by`, `updated_at`.
+- Alta/edición: `PUT /api/loras/{id}` o «Biblioteca / metadatos» en la UI.
 - Si el autor no publica triggers, deja `triggers: []` y dilo; no inventes.
 
 ## 15. Cargar un preprompt recomendado
