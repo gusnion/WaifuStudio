@@ -892,7 +892,7 @@ def build_upscale_graph(
         graph["11"] = {
             "class_type": "UNETLoader",
             "inputs": {
-                "unet_name": "Anima-2.9B-preview-v1.safetensors",
+                "unet_name": "anima_aestheticV11.safetensors",
                 "weight_dtype": "default",
             },
         }
