@@ -16,12 +16,12 @@ import {
   promptTagsFromText,
   mergeZonesText,
 } from "./prompt_zones.js";
-import { attachReferenceFromUrl, fetchCharacterProfile } from "./prompt_popover.js";
+import { fetchCharacterProfile } from "./prompt_popover.js";
 import { openLightbox } from "./lightbox.js";
 import { openTrainModal } from "./oc_train.js";
 import { runMultiviewGeneration, renderSheet } from "./editor_multiview.js";
 import { selectLora } from "./loras.js";
-import { refreshNegative } from "../tabs/image.js";
+import { clearReference, refreshNegative } from "../tabs/image.js";
 import { openPoseLibrary, initPoseLibrary, getSelectedPose } from "./pose_library.js";
 import { t } from "../i18n.js";
 
@@ -775,17 +775,10 @@ async function useCharacter(character) {
   if (!state.negativeTouched) {
     await refreshNegative();
   }
-  const refs = state.characterRefs || [];
-  const attachable = refs.find((ref) => !isSheetRef(ref));
-  let refNote = "";
-  if (attachable) {
-    await attachReferenceFromUrl(attachable.url, refFilename(attachable));
-  } else if (refs.length) {
-    refNote = " (solo hojas: sin referencia I2I)";
-  }
+  clearReference();
   $("tab-image")?.click();
   setStatus(
-    `OC «${character.name}» cargado (${profile.mode})${loraNote}${extrasNote}${refNote}`
+    `OC «${character.name}» cargado como rasgos/LoRA (${profile.mode})${loraNote}${extrasNote}; sin imagen de referencia`
   );
 }
 
