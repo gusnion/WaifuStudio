@@ -544,8 +544,11 @@ function loadPoseLibrary() {
         if (!data || !Array.isArray(data.poses)) throw new Error("pose-skeletons.json inválido");
         poseState.data = data;
         poseState.poses = data.poses;
+        populateFilters();
+        applyPoseFilters();
         return loadRemotePoses().then(() => {
           populateFilters();
+          applyPoseFilters();
           return data;
         });
       })

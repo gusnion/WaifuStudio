@@ -62,7 +62,7 @@ function galleryStatusLabel(status) {
     return "Generando";
   }
   if (status === "error") {
-    return "error";
+    return "No se pudo generar";
   }
   if (status === "cancelled") {
     return "cancelado";
