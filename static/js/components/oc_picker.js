@@ -1240,12 +1240,6 @@ async function loadCharacterRefs() {
       note.textContent = "Para IPAdapter (M10); no recomendada como referencia I2I";
       figure.append(badge, note);
     }
-    const link = document.createElement("a");
-    link.className = "oc-ref-link";
-    link.href = ref.url;
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = "Ver/Descargar";
     const remove = document.createElement("button");
     remove.type = "button";
     remove.textContent = "Quitar";
@@ -1254,7 +1248,7 @@ async function loadCharacterRefs() {
         setOcStatus(error.message, true)
       );
     });
-    figure.append(link, remove);
+    figure.append(remove);
     container.appendChild(figure);
   }
 }
