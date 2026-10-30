@@ -694,6 +694,26 @@ async function addVideoRefs(fileList) {
   }
 }
 
+function syncVideoFirstFrameState() {
+  const mode = $("video-mode")?.value || "i2v";
+  const hasImage = Boolean($("video-image")?.files?.length);
+  const btn = $("btn-video-generate");
+  if (btn && ["i2v", "flf2v", "v2v"].includes(mode)) btn.disabled = !hasImage;
+}
+
+function clearVideoFirstFrame() {
+  const input = $("video-image");
+  if (input) input.value = "";
+  const preview = $("video-image-preview");
+  if (preview) preview.classList.add("hidden");
+  const img = $("video-image-preview-img");
+  if (img) img.removeAttribute("src");
+  const name = $("video-image-preview-name");
+  if (name) name.textContent = "";
+  syncVideoFirstFrameState();
+  setVideoStatus("Primer frame quitado");
+}
+
 function clearVideoRefs() {
   if (state.videoRefs) {
     for (const ref of state.videoRefs) {
@@ -1207,6 +1227,9 @@ function initVideoTab() {
     );
   });
   on("btn-video-clear-refs", "click", clearVideoRefs);
+  on("btn-video-clear-first", "click", clearVideoFirstFrame);
+  on("video-image", "change", syncVideoFirstFrameState);
+  syncVideoFirstFrameState();
 }
 
 export {

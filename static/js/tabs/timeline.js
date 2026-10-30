@@ -85,6 +85,11 @@ function setExportActions(outputPath = "") {
     copyBtn.disabled = !visible;
     copyBtn.title = visible ? state.lastExportPath : "Copiar ruta";
   }
+  const pathInput = $("timeline-export-path");
+  if (pathInput) {
+    pathInput.value = visible ? state.lastExportPath : "";
+    pathInput.classList.toggle("hidden", !visible);
+  }
   if (visible) setExportFeedback("");
 }
 
@@ -127,7 +132,8 @@ export async function copyTimelineExportPath() {
     setExportFeedback("Ruta copiada");
   } catch (err) {
     setTimelineStatus(`No se pudo copiar la ruta (${path}): ${err.message}`, true);
-    setExportFeedback(`No se pudo copiar: ${err.message}`, true);
+    setExportFeedback(`Copia manual: selecciona la ruta de abajo (${err.message})`, true);
+    $("timeline-export-path")?.select();
   }
 }
 
@@ -162,6 +168,11 @@ function syncTimelineAiAction() {
   if (seconds) seconds.disabled = !meta.seconds || Boolean(state.aiGenerating);
   const hint = $("timeline-ai-hint");
   if (hint) hint.textContent = meta.hint;
+  const modelField = $("timeline-ai-model-field");
+  if (modelField) {
+    const isImage = ((select && select.value) || "") === "insert_image";
+    modelField.hidden = !isImage;
+  }
 }
 
 function calcTotalDuration() {  const clips = state.current.data.clips || [];
@@ -874,6 +885,10 @@ async function enqueueClipJob(jobId, kind, dur, insertIdx, msg) {
 
 async function triggerAiAction(actionType, targetClipIndex = null) {
   if (state.aiGenerating) return;
+  if (actionType === "generate_audio") {
+    await generateTimelineAudio();
+    return;
+  }
   const meta = TIMELINE_AI_ACTIONS[actionType];
   if (!meta) {
     setAiStatus("Acción IA desconocida", true);
@@ -1056,7 +1071,7 @@ async function loadTimelineAiModels() {
   if (!select) return;
   try {
     const data = await api("/api/models");
-    const items = Array.isArray(data.items) ? data.items : Array.isArray(data.models) ? data.models : [];
+    const items = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : Array.isArray(data.models) ? data.models : [];
     select.replaceChildren();
     for (const model of items) {
       const option = document.createElement("option");
@@ -1160,7 +1175,7 @@ export function initTimelineTab() {
       state.current = proj;
       const nameInput = $("timeline-project-name");
       if (nameInput) nameInput.value = proj.name;
-      setExportActions("");
+      setExportActions(proj.output_path || proj.data?.output_path || "");
       renderTracks(); selectClip(0);
       setTimelineStatus(hydrated ? "Proyecto cargado (configuración de clips recuperada)" : `Proyecto '${proj.name}' cargado`);
     } catch (err) { setTimelineStatus(err.message, true); }
