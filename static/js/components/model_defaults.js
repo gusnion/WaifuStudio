@@ -21,6 +21,19 @@ async function saveDefaults(modelId, values) {
   await applyModel(modelId);
 }
 
+async function saveMetadata(modelId, values) {
+  const response = await fetch(`/api/models/${encodeURIComponent(modelId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(values),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "No se pudo guardar la ficha del modelo");
+  const model = state.models.find((item) => item.id === modelId);
+  if (model) Object.assign(model, values);
+  await applyModel(modelId);
+}
+
 function openDefaults(modelId) {
   const model = state.models.find((item) => item.id === modelId);
   if (!model) return;
@@ -71,6 +84,37 @@ function openDefaults(modelId) {
     label.append(span, input);
     form.appendChild(label);
   }
+  const metaCard = document.createElement("fieldset");
+  metaCard.className = "control-card";
+  const metaLegend = document.createElement("legend");
+  metaLegend.textContent = "Ficha del modelo";
+  const metaForm = document.createElement("div");
+  metaForm.className = "grid-2";
+  const metaInputs = {};
+  const metaFields = [
+    ["display_name", "Nombre visible", "text"],
+    ["source", "Fuente", "text"],
+    ["license", "Licencia", "text"],
+    ["image", "Miniatura (URL o ruta)", "text"],
+    ["url", "URL de origen", "text"],
+    ["triggers", "Triggers (separados por coma)", "text"],
+    ["notes", "Notas", "text"],
+  ];
+  for (const [key, labelText, type] of metaFields) {
+    const label = document.createElement("label");
+    label.className = "field";
+    const span = document.createElement("span");
+    span.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = type;
+    const raw = key === "triggers" ? (model.triggers || []).join(", ") : (model[key] || "");
+    input.value = String(raw);
+    metaInputs[key] = input;
+    label.append(span, input);
+    metaForm.appendChild(label);
+  }
+  metaCard.append(metaLegend, metaForm);
+
   const status = document.createElement("p");
   status.className = "status";
   const actions = document.createElement("div");
@@ -92,6 +136,16 @@ function openDefaults(modelId) {
     }
     save.disabled = true;
     try {
+      const metaValues = {
+        display_name: metaInputs.display_name.value.trim(),
+        source: metaInputs.source.value.trim(),
+        license: metaInputs.license.value.trim(),
+        image: metaInputs.image.value.trim(),
+        url: metaInputs.url.value.trim(),
+        triggers: metaInputs.triggers.value.split(",").map((t) => t.trim()).filter(Boolean),
+        notes: metaInputs.notes.value,
+      };
+      await saveMetadata(modelId, metaValues);
       await saveDefaults(modelId, values);
       overlay.remove();
     } catch (error) {
@@ -101,7 +155,7 @@ function openDefaults(modelId) {
     }
   });
   actions.append(cancel, save);
-  body.append(card, status);
+  body.append(card, metaCard, status);
   box.append(header, body, actions);
   overlay.appendChild(box);
   overlay.addEventListener("click", (event) => {

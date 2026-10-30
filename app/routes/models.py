@@ -723,6 +723,14 @@ async def api_model_update(
                 status_code=400,
                 content={"error": f"prompt_profile invalido: {prof!r}"},
             )
+    for key in ("image", "url", "notes", "source", "license", "enriched_by", "updated_at"):
+        if key in payload and isinstance(payload[key], str):
+            updates[key] = payload[key].strip()
+    if "triggers" in payload:
+        raw_triggers = payload["triggers"]
+        if not isinstance(raw_triggers, list) or not all(isinstance(t, str) for t in raw_triggers):
+            return JSONResponse(status_code=400, content={"error": "triggers debe ser lista de str"})
+        updates["triggers"] = [t.strip() for t in raw_triggers if t.strip()]
 
     if updates:
         entry = replace(entry, **updates)
@@ -742,6 +750,14 @@ async def api_model_update(
         "prompt_profile_info": prompt_profile_info(entry.prompt_profile),
         "unet_name": entry.profile.unet_name,
         "defaults": dict(entry.defaults),
+        "source": entry.source,
+        "license": entry.license,
+        "notes": entry.notes,
+        "image": getattr(entry, "image", ""),
+        "url": getattr(entry, "url", ""),
+        "triggers": list(getattr(entry, "triggers", []) or []),
+        "enriched_by": getattr(entry, "enriched_by", ""),
+        "updated_at": getattr(entry, "updated_at", ""),
     }
 
 
@@ -772,6 +788,14 @@ async def api_models(request: Request, scan: bool = False) -> list[dict]:
             "prompt_profile_info": prompt_profile_info(entry.prompt_profile),
             "unet_name": entry.profile.unet_name,
             "defaults": dict(entry.defaults),
+            "source": entry.source,
+            "license": entry.license,
+            "notes": entry.notes,
+            "image": getattr(entry, "image", ""),
+            "url": getattr(entry, "url", ""),
+            "triggers": list(getattr(entry, "triggers", []) or []),
+            "enriched_by": getattr(entry, "enriched_by", ""),
+            "updated_at": getattr(entry, "updated_at", ""),
         }
         for entry in reg.models
     ]

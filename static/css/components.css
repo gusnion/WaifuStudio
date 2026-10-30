@@ -1628,9 +1628,9 @@ input[type="checkbox"] {
 }
 
 .lora-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
 }
 
 .lora-option {
@@ -2748,5 +2748,28 @@ input[type="checkbox"] {
 
 .batch-size-select {
   padding-right: 20px;
+}
+
+
+.lora-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.lora-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+  border-style: dashed;
+}
+
+.lora-thumb.broken {
+  display: none;
 }
 

@@ -19,7 +19,7 @@ import {
   setProgress,
   setVideoProgress,
 } from "../dom.js";
-import { api, postJson, pollJob, cancelJob, enqueueJobs } from "../api.js";
+import { api, postJson, putJson, pollJob, cancelJob, enqueueJobs } from "../api.js";
 import { ResolutionKit } from "../components/resolution_kit.js";
 import {
   collectPromptZoneTags,
@@ -599,6 +599,30 @@ function updateGenerateButtonState() {
   }
 }
 
+function firstJobOutputUrl(job) {
+  const out = (job && job.outputs && job.outputs[0]) || null;
+  if (!out) return "";
+  if (typeof out === "string") return out.startsWith("/") ? out : `/media/${job.gen_id}/${out}`;
+  if (out.url) return out.url;
+  if (out.name && job.gen_id) return `/media/${job.gen_id}/${out.name}`;
+  return "";
+}
+
+async function captureLoraThumbnail(job) {
+  const url = firstJobOutputUrl(job);
+  if (!url || !state.loraSelection) return;
+  for (const loraId of state.loraSelection.keys()) {
+    const lora = state.loras.find((item) => item.id === loraId);
+    if (!lora || lora.image) continue;
+    try {
+      await putJson(`/api/loras/${encodeURIComponent(loraId)}`, { image: url });
+      lora.image = url;
+    } catch (_error) {
+      // La miniatura es opcional; no bloquea la generación.
+    }
+  }
+}
+
 async function generate() {
   flushPendingZoneInputs();
   let prompt = composePrompt();
@@ -650,7 +674,7 @@ async function generate() {
     const data = await postJson("/api/generate", payload);
     const ids = Array.isArray(data.job_ids) && data.job_ids.length ? data.job_ids : [data.job_id];
     reloadImageViewerFirstPage().catch(() => {});
-    await enqueueJobs(ids, { statusFn: setStatus, onDone: reloadImageViewerFirstPage });
+    await enqueueJobs(ids, { statusFn: setStatus, onDone: (job) => { reloadImageViewerFirstPage().catch(() => {}); captureLoraThumbnail(job).catch(() => {}); } });
   } catch (error) {
     setStatus(error.message, true);
   } finally {

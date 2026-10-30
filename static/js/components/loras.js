@@ -345,6 +345,20 @@ function renderLoraModalList() {
   for (const lora of items) {
     const row = document.createElement("div");
     row.className = "lora-option";
+    if (lora.image) {
+      const thumb = document.createElement("img");
+      thumb.className = "lora-thumb";
+      thumb.src = lora.image;
+      thumb.alt = lora.display_name || lora.id;
+      thumb.loading = "lazy";
+      thumb.addEventListener("error", () => thumb.classList.add("broken"));
+      row.appendChild(thumb);
+    } else {
+      const thumb = document.createElement("div");
+      thumb.className = "lora-thumb lora-thumb-placeholder";
+      thumb.textContent = "Sin miniatura";
+      row.appendChild(thumb);
+    }
     const label = document.createElement("label");
     label.className = "lora-check";
     const check = document.createElement("input");
@@ -652,6 +666,11 @@ function editLoraEntry(loraId) {
   $("lora-form-source").value = lora.source;
   $("lora-form-license").value = lora.license;
   $("lora-form-notes").value = lora.notes || "";
+  $("lora-form-description").value = lora.description || "";
+  $("lora-form-image").value = lora.image || "";
+  $("lora-form-url").value = lora.url || "";
+  $("lora-form-triggers").value = (Array.isArray(lora.triggers) ? lora.triggers : []).join(", ");
+  $("lora-form-recommended").value = String(lora.recommended_weight ?? lora.default_weight ?? 1);
   $("lora-library-form-title").textContent = `Editar «${lora.id}»`;
   $("btn-lora-form-cancel").classList.remove("hidden");
   setLoraLibraryStatus(`Editando ${lora.id} (id inmutable)`);
@@ -669,6 +688,11 @@ function readLoraForm() {
     source: $("lora-form-source").value.trim(),
     license: $("lora-form-license").value.trim(),
     notes: $("lora-form-notes").value,
+    description: $("lora-form-description").value.trim(),
+    image: $("lora-form-image").value.trim(),
+    url: $("lora-form-url").value.trim(),
+    triggers: $("lora-form-triggers").value.split(",").map((t) => t.trim()).filter(Boolean),
+    recommended_weight: Number($("lora-form-recommended").value),
   };
 }
 
@@ -1306,11 +1330,12 @@ function initLoras() {
   on("btn-lora-manage-modal", "click", openLoraLibrary);
   on("btn-lora-library-close", "click", closeLoraLibrary);
   on("btn-lora-form-cancel", "click", resetLoraForm);
-  on("btn-lora-upload", "click", () => {
-    $("lora-upload").click();
-  });
-  on("lora-upload", "change", () => {
-    uploadLoraFile().catch((error) => setLoraLibraryStatus(error.message, true));
+  window.addEventListener("waifu:lora-uploaded", (event) => {
+    const item = event && event.detail && event.detail.item;
+    openLoraLibrary();
+    if (item && item.id) {
+      setTimeout(() => editLoraEntry(item.id), 900);
+    }
   });
   on("lora-library-form", "submit", saveLoraEntry);
   on("lora-library-modal", "click", (event) => {

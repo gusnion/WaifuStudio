@@ -201,7 +201,7 @@
             <button id="btn-model-card" type="button" class="secondary field-action">Ficha del modelo</button>
           </label>
               <div class="field">
-            <button id="btn-model-defaults" type="button" class="secondary">Editar defaults del modelo</button>
+            <button id="btn-model-defaults" type="button" class="secondary">Ficha y defaults del modelo</button>
           </div>
             </fieldset>
             <!-- BLOQUE 1: Estilo y LoRAs -->
@@ -228,7 +228,7 @@
                 <div class="section-body">
                   <div class="lora-actions">
                     <button id="btn-lora-modal" type="button">Elegir LoRAs (0)</button>
-                    <button id="btn-lora-manage" type="button">Gestionar biblioteca</button>
+                    <button id="btn-lora-manage" type="button">Biblioteca / metadatos</button>
                     <button id="btn-lora-import" type="button">Cargar LoRA</button>
                     <input id="lora-import-file" type="file" accept=".safetensors" class="hidden">
                   </div>
@@ -2104,7 +2104,7 @@
         <div id="lora-options" class="lora-options"></div>
       </div>
       <div class="modal-footer">
-        <button id="btn-lora-manage-modal" type="button">Gestionar biblioteca</button>
+        <button id="btn-lora-manage-modal" type="button">Biblioteca / metadatos</button>
         <button id="btn-lora-clear" type="button">Quitar todos</button>
         <button id="btn-lora-done" class="primary" type="button">Listo</button>
       </div>
@@ -2164,13 +2164,35 @@
             </label>
           </div>
           <label class="field">
+            <span>Descripción</span>
+            <textarea id="lora-form-description" rows="2" placeholder="Qué hace esta LoRA, cuándo usarla..."></textarea>
+          </label>
+          <div class="grid-2">
+            <label class="field">
+              <span>Miniatura (URL o ruta)</span>
+              <input id="lora-form-image" type="text" placeholder="/api/refs/lora.png">
+            </label>
+            <label class="field">
+              <span>URL de origen</span>
+              <input id="lora-form-url" type="text" placeholder="https://civitai.com/...">
+            </label>
+          </div>
+          <div class="grid-2">
+            <label class="field">
+              <span>Triggers (separados por coma)</span>
+              <input id="lora-form-triggers" type="text" placeholder="trigger1, trigger2">
+            </label>
+            <label class="field">
+              <span>Peso recomendado (0-2)</span>
+              <input id="lora-form-recommended" type="number" min="0" max="2" step="0.05" value="1">
+            </label>
+          </div>
+          <label class="field">
             <span>Notas</span>
             <textarea id="lora-form-notes" rows="2" placeholder="Base, pasos, enlaces..."></textarea>
           </label>
           <p class="train-note">Borrar una entrada solo la quita del registro: el archivo .safetensors NO se borra de ComfyUI\models\loras.</p>
           <div class="oc-form-actions">
-            <button id="btn-lora-upload" type="button">Cargar desde disco</button>
-            <input id="lora-upload" type="file" accept=".safetensors" class="hidden">
             <button id="btn-lora-form-save" class="primary" type="submit">Guardar</button>
             <button id="btn-lora-form-cancel" class="hidden" type="button">Cancelar edición</button>
           </div>
