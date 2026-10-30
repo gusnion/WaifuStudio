@@ -1380,7 +1380,7 @@ async function openModelCard(modelId) {
   body.appendChild(enrichRow("Familia / subfamilia", `${model.family || "—"} / ${model.subfamily || "sin clasificar"}`));
   body.appendChild(enrichRow("Autor", model.source || "sin autor"));
   body.appendChild(enrichRow("Licencia", model.license || "sin licencia"));
-  body.appendChild(enrichRow("Base", model.profile?.unet_name || model.profile?.base_model || "—"));
+  body.appendChild(enrichRow("Base", model.unet_name || model.profile?.unet_name || model.profile?.base_model || "—"));
   body.appendChild(enrichRow("Perfil de prompt", model.prompt_profile || "—"));
   body.appendChild(enrichRow("Preprompt", model.preprompt || "—"));
 
