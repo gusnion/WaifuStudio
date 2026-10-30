@@ -1120,7 +1120,7 @@ class PromptZonesRoutesTests(ServerTestCase):
         zones = {item["id"]: item for item in data["zones"]}
         self.assertEqual(
             [item["id"] for item in data["zones"]],
-            ["quality", "safety", "subject", "character", "general"],
+            ["quality", "safety", "subject", "character", "artist", "general"],
         )
         self.assertEqual(zones["quality"]["tags"], ["masterpiece"])
         self.assertEqual(zones["safety"]["tags"], ["nsfw"])
@@ -1146,7 +1146,7 @@ class PromptZonesRoutesTests(ServerTestCase):
         response = self.make_client().post("/api/prompt/zones", json={"text": ""})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["composed"], "")
-        self.assertEqual(len(response.json()["zones"]), 5)
+        self.assertEqual(len(response.json()["zones"]), 6)
 
     def test_zones_sin_text_400(self):
         client = self.make_client()

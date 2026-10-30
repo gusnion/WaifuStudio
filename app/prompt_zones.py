@@ -19,12 +19,13 @@ from __future__ import annotations
 from app.engine import EngineError
 from app.tags import BULK_GROUPS, all_tags, get as tag_get
 
-ZONE_ORDER = ("quality", "safety", "subject", "character", "general")
+ZONE_ORDER = ("quality", "safety", "subject", "character", "artist", "general")
 ZONE_LABELS = {
     "quality": "Calidad/meta",
     "safety": "Safety",
     "subject": "Sujeto",
     "character": "Personaje",
+    "artist": "Artista",
     "general": "General",
 }
 
@@ -974,7 +975,7 @@ def prompt_options(zone: str) -> dict:
         )
     if zone == "general":
         subgroups = _general_option_subgroups()
-    elif zone == "character":
+    elif zone in ("character", "artist"):
         subgroups = []
     else:
         subgroups = [

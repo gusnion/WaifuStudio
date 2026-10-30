@@ -38,7 +38,7 @@ from app.prompt_zones import (
 class ConstantsTests(unittest.TestCase):
     def test_zone_order_y_labels(self):
         self.assertEqual(
-            ZONE_ORDER, ("quality", "safety", "subject", "character", "general")
+            ZONE_ORDER, ("quality", "safety", "subject", "character", "artist", "general")
         )
         self.assertEqual(
             ZONE_LABELS,
@@ -47,6 +47,7 @@ class ConstantsTests(unittest.TestCase):
                 "safety": "Safety",
                 "subject": "Sujeto",
                 "character": "Personaje",
+                "artist": "Artista",
                 "general": "General",
             },
         )
@@ -646,7 +647,7 @@ class ZonesPayloadTests(unittest.TestCase):
 
     def test_vacio(self):
         payload = zones_payload("")
-        self.assertEqual(len(payload), 5)
+        self.assertEqual(len(payload), 6)
         self.assertTrue(all(item["tags"] == [] for item in payload))
 
 

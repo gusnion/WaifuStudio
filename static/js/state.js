@@ -21,10 +21,11 @@ const ZONE_LABELS = {
   safety: "Safety",
   subject: "Sujeto",
   character: "Personaje",
+  artist: "Artista",
   general: "General",
 };
 
-const ZONE_ORDER = ["quality", "safety", "subject", "character", "general"];
+const ZONE_ORDER = ["quality", "safety", "subject", "character", "artist", "general"];
 
 const GENERAL_SUBCATS = [
   "rasgos",
@@ -161,6 +162,7 @@ const state = {
     safety: [],
     subject: [],
     character: [],
+    artist: [],
     general: {
       rasgos: [],
       ropa: [],
