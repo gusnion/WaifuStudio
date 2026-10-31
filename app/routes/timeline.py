@@ -394,24 +394,35 @@ async def api_timeline_reveal(request: Request) -> Any:
             content={"error": "archivo o carpeta exportado no encontrado"},
         )
 
-    if os.name != "nt":
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Abrir carpeta en Explorer solo esta disponible en Windows"},
-        )
-
-    try:
-        if target.is_dir():
-            subprocess.Popen(["explorer.exe", str(target)])
-            folder_path = str(target)
-        else:
-            subprocess.Popen(["explorer.exe", f"/select,{target}"])
-            folder_path = str(target.parent)
-    except Exception as exc:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"No se pudo abrir Explorer: {exc}"},
-        )
+    if os.name == "nt":
+        try:
+            if target.is_dir():
+                subprocess.Popen(["explorer.exe", str(target)])
+                folder_path = str(target)
+            else:
+                subprocess.Popen(["explorer.exe", f"/select,{target}"])
+                folder_path = str(target.parent)
+        except Exception as exc:
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"No se pudo abrir Explorer: {exc}"},
+            )
+    else:
+        opener = shutil.which("xdg-open")
+        if not opener:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "xdg-open no disponible; abre la carpeta manualmente"},
+            )
+        folder = target if target.is_dir() else target.parent
+        try:
+            subprocess.Popen([opener, str(folder)])
+        except Exception as exc:
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"No se pudo abrir la carpeta: {exc}"},
+            )
+        folder_path = str(folder)
 
     return {
         "ok": True,

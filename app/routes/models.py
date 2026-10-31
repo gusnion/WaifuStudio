@@ -65,6 +65,12 @@ def _call_add_lora(entry: dict) -> dict:
 
 LORA_UPLOAD_MAX_BYTES = int(2.5 * 1024 * 1024 * 1024)
 _LORA_FAMILY_RE = re.compile(r"[a-z0-9._-]+")
+
+
+def _rel_key(value: object) -> str:
+    """Clave canonica de ruta relativa: separador POSIX, sin barras extremas, minusculas."""
+    return str(value).replace("\\", "/").strip("/").lower()
+
 _LORA_SLUG_RE = re.compile(r"[^a-z0-9._-]+")
 _MAX_HEADER_READ_BYTES = 32 * 1024 * 1024
 _GENERIC_BOORU_TAGS = frozenset({
@@ -249,7 +255,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
         return []
 
     known_unets = {
-        entry.profile.unet_name.replace("/", "\\").lower()
+        _rel_key(entry.profile.unet_name)
         for entry in registry.models
     }
     known_ids = {entry.id for entry in registry.models}
@@ -268,8 +274,8 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
                 candidates.append((p, ckpt_dir, "checkpoint", raw_hdr))
 
     for path, base_dir, kind, raw_hdr in candidates:
-        rel_name = str(path.relative_to(base_dir)).replace("\\", "/")
-        if rel_name.replace("/", "\\").lower() in known_unets:
+        rel_name = path.relative_to(base_dir).as_posix()
+        if _rel_key(rel_name) in known_unets:
             continue
         base_id = _lora_slug(path.stem)
         model_id = base_id
@@ -351,7 +357,7 @@ def scan_disk_models(cfg: Any, registry: ModelRegistry | None = None) -> list[di
         )
         registry.add(entry)
         known_ids.add(model_id)
-        known_unets.add(rel_name.replace("/", "\\").lower())
+        known_unets.add(_rel_key(rel_name))
         added.append(entry)
 
     # Auto-corregir familia de modelos checkpoint existentes si estaban marcados como anima
@@ -449,16 +455,14 @@ def scan_disk_loras(comfy_root: Any) -> list[dict]:
         return []
 
     existing = list_loras()
-    file_to_entry = {
-        item["file"].replace("/", "\\").lower(): item for item in existing
-    }
+    file_to_entry = {_rel_key(item["file"]): item for item in existing}
     known_files = set(file_to_entry.keys())
     known_ids = {item["id"] for item in existing}
     added: list[dict] = []
 
     for path in sorted(loras_dir.rglob("*.safetensors")):
         rel_path = path.relative_to(loras_dir)
-        rel_str = str(rel_path).replace("/", "\\")
+        rel_str = rel_path.as_posix()
         kind, raw_header = classify_safetensors_file(path)
         if kind != "lora":
             continue
@@ -541,6 +545,7 @@ def lora_file_path(comfy_root: Any, relative: object) -> Path:
     """
     if not isinstance(relative, str) or not relative.strip():
         raise EngineError(f"file de lora requerido (recibido {relative!r})")
+    relative = relative.replace("\\", "/")
     if Path(relative).is_absolute():
         raise EngineError(
             f"file de lora debe ser relativo a models/loras: {relative!r}"
@@ -904,7 +909,7 @@ async def api_loras_upload(request: Request, payload: dict = Body(...)) -> Any:
         "id": lora_id,
         "family": family,
         "subfamily": lora_subfamily,
-        "file": f"{family}\\{filename}",
+        "file": f"{family}/{filename}",
         "display_name": display_name,
         "trigger": trigger,
         "default_weight": 1.0,
@@ -968,7 +973,7 @@ async def api_loras_delete(
     file_removed = False
     if file:
         root = (Path(cfg.comfy_root) / "models" / "loras").resolve()
-        target = (root / entry["file"]).resolve()
+        target = (root / str(entry["file"]).replace("\\", "/")).resolve()
         if not target.is_relative_to(root):
             return JSONResponse(
                 status_code=400,

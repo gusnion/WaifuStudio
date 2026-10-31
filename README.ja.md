@@ -233,7 +233,7 @@ Git アップデーターはタイムスタンプ付きのバックアップを�
 
 ワークフローは 12 GB の予算と 1 度に 1 ジョブという条件に合わせて調整されています。任意の Qwen3.5-9B アシスタントは CPU 上で動作するため、ComfyUI の VRAM を消費しません。
 
-サポート対象のインストール方法は Windows です。コアは標準的な FastAPI、ComfyUI、バニラ JavaScript で構成されています。Linux サーバー/LAN モードは計画中ですが、まだ利用できません。
+Windows と Linux に対応しています。コアは標準的な FastAPI、ComfyUI、バニラ JavaScript で構成されています。Linux ローカル: `install-linux.sh`（`docs/linux.md`）。Linux サーバー/LAN モードは計画中です。
 
 ## 現在の制限
 

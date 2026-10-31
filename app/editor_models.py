@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from app.config import APP_ROOT
 from app.engine import EngineError
@@ -41,7 +41,7 @@ def _require_relative_file(value: object, index: int) -> str:
     """Ruta relativa POSIX simple (sin absolutos, ``..`` ni ``\\``)."""
     file = _require_text(value, f"files[{index}]")
     path = Path(file)
-    if path.is_absolute() or "\\" in file:
+    if path.is_absolute() or PureWindowsPath(file).is_absolute() or "\\" in file:
         raise EngineError(f"catalogo del editor: files[{index}] invalido: {value!r}")
     if any(part in ("", ".", "..") for part in file.split("/")):
         raise EngineError(f"catalogo del editor: files[{index}] invalido: {value!r}")

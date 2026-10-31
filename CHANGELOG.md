@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Linux deployment
+
+- `[LINUX]` Native Linux install path: `install-linux.sh`, `start-linux.sh`, `stop-linux.sh`, `healthcheck.sh`, plus `README` steps and `docs/linux.md`.
+- `[LINUX]` POSIX normalization for model/LoRA paths, extensionless `ffmpeg` discovery, `xdg-open` for exported folders, and a Linux llama.cpp runtime (`manifest.llm.linux.json`).
+- `[CI]` `linux-smoke` workflow: shell syntax and Linux deployment checks.
+
 ## 2.5.1 — 2026-10-30
 
 Primer y único tag de la línea 2.5. Cubre las funciones congeladas de 2.5 y las correcciones de 2.5.1.

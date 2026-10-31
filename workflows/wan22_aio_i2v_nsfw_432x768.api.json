@@ -150,7 +150,7 @@
         "1",
         0
       ],
-      "lora_name": "wan22_uncensored\\lopi999\\NSFW-22-H-e8.safetensors",
+      "lora_name": "wan22_uncensored/lopi999/NSFW-22-H-e8.safetensors",
       "strength_model": 0.8
     }
   }
