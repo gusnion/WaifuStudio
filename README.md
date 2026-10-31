@@ -61,20 +61,43 @@ You can also open **Guide → Connect your AI agent** and use **Download SKILL.m
 
 ## Requirements
 
-- Windows 10/11 64-bit.
+- Windows 10/11 64-bit or Linux (Ubuntu 22.04/24.04 x86_64).
 - NVIDIA GPU with 8–12 GB VRAM (reference: RTX 3060 12 GB).
-- Driver 570+ (the stack uses CUDA 13).
-- Git for Windows (optional for ZIP installs).
-- 25 GB free for app + engine + LLM; ~100 GB if you download the recommended model set. Models are downloaded separately.
-- A short local path, for example `C:\AI\WaifuStudio`.
+- NVIDIA driver 570+ (the stack uses CUDA 13).
+- Git (optional for ZIP installs on Windows).
+- 25 GB free for app + engine + LLM; ~150 GB if you download the recommended model set. Models are downloaded separately.
+- A short local path, for example `C:\AI\WaifuStudio` or `/opt/WaifuStudio`.
 
-## Install in three steps
+## Install on Windows in three steps
 
 1. Download or clone the repository.
 2. Run `install.bat`. It creates a portable Python environment, ComfyUI, FFmpeg and the app shortcut. Use `-SkipModels` to bring your own checkpoints.
 3. Run `start.bat`, open `http://127.0.0.1:8765`, and follow the Guide.
 
 The installer never overwrites `data/`, `ComfyUI/models/` or your gallery.
+
+## Install on Linux
+
+The Windows installer is not used on Linux. From a git clone:
+
+```bash
+git clone https://github.com/gusnion/WaifuStudio.git
+cd WaifuStudio
+./install-linux.sh
+./start-linux.sh
+```
+
+`install-linux.sh` installs the app dependencies, ComfyUI v0.42.5, the pinned custom nodes, FFmpeg and torch cu130. It needs an NVIDIA GPU with a recent driver and `sudo` for system packages.
+
+Optional components:
+
+```bash
+WITH_MODELS=1 ./install-linux.sh   # 3 recommended checkpoints + RealESRGAN x2
+WITH_LLM=1 ./install-linux.sh      # llama.cpp CPU + Qwen3.5-9B + mmproj
+WITH_VISION=1 ./install-linux.sh   # onnxruntime + WD14 tags
+```
+
+Stop with `./stop-linux.sh`. Logs go to `data/logs/`; `./healthcheck.sh` prints paths and service status. Full Linux guide: [`docs/linux.md`](docs/linux.md).
 
 ## Model set and licenses
 

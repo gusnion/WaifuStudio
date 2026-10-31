@@ -1181,6 +1181,7 @@ def find_ffmpeg() -> str | None:
     for cand in (
         APP_ROOT / "tools" / "ffmpeg" / "ffmpeg.exe",
         APP_ROOT / "tools" / "ffmpeg.exe",
+        APP_ROOT / "tools" / "ffmpeg" / "ffmpeg",
     ):
         if cand.is_file():
             return str(cand)

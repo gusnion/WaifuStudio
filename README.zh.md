@@ -233,7 +233,7 @@ Git 更新程序会留下一个带时间戳的备份。请保留它，直到新�
 
 这些工作流针对 12 GB 显存预算和单任务运行做了调优。可选的 Qwen3.5-9B 助手运行在 CPU 上，因此不会占用 ComfyUI 的显存。
 
-Windows 是受支持的安装方式。核心是标准 FastAPI、ComfyUI 和原生 JavaScript；Linux 服务器/局域网模式已列入计划，但尚不可用。
+Windows 和 Linux 均受支持。核心是标准 FastAPI、ComfyUI 和原生 JavaScript；Linux 本地安装：`install-linux.sh`（见 `docs/linux.md`）。Linux 服务器/局域网模式仍在计划中。
 
 ## 当前限制
 

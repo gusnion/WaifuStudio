@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "generated": "2026-10-31",
+  "app": "WAIFU",
+  "task": "M18 LLM/VL local (Qwen3.5-9B captioning v5 + mmproj) en Linux",
+  "destination_root": ".",
+  "sha256_convention": "64 hex = sha256 completo; lo compara scripts/download_llm.py.",
+  "notes": [
+    "Variante Linux de manifest.llm.json: mismos modelos, runtime llama.cpp ubuntu-x64 en lugar del zip win-cuda.",
+    "El runtime Linux es CPU; la app arranca llama-server con -ngl 0, asi que no necesita cudart.",
+    "El tar.gz se extrae con strip_components=1: llama-b11146/llama-server -> tools/llama.cpp/llama-server."
+  ],
+  "files": [
+    {
+      "id": "qwen35-9b-nsfw-captioning-q4",
+      "kind": "model",
+      "filename": "qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf",
+      "target": "ComfyUI/models/llm/qwen35-9b-nsfw-captioning",
+      "bytes": 5629109152,
+      "sha256": "2484d1dd959571635770774d00bf11d96b3d09b63cdb62cf71843127e5e2a7de",
+      "url": "https://huggingface.co/mradermacher/qwen3.5-9b-nsfw-captioning-v5-GGUF/resolve/main/qwen3.5-9b-nsfw-captioning-v5.Q4_K_M.gguf",
+      "revision": "main",
+      "source": "mradermacher/qwen3.5-9b-nsfw-captioning-v5-GGUF",
+      "license": "Apache-2.0 (base Qwen/Qwen3.5-9B; fine-tune oldhag88)",
+      "notes": "Texto Q4_K_M, arquitectura qwen35. Fine-tune especializado en etiquetado Booru anime/NSFW y CoT explicativo."
+    },
+    {
+      "id": "mmproj-qwen35-9b-nsfw-q8_0",
+      "kind": "mmproj",
+      "filename": "qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf",
+      "target": "ComfyUI/models/llm/qwen35-9b-nsfw-captioning",
+      "bytes": 624229344,
+      "sha256": "044e3191299783cc4feb5d05d255d05cec4a0b7a4f70cdcdd29026a512cf9b35",
+      "url": "https://huggingface.co/mradermacher/qwen3.5-9b-nsfw-captioning-v5-GGUF/resolve/main/qwen3.5-9b-nsfw-captioning-v5.mmproj-Q8_0.gguf",
+      "revision": "main",
+      "source": "mradermacher/qwen3.5-9b-nsfw-captioning-v5-GGUF (visual.merger)",
+      "license": "Apache-2.0",
+      "notes": "Proyector visual Q8_0 (qwen3vl) afinado por oldhag88 para emparejar con el modelo captioning v5."
+    },
+    {
+      "id": "llama-b11146-linux-x64",
+      "kind": "runtime",
+      "filename": "llama-b11146-bin-ubuntu-x64.tar.gz",
+      "target": "tools/llama.cpp/dist",
+      "extract_to": "tools/llama.cpp",
+      "strip_components": 1,
+      "bytes": 16998357,
+      "sha256": "c150306eb16b5ab696f76a8bdf810c35fd98a24e82158742e6fa28f420ff8410",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-ubuntu-x64.tar.gz",
+      "revision": "b11146",
+      "source": "ggml-org/llama.cpp releases (nightly b11146)",
+      "license": "MIT (llama.cpp)",
+      "notes": "Binarios stock ubuntu-x64 (CPU); la app usa -ngl 0. El tar.gz se extrae con strip_components=1 y deja llama-server y sus .so en tools/llama.cpp."
+    }
+  ]
+}

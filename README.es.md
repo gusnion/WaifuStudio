@@ -110,6 +110,33 @@ stop_engine.bat  detiene solo ComfyUI
 
 FFmpeg se instala por defecto. `-SkipFfmpeg` existe para instalaciones mínimas, pero el export y la concatenación del Timeline no funcionarán. `install.bat` también crea `WAIFUSTUDIO.lnk` con el icono de la app; si mueves la carpeta, ejecuta `scripts\create_shortcut.ps1` o vuelve a ejecutar el instalador.
 
+## Instalación (Linux)
+
+Linux usa un instalador propio; `install.bat` es solo para Windows. Requisitos: Ubuntu 22.04/24.04 x86_64, GPU NVIDIA, driver 570+, git, `sudo` y 25 GB libres (unos 150 GB con el set completo de modelos).
+
+```bash
+git clone https://github.com/gusnion/WaifuStudio.git
+cd WaifuStudio
+./install-linux.sh
+./start-linux.sh
+```
+
+Abre `http://127.0.0.1:8765`. Para parar:
+
+```bash
+./stop-linux.sh
+```
+
+Componentes opcionales:
+
+```bash
+WITH_MODELS=1 ./install-linux.sh   # 3 checkpoints recomendados + RealESRGAN x2
+WITH_LLM=1 ./install-linux.sh      # llama.cpp CPU + Qwen3.5-9B + mmproj
+WITH_VISION=1 ./install-linux.sh   # onnxruntime + WD14 para tags
+```
+
+Los logs van a `data/logs/`; `./healthcheck.sh` muestra rutas y estado de los servicios. Guía completa: [`docs/linux.md`](docs/linux.md).
+
 ## Actualización
 
 ### Instalación Git
@@ -227,14 +254,14 @@ Este es el hardware y software usado para desarrollo y validación. No son requi
 | GPU | NVIDIA GeForce RTX 3060, 12 GB |
 | CPU | AMD Ryzen 7 5700X, 8 núcleos |
 | RAM | 32 GB DDR4 |
-| SO | Windows 10 64 bits |
+| SO | Windows 10/11 64 bits o Ubuntu 22.04/24.04 |
 | Motor | ComfyUI v0.37.4 |
 | Python | CPython 3.12.12, aislado |
 | Inferencia | PyTorch 2.11.0 + CUDA 13.0 |
 
 Los flujos están ajustados a un presupuesto de 12 GB y un trabajo a la vez. El asistente opcional Qwen3.5-9B se ejecuta en CPU para no quitar VRAM a ComfyUI.
 
-Windows es la ruta de instalación soportada. El núcleo es FastAPI, ComfyUI y JavaScript sin bundler; el modo servidor Linux/LAN está planificado, pero todavía no está disponible.
+Windows y Linux son rutas de instalación soportadas. El núcleo es FastAPI, ComfyUI y JavaScript sin bundler. En Linux usa `install-linux.sh`; el modo servidor Linux/LAN para la red local sigue planificado.
 
 ## Límites actuales
 
@@ -253,7 +280,7 @@ Lo siguiente está planificado o en evaluación. No son promesas, no tienen fech
 ### Corto plazo
 
 - **Presets de modelos por VRAM** y gestor de modelos verificado, para no asumir 12 GB.
-- **Modo Estudio Linux**: servidor headless para la red local, separado de la app personal de Windows.
+- **Modo servidor Linux/LAN**: servidor headless para la red local, separado de la app personal. La instalación Linux local ya está disponible; el modo servidor sigue planificado.
 - **Soporte de ComfyUI/GPU remota** con volúmenes persistentes de modelos, para no depender de la GPU local.
 - **Herramientas para agentes locales**: CLI, skill y modo DSH que manejen la app mediante su API.
 - **Cola de escenas en Timeline** y director de guion a escenas con trabajos reanudables.

@@ -17,14 +17,21 @@ import hashlib
 import json
 import os
 import sys
+import tarfile
 import time
 import urllib.error
 import urllib.request
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = APP_ROOT / "install" / "manifest" / "manifest.llm.json"
+_MANIFEST_DIR = APP_ROOT / "install" / "manifest"
+_LINUX_MANIFEST = _MANIFEST_DIR / "manifest.llm.linux.json"
+MANIFEST_PATH = (
+    _MANIFEST_DIR / "manifest.llm.json"
+    if sys.platform == "win32" or not _LINUX_MANIFEST.is_file()
+    else _LINUX_MANIFEST
+)
 CHUNK = 1024 * 1024
 USER_AGENT = "WAIFU-download-llm/1.0 (+local)"
 
@@ -169,21 +176,47 @@ def download(entry: dict, root: Path, *, force: bool = False) -> bool:
     return True
 
 
+def _extract_tar(archive: tarfile.TarFile, destination: Path, strip: int) -> None:
+    """Extrae un tar.gz saneando rutas y aplicando strip_components."""
+    members = []
+    for member in archive.getmembers():
+        parts = PurePosixPath(member.name).parts[strip:]
+        if not parts:
+            continue
+        name = "/".join(parts)
+        if name.startswith("/") or ".." in PurePosixPath(name).parts:
+            continue
+        member.name = name
+        members.append(member)
+    archive.extractall(destination, members=members)
+
+
 def extract_runtime(entry: dict, root: Path) -> bool:
-    """Extrae el zip verificado a `extract_to` (si el manifiesto lo define)."""
+    """Extrae el archivo verificado a `extract_to` (zip o tar.gz)."""
     extract_to = entry.get("extract_to")
     if not extract_to:
         return True
-    zip_path = root / entry["target"] / entry["filename"]
+    archive_path = root / entry["target"] / entry["filename"]
     destination = root / extract_to
     destination.mkdir(parents=True, exist_ok=True)
     print(f"[{entry['id']}] extrayendo en {destination}")
     try:
-        with zipfile.ZipFile(zip_path) as archive:
-            archive.extractall(destination)
-    except (OSError, zipfile.BadZipFile) as exc:
+        if archive_path.name.lower().endswith((".tar.gz", ".tgz")):
+            strip = int(entry.get("strip_components") or 0)
+            with tarfile.open(archive_path, "r:gz") as archive:
+                _extract_tar(archive, destination, strip)
+        else:
+            with zipfile.ZipFile(archive_path) as archive:
+                archive.extractall(destination)
+    except (OSError, zipfile.BadZipFile, tarfile.TarError) as exc:
         print(f"[{entry['id']}] ERROR al extraer: {exc}")
         return False
+    server = destination / "llama-server"
+    if server.is_file():
+        try:
+            os.chmod(server, 0o755)
+        except OSError:
+            pass
     return True
 
 
